@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStatus {
+  PENDING
+  UNVERIFIED
+  VERIFIED
+  HANDOFF_READY
+  DISQUALIFIED
+}
+
+enum ConsentType {
+  PRIVACY
+  MARKETING
+}
+
+enum HandoffStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Visitor {
+  id          String   @id @default(cuid())
+  fingerprint String?  @unique
+  ipAddress   String?
+  userAgent   String?
+  country     String   @default("NZ")
+  referrer    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events AcquisitionEvent[]
+  leads  LeadCapture[]
+
+  @@map("visitors")
+}
+
+model AcquisitionEvent {
+  id        String   @id @default(cuid())
+  visitorId String?
+  eventType String
+  eventData Json?
+  page      String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  visitor Visitor? @relation(fields: [visitorId], references: [id])
+
+  @@index([visitorId])
+  @@index([eventType])
+  @@map("acquisition_events")
+}
+
+model LeadCapture {
+  id                String     @id @default(cuid())
+  visitorId         String?
+  fullName          String
+  email             String?
+  phone             String?
+  whatsapp          String?
+  destination       String     @default("NZ")
+  studyLevel        String?
+  preferredLanguage String?
+  status            LeadStatus @default(PENDING)
+  ipAddress         String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  visitor           Visitor?               @relation(fields: [visitorId], references: [id])
+  attribution       LeadSourceAttribution?
+  consents          ConsentRecord[]
+  handoffs          LeadHandoff[]
+  emailVerification EmailVerification?
+
+  @@index([email])
+  @@index([phone])
+  @@index([status])
+  @@map("lead_captures")
+}
+
+model LeadSourceAttribution {
+  id          String   @id @default(cuid())
+  leadId      String   @unique
+  source      String?
+  medium      String?
+  campaign    String?
+  referrer    String?
+  landingPage String?
+  createdAt   DateTime @default(now())
+
+  lead LeadCapture @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("lead_source_attributions")
+}
+
+model ConsentRecord {
+  id        String      @id @default(cuid())
+  leadId    String
+  type      ConsentType
+  granted   Boolean
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime    @default(now())
+
+  lead LeadCapture @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("consent_records")
+}
+
+model LeadHandoff {
+  id        String        @id @default(cuid())
+  leadId    String
+  payload   Json
+  status    HandoffStatus @default(PENDING)
+  notes     String?
+  sentAt    DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  lead LeadCapture @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@map("lead_handoffs")
+}
+
+model EmailVerification {
+  id         String    @id @default(cuid())
+  leadId     String    @unique
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  lead LeadCapture @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("email_verifications")
+}
