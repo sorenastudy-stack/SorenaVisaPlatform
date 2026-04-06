@@ -115,7 +115,7 @@ export class AcquisitionService {
     }
 
     const hasEmail = !!normalizedEmail;
-    const initialStatus = hasEmail ? LeadStatus.UNVERIFIED : LeadStatus.VERIFIED;
+    const initialStatus = hasEmail ? LeadStatus.NEW : LeadStatus.NEW;
 
     let plainToken: string | null = null;
 
@@ -252,8 +252,8 @@ export class AcquisitionService {
 
     if (
       lead.email &&
-      lead.status !== LeadStatus.VERIFIED &&
-      lead.status !== LeadStatus.HANDOFF_READY
+      lead.status !== LeadStatus.CONTACTED &&
+      lead.status !== LeadStatus.QUALIFIED
     ) {
       throw new BadRequestException('Lead email must be verified before handoff.');
     }
@@ -287,7 +287,7 @@ export class AcquisitionService {
       });
       await tx.leadCapture.update({
         where: { id: lead.id },
-        data: { status: LeadStatus.HANDOFF_READY },
+        data: { status: LeadStatus.QUALIFIED },
       });
       return h;
     });
@@ -342,7 +342,7 @@ export class AcquisitionService {
       await tx.emailVerification.update({ where: { tokenHash }, data: { verifiedAt: new Date() } });
       await tx.leadCapture.update({
         where: { id: verification.leadId },
-        data: { status: LeadStatus.VERIFIED },
+        data: { status: LeadStatus.CONTACTED },
       });
     });
 

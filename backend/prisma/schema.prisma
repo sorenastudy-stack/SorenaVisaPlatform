@@ -7,12 +7,197 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  SALES
+  OPERATIONS
+  LIA
+  SUPPORT
+}
+
 enum LeadStatus {
-  PENDING
-  UNVERIFIED
-  VERIFIED
-  HANDOFF_READY
+  NEW
+  CONTACTED
+  INTAKE_STARTED
+  INTAKE_COMPLETED
+  SCORING_DONE
+  QUALIFIED
+  NURTURE
+  EXECUTING
+  CLOSED_WON
+  CLOSED_LOST
   DISQUALIFIED
+}
+
+enum ScoreBand {
+  LOW
+  MID
+  HIGH
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  BLOCKED
+}
+
+enum RecommendedRoute {
+  CONTENT_NURTURE
+  WEBINAR
+  ROADMAP
+  ADMISSION_CONSULTATION
+  SPECIALIST_CONSULTATION
+  LIA_CONSULTATION
+  EXECUTION_QUEUE
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PRO
+  PREMIUM
+  CONTINUITY
+}
+
+enum SubscriptionStage {
+  STAGE_1
+  STAGE_2
+  STAGE_3
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PAUSED
+}
+
+enum ConsultationType {
+  ADMISSION
+  LIA
+}
+
+enum ConsultationStatus {
+  PENDING
+  BOOKED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum CaseStage {
+  ADMISSION
+  VISA
+  COMPLETED
+  WITHDRAWN
+}
+
+enum ApplicationStatus {
+  PREPARATION
+  SUBMITTED
+  OFFER_RECEIVED
+  OFFER_ACCEPTED
+  VISA_SUBMITTED
+  VISA_APPROVED
+  VISA_DECLINED
+  WITHDRAWN
+}
+
+enum CommissionStatus {
+  ESTIMATED
+  CONFIRMED
+  INVOICED
+  PAID
+  CANCELLED
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED
+}
+
+enum ProviderType {
+  UNIVERSITY
+  POLYTECHNIC
+  COLLEGE
+  SCHOOL
+}
+
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum QualificationLevel {
+  DIPLOMA
+  GRADUATE_CERTIFICATE
+  GRADUATE_DIPLOMA
+  BACHELOR
+  POSTGRADUATE_CERTIFICATE
+  POSTGRADUATE_DIPLOMA
+  MASTER
+  PHD
+}
+
+enum NZQFLevel {
+  LEVEL_3
+  LEVEL_4
+  LEVEL_5
+  LEVEL_6
+  LEVEL_7
+  LEVEL_8
+  LEVEL_9
+  LEVEL_10
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DocumentStatus {
+  MISSING
+  UPLOADED
+  VERIFIED
+  REJECTED
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  VIEWED
+  SIGNED
+  DECLINED
+  EXPIRED
+}
+
+enum EventSource {
+  AI
+  OPS
+  LEGAL
+  SYSTEM
+  USER
+}
+
+enum EventProcessingStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  SKIPPED
 }
 
 enum ConsentType {
@@ -25,6 +210,43 @@ enum HandoffStatus {
   SENT
   FAILED
 }
+
+enum WhatsAppConversationStatus {
+  NEW
+  ASSIGNED
+  WAITING
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+// ─── USERS ───────────────────────────────────────────────────────────────────
+
+model User {
+  id               String    @id @default(cuid())
+  name             String
+  email            String    @unique
+  passwordHash     String
+  role             UserRole  @default(SALES)
+  canEditGlobalData Boolean  @default(false)
+  isActive         Boolean   @default(true)
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  assignedLeads    Lead[]           @relation("LeadOwner")
+  consultations    Consultation[]   @relation("ConsultationAdviser")
+  cases            Case[]           @relation("CaseOwner")
+  auditLogs        AuditLog[]
+  notesAuditLogs   ManagerNotesLog[]
+
+  @@map("users")
+}
+
+// ─── ACQUISITION (existing — kept and extended) ───────────────────────────────
 
 model Visitor {
   id          String   @id @default(cuid())
@@ -39,8 +261,8 @@ model Visitor {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  events AcquisitionEvent[]
-  leads  LeadCapture[]
+  events           AcquisitionEvent[]
+  legacyLeads      LeadCapture[]
 
   @@map("visitors")
 }
@@ -71,7 +293,7 @@ model LeadCapture {
   destination       String     @default("NZ")
   studyLevel        String?
   preferredLanguage String?
-  status            LeadStatus @default(PENDING)
+  status            LeadStatus @default(NEW)
   ipAddress         String?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -81,6 +303,8 @@ model LeadCapture {
   consents          ConsentRecord[]
   handoffs          LeadHandoff[]
   emailVerification EmailVerification?
+  contact           Contact?               @relation(fields: [contactId], references: [id])
+  contactId         String?
 
   @@index([email])
   @@index([phone])
@@ -145,4 +369,508 @@ model EmailVerification {
   lead LeadCapture @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@map("email_verifications")
+}
+
+// ─── CONTACTS ────────────────────────────────────────────────────────────────
+
+model Contact {
+  id                String    @id @default(cuid())
+  fullName          String
+  email             String?   @unique
+  phone             String?
+  whatsapp          String?
+  nationality       String?
+  countryOfResidence String?
+  preferredLanguage String    @default("en")
+  lifecycleStage    String?
+  ownerId           String?
+  partnerId         String?
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  leads             Lead[]
+  legacyLeadCaptures LeadCapture[]
+  whatsappConversations WhatsAppConversation[]
+
+  @@index([email])
+  @@index([phone])
+  @@map("contacts")
+}
+
+// ─── LEADS ───────────────────────────────────────────────────────────────────
+
+model Lead {
+  id                      String            @id @default(cuid())
+  contactId               String
+  sourceChannel           String?
+  campaignId              String?
+  utmSource               String?
+  utmMedium               String?
+  utmCampaign             String?
+  firstTouchSource        String?
+  lastTouchSource         String?
+
+  leadStatus              LeadStatus        @default(NEW)
+  disqualificationReason  String?
+  isNurtureCandidate      Boolean           @default(false)
+
+  readinessScore          Int?
+  academicScore           Int?
+  financialScore          Int?
+  englishScore            Int?
+  intentScore             Int?
+  engagementScore         Int?
+  scoreBand               ScoreBand?
+  riskLevel               RiskLevel?
+  riskFlags               String[]
+  hardStopFlag            Boolean           @default(false)
+  hardStopReason          String?
+  liaEscalationRequired   Boolean           @default(false)
+  executionAllowed         Boolean           @default(false)
+  recommendedRoute        RecommendedRoute?
+  monetisationModel       String?
+  countryConfigId         String?
+
+  aiSummary               String?
+  managerNotes            String?
+
+  ownerId                 String?
+  assignedAt              DateTime?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  contact                 Contact           @relation(fields: [contactId], references: [id])
+  owner                   User?             @relation("LeadOwner", fields: [ownerId], references: [id])
+  intakeForm              IntakeForm?
+  subscriptions           Subscription[]
+  consultations           Consultation[]
+  cases                   Case[]
+  events                  CrmEvent[]
+  managerNotesLogs        ManagerNotesLog[]
+
+  @@index([contactId])
+  @@index([leadStatus])
+  @@index([scoreBand])
+  @@index([ownerId])
+  @@map("leads")
+}
+
+model ManagerNotesLog {
+  id            String   @id @default(cuid())
+  leadId        String
+  previousValue String?
+  newValue      String?
+  changedById   String
+  changedAt     DateTime @default(now())
+
+  lead      Lead @relation(fields: [leadId], references: [id])
+  changedBy User @relation(fields: [changedById], references: [id])
+
+  @@index([leadId])
+  @@map("manager_notes_logs")
+}
+
+// ─── INTAKE FORM ─────────────────────────────────────────────────────────────
+
+model IntakeForm {
+  id                    String   @id @default(cuid())
+  leadId                String   @unique
+  highestQualification  String?
+  fieldOfStudy          String?
+  gpa                   Float?
+  englishTestType       String?
+  englishOverallScore   Float?
+  englishComponentScores Json?
+  financialLevel        String?
+  estimatedBudgetNZD    Float?
+  visaHistory           String?
+  visaRejectionCount    Int      @default(0)
+  visaRejectionReason   String?
+  workExperienceYears   Int?
+  studyIntent           String?
+  preferredStartDate    String?
+  preferredCountry      String   @default("NZ")
+  preferredLevel        String?
+  preferredField        String?
+  completionPercent     Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("intake_forms")
+}
+
+// ─── SUBSCRIPTIONS ───────────────────────────────────────────────────────────
+
+model Subscription {
+  id                       String             @id @default(cuid())
+  leadId                   String
+  plan                     SubscriptionPlan   @default(FREE)
+  stage                    SubscriptionStage  @default(STAGE_1)
+  status                   SubscriptionStatus @default(ACTIVE)
+  amountPaidNZD            Float?
+  currency                 String             @default("NZD")
+  stripeSubscriptionId     String?
+  stripeCustomerId         String?
+  freeResubmissionEligible Boolean            @default(false)
+  startDate                DateTime?
+  endDate                  DateTime?
+  cancelledAt              DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id])
+
+  @@index([leadId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// ─── CONSULTATIONS ───────────────────────────────────────────────────────────
+
+model Consultation {
+  id              String             @id @default(cuid())
+  leadId          String
+  type            ConsultationType
+  assignedToId    String?
+  amountNZD       Float
+  currency        String             @default("NZD")
+  paymentStatus   PaymentStatus      @default(PENDING)
+  stripePaymentId String?
+  status          ConsultationStatus @default(PENDING)
+  outcomeNotes    String?
+  scheduledAt     DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  lead       Lead  @relation(fields: [leadId], references: [id])
+  assignedTo User? @relation("ConsultationAdviser", fields: [assignedToId], references: [id])
+
+  @@index([leadId])
+  @@index([type])
+  @@map("consultations")
+}
+
+// ─── CASES ───────────────────────────────────────────────────────────────────
+
+model Case {
+  id          String    @id @default(cuid())
+  leadId      String
+  stage       CaseStage @default(ADMISSION)
+  status      String    @default("active")
+  ownerId     String?
+  riskLevel   RiskLevel @default(LOW)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lead         Lead           @relation(fields: [leadId], references: [id])
+  owner        User?          @relation("CaseOwner", fields: [ownerId], references: [id])
+  applications Application[]
+  contract     Contract?
+
+  @@index([leadId])
+  @@index([stage])
+  @@map("cases")
+}
+
+// ─── APPLICATIONS ────────────────────────────────────────────────────────────
+
+model Application {
+  id              String            @id @default(cuid())
+  caseId          String
+  providerId      String
+  programmeId     String
+  intakeId        String?
+  status          ApplicationStatus @default(PREPARATION)
+  executionMode   String?
+  liaRequired     Boolean           @default(false)
+  submittedAt     DateTime?
+  offerReceivedAt DateTime?
+  offerAcceptedAt DateTime?
+  visaSubmittedAt DateTime?
+  visaDecisionAt  DateTime?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  case        Case                  @relation(fields: [caseId], references: [id])
+  provider    EducationProvider     @relation(fields: [providerId], references: [id])
+  programme   EducationProgramme    @relation(fields: [programmeId], references: [id])
+  documents   ApplicationDocument[]
+  commission  Commission?
+
+  @@index([caseId])
+  @@index([status])
+  @@map("applications")
+}
+
+// ─── DOCUMENTS ───────────────────────────────────────────────────────────────
+
+model ApplicationDocument {
+  id            String         @id @default(cuid())
+  applicationId String
+  type          String
+  fileName      String?
+  fileUrl       String?
+  status        DocumentStatus @default(MISSING)
+  verifiedAt    DateTime?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("application_documents")
+}
+
+// ─── CONTRACTS ───────────────────────────────────────────────────────────────
+
+model Contract {
+  id                  String         @id @default(cuid())
+  caseId              String         @unique
+  templateId          String?
+  docusignEnvelopeId  String?
+  status              ContractStatus @default(DRAFT)
+  signedAt            DateTime?
+  declinedAt          DateTime?
+  expiredAt           DateTime?
+  signedFileUrl       String?
+  auditTrailUrl       String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  case Case @relation(fields: [caseId], references: [id])
+
+  @@map("contracts")
+}
+
+// ─── COMMISSIONS ─────────────────────────────────────────────────────────────
+
+model Commission {
+  id                    String           @id @default(cuid())
+  applicationId         String           @unique
+  providerId            String
+  programmeId           String
+  commissionYear        Int              @default(1)
+  commissionType        CommissionType   @default(PERCENTAGE)
+  commissionValue       Float
+  estimatedAmountNZD    Float?
+  actualAmountNZD       Float?
+  currency              String           @default("NZD")
+  status                CommissionStatus @default(ESTIMATED)
+  confirmedAt           DateTime?
+  invoiceSentAt         DateTime?
+  paidAt                DateTime?
+  renewalReminderDate   DateTime?
+  reminderSent          Boolean          @default(false)
+  notes                 String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  application Application       @relation(fields: [applicationId], references: [id])
+  provider    EducationProvider  @relation(fields: [providerId], references: [id])
+  programme   EducationProgramme @relation(fields: [programmeId], references: [id])
+
+  @@index([status])
+  @@index([providerId])
+  @@map("commissions")
+}
+
+// ─── EDUCATION PROVIDERS ─────────────────────────────────────────────────────
+
+model EducationProvider {
+  id                   String         @id @default(cuid())
+  name                 String
+  providerType         ProviderType
+  country              String         @default("NZ")
+  city                 String?
+  websiteUrl           String?
+  status               ProviderStatus @default(PENDING)
+  agreementUrl         String?
+  agreementStartDate   DateTime?
+  agreementEndDate     DateTime?
+  agreementRenewalDate DateTime?
+  commissionY1Type     CommissionType @default(PERCENTAGE)
+  commissionY1Value    Float          @default(0)
+  commissionY2Type     CommissionType @default(PERCENTAGE)
+  commissionY2Value    Float          @default(0)
+  volumeTarget         Float?
+  bonusType            CommissionType?
+  bonusValue           Float?
+  notes                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  faculties    EducationFaculty[]
+  programmes   EducationProgramme[]
+  applications Application[]
+  commissions  Commission[]
+
+  @@map("education_providers")
+}
+
+model EducationFaculty {
+  id         String   @id @default(cuid())
+  providerId String
+  name       String
+  createdAt  DateTime @default(now())
+
+  provider   EducationProvider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  programmes EducationProgramme[]
+
+  @@index([providerId])
+  @@map("education_faculties")
+}
+
+model EducationProgramme {
+  id              String             @id @default(cuid())
+  providerId      String
+  facultyId       String?
+  name            String
+  level           QualificationLevel
+  nzqfLevel       NZQFLevel
+  durationMonths  Int?
+  tuitionFeeNZD   Float?
+  currency        String             @default("NZD")
+  intakeMonths    Int[]
+  aiPopulated     Boolean            @default(false)
+  aiLastRunAt     DateTime?
+  reviewStatus    ReviewStatus       @default(PENDING)
+  isActive        Boolean            @default(false)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  provider     EducationProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  faculty      EducationFaculty?       @relation(fields: [facultyId], references: [id])
+  requirements ProgrammeRequirement?
+  applications Application[]
+  commissions  Commission[]
+
+  @@index([providerId])
+  @@index([level])
+  @@index([reviewStatus])
+  @@map("education_programmes")
+}
+
+model ProgrammeRequirement {
+  id                       String       @id @default(cuid())
+  programmeId              String       @unique
+  minQualificationLevel    String?
+  minGpa                   Float?
+  englishTestType          String?
+  englishOverallMin        Float?
+  englishComponentMins     Json?
+  workExperienceRequired   Boolean      @default(false)
+  portfolioRequired        Boolean      @default(false)
+  interviewRequired        Boolean      @default(false)
+  documentsRequired        String[]
+  additionalNotes          String?
+  aiPopulated              Boolean      @default(false)
+  reviewStatus             ReviewStatus @default(PENDING)
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+
+  programme EducationProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  @@map("programme_requirements")
+}
+
+// ─── CRM EVENTS ──────────────────────────────────────────────────────────────
+
+model CrmEvent {
+  id               String                @id @default(cuid())
+  eventType        String
+  entityType       String?
+  entityId         String?
+  leadId           String?
+  triggerSource    EventSource           @default(SYSTEM)
+  actorType        String?
+  actorId          String?
+  payloadJson      Json?
+  processingStatus EventProcessingStatus @default(PENDING)
+  occurredAt       DateTime              @default(now())
+
+  lead Lead? @relation(fields: [leadId], references: [id])
+
+  @@index([eventType])
+  @@index([leadId])
+  @@index([occurredAt])
+  @@map("crm_events")
+}
+
+// ─── WHATSAPP ────────────────────────────────────────────────────────────────
+
+model WhatsAppConversation {
+  id            String                     @id @default(cuid())
+  contactId     String?
+  phoneNumber   String
+  status        WhatsAppConversationStatus @default(NEW)
+  assignedToId  String?
+  lastMessageAt DateTime?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  contact  Contact?          @relation(fields: [contactId], references: [id])
+  messages WhatsAppMessage[]
+
+  @@index([phoneNumber])
+  @@index([status])
+  @@map("whatsapp_conversations")
+}
+
+model WhatsAppMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  direction      MessageDirection
+  content        String?
+  messageType    String           @default("text")
+  status         String?
+  waMessageId    String?          @unique
+  timestamp      DateTime         @default(now())
+
+  conversation WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("whatsapp_messages")
+}
+
+// ─── AUDIT LOGS ──────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType])
+  @@map("audit_logs")
+}
+
+// ─── KNOWLEDGE BASE (for RAG / pgvector) ─────────────────────────────────────
+
+model KnowledgeChunk {
+  id          String   @id @default(cuid())
+  sourceType  String
+  sourceId    String?
+  sourceUrl   String?
+  content     String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sourceType])
+  @@map("knowledge_chunks")
 }
