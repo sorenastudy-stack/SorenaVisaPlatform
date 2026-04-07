@@ -24,6 +24,7 @@
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "docusign-esign": "^8.7.0",
     "dotenv": "^17.4.1",
     "helmet": "^7.1.0",
     "nodemailer": "^6.9.10",
