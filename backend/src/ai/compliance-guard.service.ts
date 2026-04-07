@@ -10,6 +10,13 @@ export class ComplianceGuardService {
     'guaranteed',
     'you qualify for',
     'i recommend applying for',
+    'you can work while studying',
+    'your passport is valid enough',
+    'you can bring your family',
+    'will immigration new zealand approve',
+    'what visa should i apply for',
+    'should i use an immigration adviser',
+    'can you check if i am eligible',
   ];
 
   scan(response: string): string {
@@ -21,6 +28,10 @@ export class ComplianceGuardService {
 
     if (this.containsVisaEligibilityInterpretation(text)) {
       return this.buildSafeResponse();
+    }
+
+    if (this.containsVisaAdviceQuestion(text)) {
+      return this.injectDisclaimer(response);
     }
 
     return response;
@@ -57,9 +68,49 @@ export class ComplianceGuardService {
       /you will.*visa/, 
       /you are.*eligible/, 
       /you.*qualify.*for/, 
+      /chance.*visa/, 
+      /chances.*visa/, 
+      /should i apply.*visa/, 
+      /apply.*visa/, 
+      /score.*visa/, 
+      /good enough.*visa/, 
+      /financial.*visa/, 
+      /approve.*application/, 
+      /application.*approve/, 
+      /visa.*declined/, 
+      /declined.*visa/, 
+      /passport.*valid.*visa/, 
+      /immigration adviser/, 
+      /bring.*family.*visa/, 
+      /probability.*visa/, 
+      /success.*visa/, 
+      /criminal record.*visa/, 
+      /visa.*criminal record/, 
     ];
 
     return eligibilityPatterns.some((pattern) => pattern.test(text));
+  }
+
+  private containsVisaAdviceQuestion(text: string): boolean {
+    const questionPatterns = [
+      /should i apply.*visa/, 
+      /what visa should i apply for/, 
+      /can you guarantee.*visa/, 
+      /is my .* score .* visa/, 
+      /is my .*good enough .* visa/, 
+      /can i work while studying.*visa/, 
+      /how long.*visa.*process/, 
+      /will my visa refusal/, 
+      /can i bring my family/, 
+      /what happens if my visa is declined/, 
+      /is my passport valid enough for a visa/, 
+      /should i use an immigration adviser/, 
+      /can you check if i am eligible/, 
+      /what is my visa success probability/, 
+      /will my criminal record affect my visa/, 
+    ];
+
+    return questionPatterns.some((pattern) => pattern.test(text));
   }
 
   private buildSafeResponse(): string {

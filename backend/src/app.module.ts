@@ -16,6 +16,7 @@ import { CasesModule } from './cases/cases.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { CommissionsModule } from './commissions/commissions.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PublicModule } from './public/public.module';
@@ -47,6 +48,7 @@ import { PublicModule } from './public/public.module';
     ApplicationsModule,
     CommissionsModule,
     ContractsModule,
+    DashboardModule,
     WhatsappModule,
     NotificationsModule,
     PublicModule,
