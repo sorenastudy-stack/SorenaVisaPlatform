@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AcquisitionModule } from './acquisition/acquisition.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -15,9 +16,15 @@ import { CasesModule } from './cases/cases.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { CommissionsModule } from './commissions/commissions.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     ThrottlerModule.forRoot([
       {
         name: 'default',
@@ -40,6 +47,9 @@ import { ContractsModule } from './contracts/contracts.module';
     ApplicationsModule,
     CommissionsModule,
     ContractsModule,
+    WhatsappModule,
+    NotificationsModule,
+    PublicModule,
   ],
 })
 export class AppModule {}

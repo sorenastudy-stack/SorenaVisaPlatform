@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocuSignService } from './docusign.service';
 import { CreateContractDto } from './dto/create-contract.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ContractsService {
   constructor(
     private prisma: PrismaService,
     private docuSignService: DocuSignService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async createContract(dto: CreateContractDto) {
@@ -33,13 +35,30 @@ export class ContractsService {
     );
 
     // Create contract record
-    return this.prisma.contract.create({
+    const contract = await this.prisma.contract.create({
       data: {
         caseId: dto.caseId,
         docusignEnvelopeId: envelopeId,
         status: 'SENT',
       },
     });
+
+    // Get signing URL
+    const signingUrl = await this.docuSignService.getSigningUrl(
+      envelopeId,
+      caseRecord.lead.contact.email,
+      caseRecord.lead.contact.fullName,
+      `${process.env.FRONTEND_URL || 'http://localhost:3000'}/contract-signed`,
+    );
+
+    // Send contract ready email
+    await this.notificationsService.sendContractReady(
+      caseRecord.lead.contact.email,
+      caseRecord.lead.contact.fullName,
+      signingUrl,
+    );
+
+    return contract;
   }
 
   async getContract(caseId: string) {

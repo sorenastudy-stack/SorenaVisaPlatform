@@ -3,6 +3,7 @@ import { StripeService } from './stripe.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EventsService } from '../events/events.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import Stripe from 'stripe';
 
@@ -13,6 +14,7 @@ export class PaymentsController {
     private subscriptionsService: SubscriptionsService,
     private eventsService: EventsService,
     private prisma: PrismaService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -115,10 +117,26 @@ export class PaymentsController {
 
     const leadId = paymentIntent.metadata.leadId;
 
+    // Get lead with contact info
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      include: { contact: true },
+    });
+
+    if (!lead) return;
+
     // Check if it's a consultation or subscription payment
     if (paymentIntent.metadata?.paymentType === 'consultation') {
       // Mark consultation as paid - would need additional logic here
       const consultationType = paymentIntent.metadata.type as 'ADMISSION' | 'LIA';
+
+      // Send consultation confirmation email
+      await this.notificationsService.sendConsultationConfirmation(
+        lead.contact.email,
+        lead.contact.fullName,
+        'ASAP', // Placeholder - in real implementation, get actual date
+        consultationType,
+      );
 
       // Emit event
       await this.eventsService.emit(
