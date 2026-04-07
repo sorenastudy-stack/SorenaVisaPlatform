@@ -4,18 +4,24 @@ import * as nodemailer from 'nodemailer';
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null = null;
 
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+    const host = process.env.SMTP_HOST;
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const port = parseInt(process.env.SMTP_PORT || '587', 10);
+
+    if (host && user && pass) {
+      this.transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user, pass },
+      });
+    } else {
+      this.logger.warn('SMTP config missing - email notifications are disabled');
+    }
   }
 
   async sendWelcomeEmail(email: string, name: string): Promise<void> {
@@ -112,6 +118,11 @@ export class NotificationsService {
   }
 
   private async sendEmail(to: string, subject: string, html: string): Promise<void> {
+    if (!this.transporter) {
+      this.logger.warn(`Email not sent to ${to}: SMTP configuration missing`);
+      return;
+    }
+
     try {
       await this.transporter.sendMail({
         from: process.env.FROM_EMAIL,
@@ -122,7 +133,6 @@ export class NotificationsService {
       this.logger.log(`Email sent to ${to}: ${subject}`);
     } catch (error) {
       this.logger.error(`Failed to send email to ${to}`, error);
-      throw error;
     }
   }
 }

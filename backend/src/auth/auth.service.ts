@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -10,7 +11,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(email: string, name: string, password: string) {
+  async register(email: string, name: string, password: string, role?: string) {
     // Check if user already exists
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -18,6 +19,29 @@ export class AuthService {
 
     if (existingUser) {
       throw new BadRequestException('User with this email already exists');
+    }
+
+    const validRoles = [
+      UserRole.SUPER_ADMIN,
+      UserRole.ADMIN,
+      UserRole.SALES,
+      UserRole.OPERATIONS,
+      UserRole.LIA,
+      UserRole.SUPPORT,
+    ];
+    let assignedRole: UserRole = UserRole.SALES;
+
+    if (role) {
+      if (!validRoles.includes(role as UserRole)) {
+        throw new BadRequestException('Invalid role');
+      }
+
+      const existingUsersCount = await this.prisma.user.count();
+      if (existingUsersCount === 0) {
+        assignedRole = role as UserRole;
+      } else {
+        throw new BadRequestException('Role may only be assigned when bootstrapping the first user');
+      }
     }
 
     // Hash password
@@ -29,7 +53,7 @@ export class AuthService {
         email,
         name,
         passwordHash: hashedPassword,
-        role: 'SALES', // Default role
+        role: assignedRole,
       },
     });
 

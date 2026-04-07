@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 export enum EventSource {
   AI = 'AI',
@@ -21,8 +22,10 @@ export class EventsService {
     triggerSource: string,
     actorId: string | null,
     payloadJson?: Record<string, any>,
+    prismaClient?: Prisma.TransactionClient,
   ) {
-    return this.prisma.crmEvent.create({
+    const client = prismaClient ?? this.prisma;
+    return client.crmEvent.create({
       data: {
         eventType,
         entityType,
