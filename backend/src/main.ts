@@ -12,7 +12,13 @@ async function bootstrap() {
 
   app.use(helmet());
 
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(',').map(s => s.trim());
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'https://app.sorenavisa.com',
+    ...(process.env.ALLOWED_ORIGINS || '').split(',').filter(s => s.trim()).map(s => s.trim()),
+  ];
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin || allowedOrigins.includes(origin)) {
@@ -21,7 +27,7 @@ async function bootstrap() {
         callback(new Error('Not allowed by CORS'), false);
       }
     },
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
   });
 
