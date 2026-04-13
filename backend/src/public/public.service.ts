@@ -196,7 +196,10 @@ export class PublicService {
       };
     });
 
-    await this.notificationsService.sendWelcomeEmail(data.email, data.fullName);
+    // Send welcome email asynchronously (don't block on failure)
+    this.notificationsService.sendWelcomeEmail(data.email, data.fullName).catch(error => {
+      console.error('[INTAKE] Welcome email failed, but proceeding:', error);
+    });
 
     return intakeResult;
   } catch (error) {
