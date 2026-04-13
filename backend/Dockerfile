@@ -2,23 +2,24 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy all necessary files
+# Copy package files first
 COPY package*.json ./
-COPY prisma ./prisma/
-COPY .env* ./
 
-# Install dependencies
+# Install production dependencies only
 RUN npm ci --only=production
 
-# Copy built application code
+# Copy prisma files
+COPY prisma ./prisma/
+
+# Copy start script
+COPY start.sh ./start.sh
+RUN chmod +x ./start.sh
+
+# Copy built application
 COPY dist ./dist/
 
-# Generate Prisma Client (required at runtime)
+# Generate Prisma Client
 RUN npx prisma generate
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/public/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
-
-# Run migrations and start the application
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+# Start the application (migrations will run in start.sh)
+CMD ["./start.sh"]
