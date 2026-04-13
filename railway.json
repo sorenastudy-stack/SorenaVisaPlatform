@@ -1,5 +1,5 @@
 {
   "buildCommand": "npm install && npm run build",
-  "startCommand": "node dist/main",
+  "startCommand": "npx prisma migrate deploy && node dist/main.js",
   "rootDirectory": "backend"
 }
