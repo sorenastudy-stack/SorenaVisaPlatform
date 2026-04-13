@@ -65,6 +65,7 @@ export class PublicService {
               fullName: data.fullName,
               phone: data.phone,
               whatsapp: data.whatsapp,
+              nationality: data.nationality,
               preferredLanguage: data.preferredLanguage || 'en',
               countryOfResidence: data.destination,
             },
