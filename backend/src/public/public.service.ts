@@ -22,8 +22,9 @@ export class PublicService {
     phone?: string;
     whatsapp?: string;
     destination: string;
-    studyLevel: string;
-    preferredLanguage: string;
+    nationality?: string;
+    preferredLevel: string;
+    preferredLanguage?: string;
     highestQualification?: string;
     fieldOfStudy?: string;
     englishTestType?: string;
@@ -35,6 +36,7 @@ export class PublicService {
     preferredStartDate?: string;
   }) {
     try {
+      console.log('[INTAKE] Received payload:', JSON.stringify(data, null, 2));
       const intakeResult = await this.prisma.$transaction(async (tx) => {
       // Create or update contact using unique email if available
       const contact = data.email
@@ -44,6 +46,7 @@ export class PublicService {
               fullName: data.fullName,
               phone: data.phone,
               whatsapp: data.whatsapp,
+              nationality: data.nationality,
               preferredLanguage: data.preferredLanguage || undefined,
               countryOfResidence: data.destination || undefined,
             },
@@ -52,6 +55,7 @@ export class PublicService {
               email: data.email,
               phone: data.phone,
               whatsapp: data.whatsapp,
+              nationality: data.nationality,
               preferredLanguage: data.preferredLanguage || 'en',
               countryOfResidence: data.destination,
             },
@@ -88,7 +92,7 @@ export class PublicService {
           visaRejectionCount: data.visaRejectionCount || 0,
           studyIntent: data.studyIntent,
           preferredStartDate: data.preferredStartDate,
-          preferredLevel: data.studyLevel,
+          preferredLevel: data.preferredLevel,
           preferredField: data.fieldOfStudy,
           completionPercent: 100, // Public form is complete
         },
@@ -105,7 +109,7 @@ export class PublicService {
         visaRejectionCount: data.visaRejectionCount,
         studyIntent: data.studyIntent,
         preferredStartDate: data.preferredStartDate ? new Date(data.preferredStartDate) : undefined,
-        preferredLevel: data.studyLevel,
+        preferredLevel: data.preferredLevel,
         preferredField: data.fieldOfStudy,
         completionPercent: 100,
       });
@@ -122,7 +126,7 @@ export class PublicService {
           visaRejectionReason: undefined,
           studyIntent: data.studyIntent,
           preferredStartDate: data.preferredStartDate ? new Date(data.preferredStartDate) : undefined,
-          preferredLevel: data.studyLevel,
+          preferredLevel: data.preferredLevel,
           preferredField: data.fieldOfStudy,
           completionPercent: 100,
         },
@@ -195,7 +199,11 @@ export class PublicService {
 
     return intakeResult;
   } catch (error) {
-      console.error('Public intake failed:', error);
+      console.error('[INTAKE ERROR] Exception occurred:', error);
+      if (error instanceof Error) {
+        console.error('[INTAKE ERROR] Message:', error.message);
+        console.error('[INTAKE ERROR] Stack:', error.stack);
+      }
       throw error;
     }
   }
