@@ -35,7 +35,7 @@ export default function Home() {
           color: '#5a6a7a',
           marginBottom: 32
         }}>
-          Expert education and migration services for New Zealand
+          Global education and migration support
         </p>
         <button
           onClick={() => router.push('/eligibility')}
