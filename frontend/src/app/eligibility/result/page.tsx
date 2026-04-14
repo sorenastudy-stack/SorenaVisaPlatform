@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 
 type ScoreType = 'high' | 'medium' | 'low';
 
@@ -38,7 +38,7 @@ const getResultConfig = (score: string | null): { type: ScoreType; title: string
   }
 };
 
-export default function EligibilityResultPage() {
+function EligibilityResultContent() {
   const searchParams = useSearchParams();
   const score = searchParams.get('score');
   const id = searchParams.get('id');
@@ -223,3 +223,29 @@ const styles: any = {
     fontSize: '0.95rem',
   },
 };
+
+function LoadingFallback() {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0a2342 0%, #0d4f6e 60%, #0a7a6e 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '40px 24px',
+    }}>
+      <div style={{
+        color: '#fff',
+        fontSize: '1.2rem',
+      }}>Loading...</div>
+    </div>
+  );
+}
+
+export default function EligibilityResultPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <EligibilityResultContent />
+    </Suspense>
+  );
+}

@@ -14,12 +14,12 @@ export default function EligibilityPage() {
   const [score, setScore] = useState('');
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '', nationality: '', age: '',
-    highestQualification: '', englishTestType: '', englishOverallScore: '',
+    highestQualification: '', englishTestType: '', englishTestSpecify: '', englishOverallScore: '',
     studyLevel: '', fieldOfStudy: '', preferredStartDate: '',
     financialLevel: '', estimatedBudgetNZD: '', visaRejectionCount: '', studyIntent: '',
   });
 
-  const u = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const u = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
   const submit = async () => {
     setLoading(true);
@@ -32,6 +32,7 @@ export default function EligibilityPage() {
         nationality: form.nationality,
         highestQualification: form.highestQualification,
         englishTestType: form.englishTestType,
+        englishTestSpecify: form.englishTestSpecify,
         englishOverallScore: form.englishOverallScore ? Number(form.englishOverallScore) : undefined,
         preferredLevel: form.studyLevel,
         fieldOfStudy: form.fieldOfStudy,
@@ -52,7 +53,7 @@ export default function EligibilityPage() {
       setScore(data.scoreBand || 'medium');
       setSubmitted(true);
     } catch (e) {
-      setError(e.message || 'An unexpected error occurred');
+      setError(e instanceof Error ? e.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -101,7 +102,8 @@ export default function EligibilityPage() {
         {step===1 && <div>
           <h2 style={{fontSize:'1.2rem',fontWeight:700,color:'#0a2342',marginBottom:24}}>Education and English</h2>
           <S label="Highest Qualification" value={form.highestQualification} onChange={(v)=>u('highestQualification',v)} options={['HIGH_SCHOOL','DIPLOMA','BACHELOR','MASTER','PHD']} />
-          <S label="English Test Type" value={form.englishTestType} onChange={(v)=>u('englishTestType',v)} options={['IELTS','PTE','TOEFL','DUOLINGO','NATIVE','NONE']} />
+          <S label="English Test Type" value={form.englishTestType} onChange={(v)=>u('englishTestType',v)} options={['IELTS','TOEFL','PTE','Duolingo','Other','None']} />
+          {form.englishTestType === 'Other' && <F label="Please specify your English test" value={form.englishTestSpecify || ''} onChange={(v)=>u('englishTestSpecify',v)} placeholder="e.g. Cambridge, BULATS" />}
           <F label="English Score" value={form.englishOverallScore} onChange={(v)=>u('englishOverallScore',v)} placeholder="e.g. 6.5" />
         </div>}
         {step===2 && <div>
@@ -112,7 +114,8 @@ export default function EligibilityPage() {
         </div>}
         {step===3 && <div>
           <h2 style={{fontSize:'1.2rem',fontWeight:700,color:'#0a2342',marginBottom:24}}>Financial & Intent</h2>
-          <S label="Financial Level" value={form.financialLevel} onChange={(v)=>u('financialLevel',v)} options={['ABOVE','MID','BELOW']} />
+          <S label="Financial Level" value={form.financialLevel} onChange={(v)=>u('financialLevel',v)} options={['Low','Medium','High']} />
+          <p style={{fontSize:'0.85rem',color:'#6b7280',marginBottom:20,marginTop:-8}}>Low = limited funds, may need scholarship or part-time work • Medium = can cover basic costs, may need some support • High = fully self-funded, strong financial position</p>
           <F label="Estimated Budget NZD" value={form.estimatedBudgetNZD} onChange={(v)=>u('estimatedBudgetNZD',v)} placeholder="e.g. 30000" type="number" />
           <S label="Previous Visa Rejections" value={form.visaRejectionCount} onChange={(v)=>u('visaRejectionCount',v)} options={['0','1','2','3']} />
           <F label="Study Intent" value={form.studyIntent} onChange={(v)=>u('studyIntent',v)} placeholder="Why do you want to study in NZ?" multiline={true} />
@@ -131,12 +134,12 @@ export default function EligibilityPage() {
   );
 }
 
-function F({label,value,onChange,placeholder,type,multiline}) {
-  const s = {width:'100%',padding:'11px 14px',border:'1.5px solid #e2e8f0',borderRadius:8,fontSize:'0.95rem',color:'#2c3e50',outline:'none',boxSizing:'border-box',fontFamily:'inherit',marginBottom:20};
+function F({label,value,onChange,placeholder,type,multiline}: {label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; multiline?: boolean}) {
+  const s: React.CSSProperties = {width:'100%',padding:'11px 14px',border:'1.5px solid #e2e8f0',borderRadius:8,fontSize:'0.95rem',color:'#2c3e50',outline:'none',boxSizing:'border-box' as any,fontFamily:'inherit',marginBottom:20};
   return <div><label style={{display:'block',fontSize:'0.88rem',fontWeight:600,color:'#2c3e50',marginBottom:6}}>{label}</label>{multiline?<textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{...s,height:100,resize:'vertical'}}/>:<input type={type||'text'} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={s}/>}</div>;
 }
 
-function S({label,value,onChange,options}) {
-  const s = {width:'100%',padding:'11px 14px',border:'1.5px solid #e2e8f0',borderRadius:8,fontSize:'0.95rem',color:'#2c3e50',outline:'none',boxSizing:'border-box',fontFamily:'inherit'};
+function S({label,value,onChange,options}: {label: string; value: string; onChange: (v: string) => void; options: string[]}) {
+  const s: React.CSSProperties = {width:'100%',padding:'11px 14px',border:'1.5px solid #e2e8f0',borderRadius:8,fontSize:'0.95rem',color:'#2c3e50',outline:'none',boxSizing:'border-box' as any,fontFamily:'inherit'};
   return <div style={{marginBottom:20}}><label style={{display:'block',fontSize:'0.88rem',fontWeight:600,color:'#2c3e50',marginBottom:6}}>{label}</label><select value={value} onChange={e=>onChange(e.target.value)} style={s}><option value=''>Select...</option>{options.map(o=><option key={o} value={o}>{o}</option>)}</select></div>;
 }
