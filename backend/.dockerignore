@@ -1,4 +1,4 @@
-node_modules/
+﻿node_modules/
 dist/
 .env
 .env.local
@@ -8,6 +8,3 @@ dist/
 README.md
 .DS_Store
 npm-debug.log
-src/
-tsconfig.json
-nest-cli.json
