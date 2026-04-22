@@ -1,9 +1,11 @@
 ﻿FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
+COPY tsconfig*.json ./
 COPY prisma ./prisma/
+COPY nest-cli.json ./
 RUN npm ci
-COPY . .
+COPY src ./src/
 RUN npm run build
 
 FROM node:22-alpine AS production
