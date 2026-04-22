@@ -2,8 +2,8 @@
 WORKDIR /app
 COPY package*.json ./
 COPY tsconfig*.json ./
-COPY prisma ./prisma/
 COPY nest-cli.json ./
+COPY prisma ./prisma/
 RUN npm ci
 COPY src ./src/
 RUN npm run build
