@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest } from '@nestjs/common';
 import { StripeService } from './stripe.service';
+import { PaymentsService } from './payments.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EventsService } from '../events/events.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,11 +12,24 @@ import Stripe from 'stripe';
 export class PaymentsController {
   constructor(
     private stripeService: StripeService,
+    private paymentsService: PaymentsService,
     private subscriptionsService: SubscriptionsService,
     private eventsService: EventsService,
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
   ) {}
+
+  /**
+   * Create a Stripe Payment Link for a consultation
+   */
+  @Post('consultation-link')
+  @UseGuards(JwtAuthGuard)
+  async createConsultationLink(
+    @Body('leadId') leadId: string,
+    @Body('consultationType') consultationType: string,
+  ) {
+    return this.paymentsService.createConsultationPaymentLink(leadId, consultationType);
+  }
 
   /**
    * Create checkout session for subscription

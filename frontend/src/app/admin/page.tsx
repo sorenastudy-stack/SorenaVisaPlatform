@@ -137,37 +137,72 @@ function LoginView({ onLogin }: { onLogin: (token: string, user: StaffUser) => v
 
 // ── LEAD DETAIL MODAL ─────────────────────────────────────────────────────────
 
-function ActionButtons({ route, onToast }: { route: string | null | undefined; onToast: (msg: string) => void }) {
-  const comingSoon = (label: string) => () => onToast(`${label} — coming soon`);
+function ActionButtons({ route, leadId, token, onToast }: {
+  route: string | null | undefined;
+  leadId: string;
+  token: string;
+  onToast: (msg: string) => void;
+}) {
+  const [loadingType, setLoadingType] = useState<string | null>(null);
 
-  const Btn = ({ label, variant, onClick, disabled }: {
+  const generateLink = async (consultationType: string) => {
+    if (consultationType === 'FREE_SESSION') {
+      onToast('Free session booked — contact lead to confirm time');
+      return;
+    }
+    setLoadingType(consultationType);
+    try {
+      const res = await fetch(`${API}/payments/consultation-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ leadId, consultationType }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to generate link');
+      if (data.url) {
+        window.open(data.url, '_blank');
+      } else {
+        onToast('Payment link generated — no URL returned');
+      }
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : 'Failed to generate payment link');
+    } finally {
+      setLoadingType(null);
+    }
+  };
+
+  const Btn = ({ label, variant, consultationType, disabled: forceDisabled }: {
     label: string;
     variant: 'green' | 'red' | 'grey';
-    onClick: () => void;
+    consultationType?: string;
     disabled?: boolean;
   }) => {
+    const isLoading = consultationType ? loadingType === consultationType : false;
+    const isDisabled = forceDisabled || isLoading || (loadingType !== null && loadingType !== consultationType);
     const bg = variant === 'green' ? '#0d7a6e' : variant === 'red' ? '#991b1b' : '#e5e7eb';
     const color = variant === 'grey' ? '#6b7280' : '#fff';
     return (
-      <button onClick={onClick} disabled={disabled}
-        style={{ width: '100%', padding: '12px', background: disabled ? '#e5e7eb' : bg, color: disabled ? '#9ca3af' : color, border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: disabled ? 'not-allowed' : 'pointer', marginBottom: 8 }}>
-        {label}
+      <button
+        onClick={consultationType ? () => generateLink(consultationType) : undefined}
+        disabled={isDisabled}
+        style={{ width: '100%', padding: '12px', background: isDisabled ? '#e5e7eb' : bg, color: isDisabled ? '#9ca3af' : color, border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: isDisabled ? 'not-allowed' : 'pointer', marginBottom: 8 }}>
+        {isLoading ? 'Generating link…' : label}
       </button>
     );
   };
 
   if (route === 'CONTENT_NURTURE') return (
-    <Btn variant="green" label="Send Nurture Email" onClick={comingSoon('Nurture email')} />
+    <Btn variant="grey" label="Send Nurture Email — coming soon" />
   );
   if (route === 'ROADMAP') return (
-    <Btn variant="green" label="Book Gap-Closing Session (30 NZD)" onClick={comingSoon('Payment link')} />
+    <Btn variant="green" label="Generate Gap-Closing Session Link (30 NZD)" consultationType="GAP_CLOSING" />
   );
   if (route === 'ADMISSION_CONSULTATION') return (
-    <Btn variant="green" label="Book Admission Consultation (50 NZD)" onClick={comingSoon('Payment link')} />
+    <Btn variant="green" label="Generate Admission Consultation Link (50 NZD)" consultationType="ADMISSION_CONSULTATION" />
   );
   if (route === 'LIA_CONSULTATION') return (
     <>
-      <Btn variant="red" label="Book LIA Consultation (150 NZD)" onClick={comingSoon('Payment link')} />
+      <Btn variant="red" label="Generate LIA Consultation Link (150 NZD)" consultationType="LIA_CONSULTATION" />
       <p style={{ fontSize: 12, color: '#991b1b', fontWeight: 700, textAlign: 'center', margin: '0 0 8px' }}>
         ⚠️ Do not proceed without LIA clearance
       </p>
@@ -175,14 +210,11 @@ function ActionButtons({ route, onToast }: { route: string | null | undefined; o
   );
   if (route === 'EXECUTION_QUEUE') return (
     <>
-      <Btn variant="green" label="Book Free 15-Min Session" onClick={comingSoon('Booking link')} />
-      <Btn variant="grey" label="Open Account (200 NZD)" onClick={() => {}} disabled />
-      <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: '0 0 8px' }}>
-        Available after free session is completed
-      </p>
+      <Btn variant="green" label="Book Free 15-Min Session" consultationType="FREE_SESSION" />
+      <Btn variant="grey" label="Generate Account Opening Link (200 NZD)" consultationType="ACCOUNT_OPENING" />
     </>
   );
-  return <Btn variant="grey" label="Contact Lead" onClick={comingSoon('Contact')} />;
+  return <Btn variant="grey" label="No action available" />;
 }
 
 function LeadModal({ lead, token, onClose }: { lead: Lead; token: string; onClose: () => void }) {
@@ -307,7 +339,7 @@ function LeadModal({ lead, token, onClose }: { lead: Lead; token: string; onClos
           {/* Take Action */}
           <Section title="Take Action">
             <div style={{ padding: '14px' }}>
-              <ActionButtons route={lead.recommendedRoute} onToast={showToast} />
+              <ActionButtons route={lead.recommendedRoute} leadId={lead.id} token={token} onToast={showToast} />
             </div>
           </Section>
         </div>

@@ -101,6 +101,40 @@ export class StripeService {
   }
 
   /**
+   * Create a Stripe Payment Link for a consultation booking
+   */
+  async createConsultationPaymentLink(
+    leadId: string,
+    consultationType: string,
+    amountNZD: number,
+    currency: string = 'nzd',
+  ) {
+    const amountCents = Math.round(amountNZD * 100);
+
+    const price = await this.stripe.prices.create({
+      currency,
+      unit_amount: amountCents,
+      product_data: {
+        name: consultationType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        description: 'Sorena Visa Platform Consultation',
+      },
+    });
+
+    const paymentLink = await this.stripe.paymentLinks.create({
+      line_items: [{ price: price.id, quantity: 1 }],
+      metadata: { leadId, consultationType },
+      after_completion: {
+        type: 'redirect',
+        redirect: {
+          url: `${process.env.FRONTEND_URL || 'https://sorenastudy.com'}/payment/success`,
+        },
+      },
+    });
+
+    return paymentLink;
+  }
+
+  /**
    * Construct and verify webhook event
    */
   constructWebhookEvent(payload: Buffer, signature: string) {
