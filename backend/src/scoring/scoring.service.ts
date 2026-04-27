@@ -27,6 +27,7 @@ export interface ScoreResult {
   intentScore: number;
   engagementScore: number;
   readinessScore: number;
+  bandNumber: number;
   scoreBand: 'LOW' | 'MID' | 'HIGH';
 }
 
@@ -70,6 +71,15 @@ export class ScoringService {
     return Math.min(score, 100);
   }
 
+  private normalizeFinancialLevel(level: string): string {
+    const map: Record<string, string> = {
+      'High': 'ABOVE',
+      'Medium': 'ADEQUATE',
+      'Low': 'BELOW',
+    };
+    return map[level] ?? level;
+  }
+
   /**
    * Calculate financial score based on level and budget
    */
@@ -78,13 +88,14 @@ export class ScoringService {
 
     // Financial level scoring (0-60)
     if (intake.financialLevel) {
+      const normalized = this.normalizeFinancialLevel(intake.financialLevel);
       const levelScores: Record<string, number> = {
         'ABOVE': 60,
         'ADEQUATE': 40,
         'BELOW': 10,
         'UNCERTAIN': 20,
       };
-      score += levelScores[intake.financialLevel] || 0;
+      score += levelScores[normalized] || 0;
     }
 
     // Budget scoring (0-40)
@@ -130,37 +141,15 @@ export class ScoringService {
   }
 
   /**
-   * Calculate intent score based on study intent and urgency
+   * Calculate intent score based on free-text length and quality
    */
   calculateIntentScore(intake: IntakeFormData): number {
-    let score = 50; // Base score
-
-    // Intent level scoring
-    if (intake.studyIntent) {
-      const intentScores: Record<string, number> = {
-        'DEFINITE': 30,
-        'LIKELY': 20,
-        'EXPLORING': 10,
-        'TENTATIVE': 5,
-      };
-      score += intentScores[intake.studyIntent] || 0;
-    }
-
-    // Urgency based on preferred start date
-    if (intake.preferredStartDate) {
-      const now = new Date();
-      const monthsUntilStart =
-        (intake.preferredStartDate.getFullYear() - now.getFullYear()) * 12 +
-        (intake.preferredStartDate.getMonth() - now.getMonth());
-
-      if (monthsUntilStart <= 3) {
-        score += 20; // High urgency
-      } else if (monthsUntilStart <= 6) {
-        score += 10;
-      }
-    }
-
-    return Math.min(score, 100);
+    const len = (intake.studyIntent || '').trim().length;
+    if (len === 0) return 0;
+    if (len < 20) return 30;
+    if (len < 100) return 50;
+    if (len <= 200) return 70;
+    return 90;
   }
 
   /**
@@ -201,11 +190,24 @@ export class ScoringService {
   }
 
   /**
-   * Determine score band
+   * Map readiness score to 6-band numeric tier (v3.0 spec)
    */
-  determineScoreBand(readinessScore: number): 'LOW' | 'MID' | 'HIGH' {
-    if (readinessScore >= 70) return 'HIGH';
-    if (readinessScore >= 40) return 'MID';
+  determineBandNumber(readinessScore: number): number {
+    if (readinessScore >= 85) return 6;
+    if (readinessScore >= 70) return 5;
+    if (readinessScore >= 55) return 4;
+    if (readinessScore >= 40) return 3;
+    if (readinessScore >= 25) return 2;
+    return 1;
+  }
+
+  /**
+   * Map band number to DB-compatible 3-value ScoreBand enum
+   * Band 1-2 → LOW, 3-4 → MID, 5-6 → HIGH
+   */
+  determineScoreBand(bandNumber: number): 'LOW' | 'MID' | 'HIGH' {
+    if (bandNumber >= 5) return 'HIGH';
+    if (bandNumber >= 3) return 'MID';
     return 'LOW';
   }
 
@@ -229,7 +231,8 @@ export class ScoringService {
       engagement: engagementScore,
     });
 
-    const scoreBand = this.determineScoreBand(readinessScore);
+    const bandNumber = this.determineBandNumber(readinessScore);
+    const scoreBand = this.determineScoreBand(bandNumber);
 
     return {
       academicScore,
@@ -238,6 +241,7 @@ export class ScoringService {
       intentScore,
       engagementScore,
       readinessScore,
+      bandNumber,
       scoreBand,
     };
   }

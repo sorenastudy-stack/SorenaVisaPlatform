@@ -135,7 +135,7 @@ export class PublicService {
       );
 
       const recommendedRoute = this.determineRecommendedRoute(
-        scoreResult.scoreBand,
+        scoreResult.bandNumber,
         riskResult.riskLevel as any,
       );
 
@@ -213,27 +213,16 @@ export class PublicService {
   }
 
   private determineRecommendedRoute(
-    scoreBand: 'LOW' | 'MID' | 'HIGH',
+    bandNumber: number,
     riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED',
   ): RecommendedRoute {
     if (riskLevel === 'BLOCKED') {
       return RecommendedRoute.LIA_CONSULTATION;
     }
 
-    if (scoreBand === 'HIGH') {
-      if (riskLevel === 'LOW') {
-        return RecommendedRoute.EXECUTION_QUEUE;
-      }
-      return RecommendedRoute.SPECIALIST_CONSULTATION;
-    }
-
-    if (scoreBand === 'MID') {
-      if (riskLevel === 'LOW') {
-        return RecommendedRoute.ADMISSION_CONSULTATION;
-      }
-      return RecommendedRoute.WEBINAR;
-    }
-
-    return RecommendedRoute.CONTENT_NURTURE;
+    if (bandNumber <= 2) return RecommendedRoute.CONTENT_NURTURE;
+    if (bandNumber === 3) return RecommendedRoute.ROADMAP;
+    if (bandNumber === 4) return RecommendedRoute.ADMISSION_CONSULTATION;
+    return RecommendedRoute.EXECUTION_QUEUE; // band 5-6
   }
 }
