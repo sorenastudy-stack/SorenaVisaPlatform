@@ -137,21 +137,101 @@ function LoginView({ onLogin }: { onLogin: (token: string, user: StaffUser) => v
 
 // ── LEAD DETAIL MODAL ─────────────────────────────────────────────────────────
 
-function LeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+function ActionButtons({ route, onToast }: { route: string | null | undefined; onToast: (msg: string) => void }) {
+  const comingSoon = (label: string) => () => onToast(`${label} — coming soon`);
+
+  const Btn = ({ label, variant, onClick, disabled }: {
+    label: string;
+    variant: 'green' | 'red' | 'grey';
+    onClick: () => void;
+    disabled?: boolean;
+  }) => {
+    const bg = variant === 'green' ? '#0d7a6e' : variant === 'red' ? '#991b1b' : '#e5e7eb';
+    const color = variant === 'grey' ? '#6b7280' : '#fff';
+    return (
+      <button onClick={onClick} disabled={disabled}
+        style={{ width: '100%', padding: '12px', background: disabled ? '#e5e7eb' : bg, color: disabled ? '#9ca3af' : color, border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: disabled ? 'not-allowed' : 'pointer', marginBottom: 8 }}>
+        {label}
+      </button>
+    );
+  };
+
+  if (route === 'CONTENT_NURTURE') return (
+    <Btn variant="green" label="Send Nurture Email" onClick={comingSoon('Nurture email')} />
+  );
+  if (route === 'ROADMAP') return (
+    <Btn variant="green" label="Book Gap-Closing Session (30 NZD)" onClick={comingSoon('Payment link')} />
+  );
+  if (route === 'ADMISSION_CONSULTATION') return (
+    <Btn variant="green" label="Book Admission Consultation (50 NZD)" onClick={comingSoon('Payment link')} />
+  );
+  if (route === 'LIA_CONSULTATION') return (
+    <>
+      <Btn variant="red" label="Book LIA Consultation (150 NZD)" onClick={comingSoon('Payment link')} />
+      <p style={{ fontSize: 12, color: '#991b1b', fontWeight: 700, textAlign: 'center', margin: '0 0 8px' }}>
+        ⚠️ Do not proceed without LIA clearance
+      </p>
+    </>
+  );
+  if (route === 'EXECUTION_QUEUE') return (
+    <>
+      <Btn variant="green" label="Book Free 15-Min Session" onClick={comingSoon('Booking link')} />
+      <Btn variant="grey" label="Open Account (200 NZD)" onClick={() => {}} disabled />
+      <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', margin: '0 0 8px' }}>
+        Available after free session is completed
+      </p>
+    </>
+  );
+  return <Btn variant="grey" label="Contact Lead" onClick={comingSoon('Contact')} />;
+}
+
+function LeadModal({ lead, token, onClose }: { lead: Lead; token: string; onClose: () => void }) {
   const band = lead.scoreBand ? BAND_STYLE[lead.scoreBand] : undefined;
   const risk = lead.riskLevel ? RISK_STYLE[lead.riskLevel] : undefined;
+  const [notes, setNotes] = useState(lead.managerNotes || '');
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3000);
+  };
+
+  const copyEmail = () => {
+    if (!lead.contact.email) return;
+    navigator.clipboard.writeText(lead.contact.email).then(() => showToast('Email copied to clipboard'));
+  };
+
+  const saveNotes = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/leads/${lead.id}/notes`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ managerNotes: notes }),
+      });
+      if (res.status === 403) { showToast('Only SUPER_ADMIN can save notes'); return; }
+      if (!res.ok) throw new Error('Save failed');
+      showToast('Notes saved ✓');
+    } catch {
+      showToast('Failed to save notes');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div
-      onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', padding: 0 }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{ background: '#fff', width: '100%', maxWidth: 480, height: '100vh', overflowY: 'auto', boxShadow: '-8px 0 40px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column' }}
-      >
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', padding: 0 }}>
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#0a2342', color: '#fff', padding: '10px 20px', borderRadius: 8, fontSize: 14, fontWeight: 600, zIndex: 2000, boxShadow: '0 4px 16px rgba(0,0,0,0.25)', whiteSpace: 'nowrap' }}>
+          {toast}
+        </div>
+      )}
+
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', width: '100%', maxWidth: 480, height: '100vh', overflowY: 'auto', boxShadow: '-8px 0 40px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <div style={{ background: '#0a2342', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ background: '#0a2342', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: 1 }}>Lead Detail</p>
             <h2 style={{ color: '#fff', fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>{lead.contact.fullName}</h2>
@@ -169,7 +249,16 @@ function LeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
 
           <Section title="Contact">
             <Row label="Full Name" value={lead.contact.fullName} />
-            <Row label="Email" value={lead.contact.email || '—'} />
+            <Row label="Email" value={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{lead.contact.email || '—'}</span>
+                {lead.contact.email && (
+                  <button onClick={copyEmail} style={{ background: '#f3f4f6', border: 'none', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: '#374151', cursor: 'pointer' }}>
+                    Copy
+                  </button>
+                )}
+              </div>
+            } />
             <Row label="Phone" value={lead.contact.phone || '—'} />
             <Row label="Nationality" value={lead.contact.nationality || '—'} />
           </Section>
@@ -177,20 +266,14 @@ function LeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
           <Section title="Scoring">
             <Row label="Status" value={lead.leadStatus.replace(/_/g, ' ')} />
             <Row label="Readiness Band" value={
-              lead.scoreBand
-                ? <Badge label={BAND_LABELS[lead.scoreBand] ?? lead.scoreBand} style={band} />
-                : '—'
+              lead.scoreBand ? <Badge label={BAND_LABELS[lead.scoreBand] ?? lead.scoreBand} style={band} /> : '—'
             } />
             <Row label="Readiness Score" value={lead.readinessScore != null ? `${lead.readinessScore}/100` : '—'} />
             <Row label="Risk Level" value={
-              lead.riskLevel
-                ? <Badge label={RISK_LABELS[lead.riskLevel] ?? lead.riskLevel} style={risk} />
-                : '—'
+              lead.riskLevel ? <Badge label={RISK_LABELS[lead.riskLevel] ?? lead.riskLevel} style={risk} /> : '—'
             } />
             <Row label="Recommended Route" value={
-              lead.recommendedRoute
-                ? (ROUTE_LABELS[lead.recommendedRoute] || lead.recommendedRoute)
-                : '—'
+              lead.recommendedRoute ? (ROUTE_LABELS[lead.recommendedRoute] || lead.recommendedRoute) : '—'
             } />
           </Section>
 
@@ -204,11 +287,29 @@ function LeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
             </Section>
           )}
 
-          {lead.managerNotes && (
-            <Section title="Manager Notes">
-              <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.7, margin: 0 }}>{lead.managerNotes}</p>
-            </Section>
-          )}
+          {/* Manager Notes */}
+          <Section title="Manager Notes">
+            <div style={{ padding: '14px' }}>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Add internal notes about this lead…"
+                rows={4}
+                style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#374151', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', outline: 'none' }}
+              />
+              <button onClick={saveNotes} disabled={saving}
+                style={{ marginTop: 8, padding: '9px 20px', background: saving ? '#0d7a6e99' : '#0d7a6e', color: '#fff', border: 'none', borderRadius: 7, fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer' }}>
+                {saving ? 'Saving…' : 'Save Notes'}
+              </button>
+            </div>
+          </Section>
+
+          {/* Take Action */}
+          <Section title="Take Action">
+            <div style={{ padding: '14px' }}>
+              <ActionButtons route={lead.recommendedRoute} onToast={showToast} />
+            </div>
+          </Section>
         </div>
       </div>
     </div>
@@ -457,7 +558,7 @@ function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; 
         </p>
       </div>
 
-      {selectedLead && <LeadModal lead={selectedLead} onClose={() => setSelectedLead(null)} />}
+      {selectedLead && <LeadModal lead={selectedLead} token={token!} onClose={() => setSelectedLead(null)} />}
     </div>
   );
 }
