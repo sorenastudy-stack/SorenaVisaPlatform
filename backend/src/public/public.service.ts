@@ -139,6 +139,12 @@ export class PublicService {
         riskResult.riskLevel as any,
       );
 
+      const hasVisaRefusal = (data.visaRejectionCount ?? 0) > 0;
+      const hardStop = hasVisaRefusal ? 'HS4' : null;
+      const finalRoute = hasVisaRefusal
+        ? RecommendedRoute.LIA_CONSULTATION
+        : recommendedRoute;
+
       // Update lead with detailed score and risk metadata
       await tx.lead.update({
         where: { id: lead.id },
@@ -151,10 +157,10 @@ export class PublicService {
           engagementScore: scoreResult.engagementScore,
           scoreBand: scoreResult.scoreBand,
           riskLevel: riskResult.riskLevel as any,
-          hardStopFlag: riskResult.hardStopFlag,
-          hardStopReason: riskResult.hardStopReason,
-          executionAllowed: riskResult.executionAllowed,
-          recommendedRoute: recommendedRoute as any,
+          hardStopFlag: hasVisaRefusal || riskResult.hardStopFlag,
+          hardStopReason: hasVisaRefusal ? 'HS4: previous visa refusal' : riskResult.hardStopReason,
+          executionAllowed: hasVisaRefusal ? false : riskResult.executionAllowed,
+          recommendedRoute: finalRoute as any,
           leadStatus: LeadStatus.SCORING_DONE,
         },
       });
@@ -178,11 +184,7 @@ export class PublicService {
         lead.id,
         'SYSTEM',
         null,
-        {
-          scoreResult,
-          riskResult,
-          recommendedRoute,
-        },
+        { scoreResult, riskResult, recommendedRoute: finalRoute },
         tx,
       );
 
@@ -190,9 +192,10 @@ export class PublicService {
         leadId: lead.id,
         scoreBand: scoreResult.scoreBand,
         readinessScore: scoreResult.readinessScore,
-        executionAllowed: riskResult.executionAllowed,
+        executionAllowed: hasVisaRefusal ? false : riskResult.executionAllowed,
         riskLevel: riskResult.riskLevel,
-        recommendedRoute,
+        recommendedRoute: finalRoute,
+        hardStop,
       };
     });
 
