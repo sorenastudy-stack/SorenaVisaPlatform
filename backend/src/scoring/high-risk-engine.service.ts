@@ -14,11 +14,19 @@ export class HighRiskEngineService {
   /**
    * Assess risk from intake form data
    */
+  private normalizeFinancialLevel(level: string | undefined | null): string | null {
+    if (!level) return null;
+    const map: Record<string, string> = { 'High': 'ABOVE', 'Medium': 'ADEQUATE', 'Low': 'BELOW' };
+    return map[level] ?? level;
+  }
+
   assessRisk(intake: any, scoreBand: 'LOW' | 'MID' | 'HIGH'): RiskAssessmentResult {
     const hardBlocks: string[] = [];
     const flaggedIssues: string[] = [];
     let executionAllowed = false;
     let hardStopReason: string | null = null;
+
+    const financialLevel = this.normalizeFinancialLevel(intake.financialLevel);
 
     // HARD BLOCK 1: Visa rejection history
     if (intake.visaRejectionCount && intake.visaRejectionCount >= 1) {
@@ -33,12 +41,15 @@ export class HighRiskEngineService {
       hardBlocks.push('No English language test provided');
     }
 
-    // HARD BLOCK 3: Inadequate finances
-    if (intake.financialLevel === 'BELOW') {
-      hardBlocks.push('Financial level below minimum threshold');
+    // FLAG (HIGH risk): Low financial level with budget under 20,000 NZD
+    if (
+      financialLevel === 'BELOW' &&
+      (intake.estimatedBudgetNZD === undefined || intake.estimatedBudgetNZD < 20000)
+    ) {
+      flaggedIssues.push('Low financial level with budget under 20,000 NZD');
     }
 
-    // FLAG: Unknown visa rejection reason
+    // FLAG: Unknown visa rejection reason (only relevant if no hard block already)
     if (
       intake.visaRejectionCount &&
       intake.visaRejectionCount > 0 &&
@@ -52,7 +63,6 @@ export class HighRiskEngineService {
       executionAllowed = false;
       hardStopReason = hardBlocks.join('; ');
     } else {
-      // No hard blocks - execution allowed based on score band
       executionAllowed = scoreBand === 'HIGH';
       hardStopReason = null;
     }
