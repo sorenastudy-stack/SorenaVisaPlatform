@@ -233,6 +233,69 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+// ── HELP PANEL ────────────────────────────────────────────────────────────────
+
+function HelpPanel({ onClose }: { onClose: () => void }) {
+  const H = ({ children }: { children: React.ReactNode }) => (
+    <h3 style={{ fontSize: 13, fontWeight: 800, color: '#0a2342', textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 12px' }}>{children}</h3>
+  );
+  const Divider = () => (
+    <div style={{ borderTop: '2px solid #0d7a6e', margin: '20px 0' }} />
+  );
+  const Item = ({ label, desc }: { label: string; desc: string }) => (
+    <div style={{ marginBottom: 10 }}>
+      <span style={{ fontWeight: 700, color: '#0a2342', fontSize: 13 }}>{label}</span>
+      <span style={{ color: '#4b5563', fontSize: 13 }}>  —  {desc}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ background: '#fff', borderBottom: '2px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', position: 'sticky', top: 60, zIndex: 99 }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 24px 20px', position: 'relative' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: 20, right: 20, background: '#f3f4f6', border: 'none', borderRadius: 6, width: 28, height: 28, cursor: 'pointer', fontSize: 16, color: '#374151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>×</button>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0 40px' }}>
+
+          {/* Readiness Bands */}
+          <div>
+            <H>Readiness Bands</H>
+            <Item label="Band 1-2 (0–39) — Early Stage" desc="Lead is not ready. Send nurture content only. Do not offer consultation yet." />
+            <Item label="Band 3-4 (40–69) — Developing" desc="Lead has potential. Offer Gap-Closing Session (30 NZD) or Admission Consultation (50 NZD)." />
+            <Item label="Band 5-6 (70–100) — Strong" desc="Lead is viable. Offer free 15-min session first, then 200 NZD account opening." />
+          </div>
+
+          {/* Risk Levels */}
+          <div>
+            <H>Risk Levels</H>
+            <Item label="Low Risk" desc="Clean profile. Safe to proceed normally." />
+            <Item label="Medium Risk" desc="Some concerns flagged. Review before proceeding." />
+            <Item label="High Risk" desc="Financial or academic gaps. Needs specialist attention before execution." />
+            <Item label="Hard Stop ⚠️" desc="Visa refusal history or no English evidence. Must go to LIA Consultation (150 NZD) before anything else." />
+          </div>
+
+          {/* Routes */}
+          <div>
+            <H>Recommended Routes</H>
+            <Item label="Free Resources & Guidance" desc="Nurture only. No outreach action needed yet." />
+            <Item label="Personalised Roadmap" desc="Gap-closing session (30 NZD). Book with language-matched Admission Specialist." />
+            <Item label="Admission Consultation" desc="Deeper programme guidance needed (50 NZD)." />
+            <Item label="Ready to Apply" desc="Offer free 15-min session first, then 200 NZD account opening." />
+            <Item label="LIA Consultation" desc="Legal review required (150 NZD). Do NOT proceed without LIA clearance." />
+          </div>
+
+        </div>
+
+        <Divider />
+        <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 8, padding: '12px 16px' }}>
+          <p style={{ color: '#991b1b', fontWeight: 700, fontSize: 13, margin: 0 }}>
+            ⚠️ Hard Stop Rule: Any lead with a ⚠️ icon must NOT be moved to execution without LIA clearance first. This is non-negotiable.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 
 function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; onLogout: () => void }) {
@@ -240,6 +303,7 @@ function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const [search, setSearch] = useState('');
   const [bandFilter, setBandFilter] = useState('');
 
@@ -278,6 +342,12 @@ function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ color: '#fff', fontWeight: 800, fontSize: '1.05rem', letterSpacing: -0.5 }}>Sorena</span>
           <span style={{ background: '#0d7a6e', color: '#fff', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6 }}>STAFF</span>
+          <button
+            onClick={() => setShowHelp(h => !h)}
+            title="Staff guide"
+            style={{ background: showHelp ? '#fff' : 'rgba(255,255,255,0.15)', color: showHelp ? '#0a2342' : '#fff', border: '1px solid rgba(255,255,255,0.3)', width: 26, height: 26, borderRadius: '50%', cursor: 'pointer', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+            ?
+          </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, display: 'none' }} className="hide-mobile">{user.name} · {user.role}</span>
@@ -287,6 +357,7 @@ function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; 
           </button>
         </div>
       </div>
+      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
 
       {/* Main */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 20px' }}>
