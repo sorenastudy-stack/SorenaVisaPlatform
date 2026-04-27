@@ -36,11 +36,24 @@ const BAND_STYLE: Record<string, { bg: string; color: string }> = {
   LOW:    { bg: '#fef3c7', color: '#92400e' },
 };
 
+const BAND_LABELS: Record<string, string> = {
+  HIGH: 'Band 5-6',
+  MID:  'Band 3-4',
+  LOW:  'Band 1-2',
+};
+
 const RISK_STYLE: Record<string, { bg: string; color: string }> = {
   LOW:     { bg: '#d1fae5', color: '#065f46' },
   MEDIUM:  { bg: '#fef3c7', color: '#92400e' },
   HIGH:    { bg: '#fee2e2', color: '#991b1b' },
   BLOCKED: { bg: '#fce7f3', color: '#9d174d' },
+};
+
+const RISK_LABELS: Record<string, string> = {
+  LOW:     'Low Risk',
+  MEDIUM:  'Medium Risk',
+  HIGH:    'High Risk',
+  BLOCKED: 'Hard Stop',
 };
 
 function Badge({ label, style }: { label: string; style?: { bg: string; color: string } }) {
@@ -163,15 +176,15 @@ function LeadModal({ lead, onClose }: { lead: Lead; onClose: () => void }) {
 
           <Section title="Scoring">
             <Row label="Status" value={lead.leadStatus.replace(/_/g, ' ')} />
-            <Row label="Score Band" value={
+            <Row label="Readiness Band" value={
               lead.scoreBand
-                ? <Badge label={lead.scoreBand} style={band} />
+                ? <Badge label={BAND_LABELS[lead.scoreBand] ?? lead.scoreBand} style={band} />
                 : '—'
             } />
             <Row label="Readiness Score" value={lead.readinessScore != null ? `${lead.readinessScore}/100` : '—'} />
             <Row label="Risk Level" value={
               lead.riskLevel
-                ? <Badge label={lead.riskLevel} style={risk} />
+                ? <Badge label={RISK_LABELS[lead.riskLevel] ?? lead.riskLevel} style={risk} />
                 : '—'
             } />
             <Row label="Recommended Route" value={
@@ -281,10 +294,10 @@ function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
           {[
             { label: 'Total Leads', value: leads.length, color: '#0a2342' },
-            { label: 'HIGH Band', value: leads.filter(l => l.scoreBand === 'HIGH').length, color: '#065f46' },
-            { label: 'MID Band', value: leads.filter(l => l.scoreBand === 'MID').length, color: '#1e3a5f' },
-            { label: 'LOW Band', value: leads.filter(l => l.scoreBand === 'LOW').length, color: '#92400e' },
-            { label: 'Hard Stops', value: leads.filter(l => l.hardStopFlag).length, color: '#991b1b' },
+            { label: 'Strong (5-6)', value: leads.filter(l => l.scoreBand === 'HIGH').length, color: '#065f46' },
+            { label: 'Developing (3-4)', value: leads.filter(l => l.scoreBand === 'MID').length, color: '#1e3a5f' },
+            { label: 'Early (1-2)', value: leads.filter(l => l.scoreBand === 'LOW').length, color: '#92400e' },
+            { label: 'Hard Stops ⚠️', value: leads.filter(l => l.hardStopFlag).length, color: '#991b1b' },
           ].map(s => (
             <div key={s.label} style={{ background: '#fff', borderRadius: 10, padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 6px' }}>{s.label}</p>
@@ -326,7 +339,7 @@ function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; 
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                    {['Name', 'Email', 'Score Band', 'Route', 'Risk Level', 'Date'].map(h => (
+                    {['Name', 'Email', 'Readiness Band', 'Route', 'Risk Level', 'Date'].map(h => (
                       <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: '#374151', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.6, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
@@ -347,7 +360,7 @@ function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; 
                       <td style={{ padding: '13px 16px', color: '#6b7280' }}>{lead.contact.email || '—'}</td>
                       <td style={{ padding: '13px 16px' }}>
                         {lead.scoreBand
-                          ? <Badge label={lead.scoreBand} style={BAND_STYLE[lead.scoreBand]} />
+                          ? <Badge label={BAND_LABELS[lead.scoreBand] ?? lead.scoreBand} style={BAND_STYLE[lead.scoreBand]} />
                           : <span style={{ color: '#9ca3af' }}>—</span>}
                       </td>
                       <td style={{ padding: '13px 16px', color: '#374151', maxWidth: 200 }}>
@@ -357,7 +370,7 @@ function Dashboard({ token, user, onLogout }: { token: string; user: StaffUser; 
                       </td>
                       <td style={{ padding: '13px 16px' }}>
                         {lead.riskLevel
-                          ? <Badge label={lead.riskLevel} style={RISK_STYLE[lead.riskLevel]} />
+                          ? <Badge label={RISK_LABELS[lead.riskLevel] ?? lead.riskLevel} style={RISK_STYLE[lead.riskLevel]} />
                           : <span style={{ color: '#9ca3af' }}>—</span>}
                       </td>
                       <td style={{ padding: '13px 16px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{fmtDate(lead.createdAt)}</td>
