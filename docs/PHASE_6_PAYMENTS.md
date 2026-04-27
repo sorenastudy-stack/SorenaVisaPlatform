@@ -104,3 +104,36 @@ The fix is required for any backend deploy to succeed; do not roll it back indep
 
 **To roll back the entire payments feature:**
 1. In a terminal at the repo root:
+
+## 11. Debug log — Prisma on Alpine (2026-04-27)
+
+After the initial Phase 6 deploy, the backend crashed on startup with:
+
+```
+PrismaClientInitializationError: 'PrismaClient' needs to be constructed with a non-empty, valid 'PrismaClientOptions'
+```
+
+This error was misleading. The real cause was Prisma binary mismatch on Alpine Linux, not options. Two fixes were required together.
+
+**Fix A — schema.prisma generator block must include explicit binaryTargets:**
+
+```prisma
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+```
+
+Without this, `prisma generate` only emits binaries for the host that ran it (glibc on dev machines), and Alpine's musl libc cannot execute them at runtime.
+
+**Fix B — Dockerfile must install openssl in both build and production stages:**
+
+```dockerfile
+RUN apk add --no-cache openssl
+```
+
+Alpine ships without openssl by default; Prisma's query engine links against it.
+
+Also discovered: the previous Dockerfile attempted to copy `node_modules/.prisma` and `node_modules/@prisma` from the builder stage to the production stage. This is fragile — the canonical pattern is to install prod deps fresh and run `npx prisma generate` again in the production stage. The current Dockerfile follows this pattern.
+
+**Prisma version note:** Prisma 7.7.0 does NOT accept `datasources` or `datasourceUrl` as constructor options in TypeScript — both fail with `TS2353`. The correct pattern for v7 is bare `super()` and let Prisma read `DATABASE_URL` from `process.env` directly.
