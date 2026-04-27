@@ -75,7 +75,13 @@ export default function EligibilityPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Submission failed');
-      router.push(`/eligibility/result?score=${(data.scoreBand || 'medium').toUpperCase()}`);
+      const params = new URLSearchParams({
+        score: (data.scoreBand || 'MID').toUpperCase(),
+        readiness: String(data.readinessScore ?? ''),
+        route: data.recommendedRoute || '',
+        risk: (data.riskLevel || '').toUpperCase(),
+      });
+      router.push(`/eligibility/result?${params.toString()}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to submit form. Please check your connection and try again.');
     } finally {
