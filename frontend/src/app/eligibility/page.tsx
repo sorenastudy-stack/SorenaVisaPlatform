@@ -80,6 +80,7 @@ export default function EligibilityPage() {
         readiness: String(data.readinessScore ?? ''),
         route: data.recommendedRoute || '',
         risk: (data.riskLevel || '').toUpperCase(),
+        ...(data.hardStop ? { hardStop: data.hardStop } : {}),
       });
       router.push(`/eligibility/result?${params.toString()}`);
     } catch (e) {

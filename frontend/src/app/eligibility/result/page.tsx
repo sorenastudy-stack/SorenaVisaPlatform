@@ -20,8 +20,18 @@ function ResultContent() {
   const readiness = searchParams.get('readiness');
   const route = (searchParams.get('route') || '').toUpperCase();
   const risk = (searchParams.get('risk') || '').toUpperCase();
+  const hardStop = searchParams.get('hardStop');
+  const isHS4 = hardStop === 'HS4';
 
   const getContent = () => {
+    if (isHS4) return {
+      emoji: '⚖️',
+      headline: 'Legal Review Required',
+      message: 'Your case includes previous visa history that must be reviewed by a Licensed Immigration Adviser. Our LIA team will contact you within 24 hours.',
+      color: '#991b1b',
+      bg: '#fef2f2',
+      badge: { text: 'Legal Review Required', bg: '#fee2e2', color: '#991b1b' },
+    };
     if (score === 'HIGH') return {
       emoji: '🎉',
       headline: 'You Have Strong Eligibility',
@@ -50,11 +60,20 @@ function ResultContent() {
 
   const c = getContent();
   const readinessNum = readiness !== null && readiness !== '' ? Number(readiness) : null;
-  const routeLabel = ROUTE_LABELS[route] || route;
+  const routeLabel = isHS4
+    ? 'Licensed Immigration Adviser Consultation (150 NZD)'
+    : (ROUTE_LABELS[route] || route);
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#0a2342 0%,#0d4f6e 60%,#0a7a6e 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
       <div style={{ background: '#fff', borderRadius: 16, padding: '48px', width: '100%', maxWidth: 600, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center' }}>
+        {isHS4 && (
+          <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 10, padding: '14px 18px', marginBottom: 24, textAlign: 'left' }}>
+            <p style={{ color: '#991b1b', fontWeight: 600, fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+              ⚠️ Important: Your case includes previous visa history that requires review by a Licensed Immigration Adviser before any application can proceed.
+            </p>
+          </div>
+        )}
         <div style={{ fontSize: 56, marginBottom: 16 }}>{c.emoji}</div>
         <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: c.color, marginBottom: 16 }}>{c.headline}</h1>
         <p style={{ color: '#374151', fontSize: 15, lineHeight: 1.7, marginBottom: 28 }}>{c.message}</p>
