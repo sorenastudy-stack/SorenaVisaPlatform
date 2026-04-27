@@ -104,6 +104,16 @@ The fix is required for any backend deploy to succeed; do not roll it back indep
 
 **To roll back the entire payments feature:**
 1. In a terminal at the repo root:
+```
+git revert <commit-hash-of-PaymentsService-merge>
+git push origin main
+```
+2. Railway will redeploy automatically.
+3. Remove `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` from Railway Variables (optional — they do no harm if left in).
+4. **Do not** rotate the Stripe key on rollback unless you suspect compromise; rotating breaks any links already shared with prospects.
+
+**Emergency stop (kill payment links without redeploying):**
+Delete `STRIPE_SECRET_KEY` from Railway. The backend will fail to call Stripe and return an error from the `/api/payments/consultation-link` endpoint. Existing payment links already issued by Stripe continue to work because they live on Stripe's side, not ours.
 
 ## 11. Debug log — Prisma on Alpine (2026-04-27)
 
