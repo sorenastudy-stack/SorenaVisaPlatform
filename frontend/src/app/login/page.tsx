@@ -62,10 +62,14 @@ function LoginForm() {
         <div className="bg-white rounded-2xl shadow-2xl px-8 py-10">
           {/* Branding */}
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-extrabold text-sorena-navy">
-              Sorena<span className="text-sorena-gold">Visa</span>
-            </h1>
-            <p className="mt-1 text-sm text-gray-500">Staff Portal — sign in to continue</p>
+            <div className="flex justify-center mb-2">
+              <img
+                src="/brand/logo-type-blue.jpg"
+                alt="Sorena Visa"
+                className="h-12 w-auto"
+              />
+            </div>
+            <p className="mt-3 text-center text-sm text-gray-500">Staff Portal — sign in to continue</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">

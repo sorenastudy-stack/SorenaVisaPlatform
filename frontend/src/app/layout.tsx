@@ -3,9 +3,9 @@ import './globals.css';
 import { LocaleProvider } from '@/components/LocaleProvider';
 
 export const metadata: Metadata = {
-  title: 'Sorena Visa | Education & Migration New Zealand',
-  description:
-    'Expert education and migration services for New Zealand. Student visas, skilled migrant visas, work visas and family sponsorship.',
+  title: 'Sorena Visa',
+  description: 'Sorena Visa staff and student portal',
+  icons: { icon: '/favicon.png' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

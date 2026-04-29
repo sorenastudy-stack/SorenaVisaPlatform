@@ -87,11 +87,18 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-white/10">
-        <span className="text-white font-extrabold text-lg tracking-tight">Sorena</span>
-        <span className="ml-2 bg-sorena-gold/20 text-sorena-gold text-xs font-bold px-2 py-0.5 rounded-md uppercase">
-          {PORTAL_TITLES[portal]}
-        </span>
+      <div className="px-6 py-5 border-b border-white/10 flex items-center gap-3">
+        <img
+          src="/brand/logo-mark-white.jpg"
+          alt="Sorena"
+          className="h-8 w-8 flex-shrink-0"
+        />
+        <div className="flex flex-col leading-tight">
+          <span className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</span>
+          <span className="text-sorena-gold text-[10px] font-bold uppercase tracking-wider">
+            {PORTAL_TITLES[portal]}
+          </span>
+        </div>
       </div>
 
       {/* Nav */}
