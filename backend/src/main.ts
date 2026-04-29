@@ -12,17 +12,19 @@ async function bootstrap() {
 
   app.use(helmet());
 
+  const extraOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(s => s.trim()).map(s => s.trim());
+  const allowAll = extraOrigins.includes('*');
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002',
     'https://app.sorenavisa.com',
     'https://ample-dream-production-1005.up.railway.app',
-    ...(process.env.ALLOWED_ORIGINS || '').split(',').filter(s => s.trim()).map(s => s.trim()),
+    ...extraOrigins.filter(s => s !== '*'),
   ];
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (allowAll || !origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'), false);
@@ -44,8 +46,8 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   const port = parseInt(process.env.PORT || '3001', 10);
-  await app.listen(port);
-  console.log(`Backend API running on http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`Backend API running on port ${port}`);
 }
 
 bootstrap();

@@ -1,13 +1,25 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 
 const Stripe = require('stripe');
 
 @Injectable()
 export class StripeService {
-  private stripe: any;
+  private readonly logger = new Logger(StripeService.name);
+  private stripe: any = null;
 
   constructor() {
-    this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) {
+      this.logger.warn('STRIPE_SECRET_KEY is not set — payment features will be unavailable');
+    } else {
+      this.stripe = new Stripe(key);
+    }
+  }
+
+  private assertConfigured(): void {
+    if (!this.stripe) {
+      throw new BadRequestException('Stripe is not configured — STRIPE_SECRET_KEY is missing');
+    }
   }
 
   /**
@@ -18,6 +30,7 @@ export class StripeService {
     plan: 'BASIC' | 'PRO' | 'PREMIUM',
     amountNZD: number,
   ) {
+    this.assertConfigured();
     const prices: Record<string, number> = {
       BASIC: 2999, // $29.99 NZD
       PRO: 4999, // $49.99 NZD
@@ -65,6 +78,7 @@ export class StripeService {
     type: 'ADMISSION' | 'LIA',
     amountNZD: number,
   ) {
+    this.assertConfigured();
     const amounts: Record<string, number> = {
       ADMISSION: 5000, // $50 NZD in cents
       LIA: 20000, // $200 NZD in cents
@@ -109,6 +123,7 @@ export class StripeService {
     amountNZD: number,
     currency: string = 'nzd',
   ) {
+    this.assertConfigured();
     const amountCents = Math.round(amountNZD * 100);
 
     const price = await this.stripe.prices.create({
@@ -138,6 +153,7 @@ export class StripeService {
    * Construct and verify webhook event
    */
   constructWebhookEvent(payload: Buffer, signature: string) {
+    this.assertConfigured();
     try {
       const event = this.stripe.webhooks.constructEvent(
         payload,
@@ -154,6 +170,7 @@ export class StripeService {
    * Retrieve a payment intent
    */
   async getPaymentIntent(paymentIntentId: string) {
+    this.assertConfigured();
     return this.stripe.paymentIntents.retrieve(paymentIntentId);
   }
 
@@ -161,6 +178,7 @@ export class StripeService {
    * Retrieve a customer
    */
   async getCustomer(customerId: string) {
+    this.assertConfigured();
     return this.stripe.customers.retrieve(customerId);
   }
 
@@ -168,6 +186,7 @@ export class StripeService {
    * Retrieve a subscription
    */
   async getSubscription(subscriptionId: string) {
+    this.assertConfigured();
     return this.stripe.subscriptions.retrieve(subscriptionId);
   }
 }

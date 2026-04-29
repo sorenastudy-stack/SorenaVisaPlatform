@@ -17,6 +17,6 @@ export class PublicController {
 
   @Get('health')
   getHealth() {
-    return { status: 'ok' };
+    return { status: 'ok', timestamp: new Date().toISOString() };
   }
 }

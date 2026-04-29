@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as docusign from 'docusign-esign';
 
 @Injectable()
 export class DocuSignService {
-  private apiClient: docusign.ApiClient;
+  private readonly logger = new Logger(DocuSignService.name);
+  private apiClient: docusign.ApiClient | null = null;
   private accountId: string;
 
   constructor() {
@@ -12,12 +13,18 @@ export class DocuSignService {
     this.accountId = process.env.DOCUSIGN_ACCOUNT_ID || '';
 
     if (!accessToken || !baseUrl || !this.accountId) {
-      throw new Error('DocuSign environment variables are required');
+      this.logger.warn('DocuSign env vars missing — contract signing will be unavailable');
+    } else {
+      this.apiClient = new docusign.ApiClient();
+      this.apiClient.setBasePath(baseUrl);
+      this.apiClient.addDefaultHeader('Authorization', `Bearer ${accessToken}`);
     }
+  }
 
-    this.apiClient = new docusign.ApiClient();
-    this.apiClient.setBasePath(baseUrl);
-    this.apiClient.addDefaultHeader('Authorization', `Bearer ${accessToken}`);
+  private assertConfigured(): void {
+    if (!this.apiClient) {
+      throw new Error('DocuSign is not configured — missing DOCUSIGN_ACCESS_TOKEN, DOCUSIGN_BASE_URL, or DOCUSIGN_ACCOUNT_ID');
+    }
   }
 
   async createEnvelope(
@@ -25,7 +32,8 @@ export class DocuSignService {
     signerEmail: string,
     signerName: string,
   ): Promise<string> {
-    const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
+    this.assertConfigured();
+    const envelopesApi = new docusign.EnvelopesApi(this.apiClient!);
 
     const envelopeDefinition = new docusign.EnvelopeDefinition();
     envelopeDefinition.emailSubject = 'Please sign this contract';
@@ -76,7 +84,8 @@ export class DocuSignService {
     signerName: string,
     returnUrl: string,
   ): Promise<string> {
-    const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
+    this.assertConfigured();
+    const envelopesApi = new docusign.EnvelopesApi(this.apiClient!);
 
     const recipientViewRequest = new docusign.RecipientViewRequest();
     recipientViewRequest.returnUrl = returnUrl;
@@ -95,7 +104,8 @@ export class DocuSignService {
   }
 
   async syncStatus(envelopeId: string): Promise<any> {
-    const envelopesApi = new docusign.EnvelopesApi(this.apiClient);
+    this.assertConfigured();
+    const envelopesApi = new docusign.EnvelopesApi(this.apiClient!);
 
     const envelope = await envelopesApi.getEnvelope(this.accountId, envelopeId);
 
