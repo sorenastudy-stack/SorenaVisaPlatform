@@ -21,13 +21,14 @@ export class AuthService {
       throw new BadRequestException('User with this email already exists');
     }
 
-    const validRoles = [
+    const validRoles: UserRole[] = [
       UserRole.SUPER_ADMIN,
       UserRole.ADMIN,
       UserRole.SALES,
       UserRole.OPERATIONS,
       UserRole.LIA,
       UserRole.SUPPORT,
+      UserRole.STUDENT,
     ];
     let assignedRole: UserRole = UserRole.SALES;
 

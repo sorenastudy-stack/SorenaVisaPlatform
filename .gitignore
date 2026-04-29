@@ -16,8 +16,7 @@ dist/
 out/
 build/
 
-# Prisma
-backend/prisma/migrations/
+# Prisma (migrations must be tracked — Railway runs prisma migrate deploy on start)
 
 # Logs
 *.log
