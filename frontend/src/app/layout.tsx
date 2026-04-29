@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { LocaleProvider } from '@/components/LocaleProvider';
 
 export const metadata: Metadata = {
   title: 'Sorena Visa | Education & Migration New Zealand',
@@ -10,8 +11,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", margin: 0 }}>
-        {children}
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
+      <body>
+        <LocaleProvider>{children}</LocaleProvider>
       </body>
     </html>
   );
