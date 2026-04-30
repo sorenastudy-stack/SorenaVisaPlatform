@@ -12,7 +12,7 @@ module.exports = {
         'off-white': '#f4f7f6',
         // design system tokens
         'sorena-navy':  '#1e3a5f',
-        'sorena-gold':  '#c9a961',
+        'sorena-gold':  '#E8B923',
         'sorena-cream': '#faf8f3',
         'sorena-text':  '#3d3d3d',
       },

@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import { LeadStatus, LeadStatusHistory } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
@@ -18,7 +19,6 @@ export class LeadsService {
   ) {}
 
   async create(dto: CreateLeadDto) {
-    // Verify contact exists
     const contact = await this.prisma.contact.findUnique({
       where: { id: dto.contactId },
     });
@@ -36,7 +36,6 @@ export class LeadsService {
       include: { contact: true },
     });
 
-    // Emit lead created event
     await this.eventsService.emit(
       'LEAD_CREATED',
       'LEAD',
@@ -84,38 +83,44 @@ export class LeadsService {
     return lead;
   }
 
-  async updateStatus(
-    id: string,
-    dto: UpdateLeadStatusDto,
-    userId: string,
-  ) {
+  async updateStatus(id: string, dto: UpdateLeadStatusDto, userId: string) {
     const lead = await this.findOne(id);
 
-    // Validate transition
     if (!isValidTransition(lead.leadStatus as any, dto.status as any)) {
       throw new BadRequestException(
         `Invalid status transition from ${lead.leadStatus} to ${dto.status}`,
       );
     }
 
-    // Check if disqualificationReason is provided when transitioning to DISQUALIFIED
     if (dto.status === 'DISQUALIFIED' && !dto.disqualificationReason) {
       throw new BadRequestException(
         'disqualificationReason is required when status is DISQUALIFIED',
       );
     }
 
-    const updatedLead = await this.prisma.lead.update({
-      where: { id },
-      data: {
-        leadStatus: dto.status as any,
-        disqualificationReason:
-          dto.status === 'DISQUALIFIED' ? dto.disqualificationReason : null,
-      },
-      include: { contact: true },
-    });
+    const [updatedLead] = await this.prisma.$transaction([
+      this.prisma.lead.update({
+        where: { id },
+        data: {
+          leadStatus: dto.status as any,
+          disqualificationReason:
+            dto.status === 'DISQUALIFIED' ? dto.disqualificationReason : null,
+        },
+        include: { contact: true },
+      }),
+      this.prisma.leadStatusHistory.create({
+        data: {
+          leadId: id,
+          fromStatus: lead.leadStatus as LeadStatus,
+          toStatus: dto.status as LeadStatus,
+          changedById: userId,
+          reason: dto.disqualificationReason ?? null,
+          isOverride: false,
+          isUndo: false,
+        },
+      }),
+    ]);
 
-    // Emit status change event
     await this.eventsService.emit(
       'LEAD_STATUS_CHANGED',
       'LEAD',
@@ -133,20 +138,115 @@ export class LeadsService {
     return updatedLead;
   }
 
+  async overrideStatus(
+    leadId: string,
+    newStatus: LeadStatus,
+    reason: string,
+    userId: string,
+  ) {
+    if (!reason?.trim()) {
+      throw new BadRequestException('reason is required for status override');
+    }
+
+    const lead = await this.findOne(leadId);
+
+    const [updatedLead] = await this.prisma.$transaction([
+      this.prisma.lead.update({
+        where: { id: leadId },
+        data: { leadStatus: newStatus },
+        include: { contact: true },
+      }),
+      this.prisma.leadStatusHistory.create({
+        data: {
+          leadId,
+          fromStatus: lead.leadStatus as LeadStatus,
+          toStatus: newStatus,
+          changedById: userId,
+          reason: reason.trim(),
+          isOverride: true,
+          isUndo: false,
+        },
+      }),
+    ]);
+
+    return updatedLead;
+  }
+
+  async undoLastChange(leadId: string, userId: string) {
+    const last = await this.prisma.leadStatusHistory.findFirst({
+      where: { leadId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!last) {
+      throw new NotFoundException('No status change to undo');
+    }
+
+    const ageMs = Date.now() - last.createdAt.getTime();
+    if (ageMs > 60_000) {
+      throw new BadRequestException('Undo window expired (60 seconds)');
+    }
+
+    if (last.changedById !== userId) {
+      throw new ForbiddenException('Can only undo your own changes');
+    }
+
+    if (last.isUndo) {
+      throw new BadRequestException('Already undone');
+    }
+
+    if (!last.fromStatus) {
+      throw new BadRequestException('Cannot undo the original creation');
+    }
+
+    const lead = await this.findOne(leadId);
+
+    const [updatedLead] = await this.prisma.$transaction([
+      this.prisma.lead.update({
+        where: { id: leadId },
+        data: { leadStatus: last.fromStatus },
+        include: { contact: true },
+      }),
+      this.prisma.leadStatusHistory.create({
+        data: {
+          leadId,
+          fromStatus: lead.leadStatus as LeadStatus,
+          toStatus: last.fromStatus,
+          changedById: userId,
+          reason: 'Undo of previous change',
+          isOverride: false,
+          isUndo: true,
+        },
+      }),
+    ]);
+
+    return updatedLead;
+  }
+
+  async getHistory(leadId: string): Promise<LeadStatusHistory[]> {
+    return this.prisma.leadStatusHistory.findMany({
+      where: { leadId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        changedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+  }
+
   async updateNotes(
     id: string,
     dto: UpdateLeadNotesDto,
     userId: string,
     userRole: string,
   ) {
-    // Only SUPER_ADMIN can update notes
     if (userRole !== 'SUPER_ADMIN') {
       throw new ForbiddenException('Only SUPER_ADMIN can update lead notes');
     }
 
     const lead = await this.findOne(id);
 
-    // Create log entry
     await this.prisma.managerNotesLog.create({
       data: {
         leadId: id,
@@ -156,7 +256,6 @@ export class LeadsService {
       },
     });
 
-    // Update notes
     return this.prisma.lead.update({
       where: { id },
       data: { managerNotes: dto.managerNotes },

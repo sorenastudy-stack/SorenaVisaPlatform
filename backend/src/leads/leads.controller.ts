@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import { LeadStatus } from '@prisma/client';
 import { LeadsService } from './leads.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadStatusDto } from './dto/update-lead-status.dto';
@@ -48,7 +49,11 @@ export class LeadsController {
   }
 
   @Patch(':id')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateLeadStatusDto, @Request() req) {
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateLeadStatusDto,
+    @Request() req,
+  ) {
     return this.leadsService.updateStatus(id, dto, req.user.userId);
   }
 
@@ -61,5 +66,26 @@ export class LeadsController {
     @Request() req,
   ) {
     return this.leadsService.updateNotes(id, dto, req.user.userId, req.user.role);
+  }
+
+  @Post(':id/override')
+  @UseGuards(RolesGuard)
+  @Roles('SUPER_ADMIN')
+  override(
+    @Param('id') id: string,
+    @Body() dto: { status: LeadStatus; reason: string },
+    @Request() req,
+  ) {
+    return this.leadsService.overrideStatus(id, dto.status, dto.reason, req.user.userId);
+  }
+
+  @Post(':id/undo')
+  undo(@Param('id') id: string, @Request() req) {
+    return this.leadsService.undoLastChange(id, req.user.userId);
+  }
+
+  @Get(':id/history')
+  history(@Param('id') id: string) {
+    return this.leadsService.getHistory(id);
   }
 }

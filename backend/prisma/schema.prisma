@@ -244,6 +244,7 @@ model User {
   cases            Case[]           @relation("CaseOwner")
   auditLogs        AuditLog[]
   notesAuditLogs   ManagerNotesLog[]
+  leadStatusChanges LeadStatusHistory[]
 
   @@map("users")
 }
@@ -450,6 +451,7 @@ model Lead {
   cases                   Case[]
   events                  CrmEvent[]
   managerNotesLogs        ManagerNotesLog[]
+  statusHistory           LeadStatusHistory[]
 
   @@index([contactId])
   @@index([leadStatus])
@@ -471,6 +473,24 @@ model ManagerNotesLog {
 
   @@index([leadId])
   @@map("manager_notes_logs")
+}
+
+model LeadStatusHistory {
+  id           String      @id @default(cuid())
+  leadId       String
+  fromStatus   LeadStatus?
+  toStatus     LeadStatus
+  changedById  String
+  reason       String?
+  isOverride   Boolean     @default(false)
+  isUndo       Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+
+  lead         Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  changedBy    User        @relation(fields: [changedById], references: [id])
+
+  @@index([leadId, createdAt])
+  @@map("lead_status_history")
 }
 
 // ─── INTAKE FORM ─────────────────────────────────────────────────────────────

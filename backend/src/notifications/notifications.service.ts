@@ -45,7 +45,12 @@ export class NotificationsService {
         <h2>Consultation Confirmed</h2>
         <p>Hi ${name},</p>
         <p>Your ${type} consultation has been confirmed for:</p>
-        <p><strong>${date}</strong></p>
+        <p><strong>${date}</
+        
+        
+        
+        
+        strong></p>
         <p>Please join the meeting on time. If you need to reschedule, contact us at least 24 hours in advance.</p>
         <p>Best regards,<br>The Sorena Visa Team</p>
       </div>
