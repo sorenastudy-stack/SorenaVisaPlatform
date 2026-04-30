@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ArrowLeft, Mail, Phone, Globe, AlertTriangle, Sparkles } from 'lucide-react';
 import { LeadStatusActions } from './LeadStatusActions';
 import { LeadProgressTimeline } from './LeadProgressTimeline';
+import { LeadStatusHistory } from './LeadStatusHistory';
+import { AdminOverridePanel } from './AdminOverridePanel';
+import { getSession } from '@/lib/auth';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { LEAD_STATUS_GLOSSARY } from '@/lib/glossary';
 
@@ -106,6 +109,9 @@ export default async function LeadDetailPage({
   } catch {
     history = [];
   }
+
+  const session = await getSession();
+  const isSuperAdmin = session?.role === 'SUPER_ADMIN';
 
   return (
     <div>
@@ -284,6 +290,16 @@ export default async function LeadDetailPage({
           <LeadStatusActions leadId={lead.id} currentStatus={lead.leadStatus} />
         </CardContent>
       </Card>
+
+      {isSuperAdmin && (
+        <div className="mt-4">
+          <AdminOverridePanel leadId={lead.id} currentStatus={lead.leadStatus} />
+        </div>
+      )}
+
+      <div className="mt-4">
+        <LeadStatusHistory history={history} />
+      </div>
     </div>
   );
 }

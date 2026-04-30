@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, AlertTriangle, ArrowRight, Clock, User } from 'lucide-react';
+import { Check, AlertTriangle, ArrowRight, Clock, User, Undo2 } from 'lucide-react';
 import { LEAD_STATUS_GLOSSARY, LEAD_STATUS_GUIDES } from '@/lib/glossary';
 import { InfoTip } from '@/components/ui/InfoTip';
 
@@ -96,6 +96,21 @@ export function LeadStatusActions({
   const [success, setSuccess] = useState<string | null>(null);
   const [pendingDisqualify, setPendingDisqualify] = useState(false);
   const [disqualifyReason, setDisqualifyReason] = useState('');
+  const [undoVisible, setUndoVisible] = useState(false);
+  const [undoSecondsLeft, setUndoSecondsLeft] = useState(0);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!undoVisible || undoSecondsLeft <= 0) return;
+    const t = setTimeout(() => {
+      setUndoSecondsLeft((s) => {
+        const next = s - 1;
+        if (next <= 0) setUndoVisible(false);
+        return next;
+      });
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [undoVisible, undoSecondsLeft]);
 
   const allowedNext = VALID_TRANSITIONS[currentStatus];
   const decision = getDecisionContext(currentStatus);
@@ -119,9 +134,29 @@ export function LeadStatusActions({
       setSuccess(`Status updated to ${newStatus}`);
       setPendingDisqualify(false);
       setDisqualifyReason('');
+      setUndoError(null);
+      setUndoVisible(true);
+      setUndoSecondsLeft(60);
       startTransition(() => router.refresh());
     } catch (err: any) {
       setError(err?.message || 'Could not update lead status.');
+    }
+  };
+
+  const handleUndo = async () => {
+    setUndoError(null);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/undo`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || `Undo failed (${res.status})`);
+      }
+      setSuccess('Reverted');
+      setUndoVisible(false);
+      setUndoSecondsLeft(0);
+      startTransition(() => router.refresh());
+    } catch (err: any) {
+      setUndoError(err?.message || 'Could not undo.');
     }
   };
 
@@ -285,8 +320,24 @@ export function LeadStatusActions({
         </p>
       )}
       {success && (
-        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-          {success}
+        <div className="flex flex-wrap items-center gap-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+          <span>{success}</span>
+          {undoVisible && (
+            <button
+              type="button"
+              onClick={handleUndo}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white text-[#1E3A5F] border border-[#1E3A5F]/20 hover:bg-[#FAF8F3] text-xs font-semibold transition-colors"
+            >
+              <Undo2 size={12} />
+              Undo ({undoSecondsLeft}s)
+            </button>
+          )}
+        </div>
+      )}
+
+      {undoError && (
+        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {undoError}
         </p>
       )}
     </div>
