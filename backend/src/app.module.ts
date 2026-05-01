@@ -20,6 +20,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PublicModule } from './public/public.module';
+import { StudentsModule } from './students/students.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { PublicModule } from './public/public.module';
     WhatsappModule,
     NotificationsModule,
     PublicModule,
+    StudentsModule,
   ],
 })
 export class AppModule {}

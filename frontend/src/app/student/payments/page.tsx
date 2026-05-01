@@ -1,11 +1,29 @@
 import { Card, CardContent } from '@/components/ui/Card';
 import { CreditCard } from 'lucide-react';
+import { apiServer } from '@/lib/apiServer';
+import { StudentHeader } from '@/components/student/StudentHeader';
 
-export default function Page() {
+interface MeResponse {
+  fullName: string;
+  photoUrl: string | null;
+}
+
+export default async function StudentPaymentsPage() {
+  let me: MeResponse = { fullName: 'Your Account', photoUrl: null };
+  try {
+    me = await apiServer.get<MeResponse>('/students/me');
+  } catch {
+    /* keep fallback */
+  }
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-[#1E3A5F] mb-1">Payments</h1>
-      <p className="text-sm text-[#4A4A4A]/70 mb-8">Your invoices, receipts, and payment history.</p>
+      <StudentHeader
+        name={me.fullName}
+        photoUrl={me.photoUrl}
+        subtitle="Your invoices, receipts, and payment history."
+        showBack
+      />
       <Card>
         <CardContent className="py-16 text-center">
           <CreditCard size={32} className="mx-auto text-[#1E3A5F]/30 mb-3" />

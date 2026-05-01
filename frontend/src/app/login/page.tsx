@@ -23,6 +23,7 @@ const ROLE_REDIRECT: Record<string, string> = {
   SALES:       '/sales',
   LIA:         '/lia',
   SUPPORT:     '/student',
+  STUDENT:     '/student',
 };
 
 function LoginForm() {

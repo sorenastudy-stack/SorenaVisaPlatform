@@ -1,14 +1,32 @@
 import { Card, CardContent } from '@/components/ui/Card';
-import { MessageSquare } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
+import { apiServer } from '@/lib/apiServer';
+import { StudentHeader } from '@/components/student/StudentHeader';
 
-export default function Page() {
+interface MeResponse {
+  fullName: string;
+  photoUrl: string | null;
+}
+
+export default async function StudentMessagesPage() {
+  let me: MeResponse = { fullName: 'Your Account', photoUrl: null };
+  try {
+    me = await apiServer.get<MeResponse>('/students/me');
+  } catch {
+    /* keep fallback */
+  }
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-[#1E3A5F] mb-1">Messages</h1>
-      <p className="text-sm text-[#4A4A4A]/70 mb-8">Conversations with your Sorena specialist.</p>
+      <StudentHeader
+        name={me.fullName}
+        photoUrl={me.photoUrl}
+        subtitle="Conversations with your Sorena specialist."
+        showBack
+      />
       <Card>
         <CardContent className="py-16 text-center">
-          <MessageSquare size={32} className="mx-auto text-[#1E3A5F]/30 mb-3" />
+          <MessageCircle size={32} className="mx-auto text-[#1E3A5F]/30 mb-3" />
           <p className="text-[#4A4A4A] font-medium">Coming soon</p>
           <p className="text-sm text-[#4A4A4A]/60 mt-1">
             This section is under construction.

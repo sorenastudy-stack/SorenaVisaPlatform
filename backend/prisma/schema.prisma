@@ -99,6 +99,45 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum TicketStatus {
+  OPEN
+  AWAITING_CLIENT
+  AWAITING_STAFF
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  STRIPE
+  BANK_TRANSFER
+  CASH
+  OTHER
+}
+
+enum InvoicePaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
 enum CaseStage {
   ADMISSION
   VISA
@@ -245,6 +284,10 @@ model User {
   auditLogs        AuditLog[]
   notesAuditLogs   ManagerNotesLog[]
   leadStatusChanges LeadStatusHistory[]
+  contact          Contact?         @relation("StudentContact")
+  assignedTickets  Ticket[]         @relation("TicketAssignee")
+  createdTickets   Ticket[]         @relation("TicketCreator")
+  ticketMessages   TicketMessage[]  @relation("TicketMessageSender")
 
   @@map("users")
 }
@@ -386,15 +429,21 @@ model Contact {
   countryOfResidence String?
   preferredLanguage String    @default("en")
   lifecycleStage    String?
+  photoUrl          String?
   ownerId           String?
   partnerId         String?
   archivedAt        DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
+  userId            String?   @unique
+  user              User?     @relation("StudentContact", fields: [userId], references: [id])
+
   leads             Lead[]
   legacyLeadCaptures LeadCapture[]
   whatsappConversations WhatsAppConversation[]
+  tickets           Ticket[]
+  invoices          Invoice[]
 
   @@index([email])
   @@index([phone])
@@ -593,6 +642,8 @@ model Case {
   owner        User?          @relation("CaseOwner", fields: [ownerId], references: [id])
   applications Application[]
   contract     Contract?
+  tickets      Ticket[]
+  invoices     Invoice[]
 
   @@index([leadId])
   @@index([stage])
@@ -895,4 +946,95 @@ model KnowledgeChunk {
 
   @@index([sourceType])
   @@map("knowledge_chunks")
+}
+
+// ─── TICKETS / IN-PORTAL MESSAGES ─────────────────────────────────────────────
+
+model Ticket {
+  id            String          @id @default(cuid())
+  caseId        String?
+  contactId     String
+  subject       String
+  status        TicketStatus    @default(OPEN)
+  priority      TicketPriority  @default(NORMAL)
+  assignedToId  String?
+  createdById   String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  closedAt      DateTime?
+
+  case          Case?           @relation(fields: [caseId], references: [id])
+  contact       Contact         @relation(fields: [contactId], references: [id])
+  assignedTo    User?           @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  createdBy     User            @relation("TicketCreator", fields: [createdById], references: [id])
+  messages      TicketMessage[]
+
+  @@index([contactId])
+  @@index([caseId])
+  @@index([status])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id           String   @id @default(cuid())
+  ticketId     String
+  senderId     String
+  body         String
+  attachments  String[]
+  isInternal   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender       User     @relation("TicketMessageSender", fields: [senderId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+// ─── INVOICES & PAYMENTS ──────────────────────────────────────────────────────
+
+model Invoice {
+  id              String         @id @default(cuid())
+  caseId          String?
+  contactId       String
+  invoiceNumber   String         @unique
+  description     String
+  amount          Decimal        @db.Decimal(10, 2)
+  currency        String         @default("NZD")
+  status          InvoiceStatus  @default(DRAFT)
+  dueDate         DateTime?
+  issuedAt        DateTime?
+  paidAt          DateTime?
+  stripeInvoiceId String?        @unique
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  case            Case?          @relation(fields: [caseId], references: [id])
+  contact         Contact        @relation(fields: [contactId], references: [id])
+  payments        Payment[]
+
+  @@index([contactId])
+  @@index([status])
+  @@map("invoices")
+}
+
+model Payment {
+  id                    String               @id @default(cuid())
+  invoiceId             String
+  amount                Decimal              @db.Decimal(10, 2)
+  currency              String               @default("NZD")
+  method                PaymentMethod        @default(STRIPE)
+  status                InvoicePaymentStatus @default(PENDING)
+  stripePaymentIntentId String?              @unique
+  receivedAt            DateTime?
+  notes                 String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  invoice               Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([status])
+  @@map("payments")
 }

@@ -6,7 +6,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   '/ops':     ['OPERATIONS', 'SUPER_ADMIN', 'ADMIN'],
   '/sales':   ['SALES', 'SUPER_ADMIN', 'ADMIN'],
   '/lia':     ['LIA', 'SUPER_ADMIN', 'ADMIN'],
-  '/student': ['SUPER_ADMIN', 'ADMIN', 'SALES', 'OPERATIONS', 'LIA', 'SUPPORT'],
+  '/student': ['STUDENT'],
 };
 
 export async function middleware(request: NextRequest) {
