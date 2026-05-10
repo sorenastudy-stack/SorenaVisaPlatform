@@ -32,3 +32,6 @@ Thumbs.db
 
 # Claude memory (local only)
 .claude/
+
+# User uploads (binary files — tracked via DB, not git)
+backend/uploads/admission-documents/

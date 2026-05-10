@@ -13,9 +13,10 @@ import { StageProgressBar } from './StageProgressBar';
 import { StepFooter }       from './StepFooter';
 import { ReadOnlyView }     from './ReadOnlyView';
 import { StepPlaceholder }  from './StepPlaceholder';
-import { Step1Study }          from './steps/Step1Study';
-import { Step2AdditionalInfo } from './steps/Step2AdditionalInfo';
-import { Step4Documents }     from './steps/Step4Documents';
+import { Step1Study }             from './steps/Step1Study';
+import { Step2AdditionalInfo }    from './steps/Step2AdditionalInfo';
+import { Step3EducationEnglish }  from './steps/Step3EducationEnglish';
+import { Step4Documents }         from './steps/Step4Documents';
 import { StudentHeader }    from '@/components/student/StudentHeader';
 import type { Session }     from '@/lib/auth';
 
@@ -101,6 +102,8 @@ function ShellInner({ session }: { session: Session }) {
             ? <Step1Study />
             : safeStep === 2
             ? <Step2AdditionalInfo />
+            : safeStep === 3
+            ? <Step3EducationEnglish />
             : safeStep === 4
             ? <Step4Documents />
             : <StepPlaceholder step={safeStep} displayStep={displayStep} />

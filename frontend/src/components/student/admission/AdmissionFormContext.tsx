@@ -31,6 +31,12 @@ export interface Step2Fields {
   respondedYesToAdditionalQuestion: boolean | null;
 }
 
+export interface Step3Fields {
+  englishTestSat: boolean | null;
+  englishTestName: string | null;
+  englishPreCourse: boolean | null;
+}
+
 export interface AdmissionDocument {
   id: string;
   documentType: string;
@@ -66,6 +72,8 @@ interface ContextValue {
   deleteDocument: (documentId: string) => Promise<void>;
   step2Fields: Step2Fields;
   setStep2Fields: (fields: Partial<Step2Fields>) => void;
+  step3Fields: Step3Fields;
+  setStep3Fields: (fields: Partial<Step3Fields>) => void;
   stepHandler: (() => Promise<boolean>) | null;
   registerStepHandler: (fn: (() => Promise<boolean>) | null) => void;
 }
@@ -98,6 +106,15 @@ export function AdmissionProvider({
   });
   const setStep2Fields = useCallback((fields: Partial<Step2Fields>) => {
     setStep2FieldsRaw(prev => ({ ...prev, ...fields }));
+  }, []);
+
+  const [step3FieldsRaw, setStep3FieldsRaw] = useState<Step3Fields>({
+    englishTestSat:   (initialApplication?.englishTestSat   as boolean | null) ?? null,
+    englishTestName:  (initialApplication?.englishTestName  as string  | null) ?? null,
+    englishPreCourse: (initialApplication?.englishPreCourse as boolean | null) ?? null,
+  });
+  const setStep3Fields = useCallback((fields: Partial<Step3Fields>) => {
+    setStep3FieldsRaw(prev => ({ ...prev, ...fields }));
   }, []);
 
   const [stepHandler, setStepHandlerState] = useState<(() => Promise<boolean>) | null>(null);
@@ -195,6 +212,8 @@ export function AdmissionProvider({
       deleteDocument,
       step2Fields: step2FieldsRaw,
       setStep2Fields,
+      step3Fields: step3FieldsRaw,
+      setStep3Fields,
       stepHandler,
       registerStepHandler,
     }}>
