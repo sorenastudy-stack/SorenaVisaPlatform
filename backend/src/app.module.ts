@@ -21,6 +21,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PublicModule } from './public/public.module';
 import { StudentsModule } from './students/students.module';
+import { FilesModule } from './files/files.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { StudentsModule } from './students/students.module';
     NotificationsModule,
     PublicModule,
     StudentsModule,
+    FilesModule,
   ],
 })
 export class AppModule {}

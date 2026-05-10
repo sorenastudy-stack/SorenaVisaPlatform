@@ -7,7 +7,9 @@ import {
   LayoutDashboard, Users, Briefcase, School, FileText, Settings,
   ArrowRightLeft, Shield, FileSearch, CheckSquare, BarChart2,
   Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
+  ClipboardList,
 } from 'lucide-react';
+import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/lib/stores/localeStore';
 import type { Session } from '@/lib/auth';
@@ -18,16 +20,17 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+  requiresCase?: boolean;
 }
 
 const NAV_CONFIG: Record<Portal, NavItem[]> = {
   admin: [
-    { label: 'Dashboard',  href: '/admin',       icon: <LayoutDashboard size={18} /> },
-    { label: 'Users',      href: '/admin/users',  icon: <Users size={18} /> },
-    { label: 'Cases',      href: '/admin/cases',  icon: <Briefcase size={18} /> },
-    { label: 'Providers',  href: '/admin/providers', icon: <School size={18} /> },
-    { label: 'Audit Log',  href: '/admin/audit',  icon: <FileText size={18} /> },
-    { label: 'Settings',   href: '/admin/settings', icon: <Settings size={18} /> },
+    { label: 'Dashboard',  href: '/admin',            icon: <LayoutDashboard size={18} /> },
+    { label: 'Users',      href: '/admin/users',      icon: <Users size={18} /> },
+    { label: 'Cases',      href: '/admin/cases',      icon: <Briefcase size={18} /> },
+    { label: 'Providers',  href: '/admin/providers',  icon: <School size={18} /> },
+    { label: 'Audit Log',  href: '/admin/audit',      icon: <FileText size={18} /> },
+    { label: 'Settings',   href: '/admin/settings',   icon: <Settings size={18} /> },
   ],
   ops: [
     { label: 'Dashboard',   href: '/ops',              icon: <LayoutDashboard size={18} /> },
@@ -37,24 +40,25 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     { label: 'Handoffs',    href: '/ops/handoffs',     icon: <ArrowRightLeft size={18} /> },
   ],
   sales: [
-    { label: 'Dashboard',      href: '/sales',               icon: <LayoutDashboard size={18} /> },
-    { label: 'Leads',          href: '/sales/leads',         icon: <Users size={18} /> },
-    { label: 'Pipeline',       href: '/sales/pipeline',      icon: <BarChart2 size={18} /> },
-    { label: 'Consultations',  href: '/sales/consultations', icon: <Calendar size={18} /> },
-    { label: 'Commissions',    href: '/sales/commissions',   icon: <DollarSign size={18} /> },
+    { label: 'Dashboard',     href: '/sales',               icon: <LayoutDashboard size={18} /> },
+    { label: 'Leads',         href: '/sales/leads',         icon: <Users size={18} /> },
+    { label: 'Pipeline',      href: '/sales/pipeline',      icon: <BarChart2 size={18} /> },
+    { label: 'Consultations', href: '/sales/consultations', icon: <Calendar size={18} /> },
+    { label: 'Commissions',   href: '/sales/commissions',   icon: <DollarSign size={18} /> },
   ],
   lia: [
-    { label: 'Dashboard',        href: '/lia',                icon: <LayoutDashboard size={18} /> },
-    { label: 'Cases',            href: '/lia/cases',          icon: <Briefcase size={18} /> },
-    { label: 'Document Review',  href: '/lia/documents',      icon: <FileSearch size={18} /> },
-    { label: 'Decisions',        href: '/lia/decisions',      icon: <CheckSquare size={18} /> },
+    { label: 'Dashboard',       href: '/lia',              icon: <LayoutDashboard size={18} /> },
+    { label: 'Cases',           href: '/lia/cases',        icon: <Briefcase size={18} /> },
+    { label: 'Document Review', href: '/lia/documents',    icon: <FileSearch size={18} /> },
+    { label: 'Decisions',       href: '/lia/decisions',    icon: <CheckSquare size={18} /> },
   ],
   student: [
-    { label: 'Dashboard',  href: '/student',           icon: <LayoutDashboard size={18} /> },
-    { label: 'My Case',    href: '/student/case',      icon: <Briefcase size={18} /> },
-    { label: 'Documents',  href: '/student/documents', icon: <FileText size={18} /> },
-    { label: 'Messages',   href: '/student/messages',  icon: <MessageSquare size={18} /> },
-    { label: 'Payments',   href: '/student/payments',  icon: <CreditCard size={18} /> },
+    { label: 'Dashboard', href: '/student',            icon: <LayoutDashboard size={18} /> },
+    { label: 'My Case',   href: '/student/case',       icon: <Briefcase size={18} /> },
+    { label: 'Documents', href: '/student/documents',  icon: <FileText size={18} /> },
+    { label: 'Messages',  href: '/student/messages',   icon: <MessageSquare size={18} /> },
+    { label: 'Payments',  href: '/student/payments',   icon: <CreditCard size={18} /> },
+    { label: 'Apply',     href: '/student/admission',  icon: <ClipboardList size={18} />, requiresCase: true },
   ],
 };
 
@@ -70,14 +74,19 @@ interface PortalLayoutProps {
   children: React.ReactNode;
   portal: Portal;
   session: Session;
+  hasCase?: boolean;
 }
 
-export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
+export function PortalLayout({ children, portal, session, hasCase }: PortalLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { locale, toggleLocale } = useLocaleStore();
-  const navItems = NAV_CONFIG[portal];
+
+  // correction 1: filter items that require a case when student has none
+  const navItems = NAV_CONFIG[portal].filter(
+    item => !item.requiresCase || hasCase === true,
+  );
 
   const handleSignOut = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -86,7 +95,6 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      {/* Logo */}
       <div className="px-6 py-5 border-b border-white/10 flex items-center gap-3">
         <img
           src="/brand/logo-mark-white.jpg"
@@ -101,7 +109,6 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
         </div>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const active = pathname === item.href;
@@ -124,7 +131,6 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
         })}
       </nav>
 
-      {/* Sign out */}
       <div className="px-3 py-4 border-t border-white/10">
         <button
           onClick={handleSignOut}
@@ -139,12 +145,10 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 flex-col flex-shrink-0 bg-sorena-navy">
         <SidebarContent />
       </aside>
 
-      {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
@@ -163,9 +167,7 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
         </div>
       )}
 
-      {/* Main */}
       <div className="flex flex-col flex-1 min-w-0">
-        {/* Top bar */}
         <header className="flex items-center justify-between h-14 px-4 bg-white border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3">
             <button
@@ -180,7 +182,6 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Language switcher */}
             <button
               onClick={toggleLocale}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 transition-colors"
@@ -190,7 +191,6 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
               {locale === 'en' ? 'فا' : 'EN'}
             </button>
 
-            {/* User */}
             <div className="flex items-center gap-2 pl-3 border-l border-gray-100">
               <div className="w-7 h-7 rounded-full bg-sorena-navy flex items-center justify-center text-white text-xs font-bold">
                 {(session.name || session.email)?.[0]?.toUpperCase()}
@@ -202,9 +202,10 @@ export function PortalLayout({ children, portal, session }: PortalLayoutProps) {
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
+
+      <Toaster richColors position="top-right" />
     </div>
   );
 }

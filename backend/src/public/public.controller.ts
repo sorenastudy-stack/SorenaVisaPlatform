@@ -19,4 +19,9 @@ export class PublicController {
   getHealth() {
     return { status: 'ok', timestamp: new Date().toISOString() };
   }
+
+  @Get('programmes')
+  listProgrammes() {
+    return this.publicService.listProgrammes();
+  }
 }

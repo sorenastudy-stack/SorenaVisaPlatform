@@ -4,7 +4,7 @@ import { EventsService } from '../events/events.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { HighRiskEngineService } from '../scoring/high-risk-engine.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { LeadStatus, RecommendedRoute } from '@prisma/client';
+import { LeadStatus, RecommendedRoute, ReviewStatus } from '@prisma/client';
 
 @Injectable()
 export class PublicService {
@@ -213,6 +213,22 @@ export class PublicService {
       }
       throw error;
     }
+  }
+
+  async listProgrammes() {
+    const rows = await this.prisma.educationProgramme.findMany({
+      where: { isActive: true, reviewStatus: ReviewStatus.APPROVED },
+      select: {
+        id: true, name: true, intakeMonths: true,
+        provider: { select: { name: true } },
+      },
+      orderBy: [{ provider: { name: 'asc' } }, { name: 'asc' }],
+    });
+    return rows.map(r => ({
+      id: r.id, name: r.name,
+      providerName: r.provider.name,
+      intakeMonths: r.intakeMonths,
+    }));
   }
 
   private determineRecommendedRoute(

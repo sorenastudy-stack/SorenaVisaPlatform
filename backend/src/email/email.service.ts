@@ -20,6 +20,16 @@ export class EmailService {
     }
   }
 
+  async sendEmail({ to, subject, html }: { to: string; subject: string; html: string }): Promise<void> {
+    const fromAddress = process.env.EMAIL_FROM || 'Sorena Visa <noreply@sorenavisa.co.nz>';
+    if (this.transporter) {
+      await this.transporter.sendMail({ from: fromAddress, to, subject, html });
+      this.logger.log(`Email sent to ${to} | Subject: ${subject}`);
+    } else {
+      this.logger.log(`[EMAIL MOCK] To: ${to} | Subject: ${subject}`);
+    }
+  }
+
   async sendVerificationEmail(to: string, name: string, token: string): Promise<void> {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const verificationUrl = `${frontendUrl}/verify-email?token=${token}`;
