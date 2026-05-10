@@ -22,6 +22,12 @@ const VALID_DOCUMENT_TYPES = [
   'SUPPORTING_DOCUMENT',
 ] as const;
 
+// ── Auto-ticket triggers ──────────────────────────────────────────────────────
+
+const ENGLISH_PRECOURSE_TICKET_SUBJECT = 'English pre-course consultation requested';
+const ENGLISH_PRECOURSE_TICKET_BODY =
+  'This applicant indicated they will study an English language course before starting their intended programme. A consultant should reach out to discuss English pathway options.';
+
 // ── PATCH allow-list ──────────────────────────────────────────────────────────
 
 const PATCHABLE_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'datetime'> = {
@@ -406,7 +412,7 @@ export class AdmissionService {
   }
 
   async updateApplication(userId: string, body: Record<string, unknown>) {
-    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const { contact, caseRecord } = await this.resolveContactAndCase(userId);
 
     const application = await this.prisma.admissionApplication.findFirst({
       where: { caseId: caseRecord.id },
@@ -434,9 +440,53 @@ export class AdmissionService {
           newValue: { updatedFields: changedKeys },
         },
       });
+
+      // Auto-ticket: trigger when englishPreCourse is set to true in this PATCH.
+      // Idempotency guarded inside the helper.
+      if (data.englishPreCourse === true) {
+        await this.maybeCreateEnglishPreCourseTicket(userId, caseRecord.id, contact.id);
+      }
     }
 
     return this.loadFullApplication(caseRecord.id);
+  }
+
+  private async maybeCreateEnglishPreCourseTicket(
+    userId: string,
+    caseId: string,
+    contactId: string,
+  ): Promise<void> {
+    try {
+      const existing = await this.prisma.ticket.findFirst({
+        where: {
+          caseId,
+          subject: ENGLISH_PRECOURSE_TICKET_SUBJECT,
+          status: { not: 'CLOSED' },
+        },
+      });
+      if (existing) return;
+
+      await this.prisma.ticket.create({
+        data: {
+          caseId,
+          contactId,
+          subject: ENGLISH_PRECOURSE_TICKET_SUBJECT,
+          createdById: userId,
+          messages: {
+            create: {
+              senderId: userId,
+              body: ENGLISH_PRECOURSE_TICKET_BODY,
+              attachments: [],
+              isInternal: false,
+            },
+          },
+        },
+      });
+
+      // TODO: in-app notification — Notification model not yet created (tracked in docs/known_issues.md)
+    } catch (err) {
+      console.warn('English pre-course auto-ticket creation failed (non-fatal):', err);
+    }
   }
 
   async addProgrammeChoice(

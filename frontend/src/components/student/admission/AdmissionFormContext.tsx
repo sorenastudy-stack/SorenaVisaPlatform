@@ -35,6 +35,14 @@ export interface Step3Fields {
   englishTestSat: boolean | null;
   englishTestName: string | null;
   englishPreCourse: boolean | null;
+  schoolCountry: string | null;
+  schoolName: string | null;
+  schoolQualification: string | null;
+  qualificationCompleted: boolean | null;
+  qualYearStart: number | null;
+  qualYearEnd: number | null;
+  lastYearOfSchool: number | null;
+  highestQualification: string | null;
 }
 
 export interface AdmissionDocument {
@@ -109,9 +117,17 @@ export function AdmissionProvider({
   }, []);
 
   const [step3FieldsRaw, setStep3FieldsRaw] = useState<Step3Fields>({
-    englishTestSat:   (initialApplication?.englishTestSat   as boolean | null) ?? null,
-    englishTestName:  (initialApplication?.englishTestName  as string  | null) ?? null,
-    englishPreCourse: (initialApplication?.englishPreCourse as boolean | null) ?? null,
+    englishTestSat:         (initialApplication?.englishTestSat         as boolean | null) ?? null,
+    englishTestName:        (initialApplication?.englishTestName        as string  | null) ?? null,
+    englishPreCourse:       (initialApplication?.englishPreCourse       as boolean | null) ?? null,
+    schoolCountry:          (initialApplication?.schoolCountry          as string  | null) ?? null,
+    schoolName:             (initialApplication?.schoolName             as string  | null) ?? null,
+    schoolQualification:    (initialApplication?.schoolQualification    as string  | null) ?? null,
+    qualificationCompleted: (initialApplication?.qualificationCompleted as boolean | null) ?? null,
+    qualYearStart:          (initialApplication?.qualYearStart          as number  | null) ?? null,
+    qualYearEnd:            (initialApplication?.qualYearEnd            as number  | null) ?? null,
+    lastYearOfSchool:       (initialApplication?.lastYearOfSchool       as number  | null) ?? null,
+    highestQualification:   (initialApplication?.highestQualification   as string  | null) ?? null,
   });
   const setStep3Fields = useCallback((fields: Partial<Step3Fields>) => {
     setStep3FieldsRaw(prev => ({ ...prev, ...fields }));
