@@ -44,6 +44,12 @@ export interface Step3Fields {
   lastYearOfSchool: number | null;
   highestQualification: string | null;
   sponsorshipProgramme: string | null;
+  hasDisability: boolean | null;
+  disabilityDetails: string | null;
+  needsEvacAssistance: boolean | null;
+  evacDetails: string | null;
+  medicalNotes: string | null;
+  otherStudyNotes: string | null;
 }
 
 export interface AdmissionDocument {
@@ -130,6 +136,12 @@ export function AdmissionProvider({
     lastYearOfSchool:       (initialApplication?.lastYearOfSchool       as number  | null) ?? null,
     highestQualification:   (initialApplication?.highestQualification   as string  | null) ?? null,
     sponsorshipProgramme:   (initialApplication?.sponsorshipProgramme   as string  | null) ?? null,
+    hasDisability:          (initialApplication?.hasDisability          as boolean | null) ?? null,
+    disabilityDetails:      (initialApplication?.disabilityDetails      as string  | null) ?? null,
+    needsEvacAssistance:    (initialApplication?.needsEvacAssistance    as boolean | null) ?? null,
+    evacDetails:            (initialApplication?.evacDetails            as string  | null) ?? null,
+    medicalNotes:           (initialApplication?.medicalNotes           as string  | null) ?? null,
+    otherStudyNotes:        (initialApplication?.otherStudyNotes        as string  | null) ?? null,
   });
   const setStep3Fields = useCallback((fields: Partial<Step3Fields>) => {
     setStep3FieldsRaw(prev => ({ ...prev, ...fields }));
