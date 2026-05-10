@@ -27,6 +27,15 @@ const QUALIFICATION_OPTIONS = [
   { value: 'OTHER',                   key: 'admissionStep3QualOptionOther'                },
 ] as const;
 
+const SPONSORSHIP_OPTIONS = [
+  { value: 'SELF_FUNDED',  key: 'admissionStep3SponsorshipOptionSelfFunded'  },
+  { value: 'FAMILY',       key: 'admissionStep3SponsorshipOptionFamily'      },
+  { value: 'SCHOLARSHIP',  key: 'admissionStep3SponsorshipOptionScholarship' },
+  { value: 'EMPLOYER',     key: 'admissionStep3SponsorshipOptionEmployer'    },
+  { value: 'GOVERNMENT',   key: 'admissionStep3SponsorshipOptionGovernment'  },
+  { value: 'OTHER',        key: 'admissionStep3SponsorshipOptionOther'       },
+] as const;
+
 export function Step3EducationEnglish() {
   const t = useTranslations();
   const {
@@ -38,6 +47,7 @@ export function Step3EducationEnglish() {
     englishTestSat, englishTestName, englishPreCourse,
     schoolCountry, schoolName, schoolQualification, qualificationCompleted,
     qualYearStart, qualYearEnd, lastYearOfSchool, highestQualification,
+    sponsorshipProgramme,
   } = step3Fields;
 
   const handler = useCallback(async (): Promise<boolean> => {
@@ -117,6 +127,7 @@ export function Step3EducationEnglish() {
       if (qualYearEnd !== null) patchBody.qualYearEnd = qualYearEnd;
       if (lastYearOfSchool !== null) patchBody.lastYearOfSchool = lastYearOfSchool;
       if (highestQualification) patchBody.highestQualification = highestQualification;
+      if (sponsorshipProgramme) patchBody.sponsorshipProgramme = sponsorshipProgramme;
       await patchApplication(patchBody);
       return true;
     } catch {
@@ -126,6 +137,7 @@ export function Step3EducationEnglish() {
     englishTestSat, englishTestName, englishPreCourse,
     schoolCountry, schoolName, schoolQualification, qualificationCompleted,
     qualYearStart, qualYearEnd, lastYearOfSchool, highestQualification,
+    sponsorshipProgramme,
     documents, patchApplication, t,
   ]);
 
@@ -452,6 +464,28 @@ export function Step3EducationEnglish() {
         single={false}
         required={true}
       />
+
+      {/* Funding section */}
+      <div>
+        <h3 className="text-lg font-bold text-sorena-navy">{t('admissionStep3FundingSectionTitle')}</h3>
+      </div>
+
+      {/* sponsorshipProgramme — optional dropdown */}
+      <div>
+        <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+          {t('admissionStep3SponsorshipProgrammeLabel')}
+        </label>
+        <select
+          value={sponsorshipProgramme ?? ''}
+          onChange={(e) => setStep3Fields({ sponsorshipProgramme: e.target.value || null })}
+          className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy focus:border-sorena-navy/60 focus:outline-none"
+        >
+          <option value="" disabled>{t('admissionStep3SponsorshipProgrammePlaceholder')}</option>
+          {SPONSORSHIP_OPTIONS.map(({ value, key }) => (
+            <option key={value} value={value}>{t(key)}</option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }

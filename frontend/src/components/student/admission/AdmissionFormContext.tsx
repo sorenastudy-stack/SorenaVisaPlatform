@@ -43,6 +43,7 @@ export interface Step3Fields {
   qualYearEnd: number | null;
   lastYearOfSchool: number | null;
   highestQualification: string | null;
+  sponsorshipProgramme: string | null;
 }
 
 export interface AdmissionDocument {
@@ -128,6 +129,7 @@ export function AdmissionProvider({
     qualYearEnd:            (initialApplication?.qualYearEnd            as number  | null) ?? null,
     lastYearOfSchool:       (initialApplication?.lastYearOfSchool       as number  | null) ?? null,
     highestQualification:   (initialApplication?.highestQualification   as string  | null) ?? null,
+    sponsorshipProgramme:   (initialApplication?.sponsorshipProgramme   as string  | null) ?? null,
   });
   const setStep3Fields = useCallback((fields: Partial<Step3Fields>) => {
     setStep3FieldsRaw(prev => ({ ...prev, ...fields }));
