@@ -25,7 +25,7 @@ export function StageProgressBar({ currentStep }: { currentStep: number }) {
               isDone ? 'bg-sorena-gold' : isActive ? 'bg-sorena-navy' : 'bg-sorena-navy/10',
             ].join(' ')} />
             <span className={[
-              'text-xs',
+              'text-sm',
               isActive ? 'font-medium text-sorena-navy' : 'text-sorena-navy/40',
             ].join(' ')}>
               {t(stage.key)}

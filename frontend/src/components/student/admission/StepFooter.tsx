@@ -12,7 +12,7 @@ const AGENT_STEPS   = [1, 2, 3, 4, 5, 6, 7, 8];
 export function StepFooter({ isAgent }: { isAgent: boolean }) {
   const t = useTranslations();
   const router = useRouter();
-  const { currentStep, setCurrentStep, programmeChoices, patchApplication, submitApplication } = useAdmission();
+  const { currentStep, setCurrentStep, programmeChoices, patchApplication, submitApplication, stepHandler } = useAdmission();
   const steps  = isAgent ? AGENT_STEPS : STUDENT_STEPS;
   const idx    = steps.indexOf(currentStep);
   const isFirst = idx === 0;
@@ -29,10 +29,14 @@ export function StepFooter({ isAgent }: { isAgent: boolean }) {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep === 1 && programmeChoices.length === 0) {
       toast.error(t('admissionStep1NoChoices'));
       return;
+    }
+    if (stepHandler) {
+      const ok = await stepHandler();
+      if (!ok) return;
     }
     setCurrentStep(steps[idx + 1]);
   };
@@ -71,14 +75,14 @@ export function StepFooter({ isAgent }: { isAgent: boolean }) {
         {isLast ? (
           <button
             onClick={handleSubmit}
-            className="rounded-lg bg-sorena-gold px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-sorena-gold/90"
+            className="rounded-lg bg-sorena-gold px-6 py-2 text-base font-semibold text-white transition-colors hover:bg-sorena-gold/90"
           >
             {t('admissionSubmit')}
           </button>
         ) : (
           <button
             onClick={handleNext}
-            className="rounded-lg bg-sorena-navy px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-sorena-navy/90"
+            className="rounded-lg bg-sorena-navy px-6 py-2 text-base font-semibold text-white transition-colors hover:bg-sorena-navy/90"
           >
             {t('admissionNext')}
           </button>

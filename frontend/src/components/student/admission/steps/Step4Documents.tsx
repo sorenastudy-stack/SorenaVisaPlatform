@@ -8,7 +8,7 @@ export function Step4Documents() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold text-sorena-navy">{t('admissionStep4Title')}</h2>
+        <h2 className="text-lg font-bold text-sorena-navy">{t('admissionStep4Title')}</h2>
         <p className="mt-1 text-sm text-sorena-navy/60">{t('admissionStep4Helper')}</p>
       </div>
       <DocumentUploader

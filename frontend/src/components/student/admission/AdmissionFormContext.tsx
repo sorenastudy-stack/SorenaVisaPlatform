@@ -21,6 +21,16 @@ export interface ProgrammeChoice {
   intakeYear: number;
 }
 
+export interface Step2Fields {
+  phone: string;
+  phoneType: string;
+  countryOfBirth: string;
+  citizenship: string;
+  ethnicity: string;
+  passportNumber: string;
+  respondedYesToAdditionalQuestion: boolean | null;
+}
+
 export interface AdmissionDocument {
   id: string;
   documentType: string;
@@ -54,6 +64,10 @@ interface ContextValue {
   reorderProgrammeChoices: (orderedIds: string[]) => Promise<void>;
   uploadDocument: (documentType: string, file: File) => Promise<void>;
   deleteDocument: (documentId: string) => Promise<void>;
+  step2Fields: Step2Fields;
+  setStep2Fields: (fields: Partial<Step2Fields>) => void;
+  stepHandler: (() => Promise<boolean>) | null;
+  registerStepHandler: (fn: (() => Promise<boolean>) | null) => void;
 }
 
 const AdmissionContext = createContext<ContextValue | null>(null);
@@ -73,6 +87,23 @@ export function AdmissionProvider({
   const [programmeChoices, setProgrammeChoicesRaw] = useState<ProgrammeChoice[]>(initialProgrammeChoices ?? []);
   const [documents, setDocumentsRaw] = useState<AdmissionDocument[]>(initialDocuments ?? []);
   const [currentStep, setCurrentStep] = useState(initialApplication?.currentStep ?? 1);
+  const [step2FieldsRaw, setStep2FieldsRaw] = useState<Step2Fields>({
+    phone:                              (initialApplication?.phone            as string)          ?? '',
+    phoneType:                          (initialApplication?.phoneType        as string)          ?? '',
+    countryOfBirth:                     (initialApplication?.countryOfBirth   as string)          ?? '',
+    citizenship:                        (initialApplication?.citizenship      as string)          ?? '',
+    ethnicity:                          (initialApplication?.ethnicity        as string)          ?? '',
+    passportNumber:                     (initialApplication?.passportNumber   as string)          ?? '',
+    respondedYesToAdditionalQuestion:   (initialApplication?.visaRefused      as boolean | null)  ?? null,
+  });
+  const setStep2Fields = useCallback((fields: Partial<Step2Fields>) => {
+    setStep2FieldsRaw(prev => ({ ...prev, ...fields }));
+  }, []);
+
+  const [stepHandler, setStepHandlerState] = useState<(() => Promise<boolean>) | null>(null);
+  const registerStepHandler = useCallback((fn: (() => Promise<boolean>) | null) => {
+    setStepHandlerState(fn !== null ? () => fn : null);
+  }, []);
 
   // Layer B: defensive setters — guard against non-array API responses landing in state
   const safeSetProgrammeChoices = useCallback((v: unknown) => {
@@ -162,6 +193,10 @@ export function AdmissionProvider({
       reorderProgrammeChoices,
       uploadDocument,
       deleteDocument,
+      step2Fields: step2FieldsRaw,
+      setStep2Fields,
+      stepHandler,
+      registerStepHandler,
     }}>
       {children}
     </AdmissionContext.Provider>

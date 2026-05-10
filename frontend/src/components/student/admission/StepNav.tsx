@@ -37,7 +37,7 @@ export function StepNav({ isAgent }: { isAgent: boolean }) {
             key={n}
             onClick={() => !isReadOnly && isDone && setCurrentStep(n)}
             className={[
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-left text-base transition-colors',
               isActive
                 ? 'bg-sorena-navy text-white font-medium'
                 : isDone
@@ -46,7 +46,7 @@ export function StepNav({ isAgent }: { isAgent: boolean }) {
             ].join(' ')}
           >
             <span className={[
-              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold',
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm font-bold',
               isActive
                 ? 'border-white bg-white text-sorena-navy'
                 : isDone

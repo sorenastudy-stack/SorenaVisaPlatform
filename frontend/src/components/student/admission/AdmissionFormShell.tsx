@@ -13,8 +13,9 @@ import { StageProgressBar } from './StageProgressBar';
 import { StepFooter }       from './StepFooter';
 import { ReadOnlyView }     from './ReadOnlyView';
 import { StepPlaceholder }  from './StepPlaceholder';
-import { Step1Study }       from './steps/Step1Study';
-import { Step4Documents }  from './steps/Step4Documents';
+import { Step1Study }          from './steps/Step1Study';
+import { Step2AdditionalInfo } from './steps/Step2AdditionalInfo';
+import { Step4Documents }     from './steps/Step4Documents';
 import { StudentHeader }    from '@/components/student/StudentHeader';
 import type { Session }     from '@/lib/auth';
 
@@ -98,6 +99,8 @@ function ShellInner({ session }: { session: Session }) {
         <main className="min-w-0 flex-1">
           {safeStep === 1
             ? <Step1Study />
+            : safeStep === 2
+            ? <Step2AdditionalInfo />
             : safeStep === 4
             ? <Step4Documents />
             : <StepPlaceholder step={safeStep} displayStep={displayStep} />

@@ -184,16 +184,38 @@ export function Step1Study() {
     <div className="flex flex-col gap-6">
       {/* Heading */}
       <div>
-        <h2 className="text-lg font-semibold text-sorena-navy">{t('admissionStep1Title')}</h2>
-        <p className="mt-1 text-sm text-sorena-navy/60">{t('admissionStep1Helper')}</p>
+        <h2 className="text-lg font-bold text-sorena-navy">{t('admissionStep1Title')}</h2>
       </div>
+
+      {/* Welcome block */}
+      <div className="flex flex-col gap-4 rounded-xl border border-sorena-navy/10 bg-white p-5">
+        <h3 className="text-lg font-bold text-sorena-navy">{t('admissionStep1WelcomeTitle')}</h3>
+        <p className="text-base leading-relaxed text-sorena-navy/80">{t('admissionStep1WelcomeIntro')}</p>
+        <div className="flex flex-col gap-3">
+          <p className="text-base leading-relaxed text-sorena-navy/80">{t('admissionStep1DocumentsIntro')}</p>
+          <ul className="list-disc space-y-1 pl-6 text-base text-sorena-navy/80">
+            <li>{t('admissionStep1Doc1')}</li>
+            <li>{t('admissionStep1Doc2')}</li>
+            <li>{t('admissionStep1Doc3')}</li>
+            <li>{t('admissionStep1Doc4')}</li>
+          </ul>
+          <p className="text-base leading-relaxed text-sorena-navy/80">{t('admissionStep1DocumentsClosing')}</p>
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-sorena-navy">{t('admissionStep1ProgrammeSectionTitle')}</h3>
+          <p className="mt-1 text-base leading-relaxed text-sorena-navy/80">{t('admissionStep1ProgrammeSectionIntro')}</p>
+        </div>
+      </div>
+
+      {/* Helper */}
+      <p className="text-sm text-sorena-navy/60">{t('admissionStep1Helper')}</p>
 
       {/* Picker card */}
       <div className="flex flex-col gap-4 rounded-xl border border-sorena-navy/10 bg-white p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Programme */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-sorena-navy/50">
+            <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep1ProgrammeLabel')}
             </label>
             {loadingProgs ? (
@@ -217,7 +239,7 @@ export function Step1Study() {
 
           {/* Intake */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-sorena-navy/50">
+            <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep1IntakeLabel')}
             </label>
             <select
@@ -243,7 +265,7 @@ export function Step1Study() {
         <button
           onClick={handleAdd}
           disabled={!canAdd}
-          className="self-end rounded-lg bg-sorena-navy px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sorena-navy/90 disabled:opacity-40"
+          className="self-end rounded-lg bg-sorena-navy px-5 py-2.5 text-base font-semibold text-white transition-colors hover:bg-sorena-navy/90 disabled:opacity-40"
         >
           {adding ? 'Adding…' : t('admissionStep1AddButton')}
         </button>
@@ -268,7 +290,7 @@ export function Step1Study() {
                 <p className="truncate text-sm font-medium text-sorena-navy">
                   {getProgLabel(choice.programmeId)}
                 </p>
-                <p className="text-xs text-sorena-navy/50">
+                <p className="text-sm text-sorena-navy/50">
                   {MONTH_NAMES[choice.intakeMonth - 1]} {choice.intakeYear}
                 </p>
               </div>

@@ -106,13 +106,13 @@ export function DocumentUploader({
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-xs font-semibold uppercase tracking-wide text-sorena-navy/50">
+      <label className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
 
       {helperText && (
-        <p className="text-xs text-sorena-navy/50">{helperText}</p>
+        <p className="text-sm text-sorena-navy/50">{helperText}</p>
       )}
 
       {typeDocs.map(doc => (

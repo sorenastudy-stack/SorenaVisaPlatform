@@ -19,7 +19,7 @@ export function StepPlaceholder({ step, displayStep }: { step: number; displaySt
 
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-sorena-navy/20 py-16 text-center">
-      <p className="text-lg font-semibold text-sorena-navy">
+      <p className="text-lg font-bold text-sorena-navy">
         Step {displayStep} — {t(key)}
       </p>
       <p className="mt-2 text-sm text-sorena-navy/50">{t('comingSoon')}</p>
