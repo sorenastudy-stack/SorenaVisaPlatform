@@ -1,9 +1,33 @@
 import 'reflect-metadata';
+import * as fs from 'fs';
+import * as path from 'path';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import helmet from 'helmet';
+
+async function sweepPendingUploads() {
+  const pendingDir = path.resolve(process.env.UPLOAD_DIR ?? './uploads', 'pending');
+  let deleted = 0;
+  try {
+    const files = await fs.promises.readdir(pendingDir);
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    for (const file of files) {
+      const filePath = path.join(pendingDir, file);
+      try {
+        const stat = await fs.promises.stat(filePath);
+        if (stat.mtimeMs < cutoff) {
+          await fs.promises.unlink(filePath);
+          deleted++;
+        }
+      } catch { /* skip files that vanish between readdir and unlink */ }
+    }
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') console.warn('Pending sweep error:', err.message);
+  }
+  console.log(`Pending sweep: deleted ${deleted} stale files`);
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -48,6 +72,7 @@ async function bootstrap() {
   const port = parseInt(process.env.PORT || '3001', 10);
   await app.listen(port, '0.0.0.0');
   console.log(`Backend API running on port ${port}`);
+  await sweepPendingUploads();
 }
 
 bootstrap();
