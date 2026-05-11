@@ -48,6 +48,8 @@ export function Step3EducationEnglish() {
     schoolCountry, schoolName, schoolQualification, qualificationCompleted,
     qualYearStart, qualYearEnd, lastYearOfSchool, highestQualification,
     sponsorshipProgramme,
+    hasDisability, disabilityDetails, needsEvacAssistance, evacDetails,
+    medicalNotes, otherStudyNotes,
   } = step3Fields;
 
   const handler = useCallback(async (): Promise<boolean> => {
@@ -112,12 +114,31 @@ export function Step3EducationEnglish() {
       toast.error(t('admissionStep3ValidationTranscripts'));
       return false;
     }
+    // Health
+    if (hasDisability === null) {
+      toast.error(t('admissionStep3ValidationDisability'));
+      return false;
+    }
+    if (hasDisability === true && !disabilityDetails?.trim()) {
+      toast.error(t('admissionStep3ValidationDisabilityDetails'));
+      return false;
+    }
+    if (needsEvacAssistance === null) {
+      toast.error(t('admissionStep3ValidationEvac'));
+      return false;
+    }
+    if (needsEvacAssistance === true && !evacDetails?.trim()) {
+      toast.error(t('admissionStep3ValidationEvacDetails'));
+      return false;
+    }
     // PATCH
     try {
       const patchBody: Record<string, unknown> = {
         englishTestSat,
         englishPreCourse,
         qualificationCompleted,
+        hasDisability,
+        needsEvacAssistance,
       };
       if (englishTestSat) patchBody.englishTestName = englishTestName;
       if (schoolCountry) patchBody.schoolCountry = schoolCountry;
@@ -128,6 +149,10 @@ export function Step3EducationEnglish() {
       if (lastYearOfSchool !== null) patchBody.lastYearOfSchool = lastYearOfSchool;
       if (highestQualification) patchBody.highestQualification = highestQualification;
       if (sponsorshipProgramme) patchBody.sponsorshipProgramme = sponsorshipProgramme;
+      if (disabilityDetails?.trim()) patchBody.disabilityDetails = disabilityDetails.trim();
+      if (evacDetails?.trim()) patchBody.evacDetails = evacDetails.trim();
+      if (medicalNotes?.trim()) patchBody.medicalNotes = medicalNotes.trim();
+      if (otherStudyNotes?.trim()) patchBody.otherStudyNotes = otherStudyNotes.trim();
       await patchApplication(patchBody);
       return true;
     } catch {
@@ -138,6 +163,8 @@ export function Step3EducationEnglish() {
     schoolCountry, schoolName, schoolQualification, qualificationCompleted,
     qualYearStart, qualYearEnd, lastYearOfSchool, highestQualification,
     sponsorshipProgramme,
+    hasDisability, disabilityDetails, needsEvacAssistance, evacDetails,
+    medicalNotes, otherStudyNotes,
     documents, patchApplication, t,
   ]);
 
@@ -149,7 +176,7 @@ export function Step3EducationEnglish() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-bold text-sorena-navy">{t('admissionStep3Title')}</h2>
+        <h2 className="text-2xl font-bold text-sorena-navy">{t('admissionStep3Title')}</h2>
         <p className="mt-1 text-sm text-sorena-navy/60">{t('admissionStep3Helper')}</p>
       </div>
 
@@ -259,8 +286,8 @@ export function Step3EducationEnglish() {
       </div>
 
       {/* Education section */}
-      <div>
-        <h3 className="text-lg font-bold text-sorena-navy">{t('admissionStep3EducationSectionTitle')}</h3>
+      <div className="mt-4 border-t border-sorena-navy/10 pt-6">
+        <h3 className="text-xl font-bold text-sorena-navy">{t('admissionStep3EducationSectionTitle')}</h3>
       </div>
 
       {/* schoolCountry — NZ vs Overseas pills */}
@@ -466,8 +493,8 @@ export function Step3EducationEnglish() {
       />
 
       {/* Funding section */}
-      <div>
-        <h3 className="text-lg font-bold text-sorena-navy">{t('admissionStep3FundingSectionTitle')}</h3>
+      <div className="mt-4 border-t border-sorena-navy/10 pt-6">
+        <h3 className="text-xl font-bold text-sorena-navy">{t('admissionStep3FundingSectionTitle')}</h3>
       </div>
 
       {/* sponsorshipProgramme — optional dropdown */}
@@ -485,6 +512,141 @@ export function Step3EducationEnglish() {
             <option key={value} value={value}>{t(key)}</option>
           ))}
         </select>
+      </div>
+
+      {/* Health Information section */}
+      <div className="mt-4 border-t border-sorena-navy/10 pt-6">
+        <h3 className="text-xl font-bold text-sorena-navy">{t('admissionStep3HealthSectionTitle')}</h3>
+      </div>
+
+      {/* hasDisability — Y/N */}
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
+          {t('admissionStep3HasDisabilityLabel')}
+          <span className="ml-0.5 text-red-500">*</span>
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setStep3Fields({ hasDisability: true })}
+            className={[
+              'rounded-lg border px-5 py-2 text-base font-medium transition-colors',
+              hasDisability === true
+                ? 'border-sorena-navy bg-sorena-navy text-white'
+                : 'border-sorena-navy/20 text-sorena-navy hover:bg-sorena-navy/5',
+            ].join(' ')}
+          >
+            {t('admissionStep3Question1OptionYes')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep3Fields({ hasDisability: false })}
+            className={[
+              'rounded-lg border px-5 py-2 text-base font-medium transition-colors',
+              hasDisability === false
+                ? 'border-sorena-navy bg-sorena-navy text-white'
+                : 'border-sorena-navy/20 text-sorena-navy hover:bg-sorena-navy/5',
+            ].join(' ')}
+          >
+            {t('admissionStep3Question1OptionNo')}
+          </button>
+        </div>
+      </div>
+
+      {/* Conditional — disabilityDetails when hasDisability === true */}
+      {hasDisability === true && (
+        <div>
+          <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+            {t('admissionStep3DisabilityDetailsLabel')}
+            <span className="ml-0.5 text-red-500">*</span>
+          </label>
+          <textarea
+            rows={4}
+            value={disabilityDetails ?? ''}
+            onChange={(e) => setStep3Fields({ disabilityDetails: e.target.value })}
+            placeholder={t('admissionStep3DisabilityDetailsPlaceholder')}
+            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+          />
+        </div>
+      )}
+
+      {/* needsEvacAssistance — Y/N */}
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
+          {t('admissionStep3NeedsEvacAssistanceLabel')}
+          <span className="ml-0.5 text-red-500">*</span>
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setStep3Fields({ needsEvacAssistance: true })}
+            className={[
+              'rounded-lg border px-5 py-2 text-base font-medium transition-colors',
+              needsEvacAssistance === true
+                ? 'border-sorena-navy bg-sorena-navy text-white'
+                : 'border-sorena-navy/20 text-sorena-navy hover:bg-sorena-navy/5',
+            ].join(' ')}
+          >
+            {t('admissionStep3Question1OptionYes')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setStep3Fields({ needsEvacAssistance: false })}
+            className={[
+              'rounded-lg border px-5 py-2 text-base font-medium transition-colors',
+              needsEvacAssistance === false
+                ? 'border-sorena-navy bg-sorena-navy text-white'
+                : 'border-sorena-navy/20 text-sorena-navy hover:bg-sorena-navy/5',
+            ].join(' ')}
+          >
+            {t('admissionStep3Question1OptionNo')}
+          </button>
+        </div>
+      </div>
+
+      {/* Conditional — evacDetails when needsEvacAssistance === true */}
+      {needsEvacAssistance === true && (
+        <div>
+          <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+            {t('admissionStep3EvacDetailsLabel')}
+            <span className="ml-0.5 text-red-500">*</span>
+          </label>
+          <textarea
+            rows={4}
+            value={evacDetails ?? ''}
+            onChange={(e) => setStep3Fields({ evacDetails: e.target.value })}
+            placeholder={t('admissionStep3EvacDetailsPlaceholder')}
+            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+          />
+        </div>
+      )}
+
+      {/* medicalNotes — optional, always visible */}
+      <div>
+        <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+          {t('admissionStep3MedicalNotesLabel')}
+        </label>
+        <textarea
+          rows={4}
+          value={medicalNotes ?? ''}
+          onChange={(e) => setStep3Fields({ medicalNotes: e.target.value })}
+          placeholder={t('admissionStep3MedicalNotesPlaceholder')}
+          className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+        />
+      </div>
+
+      {/* otherStudyNotes — optional, always visible */}
+      <div>
+        <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+          {t('admissionStep3OtherStudyNotesLabel')}
+        </label>
+        <textarea
+          rows={4}
+          value={otherStudyNotes ?? ''}
+          onChange={(e) => setStep3Fields({ otherStudyNotes: e.target.value })}
+          placeholder={t('admissionStep3OtherStudyNotesPlaceholder')}
+          className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+        />
       </div>
     </div>
   );
