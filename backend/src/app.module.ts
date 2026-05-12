@@ -23,6 +23,7 @@ import { PublicModule } from './public/public.module';
 import { StudentsModule } from './students/students.module';
 import { FilesModule } from './files/files.module';
 import { CryptoModule } from './common/crypto/crypto.module';
+import { EmailHashModule } from './common/email-hash/email-hash.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { CryptoModule } from './common/crypto/crypto.module';
     StudentsModule,
     FilesModule,
     CryptoModule,
+    EmailHashModule,
   ],
 })
 export class AppModule {}
