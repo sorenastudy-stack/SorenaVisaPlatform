@@ -22,6 +22,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PublicModule } from './public/public.module';
 import { StudentsModule } from './students/students.module';
 import { FilesModule } from './files/files.module';
+import { CryptoModule } from './common/crypto/crypto.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { FilesModule } from './files/files.module';
     PublicModule,
     StudentsModule,
     FilesModule,
+    CryptoModule,
   ],
 })
 export class AppModule {}
