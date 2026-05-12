@@ -1079,14 +1079,14 @@ model AdmissionApplication {
   termsAgreedAt DateTime?
 
   // Step 2 — Additional student info
-  phone              String?
-  phoneType          String?
-  countryOfBirth     String?
-  citizenship        String?
-  ethnicity          String?
-  passportNumber     String?
-  visaRefused        Boolean?
-  visaRefusalDetails String?
+  phone                       String?
+  phoneType                   String?
+  countryOfBirth              String?
+  citizenship                 String?
+  ethnicity                   String?
+  passportNumberEncrypted     Bytes?
+  visaRefused                 Boolean?
+  visaRefusalDetailsEncrypted Bytes?
 
   // Step 3A — English proficiency
   englishTestSat   Boolean?
@@ -1094,12 +1094,12 @@ model AdmissionApplication {
   englishPreCourse Boolean?
 
   // Step 3B — Health
-  hasDisability       Boolean?
-  disabilityDetails   String?
-  needsEvacAssistance Boolean?
-  evacDetails         String?
-  medicalNotes        String?
-  otherStudyNotes     String?
+  hasDisability                Boolean?
+  disabilityDetailsEncrypted   Bytes?
+  needsEvacAssistance          Boolean?
+  evacDetailsEncrypted         Bytes?
+  medicalNotesEncrypted        Bytes?
+  otherStudyNotesEncrypted     Bytes?
 
   // Step 3C — Education background
   schoolCountry          String?
@@ -1115,32 +1115,32 @@ model AdmissionApplication {
   sponsorshipProgramme String?
 
   // Step 5 — Parent / guardian (emergency contact)
-  guardianRelationship  String?
-  guardianFirstName     String?
-  guardianLastName      String?
-  guardianEmail         String?
-  guardianMobile        String?
-  guardianHomePhone     String?
-  guardianAddressSameAs Boolean?
-  guardianStreet        String?
-  guardianSuburb        String?
-  guardianCity          String?
-  guardianState         String?
-  guardianCountry       String?
-  guardianPostcode      String?
+  guardianRelationship          String?
+  guardianFirstNameEncrypted    Bytes?
+  guardianLastNameEncrypted     Bytes?
+  guardianEmail                 String?
+  guardianMobileEncrypted       Bytes?
+  guardianHomePhoneEncrypted    Bytes?
+  guardianAddressSameAs         Boolean?
+  guardianStreetEncrypted       Bytes?
+  guardianSuburbEncrypted       Bytes?
+  guardianCity                  String?
+  guardianState                 String?
+  guardianCountry               String?
+  guardianPostcodeEncrypted     Bytes?
 
   // Step 6 — Accommodation
   accommodationType String?
 
   // Step 7 — Agent / counsellor (only when agentId is set)
-  counsellorFirstName    String?
-  counsellorLastName     String?
-  counsellorEmail        String?
-  anotherBranch          Boolean?
-  branchAgentCode        String?
-  branchName             String?
-  agentDeclarationAgreed Boolean?
-  agentComments          String?
+  counsellorFirstNameEncrypted Bytes?
+  counsellorLastNameEncrypted  Bytes?
+  counsellorEmail              String?
+  anotherBranch                Boolean?
+  branchAgentCode              String?
+  branchName                   String?
+  agentDeclarationAgreed       Boolean?
+  agentCommentsEncrypted       Bytes?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

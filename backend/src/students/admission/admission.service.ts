@@ -10,6 +10,8 @@ import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../email/email.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
+import { CryptoService } from '../../common/crypto/crypto.service';
+import { encryptPiiFields, decryptPiiFields } from './admission-encryption.util';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 
@@ -186,6 +188,7 @@ export class AdmissionService {
   constructor(
     private prisma: PrismaService,
     private emailService: EmailService,
+    private crypto: CryptoService,
   ) {}
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -251,10 +254,11 @@ export class AdmissionService {
     if (!application) return { exists: false as const };
 
     const { documents, programmeChoices, ...appData } = application;
+    const decryptedAppData = decryptPiiFields(this.crypto, appData as Record<string, unknown>);
 
     return {
       exists: true as const,
-      application: appData,
+      application: decryptedAppData,
       programmeChoices: programmeChoices.map((c) => ({
         id: c.id,
         programmeId: c.programmeId,
@@ -424,11 +428,15 @@ export class AdmissionService {
 
     const data = stripAndCoerce(body);
     const changedKeys = Object.keys(data);
+    // PII fields in `data` are still plaintext; encryptPiiFields renames each
+    // accepted PII key to `<name>Encrypted` with an AES-256-GCM Buffer value
+    // (or null when the user is clearing the field).
+    const persistedData = encryptPiiFields(this.crypto, data);
 
     if (changedKeys.length > 0) {
       await this.prisma.admissionApplication.update({
         where: { id: application.id },
-        data,
+        data: persistedData,
       });
 
       await this.prisma.auditLog.create({
@@ -437,6 +445,8 @@ export class AdmissionService {
           action: 'ADMISSION_APPLICATION_UPDATED',
           entityType: 'AdmissionApplication',
           entityId: application.id,
+          // Audit log records the plaintext field names (PII-redacted shape),
+          // not the encrypted column names. The values are never logged.
           newValue: { updatedFields: changedKeys },
         },
       });
@@ -638,7 +648,11 @@ export class AdmissionService {
       throw new BadRequestException('At least one programme choice is required');
     }
 
-    const missingFields = validateRequiredFields(application, role);
+    // Decrypt PII columns before required-field validation so the existing
+    // textChecks logic (which reads plaintext field names like passportNumber)
+    // sees the same shape it did pre-encryption.
+    const decryptedForValidation = decryptPiiFields(this.crypto, application as unknown as Record<string, unknown>);
+    const missingFields = validateRequiredFields(decryptedForValidation, role);
     if (missingFields.length > 0) {
       throw new BadRequestException(`Missing required fields: ${missingFields.join(', ')}`);
     }
