@@ -90,16 +90,40 @@ export interface Step8Fields {
 export interface AdmissionDocument {
   id: string;
   documentType: string;
+  educationEntryId: string | null;
   fileName: string;
   mimeType: string;
   fileSizeBytes: number;
   uploadedAt: string;
 }
 
+export interface EducationEntry {
+  id: string;
+  qualificationLevel: string;
+  institutionName: string;
+  country: string;
+  fieldOfStudy: string | null;
+  startYear: number | null;
+  endYear: number | null;
+  completed: boolean;
+  sortOrder: number;
+}
+
+export interface EducationEntryInput {
+  qualificationLevel: string;
+  institutionName: string;
+  country: string;
+  fieldOfStudy?: string | null;
+  startYear?: number | null;
+  endYear?: number | null;
+  completed?: boolean;
+}
+
 interface ApplicationResponse {
   exists: boolean;
   application: Application;
   programmeChoices: ProgrammeChoice[];
+  educationEntries: EducationEntry[];
   documents: AdmissionDocument[];
 }
 
@@ -118,7 +142,12 @@ interface ContextValue {
   addProgrammeChoice: (data: { programmeId: string; intakeMonth: number; intakeYear: number }) => Promise<void>;
   removeProgrammeChoice: (choiceId: string) => Promise<void>;
   reorderProgrammeChoices: (orderedIds: string[]) => Promise<void>;
-  uploadDocument: (documentType: string, file: File) => Promise<void>;
+  educationEntries: EducationEntry[];
+  addEducationEntry: (data: EducationEntryInput) => Promise<EducationEntry>;
+  updateEducationEntry: (entryId: string, data: Partial<EducationEntryInput>) => Promise<EducationEntry>;
+  deleteEducationEntry: (entryId: string) => Promise<void>;
+  reorderEducationEntries: (orderedIds: string[]) => Promise<void>;
+  uploadDocument: (documentType: string, file: File, educationEntryId?: string) => Promise<void>;
   deleteDocument: (documentId: string) => Promise<void>;
   step2Fields: Step2Fields;
   setStep2Fields: (fields: Partial<Step2Fields>) => void;
@@ -142,15 +171,18 @@ export function AdmissionProvider({
   children,
   initialApplication,
   initialProgrammeChoices,
+  initialEducationEntries,
   initialDocuments,
 }: {
   children: ReactNode;
   initialApplication: Application | null;
   initialProgrammeChoices: ProgrammeChoice[];
+  initialEducationEntries: EducationEntry[];
   initialDocuments: AdmissionDocument[];
 }) {
   const [application, setApplication] = useState<Application | null>(initialApplication);
   const [programmeChoices, setProgrammeChoicesRaw] = useState<ProgrammeChoice[]>(initialProgrammeChoices ?? []);
+  const [educationEntries, setEducationEntriesRaw] = useState<EducationEntry[]>(initialEducationEntries ?? []);
   const [documents, setDocumentsRaw] = useState<AdmissionDocument[]>(initialDocuments ?? []);
   const [currentStep, setCurrentStep] = useState(initialApplication?.currentStep ?? 1);
   const [step2FieldsRaw, setStep2FieldsRaw] = useState<Step2Fields>({
@@ -251,6 +283,10 @@ export function AdmissionProvider({
     setDocumentsRaw(Array.isArray(v) ? v as AdmissionDocument[] : []);
   }, []);
 
+  const safeSetEducationEntries = useCallback((v: unknown) => {
+    setEducationEntriesRaw(Array.isArray(v) ? v as EducationEntry[] : []);
+  }, []);
+
   // correction 2: LOCKED is also read-only
   const isReadOnly =
     application?.status === 'SUBMITTED' || application?.status === 'LOCKED';
@@ -270,9 +306,10 @@ export function AdmissionProvider({
     if (res.application) {
       setApplication(res.application);
       safeSetProgrammeChoices(res.programmeChoices);
+      safeSetEducationEntries(res.educationEntries);
       safeSetDocuments(res.documents);
     }
-  }, [safeSetProgrammeChoices, safeSetDocuments]);
+  }, [safeSetProgrammeChoices, safeSetEducationEntries, safeSetDocuments]);
 
   const addProgrammeChoice = useCallback(
     async (data: { programmeId: string; intakeMonth: number; intakeYear: number }) => {
@@ -293,13 +330,56 @@ export function AdmissionProvider({
     );
   }, []);
 
-  const uploadDocument = useCallback(async (documentType: string, file: File) => {
+  const uploadDocument = useCallback(async (
+    documentType: string,
+    file: File,
+    educationEntryId?: string,
+  ) => {
     const form = new FormData();
     form.append('file', file);
     form.append('documentType', documentType);
+    if (educationEntryId) form.append('educationEntryId', educationEntryId);
     const doc = await api.upload<AdmissionDocument>('/students/me/admission/documents', form);
     setDocumentsRaw(prev => [...prev, doc]);
   }, []);
+
+  const addEducationEntry = useCallback(async (data: EducationEntryInput) => {
+    const entry = await api.post<EducationEntry>(
+      '/students/me/admission/application/education-entries', data,
+    );
+    setEducationEntriesRaw(prev => [...prev, entry].sort((a, b) => a.sortOrder - b.sortOrder));
+    return entry;
+  }, []);
+
+  const updateEducationEntry = useCallback(
+    async (entryId: string, data: Partial<EducationEntryInput>) => {
+      const entry = await api.patch<EducationEntry>(
+        `/students/me/admission/application/education-entries/${entryId}`, data,
+      );
+      setEducationEntriesRaw(prev =>
+        prev.map(e => e.id === entryId ? entry : e),
+      );
+      return entry;
+    }, []);
+
+  const deleteEducationEntry = useCallback(async (entryId: string) => {
+    await api.delete<void>(`/students/me/admission/application/education-entries/${entryId}`);
+    setEducationEntriesRaw(prev =>
+      prev.filter(e => e.id !== entryId)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((e, i) => ({ ...e, sortOrder: i })),
+    );
+    // Also drop any documents that were linked to that entry (cascade on server).
+    setDocumentsRaw(prev => prev.filter(d => d.educationEntryId !== entryId));
+  }, []);
+
+  const reorderEducationEntries = useCallback(async (orderedIds: string[]) => {
+    const res = await api.patch<{ educationEntries: EducationEntry[] }>(
+      '/students/me/admission/application/education-entries/reorder',
+      { orderedIds },
+    );
+    safeSetEducationEntries(res.educationEntries);
+  }, [safeSetEducationEntries]);
 
   const deleteDocument = useCallback(async (documentId: string) => {
     await api.delete<void>(`/students/me/admission/documents/${documentId}`);
@@ -328,6 +408,11 @@ export function AdmissionProvider({
       addProgrammeChoice,
       removeProgrammeChoice,
       reorderProgrammeChoices,
+      educationEntries,
+      addEducationEntry,
+      updateEducationEntry,
+      deleteEducationEntry,
+      reorderEducationEntries,
       uploadDocument,
       deleteDocument,
       step2Fields: step2FieldsRaw,

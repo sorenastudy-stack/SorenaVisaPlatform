@@ -22,6 +22,17 @@ const VALID_DOCUMENT_TYPES = [
   'ENGLISH_TEST_EVIDENCE',
   'EDUCATION_TRANSCRIPTS',
   'SUPPORTING_DOCUMENT',
+  'NOTARIZED_CERTIFICATE',
+  'NOTARIZED_TRANSCRIPT',
+] as const;
+
+const VALID_QUALIFICATION_LEVELS = [
+  'HIGH_SCHOOL',
+  'DIPLOMA',
+  'BACHELORS',
+  'MASTERS',
+  'DOCTORATE',
+  'OTHER',
 ] as const;
 
 // ── Auto-ticket triggers ──────────────────────────────────────────────────────
@@ -248,12 +259,15 @@ export class AdmissionService {
           orderBy: { priority: 'asc' },
           include: { programme: { select: { name: true } } },
         },
+        educationEntries: {
+          orderBy: { sortOrder: 'asc' },
+        },
       },
     });
 
     if (!application) return { exists: false as const };
 
-    const { documents, programmeChoices, ...appData } = application;
+    const { documents, programmeChoices, educationEntries, ...appData } = application;
     const decryptedAppData = decryptPiiFields(this.crypto, appData as Record<string, unknown>);
 
     return {
@@ -267,9 +281,21 @@ export class AdmissionService {
         intakeYear: c.intakeYear,
         priority: c.priority,
       })),
+      educationEntries: educationEntries.map((e) => ({
+        id: e.id,
+        qualificationLevel: e.qualificationLevel,
+        institutionName: e.institutionName,
+        country: e.country,
+        fieldOfStudy: e.fieldOfStudy,
+        startYear: e.startYear,
+        endYear: e.endYear,
+        completed: e.completed,
+        sortOrder: e.sortOrder,
+      })),
       documents: documents.map((doc) => ({
         id: doc.id,
         documentType: doc.documentType,
+        educationEntryId: doc.educationEntryId,
         fileName: doc.fileName,
         fileUrl: `/files/signed/${createSignedDownloadToken({ fileUrl: doc.fileUrl, fileName: doc.fileName, mimeType: doc.mimeType })}`,
         mimeType: doc.mimeType,
@@ -285,6 +311,7 @@ export class AdmissionService {
     userId: string,
     file: Express.Multer.File,
     documentType: string,
+    educationEntryId?: string,
   ) {
     if (!VALID_DOCUMENT_TYPES.includes(documentType as any)) {
       throw new BadRequestException(
@@ -295,6 +322,16 @@ export class AdmissionService {
     const { contact, caseRecord } = await this.resolveContactAndCase(userId);
     const application = await this.findOrCreateApplication(caseRecord.id, contact.id);
 
+    // If linking to an education entry, verify it belongs to this application.
+    if (educationEntryId) {
+      const entry = await this.prisma.admissionEducationEntry.findUnique({
+        where: { id: educationEntryId },
+      });
+      if (!entry || entry.admissionApplicationId !== application.id) {
+        throw new ForbiddenException('Education entry not found or does not belong to this application');
+      }
+    }
+
     const destDir = path.join(UPLOAD_DIR, 'admission-documents', application.id);
     await fs.promises.mkdir(destDir, { recursive: true });
     const destPath = path.join(destDir, path.basename(file.path));
@@ -303,6 +340,7 @@ export class AdmissionService {
     const doc = await this.prisma.admissionDocument.create({
       data: {
         admissionApplicationId: application.id,
+        educationEntryId: educationEntryId ?? null,
         documentType: documentType as any,
         fileName: file.originalname,
         fileUrl: destPath,
@@ -322,6 +360,7 @@ export class AdmissionService {
           fileName: file.originalname,
           fileSizeBytes: file.size,
           admissionApplicationId: application.id,
+          educationEntryId: educationEntryId ?? null,
         },
       },
     });
@@ -329,6 +368,7 @@ export class AdmissionService {
     return {
       id: doc.id,
       documentType: doc.documentType,
+      educationEntryId: doc.educationEntryId,
       fileName: doc.fileName,
       mimeType: doc.mimeType,
       fileSizeBytes: doc.fileSizeBytes,
@@ -336,7 +376,7 @@ export class AdmissionService {
     };
   }
 
-  async listDocuments(userId: string, documentType?: string) {
+  async listDocuments(userId: string, documentType?: string, educationEntryId?: string) {
     const { caseRecord } = await this.resolveContactAndCase(userId);
 
     const application = await this.prisma.admissionApplication.findFirst({
@@ -348,6 +388,7 @@ export class AdmissionService {
       where: {
         admissionApplicationId: application.id,
         ...(documentType ? { documentType: documentType as any } : {}),
+        ...(educationEntryId !== undefined ? { educationEntryId } : {}),
       },
       orderBy: { uploadedAt: 'desc' },
     });
@@ -355,6 +396,7 @@ export class AdmissionService {
     return docs.map((doc) => ({
       id: doc.id,
       documentType: doc.documentType,
+      educationEntryId: doc.educationEntryId,
       fileName: doc.fileName,
       mimeType: doc.mimeType,
       fileSizeBytes: doc.fileSizeBytes,
@@ -621,6 +663,212 @@ export class AdmissionService {
         this.prisma.admissionProgrammeChoice.update({
           where: { id },
           data: { priority: i + 1 },
+        }),
+      ),
+    );
+
+    return this.loadFullApplication(caseRecord.id);
+  }
+
+  // ── Education entry CRUD (PR-EDU1) ────────────────────────────────────────
+
+  private async assertEducationEntryOwnership(entryId: string, applicationId: string) {
+    const entry = await this.prisma.admissionEducationEntry.findUnique({
+      where: { id: entryId },
+    });
+    if (!entry) throw new NotFoundException('Education entry not found');
+    if (entry.admissionApplicationId !== applicationId) {
+      throw new ForbiddenException('Education entry does not belong to this application');
+    }
+    return entry;
+  }
+
+  async addEducationEntry(
+    userId: string,
+    body: {
+      qualificationLevel: string;
+      institutionName: string;
+      country: string;
+      fieldOfStudy?: string | null;
+      startYear?: number | null;
+      endYear?: number | null;
+      completed?: boolean;
+    },
+  ) {
+    const { contact, caseRecord } = await this.resolveContactAndCase(userId);
+
+    if (!body?.qualificationLevel || !VALID_QUALIFICATION_LEVELS.includes(body.qualificationLevel as any)) {
+      throw new BadRequestException(
+        `Invalid qualificationLevel. Valid values: ${VALID_QUALIFICATION_LEVELS.join(', ')}`,
+      );
+    }
+    if (!body.institutionName?.trim()) {
+      throw new BadRequestException('institutionName is required');
+    }
+    if (!body.country?.trim()) {
+      throw new BadRequestException('country is required');
+    }
+
+    const application = await this.findOrCreateApplication(caseRecord.id, contact.id);
+
+    // sortOrder = current max + 1 (append to the end)
+    const last = await this.prisma.admissionEducationEntry.findFirst({
+      where: { admissionApplicationId: application.id },
+      orderBy: { sortOrder: 'desc' },
+    });
+    const sortOrder = (last?.sortOrder ?? -1) + 1;
+
+    const entry = await this.prisma.admissionEducationEntry.create({
+      data: {
+        admissionApplicationId: application.id,
+        qualificationLevel: body.qualificationLevel,
+        institutionName: body.institutionName.trim(),
+        country: body.country.trim(),
+        fieldOfStudy: body.fieldOfStudy?.trim() || null,
+        startYear: body.startYear ?? null,
+        endYear: body.endYear ?? null,
+        completed: body.completed ?? false,
+        sortOrder,
+      },
+    });
+
+    return {
+      id: entry.id,
+      qualificationLevel: entry.qualificationLevel,
+      institutionName: entry.institutionName,
+      country: entry.country,
+      fieldOfStudy: entry.fieldOfStudy,
+      startYear: entry.startYear,
+      endYear: entry.endYear,
+      completed: entry.completed,
+      sortOrder: entry.sortOrder,
+    };
+  }
+
+  async updateEducationEntry(userId: string, entryId: string, body: Record<string, unknown>) {
+    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const application = await this.prisma.admissionApplication.findFirst({
+      where: { caseId: caseRecord.id },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.status !== 'DRAFT') {
+      throw new ConflictException('Cannot modify a submitted application');
+    }
+
+    await this.assertEducationEntryOwnership(entryId, application.id);
+
+    const data: Record<string, unknown> = {};
+    if (body.qualificationLevel !== undefined) {
+      if (typeof body.qualificationLevel !== 'string'
+        || !VALID_QUALIFICATION_LEVELS.includes(body.qualificationLevel as any)) {
+        throw new BadRequestException(
+          `Invalid qualificationLevel. Valid values: ${VALID_QUALIFICATION_LEVELS.join(', ')}`,
+        );
+      }
+      data.qualificationLevel = body.qualificationLevel;
+    }
+    if (body.institutionName !== undefined) {
+      const v = String(body.institutionName).trim();
+      if (!v) throw new BadRequestException('institutionName cannot be empty');
+      data.institutionName = v;
+    }
+    if (body.country !== undefined) {
+      const v = String(body.country).trim();
+      if (!v) throw new BadRequestException('country cannot be empty');
+      data.country = v;
+    }
+    if (body.fieldOfStudy !== undefined) {
+      const v = body.fieldOfStudy === null ? null : String(body.fieldOfStudy).trim() || null;
+      data.fieldOfStudy = v;
+    }
+    if (body.startYear !== undefined) {
+      data.startYear = body.startYear === null ? null : Number(body.startYear);
+    }
+    if (body.endYear !== undefined) {
+      data.endYear = body.endYear === null ? null : Number(body.endYear);
+    }
+    if (body.completed !== undefined) {
+      data.completed = Boolean(body.completed);
+    }
+
+    const entry = await this.prisma.admissionEducationEntry.update({
+      where: { id: entryId },
+      data,
+    });
+
+    return {
+      id: entry.id,
+      qualificationLevel: entry.qualificationLevel,
+      institutionName: entry.institutionName,
+      country: entry.country,
+      fieldOfStudy: entry.fieldOfStudy,
+      startYear: entry.startYear,
+      endYear: entry.endYear,
+      completed: entry.completed,
+      sortOrder: entry.sortOrder,
+    };
+  }
+
+  async deleteEducationEntry(userId: string, entryId: string) {
+    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const application = await this.prisma.admissionApplication.findFirst({
+      where: { caseId: caseRecord.id },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.status !== 'DRAFT') {
+      throw new ConflictException('Cannot modify a submitted application');
+    }
+
+    await this.assertEducationEntryOwnership(entryId, application.id);
+
+    // Cascade in the DB removes any AdmissionDocument rows linked to this entry
+    // (FK ON DELETE CASCADE on admission_documents.educationEntryId). The
+    // physical files on disk are NOT cleaned up here; that's a separate
+    // janitorial concern matching the existing deleteProgrammeChoice pattern.
+    await this.prisma.admissionEducationEntry.delete({ where: { id: entryId } });
+
+    // Re-number sortOrder for the remaining entries to keep them contiguous.
+    const remaining = await this.prisma.admissionEducationEntry.findMany({
+      where: { admissionApplicationId: application.id },
+      orderBy: { sortOrder: 'asc' },
+    });
+    await Promise.all(
+      remaining.map((e, i) =>
+        this.prisma.admissionEducationEntry.update({
+          where: { id: e.id },
+          data: { sortOrder: i },
+        }),
+      ),
+    );
+  }
+
+  async reorderEducationEntries(userId: string, orderedIds: string[]) {
+    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const application = await this.prisma.admissionApplication.findFirst({
+      where: { caseId: caseRecord.id },
+      include: { educationEntries: true },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.status !== 'DRAFT') {
+      throw new ConflictException('Cannot modify a submitted application');
+    }
+
+    const currentIds = new Set(application.educationEntries.map((e) => e.id));
+    const incomingIds = new Set(orderedIds);
+    if (
+      currentIds.size !== incomingIds.size ||
+      ![...currentIds].every((id) => incomingIds.has(id))
+    ) {
+      throw new BadRequestException(
+        'orderedIds must contain exactly the same IDs as current education entries',
+      );
+    }
+
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        this.prisma.admissionEducationEntry.update({
+          where: { id },
+          data: { sortOrder: i },
         }),
       ),
     );

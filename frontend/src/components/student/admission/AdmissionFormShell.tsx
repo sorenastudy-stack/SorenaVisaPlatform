@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import {
   AdmissionProvider, useAdmission,
-  type Application, type ProgrammeChoice, type AdmissionDocument,
+  type Application, type ProgrammeChoice, type EducationEntry, type AdmissionDocument,
 } from './AdmissionFormContext';
 import { StepNav }          from './StepNav';
 import { StageProgressBar } from './StageProgressBar';
@@ -31,6 +31,7 @@ interface InitialData {
   exists: boolean;
   application: Application;
   programmeChoices: ProgrammeChoice[];
+  educationEntries: EducationEntry[];
   documents: AdmissionDocument[];
 }
 
@@ -48,7 +49,7 @@ export function AdmissionFormShell({ session, initialData }: Props) {
     if (initialData) return;
     api.post<{ application: Application }>('/students/me/admission/application', {})
       .then((res) =>
-        setData({ exists: true, application: res.application, programmeChoices: [], documents: [] })
+        setData({ exists: true, application: res.application, programmeChoices: [], educationEntries: [], documents: [] })
       )
       .catch(() => toast.error('Could not start your application. Please refresh.'))
       .finally(() => setLoading(false));
@@ -68,6 +69,7 @@ export function AdmissionFormShell({ session, initialData }: Props) {
     <AdmissionProvider
       initialApplication={data.application}
       initialProgrammeChoices={data.programmeChoices}
+      initialEducationEntries={data.educationEntries}
       initialDocuments={data.documents}
     >
       <ShellInner session={session} />

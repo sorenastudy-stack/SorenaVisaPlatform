@@ -31,12 +31,20 @@ export function DocumentUploader({
   helperText,
   single = false,
   required = false,
+  educationEntryId,
 }: {
   documentType: string;
   label: string;
   helperText?: string;
   single?: boolean;
   required?: boolean;
+  /**
+   * Optional. When provided, this uploader is scoped to a specific
+   * AdmissionEducationEntry: uploads attach with educationEntryId set,
+   * and the document list filters to docs for that entry only.
+   * When absent (default), behaves as today (application-level docs).
+   */
+  educationEntryId?: string;
 }) {
   const t = useTranslations();
   const { documents, uploadDocument, deleteDocument } = useAdmission();
@@ -44,7 +52,16 @@ export function DocumentUploader({
   const [dragOver, setDragOver]   = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const typeDocs   = documents.filter(d => d.documentType === documentType);
+  // Filter by documentType plus the scoping rule:
+  //   - educationEntryId set → only docs for that entry
+  //   - educationEntryId absent → only app-level docs (no entry link)
+  const typeDocs = documents.filter(d => {
+    if (d.documentType !== documentType) return false;
+    if (educationEntryId !== undefined) {
+      return d.educationEntryId === educationEntryId;
+    }
+    return d.educationEntryId === null;
+  });
   const showUpload = !single || typeDocs.length === 0;
 
   const handleFile = async (file: File) => {
@@ -58,7 +75,7 @@ export function DocumentUploader({
     }
     setUploading(true);
     try {
-      await uploadDocument(documentType, file);
+      await uploadDocument(documentType, file, educationEntryId);
     } catch {
       toast.error(t('admissionUploadFailed'));
     } finally {

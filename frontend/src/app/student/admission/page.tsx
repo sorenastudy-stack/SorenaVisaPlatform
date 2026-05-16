@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { apiServer } from '@/lib/apiServer';
 import { AdmissionFormShell } from '@/components/student/admission/AdmissionFormShell';
-import type { Application, ProgrammeChoice, AdmissionDocument } from '@/components/student/admission/AdmissionFormContext';
+import type { Application, ProgrammeChoice, EducationEntry, AdmissionDocument } from '@/components/student/admission/AdmissionFormContext';
 
 export default async function AdmissionPage() {
   const session = await getSession();
@@ -12,6 +12,7 @@ export default async function AdmissionPage() {
     exists: boolean;
     application: Application;
     programmeChoices: ProgrammeChoice[];
+    educationEntries: EducationEntry[];
     documents: AdmissionDocument[];
   } | null = null;
 
@@ -20,6 +21,7 @@ export default async function AdmissionPage() {
       exists: boolean;
       application: Application;
       programmeChoices: ProgrammeChoice[];
+      educationEntries: EducationEntry[];
       documents: AdmissionDocument[];
     }>('/students/me/admission/application');
     if (res.exists) initialData = res;

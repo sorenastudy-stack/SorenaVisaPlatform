@@ -74,6 +74,7 @@ export class AdmissionController {
   async uploadDocument(
     @Req() req: any,
     @Body('documentType') documentType: string,
+    @Body('educationEntryId') educationEntryId?: string,
   ) {
     if (req.fileTypeRejected) {
       throw new UnsupportedMediaTypeException(
@@ -83,12 +84,21 @@ export class AdmissionController {
     if (!req.file) {
       throw new UnsupportedMediaTypeException('No file provided.');
     }
-    return this.admissionService.uploadDocument(req.user.userId, req.file, documentType);
+    return this.admissionService.uploadDocument(
+      req.user.userId,
+      req.file,
+      documentType,
+      educationEntryId,
+    );
   }
 
   @Get('documents')
-  listDocuments(@Req() req: any, @Query('documentType') documentType?: string) {
-    return this.admissionService.listDocuments(req.user.userId, documentType);
+  listDocuments(
+    @Req() req: any,
+    @Query('documentType') documentType?: string,
+    @Query('educationEntryId') educationEntryId?: string,
+  ) {
+    return this.admissionService.listDocuments(req.user.userId, documentType, educationEntryId);
   }
 
   @Get('documents/:id/download')
@@ -141,6 +151,49 @@ export class AdmissionController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteProgrammeChoice(@Req() req: any, @Param('choiceId') choiceId: string) {
     return this.admissionService.deleteProgrammeChoice(req.user.userId, choiceId);
+  }
+
+  // ── Education-entry endpoints (PR-EDU1) ──────────────────────────────────
+
+  @Post('application/education-entries')
+  addEducationEntry(
+    @Req() req: any,
+    @Body() body: {
+      qualificationLevel: string;
+      institutionName: string;
+      country: string;
+      fieldOfStudy?: string | null;
+      startYear?: number | null;
+      endYear?: number | null;
+      completed?: boolean;
+    },
+  ) {
+    return this.admissionService.addEducationEntry(req.user.userId, body);
+  }
+
+  // reorder must be declared before /:entryId to avoid the static segment being
+  // matched as a param on PATCH requests
+  @Patch('application/education-entries/reorder')
+  reorderEducationEntries(
+    @Req() req: any,
+    @Body() body: { orderedIds: string[] },
+  ) {
+    return this.admissionService.reorderEducationEntries(req.user.userId, body.orderedIds);
+  }
+
+  @Patch('application/education-entries/:entryId')
+  updateEducationEntry(
+    @Req() req: any,
+    @Param('entryId') entryId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.admissionService.updateEducationEntry(req.user.userId, entryId, body);
+  }
+
+  @Delete('application/education-entries/:entryId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteEducationEntry(@Req() req: any, @Param('entryId') entryId: string) {
+    return this.admissionService.deleteEducationEntry(req.user.userId, entryId);
   }
 
   @Post('application/submit')

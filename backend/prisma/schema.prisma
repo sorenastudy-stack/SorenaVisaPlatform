@@ -1065,6 +1065,8 @@ enum AdmissionDocumentType {
   ENGLISH_TEST_EVIDENCE
   EDUCATION_TRANSCRIPTS
   SUPPORTING_DOCUMENT
+  NOTARIZED_CERTIFICATE
+  NOTARIZED_TRANSCRIPT
 }
 
 model AdmissionApplication {
@@ -1149,12 +1151,34 @@ model AdmissionApplication {
   contact          Contact                    @relation(fields: [contactId], references: [id])
   agent            User?                      @relation("ApplicationAgent", fields: [agentId], references: [id])
   programmeChoices AdmissionProgrammeChoice[]
+  educationEntries AdmissionEducationEntry[]
   documents        AdmissionDocument[]
 
   @@index([caseId])
   @@index([contactId])
   @@index([status])
   @@map("admission_applications")
+}
+
+model AdmissionEducationEntry {
+  id                     String   @id @default(cuid())
+  admissionApplicationId String
+  qualificationLevel     String
+  institutionName        String
+  country                String
+  fieldOfStudy           String?
+  startYear              Int?
+  endYear                Int?
+  completed              Boolean  @default(false)
+  sortOrder              Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
+  documents            AdmissionDocument[]
+
+  @@index([admissionApplicationId])
+  @@map("admission_education_entries")
 }
 
 model AdmissionProgrammeChoice {
@@ -1176,6 +1200,7 @@ model AdmissionProgrammeChoice {
 model AdmissionDocument {
   id                     String                @id @default(cuid())
   admissionApplicationId String
+  educationEntryId       String?
   documentType           AdmissionDocumentType
   fileName               String
   fileUrl                String
@@ -1183,9 +1208,11 @@ model AdmissionDocument {
   fileSizeBytes          Int
   uploadedAt             DateTime              @default(now())
 
-  admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
+  admissionApplication AdmissionApplication      @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
+  educationEntry       AdmissionEducationEntry?  @relation(fields: [educationEntryId], references: [id], onDelete: Cascade)
 
   @@index([admissionApplicationId])
+  @@index([educationEntryId])
   @@map("admission_documents")
 }
 
