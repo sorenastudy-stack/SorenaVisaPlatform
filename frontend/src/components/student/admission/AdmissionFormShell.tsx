@@ -17,6 +17,10 @@ import { Step1Study }             from './steps/Step1Study';
 import { Step2AdditionalInfo }    from './steps/Step2AdditionalInfo';
 import { Step3EducationEnglish }  from './steps/Step3EducationEnglish';
 import { Step4Documents }         from './steps/Step4Documents';
+import { Step5GuardianInfo }      from './steps/Step5GuardianInfo';
+import { Step6Accommodation }     from './steps/Step6Accommodation';
+import { Step7AgentDetails }      from './steps/Step7AgentDetails';
+import { Step8Acceptance }        from './steps/Step8Acceptance';
 import { StudentHeader }    from '@/components/student/StudentHeader';
 import type { Session }     from '@/lib/auth';
 
@@ -106,6 +110,14 @@ function ShellInner({ session }: { session: Session }) {
             ? <Step3EducationEnglish />
             : safeStep === 4
             ? <Step4Documents />
+            : safeStep === 5
+            ? <Step5GuardianInfo />
+            : safeStep === 6
+            ? <Step6Accommodation />
+            : safeStep === 7
+            ? <Step7AgentDetails />
+            : safeStep === 8
+            ? <Step8Acceptance />
             : <StepPlaceholder step={safeStep} displayStep={displayStep} />
           }
         </main>

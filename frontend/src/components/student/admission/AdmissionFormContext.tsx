@@ -52,6 +52,41 @@ export interface Step3Fields {
   otherStudyNotes: string | null;
 }
 
+export interface Step5Fields {
+  guardianRelationship: string | null;
+  guardianFirstName: string | null;
+  guardianLastName: string | null;
+  guardianEmail: string | null;
+  guardianMobile: string | null;
+  guardianHomePhone: string | null;
+  guardianAddressSameAs: boolean | null;
+  guardianStreet: string | null;
+  guardianSuburb: string | null;
+  guardianCity: string | null;
+  guardianState: string | null;
+  guardianCountry: string | null;
+  guardianPostcode: string | null;
+}
+
+export interface Step6Fields {
+  accommodationType: string | null;
+}
+
+export interface Step7Fields {
+  counsellorFirstName: string | null;
+  counsellorLastName: string | null;
+  counsellorEmail: string | null;
+  anotherBranch: boolean | null;
+  branchAgentCode: string | null;
+  branchName: string | null;
+  agentDeclarationAgreed: boolean | null;
+  agentComments: string | null;
+}
+
+export interface Step8Fields {
+  termsAgreedAt: string | null;
+}
+
 export interface AdmissionDocument {
   id: string;
   documentType: string;
@@ -89,6 +124,14 @@ interface ContextValue {
   setStep2Fields: (fields: Partial<Step2Fields>) => void;
   step3Fields: Step3Fields;
   setStep3Fields: (fields: Partial<Step3Fields>) => void;
+  step5Fields: Step5Fields;
+  setStep5Fields: (fields: Partial<Step5Fields>) => void;
+  step6Fields: Step6Fields;
+  setStep6Fields: (fields: Partial<Step6Fields>) => void;
+  step7Fields: Step7Fields;
+  setStep7Fields: (fields: Partial<Step7Fields>) => void;
+  step8Fields: Step8Fields;
+  setStep8Fields: (fields: Partial<Step8Fields>) => void;
   stepHandler: (() => Promise<boolean>) | null;
   registerStepHandler: (fn: (() => Promise<boolean>) | null) => void;
 }
@@ -145,6 +188,53 @@ export function AdmissionProvider({
   });
   const setStep3Fields = useCallback((fields: Partial<Step3Fields>) => {
     setStep3FieldsRaw(prev => ({ ...prev, ...fields }));
+  }, []);
+
+  const [step5FieldsRaw, setStep5FieldsRaw] = useState<Step5Fields>({
+    guardianRelationship:  (initialApplication?.guardianRelationship  as string  | null) ?? null,
+    guardianFirstName:     (initialApplication?.guardianFirstName     as string  | null) ?? null,
+    guardianLastName:      (initialApplication?.guardianLastName      as string  | null) ?? null,
+    guardianEmail:         (initialApplication?.guardianEmail         as string  | null) ?? null,
+    guardianMobile:        (initialApplication?.guardianMobile        as string  | null) ?? null,
+    guardianHomePhone:     (initialApplication?.guardianHomePhone     as string  | null) ?? null,
+    guardianAddressSameAs: (initialApplication?.guardianAddressSameAs as boolean | null) ?? null,
+    guardianStreet:        (initialApplication?.guardianStreet        as string  | null) ?? null,
+    guardianSuburb:        (initialApplication?.guardianSuburb        as string  | null) ?? null,
+    guardianCity:          (initialApplication?.guardianCity          as string  | null) ?? null,
+    guardianState:         (initialApplication?.guardianState         as string  | null) ?? null,
+    guardianCountry:       (initialApplication?.guardianCountry       as string  | null) ?? null,
+    guardianPostcode:      (initialApplication?.guardianPostcode      as string  | null) ?? null,
+  });
+  const setStep5Fields = useCallback((fields: Partial<Step5Fields>) => {
+    setStep5FieldsRaw(prev => ({ ...prev, ...fields }));
+  }, []);
+
+  const [step6FieldsRaw, setStep6FieldsRaw] = useState<Step6Fields>({
+    accommodationType: (initialApplication?.accommodationType as string | null) ?? null,
+  });
+  const setStep6Fields = useCallback((fields: Partial<Step6Fields>) => {
+    setStep6FieldsRaw(prev => ({ ...prev, ...fields }));
+  }, []);
+
+  const [step7FieldsRaw, setStep7FieldsRaw] = useState<Step7Fields>({
+    counsellorFirstName:    (initialApplication?.counsellorFirstName    as string  | null) ?? null,
+    counsellorLastName:     (initialApplication?.counsellorLastName     as string  | null) ?? null,
+    counsellorEmail:        (initialApplication?.counsellorEmail        as string  | null) ?? null,
+    anotherBranch:          (initialApplication?.anotherBranch          as boolean | null) ?? null,
+    branchAgentCode:        (initialApplication?.branchAgentCode        as string  | null) ?? null,
+    branchName:             (initialApplication?.branchName             as string  | null) ?? null,
+    agentDeclarationAgreed: (initialApplication?.agentDeclarationAgreed as boolean | null) ?? null,
+    agentComments:          (initialApplication?.agentComments          as string  | null) ?? null,
+  });
+  const setStep7Fields = useCallback((fields: Partial<Step7Fields>) => {
+    setStep7FieldsRaw(prev => ({ ...prev, ...fields }));
+  }, []);
+
+  const [step8FieldsRaw, setStep8FieldsRaw] = useState<Step8Fields>({
+    termsAgreedAt: (initialApplication?.termsAgreedAt as string | null) ?? null,
+  });
+  const setStep8Fields = useCallback((fields: Partial<Step8Fields>) => {
+    setStep8FieldsRaw(prev => ({ ...prev, ...fields }));
   }, []);
 
   const [stepHandler, setStepHandlerState] = useState<(() => Promise<boolean>) | null>(null);
@@ -244,6 +334,14 @@ export function AdmissionProvider({
       setStep2Fields,
       step3Fields: step3FieldsRaw,
       setStep3Fields,
+      step5Fields: step5FieldsRaw,
+      setStep5Fields,
+      step6Fields: step6FieldsRaw,
+      setStep6Fields,
+      step7Fields: step7FieldsRaw,
+      setStep7Fields,
+      step8Fields: step8FieldsRaw,
+      setStep8Fields,
       stepHandler,
       registerStepHandler,
     }}>
