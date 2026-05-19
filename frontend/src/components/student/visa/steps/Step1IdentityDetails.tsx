@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useVisa } from '../VisaFormContext';
+import { VisaPhotoUploader } from '../VisaPhotoUploader';
 import { COUNTRIES } from '@/lib/data/countries';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 
@@ -47,7 +48,7 @@ function dateInputToIso(value: string): string | null {
 
 export function Step1IdentityDetails() {
   const t = useTranslations();
-  const { visa, readonly, patchVisa, savedAt, setSavedAt } = useVisa();
+  const { visa, readonly, patchVisa, savedAt, setSavedAt, setActiveStep } = useVisa();
 
   // Local-state buffer. The form is "save and continue" — we don't PATCH on
   // every keystroke. Submit happens on the single button click at the bottom.
@@ -75,6 +76,10 @@ export function Step1IdentityDetails() {
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  // Visa photo presence is tracked by VisaPhotoUploader (it fetches existing
+  // VISA_PHOTO docs on mount and reports via onPhotoChange). The validator
+  // below blocks Save until at least one photo is uploaded.
+  const [hasPhoto, setHasPhoto] = useState(false);
 
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -112,6 +117,10 @@ export function Step1IdentityDetails() {
     }
     if (form.middleNames.length > MIDDLE_NAMES_MAX) {
       e.middleNames = true; missing.push('middleNames');
+    }
+    // INZ photo is mandatory to complete Step 1.
+    if (!hasPhoto) {
+      e.visaPhoto = true; missing.push('visaPhoto');
     }
 
     setErrors(e);
@@ -153,6 +162,10 @@ export function Step1IdentityDetails() {
       await patchVisa(payload);
       setSavedAt(new Date().toISOString());
       toast.success(t('visaIdentitySaveSuccess'));
+      // PR-VISA2: advance the stepper now that Section 2 exists. The success
+      // banner shown on Step 1 was effectively a stand-in for "no next step";
+      // we keep it for the case where the student lands back on Step 1.
+      setActiveStep(2);
     } catch {
       toast.error(t('visaIdentitySaveError'));
     } finally {
@@ -234,12 +247,6 @@ export function Step1IdentityDetails() {
           {t('visaIdentitySavedBanner')}
         </div>
       )}
-
-      {/* Applicant name (read-only, from contacts) */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <ReadonlyField label={t('visaIdentityApplicantSurname')}   value={surname} />
-        <ReadonlyField label={t('visaIdentityApplicantFirstName')} value={firstName} />
-      </div>
 
       {/* ── Subsection: Identity information ─────────────────────────── */}
       <div className="mt-2 border-t border-sorena-navy/10 pt-6">
@@ -539,6 +546,28 @@ export function Step1IdentityDetails() {
           </div>
         )}
       </div>
+
+      {/* ── Subsection: Upload photo (INZ visa photo) ───────────────── */}
+      <div className="mt-2 border-t border-sorena-navy/10 pt-6">
+        <h3 className="text-xl font-bold text-sorena-navy">{t('visaPhotoSubsectionTitle')}</h3>
+        <p className="mt-2 text-sm text-sorena-navy/70">{t('visaPhotoExplanation')}</p>
+        <p className="mt-3 text-sm text-sorena-navy/70">{t('visaPhotoRequirementsIntro')}</p>
+        <ul className="mt-1 list-disc space-y-1 pl-6 text-sm text-sorena-navy/70">
+          <li>{t('visaPhotoRequirementType')}</li>
+          <li>{t('visaPhotoRequirementSize')}</li>
+          <li>{t('visaPhotoRequirementDimensions')}</li>
+        </ul>
+      </div>
+
+      <VisaPhotoUploader
+        hasError={!!errors.visaPhoto}
+        onPhotoChange={setHasPhoto}
+      />
+
+      <RedWarning>
+        <p className="mb-1 font-bold uppercase tracking-wide">{t('visaCommonWarningLabel')}</p>
+        {t('visaPhotoAiWarning')}
+      </RedWarning>
 
       {/* Save button */}
       <div className="flex justify-end border-t border-sorena-navy/10 pt-4">

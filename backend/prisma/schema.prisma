@@ -1067,6 +1067,7 @@ enum AdmissionDocumentType {
   SUPPORTING_DOCUMENT
   NOTARIZED_CERTIFICATE
   NOTARIZED_TRANSCRIPT
+  VISA_PHOTO
 }
 
 model AdmissionApplication {
@@ -1271,6 +1272,25 @@ model VisaApplication {
   hasNationalId           Boolean?
   nationalIdEncrypted     Bytes?
   nationalIdCountry       String?
+
+  // Section 2 — Address and contact information (PR-VISA2)
+  physicalStreetEncrypted     Bytes?
+  physicalSuburb              String?
+  physicalCity                String?
+  physicalState               String?
+  physicalPostcode            String?
+  physicalCountry             String?
+  postalSameAsPhysical        Boolean?
+  postalStreetEncrypted       Bytes?
+  postalSuburb                String?
+  postalCity                  String?
+  postalState                 String?
+  postalPostcode              String?
+  postalCountry               String?
+  preferredContactCountryCode    String?
+  preferredContactNumber         String?
+  alternativeContactCountryCode  String?
+  alternativeContactNumber       String?
 
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())

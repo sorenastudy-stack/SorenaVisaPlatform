@@ -24,6 +24,10 @@ const VALID_DOCUMENT_TYPES = [
   'SUPPORTING_DOCUMENT',
   'NOTARIZED_CERTIFICATE',
   'NOTARIZED_TRANSCRIPT',
+  // Visa Section reuses this pipeline for the INZ photo (PR-VISA2 fix).
+  // Same admission_documents row layout, scoped to the same admission
+  // application as the visa row.
+  'VISA_PHOTO',
 ] as const;
 
 const VALID_QUALIFICATION_LEVELS = [
