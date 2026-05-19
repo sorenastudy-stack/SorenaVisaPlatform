@@ -38,6 +38,64 @@ const VALID_QUALIFICATION_LEVELS = [
   'OTHER',
 ] as const;
 
+// Rank used for cross-entry progression checks. OTHER is intentionally
+// missing (treated as unranked / excluded from the check).
+const QUALIFICATION_RANK: Record<string, number> = {
+  INTERMEDIATE:     0,
+  HIGH_SCHOOL:      1,
+  CERTIFICATE:      2,
+  DIPLOMA:          3,
+  ASSOCIATE_DEGREE: 4,
+  BACHELORS:        5,
+  MASTERS:          6,
+  DOCTORATE:        7,
+};
+
+// Year validation constants — must match stepVisibility / EducationHistoryEditor.
+const EDU_MIN_YEAR = 1950;
+const EDU_MAX_YEAR = new Date().getFullYear() + 10;
+
+/**
+ * Map an UPPER_SNAKE_CASE qualification level to a human-readable label
+ * for error messages (e.g. ASSOCIATE_DEGREE → "Associate Degree").
+ */
+function humanLevel(value: string): string {
+  return value
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Validates a (startYear, endYear, completed) triple. Returns the first
+ * error message found, or null when valid. Used by addEducationEntry,
+ * updateEducationEntry, and submitApplication.
+ */
+function validateEducationYears(
+  startYear: number | null | undefined,
+  endYear: number | null | undefined,
+  completed: boolean,
+): string | null {
+  // Range stays 1950 .. CURRENT_YEAR + 10 (EDU_MIN_YEAR / EDU_MAX_YEAR); the
+  // user-facing message intentionally omits the numeric range to avoid
+  // confusing students with a maxYear like "current year + 10".
+  const inRange = (n: number) => Number.isInteger(n) && n >= EDU_MIN_YEAR && n <= EDU_MAX_YEAR;
+  if (startYear !== null && startYear !== undefined && !inRange(startYear)) {
+    return 'Please enter a valid 4-digit year.';
+  }
+  if (endYear !== null && endYear !== undefined && !inRange(endYear)) {
+    return 'Please enter a valid 4-digit year.';
+  }
+  if (startYear !== null && startYear !== undefined && endYear !== null && endYear !== undefined && startYear > endYear) {
+    return 'Start year cannot be after end year';
+  }
+  const currentYear = new Date().getFullYear();
+  if (completed && endYear !== null && endYear !== undefined && endYear > currentYear) {
+    return 'Completed qualifications cannot have a future end year';
+  }
+  return null;
+}
+
 const VALID_MARITAL_STATUSES = [
   'SINGLE',
   'MARRIED',
@@ -774,6 +832,15 @@ export class AdmissionService {
     if (!body.fieldOfStudy?.trim()) {
       throw new BadRequestException('fieldOfStudy is required');
     }
+    // PR-C2: mirror the frontend year validation server-side.
+    {
+      const err = validateEducationYears(
+        body.startYear ?? null,
+        body.endYear ?? null,
+        body.completed ?? false,
+      );
+      if (err) throw new BadRequestException(err);
+    }
 
     const application = await this.findOrCreateApplication(caseRecord.id, contact.id);
 
@@ -823,7 +890,7 @@ export class AdmissionService {
       throw new ConflictException('Cannot modify a submitted application');
     }
 
-    await this.assertEducationEntryOwnership(entryId, application.id);
+    const existing = await this.assertEducationEntryOwnership(entryId, application.id);
 
     const data: Record<string, unknown> = {};
     if (body.qualificationLevel !== undefined) {
@@ -863,6 +930,17 @@ export class AdmissionService {
     }
     if (body.certificateNotReceived !== undefined) {
       data.certificateNotReceived = Boolean(body.certificateNotReceived);
+    }
+
+    // PR-C2: year-validation against the FINAL merged state. Caller may patch
+    // just startYear, just endYear, or just completed, so we resolve each
+    // against `existing` when not present in `data`.
+    {
+      const finalStart    = (data.startYear    !== undefined ? data.startYear    : existing.startYear) as number | null;
+      const finalEnd      = (data.endYear      !== undefined ? data.endYear      : existing.endYear)   as number | null;
+      const finalCompleted = (data.completed   !== undefined ? data.completed   : existing.completed) as boolean;
+      const err = validateEducationYears(finalStart, finalEnd, finalCompleted);
+      if (err) throw new BadRequestException(err);
     }
 
     const entry = await this.prisma.admissionEducationEntry.update({
@@ -959,6 +1037,9 @@ export class AdmissionService {
       include: {
         documents: true,
         programmeChoices: { orderBy: { priority: 'asc' } },
+        // PR-C2: include education entries so we can run the cross-entry
+        // progression check and the per-entry document-completeness gate.
+        educationEntries: { orderBy: { sortOrder: 'asc' } },
       },
     });
 
@@ -986,6 +1067,64 @@ export class AdmissionService {
     if (!docTypes.includes('EDUCATION_TRANSCRIPTS' as any)) missingDocs.push('EDUCATION_TRANSCRIPTS');
     if (missingDocs.length > 0) {
       throw new BadRequestException(`Missing required documents: ${missingDocs.join(', ')}`);
+    }
+
+    // PR-C2 (a) — re-validate years on every education entry. Catches stale
+    // rows that pre-date the validation, or any API client that bypassed the
+    // per-entry endpoints.
+    for (const e of application.educationEntries) {
+      const err = validateEducationYears(e.startYear, e.endYear, e.completed);
+      if (err) {
+        throw new BadRequestException(
+          `${humanLevel(e.qualificationLevel)} at ${e.institutionName}: ${err}.`,
+        );
+      }
+    }
+
+    // PR-C2 (b) — cross-entry qualification progression. When ordered by
+    // startYear ascending, ranked levels must be non-decreasing. OTHER and
+    // entries without a valid startYear are skipped. Completed/incomplete
+    // status is NOT a factor.
+    const ranked = application.educationEntries
+      .filter(
+        (e) =>
+          QUALIFICATION_RANK[e.qualificationLevel] !== undefined &&
+          typeof e.startYear === 'number' &&
+          Number.isFinite(e.startYear),
+      )
+      .slice()
+      .sort((a, b) => Number(a.startYear) - Number(b.startYear));
+    for (let i = 1; i < ranked.length; i++) {
+      const prev = ranked[i - 1];
+      const curr = ranked[i];
+      if (QUALIFICATION_RANK[curr.qualificationLevel] < QUALIFICATION_RANK[prev.qualificationLevel]) {
+        throw new BadRequestException(
+          `Qualifications must progress from lowest to highest. ` +
+          `'${humanLevel(curr.qualificationLevel)} (${curr.startYear})' appears after ` +
+          `'${humanLevel(prev.qualificationLevel)} (${prev.startYear})'.`,
+        );
+      }
+    }
+
+    // PR-C2 (c) — document-completeness gate per completed education entry.
+    // Completed entries need a NOTARIZED_TRANSCRIPT and (unless the student
+    // marked certificateNotReceived) a NOTARIZED_CERTIFICATE.
+    const docGateMissing: string[] = [];
+    for (const e of application.educationEntries) {
+      if (!e.completed) continue;
+      const entryDocs = application.documents.filter((d) => d.educationEntryId === e.id);
+      const hasCert       = entryDocs.some((d) => d.documentType === 'NOTARIZED_CERTIFICATE');
+      const hasTranscript = entryDocs.some((d) => d.documentType === 'NOTARIZED_TRANSCRIPT');
+      const tag = `${humanLevel(e.qualificationLevel)} at ${e.institutionName}`;
+      if (!e.certificateNotReceived && !hasCert) {
+        docGateMissing.push(`${tag}: notarized certificate is required before you can submit`);
+      }
+      if (!hasTranscript) {
+        docGateMissing.push(`${tag}: notarized transcript is required before you can submit`);
+      }
+    }
+    if (docGateMissing.length > 0) {
+      throw new BadRequestException(docGateMissing.join('; '));
     }
 
     // Atomic: application status + case status + audit log

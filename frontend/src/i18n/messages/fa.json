@@ -155,6 +155,7 @@
   "admissionStep3ValidationHighestQualification": "لطفاً بالاترین مدرک خود را وارد کنید.",
   "admissionStep3ValidationTranscripts": "لطفاً ریز نمرات تحصیلی خود را بارگذاری کنید.",
   "admissionStep4Title": "مدارک پشتیبان",
+  "admissionStep4ValidationProgression": "لطفاً پیش از ادامه، مشکل ترتیب مدارک تحصیلی را برطرف کنید.",
   "admissionStep5Title": "والدین یا قیم",
   "admissionStep5Helper": "لطفاً اطلاعات والد، قیم قانونی یا فرد تماس اضطراری خود را وارد کنید.",
   "admissionStep5RelationshipLabel": "نسبت با شما",
@@ -336,5 +337,13 @@
   "admissionEducationHistoryValidationInstitution": "لطفاً نام مؤسسه را وارد کنید.",
   "admissionEducationHistoryValidationCountry": "لطفاً کشور را وارد کنید.",
   "admissionEducationHistoryValidationFieldOfStudy": "لطفاً رشته تحصیلی را وارد کنید.",
-  "admissionEducationHistoryCertNotReceivedLabel": "هنوز گواهی این مدرک را دریافت نکرده‌ام."
+  "admissionEducationHistoryCertNotReceivedLabel": "هنوز گواهی این مدرک را دریافت نکرده‌ام.",
+  "admissionEducationHistoryValidationYearRange": "لطفاً یک سال معتبر چهاررقمی وارد کنید.",
+  "admissionEducationHistoryValidationYearOrder": "سال شروع نمی‌تواند بعد از سال پایان باشد.",
+  "admissionEducationHistoryValidationYearFuture": "مدارک تکمیل‌شده نمی‌توانند سال پایانی در آینده داشته باشند.",
+  "admissionEducationHistoryProgressionWarning": "مدارک تحصیلی شما باید از پایین‌ترین به بالاترین سطح فهرست شوند. «{laterLabel} ({laterYear})» پس از «{earlierLabel} ({earlierYear})» قرار گرفته است — لطفاً سطح‌ها و سال‌ها را بررسی کنید.",
+  "admissionEducationHistoryDocsMissingHeading": "مدارک مورد نیاز پیش از ارسال:",
+  "admissionEducationHistoryDocsMissingCertificate": "بارگذاری گواهی نوتاری‌شده الزامی است.",
+  "admissionEducationHistoryDocsMissingTranscript": "بارگذاری ریز نمرات نوتاری‌شده الزامی است.",
+  "commonBackToTop": "بازگشت به بالا"
 }

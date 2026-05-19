@@ -155,6 +155,7 @@
   "admissionStep3ValidationHighestQualification": "Please enter your highest qualification.",
   "admissionStep3ValidationTranscripts": "Please upload your education transcripts.",
   "admissionStep4Title": "Supporting documents",
+  "admissionStep4ValidationProgression": "Please fix the qualification progression issue before continuing.",
   "admissionStep5Title": "Parent / guardian",
   "admissionStep5Helper": "Please provide details for your parent, legal guardian, or emergency contact.",
   "admissionStep5RelationshipLabel": "Relationship to you",
@@ -336,5 +337,13 @@
   "admissionEducationHistoryValidationInstitution": "Please enter the institution name.",
   "admissionEducationHistoryValidationCountry": "Please enter the country.",
   "admissionEducationHistoryValidationFieldOfStudy": "Please enter the field of study.",
-  "admissionEducationHistoryCertNotReceivedLabel": "I have not received the certificate yet."
+  "admissionEducationHistoryCertNotReceivedLabel": "I have not received the certificate yet.",
+  "admissionEducationHistoryValidationYearRange": "Please enter a valid 4-digit year.",
+  "admissionEducationHistoryValidationYearOrder": "Start year cannot be after end year.",
+  "admissionEducationHistoryValidationYearFuture": "Completed qualifications cannot have a future end year.",
+  "admissionEducationHistoryProgressionWarning": "Your qualifications should be listed from lowest to highest level. “{laterLabel} ({laterYear})” appears after “{earlierLabel} ({earlierYear})” — please check the levels and years.",
+  "admissionEducationHistoryDocsMissingHeading": "Documents still needed before you can submit:",
+  "admissionEducationHistoryDocsMissingCertificate": "Notarized certificate is required.",
+  "admissionEducationHistoryDocsMissingTranscript": "Notarized transcript is required.",
+  "commonBackToTop": "Back to top"
 }

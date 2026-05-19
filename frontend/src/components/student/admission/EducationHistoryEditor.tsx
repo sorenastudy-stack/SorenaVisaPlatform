@@ -4,9 +4,110 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
-import { useAdmission, type EducationEntry, type EducationEntryInput } from './AdmissionFormContext';
+import { useAdmission, type EducationEntry, type EducationEntryInput, type AdmissionDocument } from './AdmissionFormContext';
 import { DocumentUploader } from './DocumentUploader';
 import { COUNTRIES } from '@/lib/data/countries';
+
+const CURRENT_YEAR = new Date().getFullYear();
+const MIN_YEAR = 1950;
+const MAX_YEAR = CURRENT_YEAR + 10;
+
+type YearErrorCode = 'range' | 'order' | 'future';
+interface YearErrors {
+  startYear?: YearErrorCode;
+  endYear?: YearErrorCode;
+}
+
+// Pure year validator. Mirrors the same logic on the backend.
+// Returns error codes; the JSX maps codes to i18n strings (so we can render
+// the same messages without scattering t() calls through validation code).
+function validateYears(
+  startYearRaw: string | number | null | undefined,
+  endYearRaw:   string | number | null | undefined,
+  completed:    boolean,
+): YearErrors {
+  const errors: YearErrors = {};
+  const parseInt4 = (v: string | number | null | undefined): number | null => {
+    if (v === null || v === undefined) return null;
+    const s = typeof v === 'number' ? String(v) : v.trim();
+    if (!s) return null;
+    if (!/^\d{4}$/.test(s)) return null;
+    const n = parseInt(s, 10);
+    if (n < MIN_YEAR || n > MAX_YEAR) return null;
+    return n;
+  };
+  const provided = (v: string | number | null | undefined) =>
+    v !== null && v !== undefined && String(v).trim() !== '';
+
+  const start = parseInt4(startYearRaw);
+  const end   = parseInt4(endYearRaw);
+
+  if (provided(startYearRaw) && start === null) errors.startYear = 'range';
+  if (provided(endYearRaw)   && end   === null) errors.endYear   = 'range';
+  if (start !== null && end !== null && start > end) errors.endYear = 'order';
+  if (completed && end !== null && end > CURRENT_YEAR) errors.endYear = 'future';
+
+  return errors;
+}
+
+// Ranks for progression check. OTHER is intentionally excluded.
+const QUALIFICATION_RANK: Record<string, number> = {
+  INTERMEDIATE:     0,
+  HIGH_SCHOOL:      1,
+  CERTIFICATE:      2,
+  DIPLOMA:          3,
+  ASSOCIATE_DEGREE: 4,
+  BACHELORS:        5,
+  MASTERS:          6,
+  DOCTORATE:        7,
+};
+
+// Returns the first (earlier, later) pair where the later qualification ranks
+// LOWER than the earlier one (by startYear order). Entries are excluded only
+// when their qualificationLevel is OTHER (unranked) or their startYear is not
+// a real number. Completed/incomplete status is NOT a factor.
+//
+// Defensive: uses indexed-property lookup instead of `in` (which also matches
+// Object.prototype keys like 'toString'), and `typeof === 'number'` for
+// startYear (which catches null, undefined, NaN, and string values).
+//
+// Exported so Step4Documents.tsx can run the same check in its stepHandler
+// and gate the Next button on it.
+export function findProgressionViolation(
+  entries: EducationEntry[],
+): { earlier: EducationEntry; later: EducationEntry } | null {
+  const ranked = entries
+    .filter((e) =>
+      QUALIFICATION_RANK[e.qualificationLevel] !== undefined &&
+      typeof e.startYear === 'number' &&
+      Number.isFinite(e.startYear),
+    )
+    .slice()
+    .sort((a, b) => Number(a.startYear) - Number(b.startYear));
+  for (let i = 1; i < ranked.length; i++) {
+    const prev = ranked[i - 1];
+    const curr = ranked[i];
+    if (QUALIFICATION_RANK[curr.qualificationLevel] < QUALIFICATION_RANK[prev.qualificationLevel]) {
+      return { earlier: prev, later: curr };
+    }
+  }
+  return null;
+}
+
+// What documents (if any) a completed entry is missing for submit.
+// Returns { certificate: true, transcript: true } when missing. Non-completed
+// entries return empty object (no requirement).
+function getMissingEntryDocs(entry: EducationEntry, documents: AdmissionDocument[]): { certificate?: boolean; transcript?: boolean } {
+  if (!entry.completed) return {};
+  const entryDocs = documents.filter(d => d.educationEntryId === entry.id);
+  const hasCert       = entryDocs.some(d => d.documentType === 'NOTARIZED_CERTIFICATE');
+  const hasTranscript = entryDocs.some(d => d.documentType === 'NOTARIZED_TRANSCRIPT');
+  const missing: { certificate?: boolean; transcript?: boolean } = {};
+  // Certificate is only required when student has NOT declared "not received yet".
+  if (!entry.certificateNotReceived && !hasCert) missing.certificate = true;
+  if (!hasTranscript) missing.transcript = true;
+  return missing;
+}
 
 // PR-C1: added INTERMEDIATE (lowest rung). Order is lowest → highest, with
 // OTHER as a fallback at the end.
@@ -21,6 +122,14 @@ const QUALIFICATION_LEVELS = [
   { value: 'DOCTORATE',        key: 'admissionEducationHistoryLevelDoctorate'        },
   { value: 'OTHER',            key: 'admissionEducationHistoryLevelOther'            },
 ] as const;
+
+// Resolve a qualification value to its i18n key, falling back to OTHER.
+// Declared AFTER QUALIFICATION_LEVELS so the function body never references
+// a const still in temporal dead zone.
+function qualificationKey(value: string): string {
+  const opt = QUALIFICATION_LEVELS.find(o => o.value === value);
+  return opt?.key ?? 'admissionEducationHistoryLevelOther';
+}
 
 // Searchable country select — inlined here to match the existing
 // Step2/Step5 pattern (no shared component yet). Mirrors that signature
@@ -151,6 +260,19 @@ export function EducationHistoryEditor() {
       toast.error(t('admissionEducationHistoryValidationFieldOfStudy'));
       return;
     }
+    // PR-C2: block save on invalid years. Inline errors are already visible
+    // on the offending field(s); the toast names the first failure for
+    // accessibility / screen-reader users.
+    const yErrs = validateYears(draft.startYear, draft.endYear, draft.completed);
+    if (yErrs.startYear || yErrs.endYear) {
+      const code = yErrs.startYear ?? yErrs.endYear;
+      toast.error(
+        code === 'range'  ? t('admissionEducationHistoryValidationYearRange')
+        : code === 'order'? t('admissionEducationHistoryValidationYearOrder')
+        :                   t('admissionEducationHistoryValidationYearFuture'),
+      );
+      return;
+    }
     const payload: EducationEntryInput = {
       qualificationLevel: draft.qualificationLevel,
       institutionName: draft.institutionName.trim(),
@@ -196,6 +318,8 @@ export function EducationHistoryEditor() {
     }
   };
 
+  const progressionViolation = findProgressionViolation(educationEntries);
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -206,6 +330,24 @@ export function EducationHistoryEditor() {
           {t('admissionEducationHistoryHelper')}
         </p>
       </div>
+
+      {/* PR-C2: cross-entry progression warning. Doesn't block individual
+          saves; Step 4's stepHandler hard-blocks Next and the submit endpoint
+          enforces it as a final guard. The id is the scroll target used by
+          Step4Documents when it blocks advancement. */}
+      {progressionViolation && (
+        <div
+          id="education-progression-warning"
+          className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          {t('admissionEducationHistoryProgressionWarning', {
+            earlierLabel: t(qualificationKey(progressionViolation.earlier.qualificationLevel)),
+            earlierYear:  progressionViolation.earlier.startYear ?? '',
+            laterLabel:   t(qualificationKey(progressionViolation.later.qualificationLevel)),
+            laterYear:    progressionViolation.later.startYear ?? '',
+          })}
+        </div>
+      )}
 
       {/* Saved entries */}
       {educationEntries.map((entry) => (
@@ -253,6 +395,8 @@ function SavedEntryCard({
   onDelete: () => void;
 }) {
   const t = useTranslations();
+  const { documents } = useAdmission();
+  const missingDocs = getMissingEntryDocs(entry, documents);
 
   // Local-state buffer for text inputs so we don't PATCH on every keystroke.
   // We sync with `entry.<field>` on mount and on entry-id change. PATCH fires
@@ -263,6 +407,10 @@ function SavedEntryCard({
   const [startYear, setStartYear] = useState(entry.startYear?.toString() ?? '');
   const [endYear, setEndYear] = useState(entry.endYear?.toString() ?? '');
 
+  // Live year errors recomputed every render against current local state
+  // and the saved entry.completed flag.
+  const yearErrors = validateYears(startYear, endYear, entry.completed);
+
   const blurIfChanged = async (field: keyof EducationEntryInput, current: string, original: string | null | undefined) => {
     const next = current.trim();
     const orig = (original ?? '').toString();
@@ -271,6 +419,9 @@ function SavedEntryCard({
       if (!next) return; // server rejects empty; UI keeps stale until user types something valid
     }
     if (field === 'startYear' || field === 'endYear') {
+      // PR-C2: don't PATCH an invalid year — UI stays in the "error" state
+      // until the user fixes it (inline error already visible).
+      if (yearErrors[field]) return;
       const n = parseYearOrNull(current);
       await onFieldChange(entry.id, { [field]: n } as Partial<EducationEntryInput>);
       return;
@@ -281,6 +432,24 @@ function SavedEntryCard({
     }
     await onFieldChange(entry.id, { [field]: next } as Partial<EducationEntryInput>);
   };
+
+  const renderYearError = (code: YearErrorCode | undefined) => {
+    if (!code) return null;
+    const msg =
+      code === 'range'  ? t('admissionEducationHistoryValidationYearRange')
+      : code === 'order'? t('admissionEducationHistoryValidationYearOrder')
+      :                   t('admissionEducationHistoryValidationYearFuture');
+    return <p className="mt-1 text-xs text-red-500">{msg}</p>;
+  };
+
+  // Build the year input className with a red border when invalid.
+  const yearInputClass = (hasError: boolean) =>
+    [
+      'w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:outline-none',
+      hasError
+        ? 'border-red-400 focus:border-red-500'
+        : 'border-sorena-navy/20 focus:border-sorena-navy/60',
+    ].join(' ');
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-sorena-navy/10 bg-white p-4">
@@ -376,8 +545,9 @@ function SavedEntryCard({
             onChange={(e) => setStartYear(e.target.value)}
             onBlur={() => blurIfChanged('startYear', startYear, entry.startYear?.toString())}
             placeholder={t('admissionEducationHistoryStartYearPlaceholder')}
-            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+            className={yearInputClass(!!yearErrors.startYear)}
           />
+          {renderYearError(yearErrors.startYear)}
         </div>
 
         {/* endYear */}
@@ -391,8 +561,9 @@ function SavedEntryCard({
             onChange={(e) => setEndYear(e.target.value)}
             onBlur={() => blurIfChanged('endYear', endYear, entry.endYear?.toString())}
             placeholder={t('admissionEducationHistoryEndYearPlaceholder')}
-            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+            className={yearInputClass(!!yearErrors.endYear)}
           />
+          {renderYearError(yearErrors.endYear)}
         </div>
       </div>
 
@@ -429,10 +600,17 @@ function SavedEntryCard({
       </div>
 
       {/* Per-entry document uploaders — only visible once the qualification
-          is marked completed. (Transcript uploader stays visible even when
-          "certificate not received" is ticked; submit-gate handling is in PR-C2.) */}
+          is marked completed. PR-C2 surfaces missing-docs inline so students
+          see the gate before they try to submit. */}
       {entry.completed && (
         <div className="flex flex-col gap-4 border-t border-sorena-navy/10 pt-4">
+          {(missingDocs.certificate || missingDocs.transcript) && (
+            <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+              <p className="font-semibold">{t('admissionEducationHistoryDocsMissingHeading')}</p>
+              {missingDocs.certificate && <p className="mt-1">• {t('admissionEducationHistoryDocsMissingCertificate')}</p>}
+              {missingDocs.transcript  && <p className="mt-1">• {t('admissionEducationHistoryDocsMissingTranscript')}</p>}
+            </div>
+          )}
           <DocumentUploader
             documentType="NOTARIZED_CERTIFICATE"
             educationEntryId={entry.id}
@@ -471,6 +649,22 @@ function DraftEntryCard({
   onDiscard: () => void;
 }) {
   const t = useTranslations();
+  const yErrs = validateYears(draft.startYear, draft.endYear, draft.completed);
+  const renderYErr = (code: YearErrorCode | undefined) => {
+    if (!code) return null;
+    const msg =
+      code === 'range'  ? t('admissionEducationHistoryValidationYearRange')
+      : code === 'order'? t('admissionEducationHistoryValidationYearOrder')
+      :                   t('admissionEducationHistoryValidationYearFuture');
+    return <p className="mt-1 text-xs text-red-500">{msg}</p>;
+  };
+  const yInput = (hasError: boolean) =>
+    [
+      'w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:outline-none',
+      hasError
+        ? 'border-red-400 focus:border-red-500'
+        : 'border-sorena-navy/20 focus:border-sorena-navy/60',
+    ].join(' ');
   return (
     <div className="flex flex-col gap-4 rounded-xl border-2 border-dashed border-sorena-navy/20 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -555,8 +749,9 @@ function DraftEntryCard({
             value={draft.startYear}
             onChange={(e) => onChange({ startYear: e.target.value })}
             placeholder={t('admissionEducationHistoryStartYearPlaceholder')}
-            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+            className={yInput(!!yErrs.startYear)}
           />
+          {renderYErr(yErrs.startYear)}
         </div>
 
         <div>
@@ -568,8 +763,9 @@ function DraftEntryCard({
             value={draft.endYear}
             onChange={(e) => onChange({ endYear: e.target.value })}
             placeholder={t('admissionEducationHistoryEndYearPlaceholder')}
-            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+            className={yInput(!!yErrs.endYear)}
           />
+          {renderYErr(yErrs.endYear)}
         </div>
       </div>
 

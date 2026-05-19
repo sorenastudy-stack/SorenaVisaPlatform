@@ -13,6 +13,7 @@ import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/lib/stores/localeStore';
 import type { Session } from '@/lib/auth';
+import { BackToTop } from '@/components/common/BackToTop';
 
 type Portal = 'admin' | 'ops' | 'sales' | 'lia' | 'student';
 
@@ -205,6 +206,7 @@ export function PortalLayout({ children, portal, session, hasCase }: PortalLayou
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
 
+      <BackToTop />
       <Toaster richColors position="top-right" />
     </div>
   );
