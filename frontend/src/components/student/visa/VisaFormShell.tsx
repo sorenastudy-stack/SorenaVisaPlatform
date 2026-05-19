@@ -14,6 +14,12 @@ import {
   type EducationSupplement,
   type EmploymentEntry,
   type UnemploymentEntry,
+  type VisaPartnerRow,
+  type FormerPartnerRow,
+  type ChildRow,
+  type ParentRow,
+  type SiblingRow,
+  type NzContactRow,
 } from './VisaFormContext';
 import { VisaStepper } from './VisaStepper';
 import { Step1IdentityDetails } from './steps/Step1IdentityDetails';
@@ -23,6 +29,7 @@ import { Step4Character } from './steps/Step4Character';
 import { Step5Health } from './steps/Step5Health';
 import { Step6EducationHistory } from './steps/Step6EducationHistory';
 import { Step7EmploymentHistory } from './steps/Step7EmploymentHistory';
+import { Step8Relationships } from './steps/Step8Relationships';
 
 interface InitialData {
   visaApplication: VisaApplication;
@@ -33,6 +40,12 @@ interface InitialData {
   educationSupplements: EducationSupplement[];
   employmentEntries: EmploymentEntry[];
   unemploymentEntries: UnemploymentEntry[];
+  partner: VisaPartnerRow | null;
+  formerPartners: FormerPartnerRow[];
+  children: ChildRow[];
+  parents: ParentRow[];
+  siblings: SiblingRow[];
+  nzContacts: NzContactRow[];
 }
 
 interface Props {
@@ -77,6 +90,12 @@ export function VisaFormShell({ initialData }: Props) {
       initialEducationSupplements={data.educationSupplements ?? []}
       initialEmploymentEntries={data.employmentEntries ?? []}
       initialUnemploymentEntries={data.unemploymentEntries ?? []}
+      initialPartner={data.partner ?? null}
+      initialFormerPartners={data.formerPartners ?? []}
+      initialChildren={data.children ?? []}
+      initialParents={data.parents ?? []}
+      initialSiblings={data.siblings ?? []}
+      initialNzContacts={data.nzContacts ?? []}
     >
       <div className="flex flex-col gap-6">
         <div>
@@ -96,6 +115,7 @@ export function VisaFormShell({ initialData }: Props) {
 // the new step with values pre-filled from visa.* (the server-of-record).
 function ActiveStep() {
   const { activeStep } = useVisa();
+  if (activeStep === 8) return <Step8Relationships />;
   if (activeStep === 7) return <Step7EmploymentHistory />;
   if (activeStep === 6) return <Step6EducationHistory />;
   if (activeStep === 5) return <Step5Health />;

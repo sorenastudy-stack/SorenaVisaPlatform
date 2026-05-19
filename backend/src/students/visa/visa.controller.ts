@@ -168,4 +168,84 @@ export class VisaController {
   deleteUnemploymentEntry(@Req() req: any, @Param('id') id: string) {
     return this.visaService.deleteUnemploymentEntry(req.user.userId, id);
   }
+
+  // ── Step 8 — Relationships (PR-VISA8) ──────────────────────────
+  // Partner is singleton — single upsert route, no POST/DELETE.
+  // Everything else is the same POST/PATCH/DELETE shape as the other
+  // repeating tables.
+
+  @Patch('partner')
+  upsertPartner(@Req() req: any, @Body() body: Record<string, unknown>) {
+    return this.visaService.upsertPartner(req.user.userId, body);
+  }
+
+  @Post('former-partners')
+  addFormerPartner(@Req() req: any, @Body() body: Record<string, unknown>) {
+    return this.visaService.addFormerPartner(req.user.userId, body);
+  }
+  @Patch('former-partners/:id')
+  updateFormerPartner(@Req() req: any, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.visaService.updateFormerPartner(req.user.userId, id, body);
+  }
+  @Delete('former-partners/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteFormerPartner(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteFormerPartner(req.user.userId, id);
+  }
+
+  @Post('children')
+  addChild(@Req() req: any, @Body() body: Record<string, unknown>) {
+    return this.visaService.addChild(req.user.userId, body);
+  }
+  @Patch('children/:id')
+  updateChild(@Req() req: any, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.visaService.updateChild(req.user.userId, id, body);
+  }
+  @Delete('children/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteChild(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteChild(req.user.userId, id);
+  }
+
+  @Post('parents')
+  addParent(@Req() req: any, @Body() body: Record<string, unknown>) {
+    return this.visaService.addParent(req.user.userId, body);
+  }
+  @Patch('parents/:id')
+  updateParent(@Req() req: any, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.visaService.updateParent(req.user.userId, id, body);
+  }
+  @Delete('parents/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteParent(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteParent(req.user.userId, id);
+  }
+
+  @Post('siblings')
+  addSibling(@Req() req: any, @Body() body: Record<string, unknown>) {
+    return this.visaService.addSibling(req.user.userId, body);
+  }
+  @Patch('siblings/:id')
+  updateSibling(@Req() req: any, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.visaService.updateSibling(req.user.userId, id, body);
+  }
+  @Delete('siblings/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteSibling(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteSibling(req.user.userId, id);
+  }
+
+  @Post('nz-contacts')
+  addNzContact(@Req() req: any, @Body() body: Record<string, unknown>) {
+    return this.visaService.addNzContact(req.user.userId, body);
+  }
+  @Patch('nz-contacts/:id')
+  updateNzContact(@Req() req: any, @Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.visaService.updateNzContact(req.user.userId, id, body);
+  }
+  @Delete('nz-contacts/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteNzContact(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteNzContact(req.user.userId, id);
+  }
 }

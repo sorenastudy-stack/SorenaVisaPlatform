@@ -264,6 +264,8 @@ export function Step7EmploymentHistory() {
       });
       setSavedAt(new Date().toISOString());
       toast.success(t('visaEmploymentSaveSuccess'));
+      // PR-VISA8: advance the stepper now that Section 8 exists.
+      setActiveStep(8);
     } catch {
       toast.error(t('visaEmploymentSaveError'));
     } finally {

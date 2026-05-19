@@ -1372,6 +1372,15 @@ model VisaApplication {
   hadPreviousEmployment          Boolean?
   everUnemployed                 Boolean?
 
+  // Section 8 — Relationships (PR-VISA8)
+  // Note: relationshipStatus + hasChildren are sourced read-only from
+  // admission.maritalStatus + admission.hasChildren (see PR-VISA8 reuse
+  // notes). Only the three Y/N gates that have no admission equivalent
+  // live here.
+  hasFormerPartners              Boolean?
+  hasSiblings                    Boolean?
+  hasNzContacts                  Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -1382,8 +1391,171 @@ model VisaApplication {
   educationSupplements    VisaEducationSupplement[]
   employmentEntries       VisaEmploymentEntry[]
   unemploymentEntries     VisaUnemploymentEntry[]
+  partner                 VisaPartner?
+  formerPartners          VisaFormerPartner[]
+  children                VisaChild[]
+  parents                 VisaParent[]
+  siblings                VisaSibling[]
+  nzContacts              VisaNzContact[]
 
   @@map("visa_applications")
+}
+
+// Step 8 (PR-VISA8) — Relationships. Six new tables; all third-party
+// name fields and passport numbers / phone numbers / street addresses
+// are PII and stored encrypted (AES-256-GCM via CryptoService, same
+// envelope as the earlier Visa Section PII columns).
+//
+// visa_partner is singleton (UNIQUE on visaApplicationId) — at most one
+// current partner per visa application. Everything else is a repeating
+// child table with sortOrder for stable render order. Cascade on the
+// parent FK so the visa_application's delete tears everything down.
+
+model VisaPartner {
+  id                       String   @id @default(cuid())
+  visaApplicationId        String   @unique
+  relationshipToApplicant  String?
+  givenNameEncrypted       Bytes?
+  middleNamesEncrypted     Bytes?
+  surnameEncrypted         Bytes?
+  gender                   String?
+  dateOfBirth              DateTime?
+  relationshipStatus       String?
+  countryOfBirth           String?
+  stateOfBirth             String?
+  cityOfBirth              String?
+  nationality              String?
+  countryOfResidence       String?
+  occupation               String?
+  holdsPassport            Boolean?
+  passportNumberEncrypted  Bytes?
+  passportCountryOfIssue   String?
+  passportIssueDate        DateTime?
+  passportExpiryDate       DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@map("visa_partner")
+}
+
+model VisaFormerPartner {
+  id                    String   @id @default(cuid())
+  visaApplicationId     String
+  givenNameEncrypted    Bytes?
+  middleNamesEncrypted  Bytes?
+  surnameEncrypted      Bytes?
+  gender                String?
+  dateOfBirth           DateTime?
+  relationshipStatus    String?
+  countryOfBirth        String?
+  nationality           String?
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  visaApplication       VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_former_partners")
+}
+
+model VisaChild {
+  id                       String   @id @default(cuid())
+  visaApplicationId        String
+  givenNameEncrypted       Bytes?
+  middleNamesEncrypted     Bytes?
+  surnameEncrypted         Bytes?
+  gender                   String?
+  dateOfBirth              DateTime?
+  countryOfBirth           String?
+  nationality              String?
+  relationshipToApplicant  String?
+  livesWithApplicant       Boolean?
+  sortOrder                Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_children")
+}
+
+model VisaParent {
+  id                       String   @id @default(cuid())
+  visaApplicationId        String
+  givenNameEncrypted       Bytes?
+  middleNamesEncrypted     Bytes?
+  surnameEncrypted         Bytes?
+  relationshipToApplicant  String?
+  isDeceased               Boolean?
+  gender                   String?
+  dateOfBirth              DateTime?
+  dateOfBirthUnknown       Boolean?
+  relationshipStatus       String?
+  countryOfBirth           String?
+  citizenship              String?
+  countryOfResidence       String?
+  occupation               String?
+  sortOrder                Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_parents")
+}
+
+model VisaSibling {
+  id                       String   @id @default(cuid())
+  visaApplicationId        String
+  givenNameEncrypted       Bytes?
+  middleNamesEncrypted     Bytes?
+  surnameEncrypted         Bytes?
+  relationshipToApplicant  String?
+  gender                   String?
+  dateOfBirth              DateTime?
+  dateOfBirthUnknown       Boolean?
+  relationshipStatus       String?
+  countryOfBirth           String?
+  citizenship              String?
+  countryOfResidence       String?
+  occupation               String?
+  sortOrder                Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_siblings")
+}
+
+model VisaNzContact {
+  id                       String   @id @default(cuid())
+  visaApplicationId        String
+  givenNameEncrypted       Bytes?
+  middleNamesEncrypted     Bytes?
+  surnameEncrypted         Bytes?
+  relationshipToApplicant  String?
+  phoneEncrypted           Bytes?
+  email                    String?
+  streetEncrypted          Bytes?
+  suburb                   String?
+  townCity                 String?
+  region                   String?
+  postcode                 String?
+  sortOrder                Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_nz_contacts")
 }
 
 // Step 7 employment history (PR-VISA7). One table covers both the

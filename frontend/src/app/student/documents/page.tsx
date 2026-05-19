@@ -11,6 +11,12 @@ import type {
   EducationSupplement,
   EmploymentEntry,
   UnemploymentEntry,
+  VisaPartnerRow,
+  FormerPartnerRow,
+  ChildRow,
+  ParentRow,
+  SiblingRow,
+  NzContactRow,
 } from '@/components/student/visa/VisaFormContext';
 
 interface InitialResponse {
@@ -23,6 +29,12 @@ interface InitialResponse {
   educationSupplements?: EducationSupplement[];
   employmentEntries?: EmploymentEntry[];
   unemploymentEntries?: UnemploymentEntry[];
+  partner?: VisaPartnerRow | null;
+  formerPartners?: FormerPartnerRow[];
+  children?: ChildRow[];
+  parents?: ParentRow[];
+  siblings?: SiblingRow[];
+  nzContacts?: NzContactRow[];
 }
 
 // The Visa Section lives at /student/documents (the route is unchanged from
@@ -44,6 +56,12 @@ export default async function StudentVisaSectionPage() {
         educationSupplements: EducationSupplement[];
         employmentEntries: EmploymentEntry[];
         unemploymentEntries: UnemploymentEntry[];
+        partner: VisaPartnerRow | null;
+        formerPartners: FormerPartnerRow[];
+        children: ChildRow[];
+        parents: ParentRow[];
+        siblings: SiblingRow[];
+        nzContacts: NzContactRow[];
       }
     | null = null;
 
@@ -59,6 +77,12 @@ export default async function StudentVisaSectionPage() {
         educationSupplements: res.educationSupplements ?? [],
         employmentEntries: res.employmentEntries ?? [],
         unemploymentEntries: res.unemploymentEntries ?? [],
+        partner: res.partner ?? null,
+        formerPartners: res.formerPartners ?? [],
+        children: res.children ?? [],
+        parents: res.parents ?? [],
+        siblings: res.siblings ?? [],
+        nzContacts: res.nzContacts ?? [],
       };
     }
   } catch {

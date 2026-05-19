@@ -20,6 +20,7 @@ export function VisaStepper() {
     { n: 5, key: 'visaHealthSectionTitle'            as const },
     { n: 6, key: 'visaEducationHistorySectionTitle'  as const },
     { n: 7, key: 'visaEmploymentHistorySectionTitle' as const },
+    { n: 8, key: 'visaRelationshipsSectionTitle'     as const },
   ];
 
   // Reachable = either the active step itself or a step <= the highest the

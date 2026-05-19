@@ -138,6 +138,12 @@ const PATCHABLE_VISA_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'dateti
   hadPreviousEmployment:        'boolean',
   everUnemployed:               'boolean',
 
+  // Section 8 — Relationships (PR-VISA8). Note: relationshipStatus +
+  // hasChildren are NOT here — they're sourced read-only from admission.
+  hasFormerPartners:            'boolean',
+  hasSiblings:                  'boolean',
+  hasNzContacts:                'boolean',
+
   currentStep:            'int',
 };
 
@@ -254,6 +260,11 @@ export class VisaService {
       countryOfBirth:     (admission.countryOfBirth as string | null) ?? null,
       programmeName:      topChoice?.programme.name          ?? null,
       providerName:       topChoice?.programme.provider.name ?? null,
+      // PR-VISA8: Step 8 reads these admission values read-only to gate
+      // the partner block (maritalStatus === MARRIED|DE_FACTO) and the
+      // children block (hasChildren === true). No visa-side duplicates.
+      maritalStatus:      (admission.maritalStatus as string | null) ?? null,
+      hasChildren:        (admission.hasChildren   as boolean | null) ?? null,
     };
   }
 
@@ -527,6 +538,12 @@ export class VisaService {
         educationSupplements: [],
         employmentEntries: [],
         unemploymentEntries: [],
+        partner: null,
+        formerPartners: [],
+        children: [],
+        parents: [],
+        siblings: [],
+        nzContacts: [],
       };
     }
     return {
@@ -539,6 +556,12 @@ export class VisaService {
       educationSupplements: await this.loadEducationSupplements(visa.id),
       employmentEntries: await this.loadEmploymentEntries(visa.id),
       unemploymentEntries: await this.loadUnemploymentEntries(visa.id),
+      partner: await this.loadPartner(visa.id),
+      formerPartners: await this.loadFormerPartners(visa.id),
+      children: await this.loadChildren(visa.id),
+      parents: await this.loadParents(visa.id),
+      siblings: await this.loadSiblings(visa.id),
+      nzContacts: await this.loadNzContacts(visa.id),
     };
   }
 
@@ -563,6 +586,12 @@ export class VisaService {
       educationSupplements: await this.loadEducationSupplements(visa.id),
       employmentEntries: await this.loadEmploymentEntries(visa.id),
       unemploymentEntries: await this.loadUnemploymentEntries(visa.id),
+      partner: await this.loadPartner(visa.id),
+      formerPartners: await this.loadFormerPartners(visa.id),
+      children: await this.loadChildren(visa.id),
+      parents: await this.loadParents(visa.id),
+      siblings: await this.loadSiblings(visa.id),
+      nzContacts: await this.loadNzContacts(visa.id),
     };
   }
 
@@ -699,6 +728,50 @@ export class VisaService {
         where: { visaApplicationId: visa.id },
       });
     }
+    // PR-VISA8: same reconcile for the three relationships gates.
+    if (
+      Object.prototype.hasOwnProperty.call(sanitized, 'hasFormerPartners') &&
+      sanitized.hasFormerPartners !== true
+    ) {
+      await this.prisma.visaFormerPartner.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(sanitized, 'hasSiblings') &&
+      sanitized.hasSiblings !== true
+    ) {
+      await this.prisma.visaSibling.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(sanitized, 'hasNzContacts') &&
+      sanitized.hasNzContacts !== true
+    ) {
+      await this.prisma.visaNzContact.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+    }
+    // Children block is gated by admission.hasChildren (read-only).
+    // When that flips to false (or null), wipe any orphan child rows so
+    // re-toggling later starts fresh.
+    if (admission.hasChildren !== true) {
+      await this.prisma.visaChild.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+    }
+    // Partner block is gated by admission.maritalStatus. If the student
+    // is no longer in a partnered status, drop the singleton row so a
+    // future re-partnering starts fresh.
+    if (
+      admission.maritalStatus !== 'MARRIED' &&
+      admission.maritalStatus !== 'DE_FACTO'
+    ) {
+      await this.prisma.visaPartner.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+    }
 
     return {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
@@ -709,6 +782,12 @@ export class VisaService {
       educationSupplements: await this.loadEducationSupplements(visa.id),
       employmentEntries: await this.loadEmploymentEntries(visa.id),
       unemploymentEntries: await this.loadUnemploymentEntries(visa.id),
+      partner: await this.loadPartner(visa.id),
+      formerPartners: await this.loadFormerPartners(visa.id),
+      children: await this.loadChildren(visa.id),
+      parents: await this.loadParents(visa.id),
+      siblings: await this.loadSiblings(visa.id),
+      nzContacts: await this.loadNzContacts(visa.id),
     };
   }
 
@@ -1236,5 +1315,520 @@ export class VisaService {
   async deleteUnemploymentEntry(userId: string, rowId: string) {
     await this.assertUnemploymentEntryOwnership(rowId, userId);
     await this.prisma.visaUnemploymentEntry.delete({ where: { id: rowId } });
+  }
+
+  // ── Step 8 — Relationships (PR-VISA8) ────────────────────────────────
+  // Every third-party row goes through the same encryption pattern:
+  // givenName / middleNames / surname are stored encrypted; everything
+  // else plaintext (or, for VisaPartner.passportNumber and
+  // VisaNzContact.phone + street, additional encrypted columns). The
+  // helpers below DRY the encrypt-on-write / decrypt-on-read flow so
+  // each table's CRUD body stays short.
+
+  private encryptOrNull(value: unknown): Buffer | null {
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value !== 'string') {
+      throw new BadRequestException('Encrypted field must be a string');
+    }
+    return this.crypto.encrypt(value);
+  }
+  private decryptOrNull(value: Buffer | Uint8Array | null | undefined): string | null {
+    if (value === null || value === undefined) return null;
+    return this.crypto.decrypt(Buffer.isBuffer(value) ? value : Buffer.from(value));
+  }
+
+  // Generic ownership check by visa application — looks up the row,
+  // resolves its visa app's admission chain to the caller's userId.
+  // We use a small dispatcher rather than 6 near-identical methods.
+  private async assertRelationshipOwnership(
+    table: 'formerPartner' | 'child' | 'parent' | 'sibling' | 'nzContact',
+    rowId: string,
+    userId: string,
+  ) {
+    const include = {
+      visaApplication: {
+        include: { admissionApplication: { include: { contact: true } } },
+      },
+    } as const;
+    let row;
+    switch (table) {
+      case 'formerPartner':
+        row = await this.prisma.visaFormerPartner.findUnique({ where: { id: rowId }, include });
+        break;
+      case 'child':
+        row = await this.prisma.visaChild.findUnique({ where: { id: rowId }, include });
+        break;
+      case 'parent':
+        row = await this.prisma.visaParent.findUnique({ where: { id: rowId }, include });
+        break;
+      case 'sibling':
+        row = await this.prisma.visaSibling.findUnique({ where: { id: rowId }, include });
+        break;
+      case 'nzContact':
+        row = await this.prisma.visaNzContact.findUnique({ where: { id: rowId }, include });
+        break;
+    }
+    if (!row) throw new NotFoundException(`${table} row not found`);
+    if (row.visaApplication.admissionApplication.contact.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    return row;
+  }
+
+  // ── Partner (singleton, upsert) ─────────────────────────────────────
+
+  private serializePartner(r: any) {
+    if (!r) return null;
+    return {
+      id: r.id,
+      relationshipToApplicant: r.relationshipToApplicant,
+      givenName:    this.decryptOrNull(r.givenNameEncrypted),
+      middleNames:  this.decryptOrNull(r.middleNamesEncrypted),
+      surname:      this.decryptOrNull(r.surnameEncrypted),
+      gender: r.gender,
+      dateOfBirth: r.dateOfBirth,
+      relationshipStatus: r.relationshipStatus,
+      countryOfBirth: r.countryOfBirth,
+      stateOfBirth: r.stateOfBirth,
+      cityOfBirth: r.cityOfBirth,
+      nationality: r.nationality,
+      countryOfResidence: r.countryOfResidence,
+      occupation: r.occupation,
+      holdsPassport: r.holdsPassport,
+      passportNumber: this.decryptOrNull(r.passportNumberEncrypted),
+      passportCountryOfIssue: r.passportCountryOfIssue,
+      passportIssueDate: r.passportIssueDate,
+      passportExpiryDate: r.passportExpiryDate,
+    };
+  }
+
+  private buildPartnerData(body: Record<string, unknown>): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+    const passText = (k: string) => {
+      if (body[k] === undefined) return;
+      data[k] = body[k] === null ? null : String(body[k]).trim();
+    };
+    const passDate = (k: string) => {
+      if (body[k] === undefined) return;
+      if (body[k] === null) { data[k] = null; return; }
+      const d = new Date(body[k] as string);
+      if (isNaN(d.getTime())) throw new BadRequestException(`${k} must be a valid ISO date`);
+      data[k] = d;
+    };
+    const passBool = (k: string) => {
+      if (body[k] === undefined) return;
+      if (body[k] === null) { data[k] = null; return; }
+      if (typeof body[k] !== 'boolean') throw new BadRequestException(`${k} must be a boolean`);
+      data[k] = body[k];
+    };
+    passText('relationshipToApplicant');
+    if (body.givenName !== undefined)    data.givenNameEncrypted    = this.encryptOrNull(body.givenName);
+    if (body.middleNames !== undefined)  data.middleNamesEncrypted  = this.encryptOrNull(body.middleNames);
+    if (body.surname !== undefined)      data.surnameEncrypted      = this.encryptOrNull(body.surname);
+    passText('gender');
+    passDate('dateOfBirth');
+    passText('relationshipStatus');
+    passText('countryOfBirth');
+    passText('stateOfBirth');
+    passText('cityOfBirth');
+    passText('nationality');
+    passText('countryOfResidence');
+    passText('occupation');
+    passBool('holdsPassport');
+    if (body.passportNumber !== undefined) data.passportNumberEncrypted = this.encryptOrNull(body.passportNumber);
+    passText('passportCountryOfIssue');
+    passDate('passportIssueDate');
+    passDate('passportExpiryDate');
+    return data;
+  }
+
+  private async loadPartner(visaApplicationId: string) {
+    const r = await this.prisma.visaPartner.findUnique({ where: { visaApplicationId } });
+    return this.serializePartner(r);
+  }
+
+  async upsertPartner(userId: string, body: Record<string, unknown>) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) throw new NotFoundException('Visa application not found.');
+    const data = this.buildPartnerData(body);
+    const row = await this.prisma.visaPartner.upsert({
+      where:  { visaApplicationId: visa.id },
+      create: { visaApplicationId: visa.id, ...data },
+      update: data,
+    });
+    return this.serializePartner(row);
+  }
+
+  // ── Former partner / child / parent / sibling / NZ contact CRUD ──────
+  // Six near-identical method families. Each uses its own data builder
+  // (to keep the encrypted-field set explicit) but the shape is uniform.
+
+  private serializeFormerPartner(r: any) {
+    return {
+      id: r.id,
+      givenName:   this.decryptOrNull(r.givenNameEncrypted),
+      middleNames: this.decryptOrNull(r.middleNamesEncrypted),
+      surname:     this.decryptOrNull(r.surnameEncrypted),
+      gender: r.gender,
+      dateOfBirth: r.dateOfBirth,
+      relationshipStatus: r.relationshipStatus,
+      countryOfBirth: r.countryOfBirth,
+      nationality: r.nationality,
+      sortOrder: r.sortOrder,
+    };
+  }
+  private buildFormerPartnerData(body: Record<string, unknown>): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+    if (body.givenName !== undefined)    data.givenNameEncrypted    = this.encryptOrNull(body.givenName);
+    if (body.middleNames !== undefined)  data.middleNamesEncrypted  = this.encryptOrNull(body.middleNames);
+    if (body.surname !== undefined)      data.surnameEncrypted      = this.encryptOrNull(body.surname);
+    if (body.gender !== undefined)       data.gender             = body.gender === null ? null : String(body.gender).trim();
+    if (body.dateOfBirth !== undefined) {
+      if (body.dateOfBirth === null) data.dateOfBirth = null;
+      else {
+        const d = new Date(body.dateOfBirth as string);
+        if (isNaN(d.getTime())) throw new BadRequestException('dateOfBirth must be a valid ISO date');
+        data.dateOfBirth = d;
+      }
+    }
+    if (body.relationshipStatus !== undefined) data.relationshipStatus = body.relationshipStatus === null ? null : String(body.relationshipStatus).trim();
+    if (body.countryOfBirth !== undefined)     data.countryOfBirth     = body.countryOfBirth === null ? null : String(body.countryOfBirth).trim();
+    if (body.nationality !== undefined)        data.nationality        = body.nationality === null ? null : String(body.nationality).trim();
+    return data;
+  }
+
+  private serializeChild(r: any) {
+    return {
+      id: r.id,
+      givenName:   this.decryptOrNull(r.givenNameEncrypted),
+      middleNames: this.decryptOrNull(r.middleNamesEncrypted),
+      surname:     this.decryptOrNull(r.surnameEncrypted),
+      gender: r.gender,
+      dateOfBirth: r.dateOfBirth,
+      countryOfBirth: r.countryOfBirth,
+      nationality: r.nationality,
+      relationshipToApplicant: r.relationshipToApplicant,
+      livesWithApplicant: r.livesWithApplicant,
+      sortOrder: r.sortOrder,
+    };
+  }
+  private buildChildData(body: Record<string, unknown>): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+    if (body.givenName !== undefined)    data.givenNameEncrypted    = this.encryptOrNull(body.givenName);
+    if (body.middleNames !== undefined)  data.middleNamesEncrypted  = this.encryptOrNull(body.middleNames);
+    if (body.surname !== undefined)      data.surnameEncrypted      = this.encryptOrNull(body.surname);
+    if (body.gender !== undefined)       data.gender             = body.gender === null ? null : String(body.gender).trim();
+    if (body.dateOfBirth !== undefined) {
+      if (body.dateOfBirth === null) data.dateOfBirth = null;
+      else {
+        const d = new Date(body.dateOfBirth as string);
+        if (isNaN(d.getTime())) throw new BadRequestException('dateOfBirth must be a valid ISO date');
+        data.dateOfBirth = d;
+      }
+    }
+    if (body.countryOfBirth !== undefined)         data.countryOfBirth         = body.countryOfBirth === null ? null : String(body.countryOfBirth).trim();
+    if (body.nationality !== undefined)            data.nationality            = body.nationality === null ? null : String(body.nationality).trim();
+    if (body.relationshipToApplicant !== undefined) data.relationshipToApplicant = body.relationshipToApplicant === null ? null : String(body.relationshipToApplicant).trim();
+    if (body.livesWithApplicant !== undefined) {
+      if (body.livesWithApplicant === null) data.livesWithApplicant = null;
+      else if (typeof body.livesWithApplicant !== 'boolean') throw new BadRequestException('livesWithApplicant must be a boolean');
+      else data.livesWithApplicant = body.livesWithApplicant;
+    }
+    return data;
+  }
+
+  private serializeParent(r: any) {
+    return {
+      id: r.id,
+      givenName:   this.decryptOrNull(r.givenNameEncrypted),
+      middleNames: this.decryptOrNull(r.middleNamesEncrypted),
+      surname:     this.decryptOrNull(r.surnameEncrypted),
+      relationshipToApplicant: r.relationshipToApplicant,
+      isDeceased: r.isDeceased,
+      gender: r.gender,
+      dateOfBirth: r.dateOfBirth,
+      dateOfBirthUnknown: r.dateOfBirthUnknown,
+      relationshipStatus: r.relationshipStatus,
+      countryOfBirth: r.countryOfBirth,
+      citizenship: r.citizenship,
+      countryOfResidence: r.countryOfResidence,
+      occupation: r.occupation,
+      sortOrder: r.sortOrder,
+    };
+  }
+  private buildPersonWithDobData(body: Record<string, unknown>, extraTextKeys: string[]): Record<string, unknown> {
+    // Shared builder for VisaParent / VisaSibling — same shape minus a
+    // couple of fields each.
+    const data: Record<string, unknown> = {};
+    if (body.givenName !== undefined)    data.givenNameEncrypted    = this.encryptOrNull(body.givenName);
+    if (body.middleNames !== undefined)  data.middleNamesEncrypted  = this.encryptOrNull(body.middleNames);
+    if (body.surname !== undefined)      data.surnameEncrypted      = this.encryptOrNull(body.surname);
+    const passText = (k: string) => {
+      if (body[k] === undefined) return;
+      data[k] = body[k] === null ? null : String(body[k]).trim();
+    };
+    const passBool = (k: string) => {
+      if (body[k] === undefined) return;
+      if (body[k] === null) { data[k] = null; return; }
+      if (typeof body[k] !== 'boolean') throw new BadRequestException(`${k} must be a boolean`);
+      data[k] = body[k];
+    };
+    if (body.dateOfBirth !== undefined) {
+      if (body.dateOfBirth === null) data.dateOfBirth = null;
+      else {
+        const d = new Date(body.dateOfBirth as string);
+        if (isNaN(d.getTime())) throw new BadRequestException('dateOfBirth must be a valid ISO date');
+        data.dateOfBirth = d;
+      }
+    }
+    passBool('dateOfBirthUnknown');
+    passText('relationshipToApplicant');
+    passText('gender');
+    passText('relationshipStatus');
+    passText('countryOfBirth');
+    passText('citizenship');
+    passText('countryOfResidence');
+    passText('occupation');
+    for (const k of extraTextKeys) passText(k);
+    if (body.isDeceased !== undefined) {
+      if (body.isDeceased === null) data.isDeceased = null;
+      else if (typeof body.isDeceased !== 'boolean') throw new BadRequestException('isDeceased must be a boolean');
+      else data.isDeceased = body.isDeceased;
+    }
+    return data;
+  }
+
+  private serializeSibling(r: any) {
+    return {
+      id: r.id,
+      givenName:   this.decryptOrNull(r.givenNameEncrypted),
+      middleNames: this.decryptOrNull(r.middleNamesEncrypted),
+      surname:     this.decryptOrNull(r.surnameEncrypted),
+      relationshipToApplicant: r.relationshipToApplicant,
+      gender: r.gender,
+      dateOfBirth: r.dateOfBirth,
+      dateOfBirthUnknown: r.dateOfBirthUnknown,
+      relationshipStatus: r.relationshipStatus,
+      countryOfBirth: r.countryOfBirth,
+      citizenship: r.citizenship,
+      countryOfResidence: r.countryOfResidence,
+      occupation: r.occupation,
+      sortOrder: r.sortOrder,
+    };
+  }
+
+  private serializeNzContact(r: any) {
+    return {
+      id: r.id,
+      givenName:   this.decryptOrNull(r.givenNameEncrypted),
+      middleNames: this.decryptOrNull(r.middleNamesEncrypted),
+      surname:     this.decryptOrNull(r.surnameEncrypted),
+      relationshipToApplicant: r.relationshipToApplicant,
+      phone:       this.decryptOrNull(r.phoneEncrypted),
+      email: r.email,
+      street:      this.decryptOrNull(r.streetEncrypted),
+      suburb: r.suburb,
+      townCity: r.townCity,
+      region: r.region,
+      postcode: r.postcode,
+      sortOrder: r.sortOrder,
+    };
+  }
+  private buildNzContactData(body: Record<string, unknown>): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+    if (body.givenName !== undefined)    data.givenNameEncrypted    = this.encryptOrNull(body.givenName);
+    if (body.middleNames !== undefined)  data.middleNamesEncrypted  = this.encryptOrNull(body.middleNames);
+    if (body.surname !== undefined)      data.surnameEncrypted      = this.encryptOrNull(body.surname);
+    if (body.phone !== undefined)        data.phoneEncrypted        = this.encryptOrNull(body.phone);
+    if (body.street !== undefined)       data.streetEncrypted       = this.encryptOrNull(body.street);
+    const passText = (k: string) => {
+      if (body[k] === undefined) return;
+      data[k] = body[k] === null ? null : String(body[k]).trim();
+    };
+    passText('relationshipToApplicant');
+    passText('email');
+    passText('suburb');
+    passText('townCity');
+    passText('region');
+    passText('postcode');
+    return data;
+  }
+
+  // Loaders for all six tables.
+  private async loadFormerPartners(visaApplicationId: string) {
+    const rows = await this.prisma.visaFormerPartner.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => this.serializeFormerPartner(r));
+  }
+  private async loadChildren(visaApplicationId: string) {
+    const rows = await this.prisma.visaChild.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => this.serializeChild(r));
+  }
+  private async loadParents(visaApplicationId: string) {
+    const rows = await this.prisma.visaParent.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => this.serializeParent(r));
+  }
+  private async loadSiblings(visaApplicationId: string) {
+    const rows = await this.prisma.visaSibling.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => this.serializeSibling(r));
+  }
+  private async loadNzContacts(visaApplicationId: string) {
+    const rows = await this.prisma.visaNzContact.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => this.serializeNzContact(r));
+  }
+
+  // Shared next-sortOrder helper.
+  private async nextRelationshipSortOrder(
+    table: 'formerPartner' | 'child' | 'parent' | 'sibling' | 'nzContact',
+    visaApplicationId: string,
+  ): Promise<number> {
+    let last: { sortOrder: number } | null = null;
+    const where = { visaApplicationId };
+    const orderBy = { sortOrder: 'desc' as const };
+    switch (table) {
+      case 'formerPartner': last = await this.prisma.visaFormerPartner.findFirst({ where, orderBy }); break;
+      case 'child':         last = await this.prisma.visaChild.findFirst({ where, orderBy }); break;
+      case 'parent':        last = await this.prisma.visaParent.findFirst({ where, orderBy }); break;
+      case 'sibling':       last = await this.prisma.visaSibling.findFirst({ where, orderBy }); break;
+      case 'nzContact':     last = await this.prisma.visaNzContact.findFirst({ where, orderBy }); break;
+    }
+    return (last?.sortOrder ?? -1) + 1;
+  }
+
+  // Resolves the caller's visaApplicationId for add operations on a
+  // child table.
+  private async resolveVisaApplicationIdForAdd(userId: string): Promise<string> {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    return visa.id;
+  }
+
+  // ── Former partner CRUD ─────────────────────────────────────────────
+  async addFormerPartner(userId: string, body: Record<string, unknown>) {
+    const visaApplicationId = await this.resolveVisaApplicationIdForAdd(userId);
+    const sortOrder = await this.nextRelationshipSortOrder('formerPartner', visaApplicationId);
+    const data = this.buildFormerPartnerData(body);
+    const row = await this.prisma.visaFormerPartner.create({
+      data: { visaApplicationId, sortOrder, ...data },
+    });
+    return this.serializeFormerPartner(row);
+  }
+  async updateFormerPartner(userId: string, rowId: string, body: Record<string, unknown>) {
+    await this.assertRelationshipOwnership('formerPartner', rowId, userId);
+    const data = this.buildFormerPartnerData(body);
+    const row = await this.prisma.visaFormerPartner.update({ where: { id: rowId }, data });
+    return this.serializeFormerPartner(row);
+  }
+  async deleteFormerPartner(userId: string, rowId: string) {
+    await this.assertRelationshipOwnership('formerPartner', rowId, userId);
+    await this.prisma.visaFormerPartner.delete({ where: { id: rowId } });
+  }
+
+  // ── Child CRUD ──────────────────────────────────────────────────────
+  async addChild(userId: string, body: Record<string, unknown>) {
+    const visaApplicationId = await this.resolveVisaApplicationIdForAdd(userId);
+    const sortOrder = await this.nextRelationshipSortOrder('child', visaApplicationId);
+    const data = this.buildChildData(body);
+    const row = await this.prisma.visaChild.create({
+      data: { visaApplicationId, sortOrder, ...data },
+    });
+    return this.serializeChild(row);
+  }
+  async updateChild(userId: string, rowId: string, body: Record<string, unknown>) {
+    await this.assertRelationshipOwnership('child', rowId, userId);
+    const data = this.buildChildData(body);
+    const row = await this.prisma.visaChild.update({ where: { id: rowId }, data });
+    return this.serializeChild(row);
+  }
+  async deleteChild(userId: string, rowId: string) {
+    await this.assertRelationshipOwnership('child', rowId, userId);
+    await this.prisma.visaChild.delete({ where: { id: rowId } });
+  }
+
+  // ── Parent CRUD ─────────────────────────────────────────────────────
+  async addParent(userId: string, body: Record<string, unknown>) {
+    const visaApplicationId = await this.resolveVisaApplicationIdForAdd(userId);
+    const sortOrder = await this.nextRelationshipSortOrder('parent', visaApplicationId);
+    const data = this.buildPersonWithDobData(body, ['isDeceased']);
+    const row = await this.prisma.visaParent.create({
+      data: { visaApplicationId, sortOrder, ...data },
+    });
+    return this.serializeParent(row);
+  }
+  async updateParent(userId: string, rowId: string, body: Record<string, unknown>) {
+    await this.assertRelationshipOwnership('parent', rowId, userId);
+    const data = this.buildPersonWithDobData(body, ['isDeceased']);
+    const row = await this.prisma.visaParent.update({ where: { id: rowId }, data });
+    return this.serializeParent(row);
+  }
+  async deleteParent(userId: string, rowId: string) {
+    await this.assertRelationshipOwnership('parent', rowId, userId);
+    await this.prisma.visaParent.delete({ where: { id: rowId } });
+  }
+
+  // ── Sibling CRUD ────────────────────────────────────────────────────
+  async addSibling(userId: string, body: Record<string, unknown>) {
+    const visaApplicationId = await this.resolveVisaApplicationIdForAdd(userId);
+    const sortOrder = await this.nextRelationshipSortOrder('sibling', visaApplicationId);
+    const data = this.buildPersonWithDobData(body, []);
+    const row = await this.prisma.visaSibling.create({
+      data: { visaApplicationId, sortOrder, ...data },
+    });
+    return this.serializeSibling(row);
+  }
+  async updateSibling(userId: string, rowId: string, body: Record<string, unknown>) {
+    await this.assertRelationshipOwnership('sibling', rowId, userId);
+    const data = this.buildPersonWithDobData(body, []);
+    const row = await this.prisma.visaSibling.update({ where: { id: rowId }, data });
+    return this.serializeSibling(row);
+  }
+  async deleteSibling(userId: string, rowId: string) {
+    await this.assertRelationshipOwnership('sibling', rowId, userId);
+    await this.prisma.visaSibling.delete({ where: { id: rowId } });
+  }
+
+  // ── NZ contact CRUD ─────────────────────────────────────────────────
+  async addNzContact(userId: string, body: Record<string, unknown>) {
+    const visaApplicationId = await this.resolveVisaApplicationIdForAdd(userId);
+    const sortOrder = await this.nextRelationshipSortOrder('nzContact', visaApplicationId);
+    const data = this.buildNzContactData(body);
+    const row = await this.prisma.visaNzContact.create({
+      data: { visaApplicationId, sortOrder, ...data },
+    });
+    return this.serializeNzContact(row);
+  }
+  async updateNzContact(userId: string, rowId: string, body: Record<string, unknown>) {
+    await this.assertRelationshipOwnership('nzContact', rowId, userId);
+    const data = this.buildNzContactData(body);
+    const row = await this.prisma.visaNzContact.update({ where: { id: rowId }, data });
+    return this.serializeNzContact(row);
+  }
+  async deleteNzContact(userId: string, rowId: string) {
+    await this.assertRelationshipOwnership('nzContact', rowId, userId);
+    await this.prisma.visaNzContact.delete({ where: { id: rowId } });
   }
 }

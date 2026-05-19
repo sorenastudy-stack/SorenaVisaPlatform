@@ -104,6 +104,13 @@ export interface VisaApplication {
   hadPreviousEmployment: boolean | null;
   everUnemployed: boolean | null;
 
+  // Section 8 — Relationships (PR-VISA8). maritalStatus and hasChildren
+  // are NOT on the visa row — they live on admission and arrive via the
+  // readonly snapshot (see VisaReadonly).
+  hasFormerPartners: boolean | null;
+  hasSiblings: boolean | null;
+  hasNzContacts: boolean | null;
+
   // Section 5 — Health (PR-VISA5)
   hasTuberculosis: boolean | null;
   needsRenalDialysis: boolean | null;
@@ -252,6 +259,115 @@ export interface UnemploymentEntryPatch {
   financialSupport?: string | null;
 }
 
+// Step 8 (PR-VISA8) types. All name fields and the partner's
+// passportNumber / NZ-contact phone+street are decrypted plaintext on
+// read; the backend encrypts on write.
+export interface VisaPartnerRow {
+  id: string;
+  relationshipToApplicant: string | null;
+  givenName: string | null;
+  middleNames: string | null;
+  surname: string | null;
+  gender: string | null;
+  dateOfBirth: string | null;
+  relationshipStatus: string | null;
+  countryOfBirth: string | null;
+  stateOfBirth: string | null;
+  cityOfBirth: string | null;
+  nationality: string | null;
+  countryOfResidence: string | null;
+  occupation: string | null;
+  holdsPassport: boolean | null;
+  passportNumber: string | null;
+  passportCountryOfIssue: string | null;
+  passportIssueDate: string | null;
+  passportExpiryDate: string | null;
+}
+export type VisaPartnerPatch = Partial<Omit<VisaPartnerRow, 'id'>>;
+
+export interface FormerPartnerRow {
+  id: string;
+  givenName: string | null;
+  middleNames: string | null;
+  surname: string | null;
+  gender: string | null;
+  dateOfBirth: string | null;
+  relationshipStatus: string | null;
+  countryOfBirth: string | null;
+  nationality: string | null;
+  sortOrder: number;
+}
+export type FormerPartnerPatch = Partial<Omit<FormerPartnerRow, 'id' | 'sortOrder'>>;
+
+export interface ChildRow {
+  id: string;
+  givenName: string | null;
+  middleNames: string | null;
+  surname: string | null;
+  gender: string | null;
+  dateOfBirth: string | null;
+  countryOfBirth: string | null;
+  nationality: string | null;
+  relationshipToApplicant: string | null;
+  livesWithApplicant: boolean | null;
+  sortOrder: number;
+}
+export type ChildPatch = Partial<Omit<ChildRow, 'id' | 'sortOrder'>>;
+
+export interface ParentRow {
+  id: string;
+  givenName: string | null;
+  middleNames: string | null;
+  surname: string | null;
+  relationshipToApplicant: string | null;
+  isDeceased: boolean | null;
+  gender: string | null;
+  dateOfBirth: string | null;
+  dateOfBirthUnknown: boolean | null;
+  relationshipStatus: string | null;
+  countryOfBirth: string | null;
+  citizenship: string | null;
+  countryOfResidence: string | null;
+  occupation: string | null;
+  sortOrder: number;
+}
+export type ParentPatch = Partial<Omit<ParentRow, 'id' | 'sortOrder'>>;
+
+export interface SiblingRow {
+  id: string;
+  givenName: string | null;
+  middleNames: string | null;
+  surname: string | null;
+  relationshipToApplicant: string | null;
+  gender: string | null;
+  dateOfBirth: string | null;
+  dateOfBirthUnknown: boolean | null;
+  relationshipStatus: string | null;
+  countryOfBirth: string | null;
+  citizenship: string | null;
+  countryOfResidence: string | null;
+  occupation: string | null;
+  sortOrder: number;
+}
+export type SiblingPatch = Partial<Omit<SiblingRow, 'id' | 'sortOrder'>>;
+
+export interface NzContactRow {
+  id: string;
+  givenName: string | null;
+  middleNames: string | null;
+  surname: string | null;
+  relationshipToApplicant: string | null;
+  phone: string | null;
+  email: string | null;
+  street: string | null;
+  suburb: string | null;
+  townCity: string | null;
+  region: string | null;
+  postcode: string | null;
+  sortOrder: number;
+}
+export type NzContactPatch = Partial<Omit<NzContactRow, 'id' | 'sortOrder'>>;
+
 // Read-only snapshot pulled from admission + contacts. The Visa Section
 // never re-collects these — they are displayed inline and the student
 // edits them on the admission/account profile if a correction is needed.
@@ -268,6 +384,10 @@ export interface VisaReadonly {
   // read-only so the student doesn't enter the same data twice.
   programmeName: string | null;
   providerName: string | null;
+  // PR-VISA8: admission's marital status drives the Step 8 partnership
+  // dropdown read-only; hasChildren drives the Children block.
+  maritalStatus: string | null;
+  hasChildren: boolean | null;
 }
 
 interface ContextValue {
@@ -330,11 +450,36 @@ interface ContextValue {
     patch: UnemploymentEntryPatch,
   ) => Promise<UnemploymentEntry>;
   deleteUnemploymentEntry: (id: string) => Promise<void>;
+
+  // Step 8 — Relationships (PR-VISA8). Partner is singleton via upsert;
+  // everything else uses the standard add / update / delete shape.
+  partner: VisaPartnerRow | null;
+  upsertPartner: (patch: VisaPartnerPatch) => Promise<VisaPartnerRow>;
+  formerPartners: FormerPartnerRow[];
+  addFormerPartner: () => Promise<FormerPartnerRow>;
+  updateFormerPartner: (id: string, patch: FormerPartnerPatch) => Promise<FormerPartnerRow>;
+  deleteFormerPartner: (id: string) => Promise<void>;
+  children: ChildRow[];
+  addChild: () => Promise<ChildRow>;
+  updateChild: (id: string, patch: ChildPatch) => Promise<ChildRow>;
+  deleteChild: (id: string) => Promise<void>;
+  parents: ParentRow[];
+  addParent: () => Promise<ParentRow>;
+  updateParent: (id: string, patch: ParentPatch) => Promise<ParentRow>;
+  deleteParent: (id: string) => Promise<void>;
+  siblings: SiblingRow[];
+  addSibling: () => Promise<SiblingRow>;
+  updateSibling: (id: string, patch: SiblingPatch) => Promise<SiblingRow>;
+  deleteSibling: (id: string) => Promise<void>;
+  nzContacts: NzContactRow[];
+  addNzContact: () => Promise<NzContactRow>;
+  updateNzContact: (id: string, patch: NzContactPatch) => Promise<NzContactRow>;
+  deleteNzContact: (id: string) => Promise<void>;
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA7 brings this to 7).
-export const VISA_TOTAL_STEPS = 7;
+// each later INZ section is built (PR-VISA8 brings this to 8).
+export const VISA_TOTAL_STEPS = 8;
 
 const VisaContext = createContext<ContextValue | null>(null);
 
@@ -348,6 +493,12 @@ export function VisaProvider({
   initialEducationSupplements,
   initialEmploymentEntries,
   initialUnemploymentEntries,
+  initialPartner,
+  initialFormerPartners,
+  initialChildren,
+  initialParents,
+  initialSiblings,
+  initialNzContacts,
 }: {
   children: ReactNode;
   initialVisa: VisaApplication;
@@ -358,6 +509,12 @@ export function VisaProvider({
   initialEducationSupplements: EducationSupplement[];
   initialEmploymentEntries: EmploymentEntry[];
   initialUnemploymentEntries: UnemploymentEntry[];
+  initialPartner: VisaPartnerRow | null;
+  initialFormerPartners: FormerPartnerRow[];
+  initialChildren: ChildRow[];
+  initialParents: ParentRow[];
+  initialSiblings: SiblingRow[];
+  initialNzContacts: NzContactRow[];
 }) {
   const [visa, setVisa] = useState<VisaApplication>(initialVisa);
   const [readonlyState] = useState<VisaReadonly>(initialReadonly);
@@ -378,6 +535,12 @@ export function VisaProvider({
   const [unemploymentEntries, setUnemploymentEntries] = useState<UnemploymentEntry[]>(
     initialUnemploymentEntries ?? [],
   );
+  const [partner, setPartner] = useState<VisaPartnerRow | null>(initialPartner ?? null);
+  const [formerPartners, setFormerPartners] = useState<FormerPartnerRow[]>(initialFormerPartners ?? []);
+  const [childrenRows, setChildrenRows] = useState<ChildRow[]>(initialChildren ?? []);
+  const [parents, setParents] = useState<ParentRow[]>(initialParents ?? []);
+  const [siblings, setSiblings] = useState<SiblingRow[]>(initialSiblings ?? []);
+  const [nzContacts, setNzContacts] = useState<NzContactRow[]>(initialNzContacts ?? []);
   // Clamp the initial step in case the row has a stale value from before
   // VISA_TOTAL_STEPS bumped — we never want the UI in an off-by-one state.
   const [activeStep, setActiveStep] = useState<number>(() =>
@@ -393,6 +556,12 @@ export function VisaProvider({
       educationSupplements?: EducationSupplement[];
       employmentEntries?: EmploymentEntry[];
       unemploymentEntries?: UnemploymentEntry[];
+      partner?: VisaPartnerRow | null;
+      formerPartners?: FormerPartnerRow[];
+      children?: ChildRow[];
+      parents?: ParentRow[];
+      siblings?: SiblingRow[];
+      nzContacts?: NzContactRow[];
     }>(
       '/students/me/visa/application',
       fields,
@@ -416,6 +585,15 @@ export function VisaProvider({
     if (Array.isArray(res.unemploymentEntries)) {
       setUnemploymentEntries(res.unemploymentEntries);
     }
+    // PR-VISA8: reconciliations on save (admission status change wipes
+    // partner; toggle-No on the three Step-8 gates wipes their lists)
+    // are reflected in the response — trust the server's truth.
+    if (res.partner !== undefined) setPartner(res.partner);
+    if (Array.isArray(res.formerPartners)) setFormerPartners(res.formerPartners);
+    if (Array.isArray(res.children))       setChildrenRows(res.children);
+    if (Array.isArray(res.parents))        setParents(res.parents);
+    if (Array.isArray(res.siblings))       setSiblings(res.siblings);
+    if (Array.isArray(res.nzContacts))     setNzContacts(res.nzContacts);
   }, []);
 
   const addOtherCitizenship = useCallback(async (data: OtherCitizenshipInput) => {
@@ -543,6 +721,92 @@ export function VisaProvider({
     setUnemploymentEntries(prev => prev.filter(r => r.id !== id));
   }, []);
 
+  // ── Step 8 — Relationships (PR-VISA8) ─────────────────────────────
+
+  const upsertPartner = useCallback(async (patch: VisaPartnerPatch) => {
+    const row = await api.patch<VisaPartnerRow>(
+      '/students/me/visa/partner',
+      patch,
+    );
+    setPartner(row);
+    return row;
+  }, []);
+
+  const addFormerPartner = useCallback(async () => {
+    const row = await api.post<FormerPartnerRow>('/students/me/visa/former-partners', {});
+    setFormerPartners((prev) => [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder));
+    return row;
+  }, []);
+  const updateFormerPartner = useCallback(async (id: string, patch: FormerPartnerPatch) => {
+    const row = await api.patch<FormerPartnerRow>(`/students/me/visa/former-partners/${id}`, patch);
+    setFormerPartners((prev) => prev.map((r) => (r.id === id ? row : r)));
+    return row;
+  }, []);
+  const deleteFormerPartner = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/former-partners/${id}`);
+    setFormerPartners((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const addChild = useCallback(async () => {
+    const row = await api.post<ChildRow>('/students/me/visa/children', {});
+    setChildrenRows((prev) => [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder));
+    return row;
+  }, []);
+  const updateChild = useCallback(async (id: string, patch: ChildPatch) => {
+    const row = await api.patch<ChildRow>(`/students/me/visa/children/${id}`, patch);
+    setChildrenRows((prev) => prev.map((r) => (r.id === id ? row : r)));
+    return row;
+  }, []);
+  const deleteChild = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/children/${id}`);
+    setChildrenRows((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const addParent = useCallback(async () => {
+    const row = await api.post<ParentRow>('/students/me/visa/parents', {});
+    setParents((prev) => [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder));
+    return row;
+  }, []);
+  const updateParent = useCallback(async (id: string, patch: ParentPatch) => {
+    const row = await api.patch<ParentRow>(`/students/me/visa/parents/${id}`, patch);
+    setParents((prev) => prev.map((r) => (r.id === id ? row : r)));
+    return row;
+  }, []);
+  const deleteParent = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/parents/${id}`);
+    setParents((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const addSibling = useCallback(async () => {
+    const row = await api.post<SiblingRow>('/students/me/visa/siblings', {});
+    setSiblings((prev) => [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder));
+    return row;
+  }, []);
+  const updateSibling = useCallback(async (id: string, patch: SiblingPatch) => {
+    const row = await api.patch<SiblingRow>(`/students/me/visa/siblings/${id}`, patch);
+    setSiblings((prev) => prev.map((r) => (r.id === id ? row : r)));
+    return row;
+  }, []);
+  const deleteSibling = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/siblings/${id}`);
+    setSiblings((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const addNzContact = useCallback(async () => {
+    const row = await api.post<NzContactRow>('/students/me/visa/nz-contacts', {});
+    setNzContacts((prev) => [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder));
+    return row;
+  }, []);
+  const updateNzContact = useCallback(async (id: string, patch: NzContactPatch) => {
+    const row = await api.patch<NzContactRow>(`/students/me/visa/nz-contacts/${id}`, patch);
+    setNzContacts((prev) => prev.map((r) => (r.id === id ? row : r)));
+    return row;
+  }, []);
+  const deleteNzContact = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/nz-contacts/${id}`);
+    setNzContacts((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
   const upsertEducationSupplement = useCallback(
     async (educationEntryId: string, patch: EducationSupplementPatch) => {
       const row = await api.patch<EducationSupplement>(
@@ -590,6 +854,28 @@ export function VisaProvider({
       addUnemploymentEntry,
       updateUnemploymentEntry,
       deleteUnemploymentEntry,
+      partner,
+      upsertPartner,
+      formerPartners,
+      addFormerPartner,
+      updateFormerPartner,
+      deleteFormerPartner,
+      children: childrenRows,
+      addChild,
+      updateChild,
+      deleteChild,
+      parents,
+      addParent,
+      updateParent,
+      deleteParent,
+      siblings,
+      addSibling,
+      updateSibling,
+      deleteSibling,
+      nzContacts,
+      addNzContact,
+      updateNzContact,
+      deleteNzContact,
     }}>
       {children}
     </VisaContext.Provider>
