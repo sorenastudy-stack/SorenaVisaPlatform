@@ -181,6 +181,8 @@ export function Step4Character() {
       await patchVisa(payload);
       setSavedAt(new Date().toISOString());
       toast.success(t('visaCharacterSaveSuccess'));
+      // PR-VISA5: advance the stepper now that Section 5 exists.
+      setActiveStep(5);
     } catch {
       toast.error(t('visaCharacterSaveError'));
     } finally {

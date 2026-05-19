@@ -69,4 +69,31 @@ export class VisaController {
   deleteCitizenship(@Req() req: any, @Param('id') id: string) {
     return this.visaService.deleteOtherCitizenship(req.user.userId, id);
   }
+
+  // ── TB-risk countries CRUD (PR-VISA5) ────────────────────────────
+  // Same shape as the citizenships routes. The service enforces
+  // ownership through the userId → contact → visa chain.
+
+  @Post('tb-countries')
+  addTbCountry(
+    @Req() req: any,
+    @Body() body: { country?: string; totalDurationDays?: number },
+  ) {
+    return this.visaService.addTbRiskCountry(req.user.userId, body);
+  }
+
+  @Patch('tb-countries/:id')
+  updateTbCountry(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { country?: string; totalDurationDays?: number },
+  ) {
+    return this.visaService.updateTbRiskCountry(req.user.userId, id, body);
+  }
+
+  @Delete('tb-countries/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteTbCountry(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteTbRiskCountry(req.user.userId, id);
+  }
 }

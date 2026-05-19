@@ -639,5 +639,70 @@
   "visaCharacterSaveSuccess": "Character saved.",
   "visaCharacterSaveError": "Could not save Character. Please try again.",
   "visaCharacterValidationMissing": "Please complete every required field before saving.",
-  "visaCharacterSavedBanner": "Character saved — more sections coming soon."
+  "visaCharacterSavedBanner": "Character saved — more sections coming soon.",
+
+  "visaHealthSectionTitle": "Health",
+  "visaHealthIntro": "We use the information you enter in this section to check you have an acceptable standard of health.",
+
+  "visaHealthSubsectionGuidance": "Guidance",
+  "visaHealthGuidanceNote": "All visa applicants must have an acceptable standard of health. After you submit your visa application, we will check any previous medical records that you have submitted to us. If you need to have a medical examination, we will contact you with more information.",
+
+  "visaHealthSubsectionTuberculosis": "Tuberculosis",
+  "visaHealthHasTbLabel": "Do you have tuberculosis (TB)?",
+
+  "visaHealthSubsectionMedicalCare": "Medical care during your stay in New Zealand",
+  "visaHealthRenalDialysisLabel": "Will you require renal dialysis during your stay in New Zealand?",
+  "visaHealthMedicalConditionLabel": "Do you have a medical condition that requires or may require hospital or specialist care during your stay in New Zealand?",
+  "visaHealthMedicalConditionHelper": "You do not need to answer 'yes' if you are concerned that you may have an accident or unexpected illness.",
+  "visaHealthResidentialCareLabel": "Do you or are you likely to require residential care during your stay in New Zealand?",
+  "visaHealthResidentialCareHelper": "Residential care is long-term care provided in live-in facilities for the aged or for people with physical, sensory, intellectual or psychiatric disabilities.",
+
+  "visaHealthSubsectionPregnancy": "Pregnancy",
+  "visaHealthIsPregnantLabel": "Are you pregnant?",
+
+  "visaHealthSubsectionLengthOfStay": "Length of stay",
+  "visaHealthLengthHelperIntro": "Your intended length of stay helps us determine if you need a medical examination.",
+  "visaHealthLengthLabel": "How long do you plan to stay in New Zealand?",
+  "visaHealthLengthHelperCount": "If you are already in New Zealand, include the time you have already spent on your current trip. Count from the date you last arrived in New Zealand to the date you plan to leave New Zealand.",
+  "visaHealthLengthSixOrLess": "6 months or less",
+  "visaHealthLengthSixToTwelve": "More than 6 months up to 12 months",
+  "visaHealthLengthMoreThanTwelve": "More than 12 months",
+
+  "visaHealthSubsectionMedicalExams": "Medical examinations",
+  "visaHealthHadMedicalExamLabel": "Have you already had a medical examination for this visa application?",
+  "visaHealthMedicalRefLabel": "Enter the eMedical reference number (NZER) or INZ health case reference number (NZHR) for your most recent medical examination.",
+  "visaHealthMedicalRefHelper": "Providing your eMedical reference number (NZER) or INZ health case reference number (NZHR) will prevent delays in processing your application. An NZER begins with 'N' and has 9 digits. An NZHR begins with 'HR' and has 7 digits.",
+
+  "visaHealthSubsectionTbRisk": "Tuberculosis (TB) risk",
+  "visaHealthTbRiskNote": "If you have spent time in places that have a risk of TB since your most recent chest x-ray, we may ask you for a new chest x-ray certificate.",
+  "visaHealthTbRiskHeading": "List the countries you have visited or lived in over the last 5 years.",
+  "visaHealthTbAtLeastOneOrNoMore": "Please add at least one country or territory, or tick 'I have no more countries or territories to add'.",
+  "visaHealthTbRowHeading": "Country {n}",
+  "visaHealthTbCountryLabel": "Country or territory",
+  "visaHealthTbDurationLabel": "Total duration in days",
+  "visaHealthTbDurationHelper": "Enter the total amount of time (in days) that you have spent in this country over the last 5 years. For example, two visits of 3 months each should be recorded as 183 days.",
+  "visaHealthTbAddButton": "Add another country or territory",
+  "visaHealthTbRemoveTooltip": "Remove this country",
+  "visaHealthTbRemoveConfirm": "Remove this country?",
+  "visaHealthTbAddError": "Could not add country. Please try again.",
+  "visaHealthTbUpdateError": "Could not update country. Please try again.",
+  "visaHealthTbRemoveError": "Could not remove country. Please try again.",
+  "visaHealthTbDurationInvalid": "Total duration must be a non-negative whole number of days.",
+  "visaHealthTbNoMoreLabel": "I have no more countries or territories to add.",
+
+  "visaHealthSubsectionInsurance": "Declaration regarding insurance requirements",
+  "visaHealthInsuranceIntro": "This declaration requires you to agree to, and confirm your understanding of, the requirement to hold acceptable insurance as a condition of your student visa and the implications of not holding acceptable insurance.",
+  "visaHealthInsuranceP1": "I agree to arrange and hold insurance which my education provider considers acceptable, from the period of my enrolment until the expiry of my student visa, unless I depart New Zealand earlier.",
+  "visaHealthInsuranceP2": "I understand that holding insurance will be a condition of my visa and that I may become liable for deportation if I do not hold insurance, for the period of my enrolment until my visa expires, unless I depart New Zealand earlier.",
+  "visaHealthInsuranceP3": "I understand that if I apply for a further visa, I may be required to provide evidence that I held acceptable insurance while in New Zealand, as an international student visa holder.",
+  "visaHealthInsuranceAgreeLabel": "I agree with the declaration.",
+
+  "visaHealthSubsectionPublicHealth": "Public health acknowledgement",
+  "visaHealthPublicHealthAckLabel": "I understand it is recommended by the New Zealand Government that I see a health professional prior to arrival in New Zealand for appropriate testing and commencement of treatment, if I have taken intravenous drugs or participated in activities that may have exposed me to Hepatitis or HIV.",
+
+  "visaHealthSaveButton": "Save and continue",
+  "visaHealthSaveSuccess": "Health saved.",
+  "visaHealthSaveError": "Could not save Health. Please try again.",
+  "visaHealthValidationMissing": "Please complete every required field before saving.",
+  "visaHealthSavedBanner": "Health saved — more sections coming soon."
 }

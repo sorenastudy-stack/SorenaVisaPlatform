@@ -118,11 +118,29 @@ const PATCHABLE_VISA_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'dateti
   holdsOtherCitizenships:       'boolean',
   livedOtherCountry5Years:      'boolean',
 
+  // Section 5 — Health (PR-VISA5)
+  hasTuberculosis:              'boolean',
+  needsRenalDialysis:           'boolean',
+  hasMedicalCondition:          'boolean',
+  needsResidentialCare:         'boolean',
+  isPregnant:                   'boolean',
+  intendedLengthOfStay:         'text',
+  hadMedicalExam:               'boolean',
+  medicalRefNumber:             'text',
+  tbCountriesNoMore:            'boolean',
+  insuranceDeclarationAgreed:   'boolean',
+  publicHealthAckAgreed:        'boolean',
+
   currentStep:            'int',
 };
 
 const VALID_GENDERS = new Set(['MALE', 'FEMALE', 'GENDER_DIVERSE']);
 const VALID_MASTERS_OR_PHD = new Set(['MASTERS', 'PHD', 'NEITHER']);
+const VALID_LENGTHS_OF_STAY = new Set([
+  'SIX_MONTHS_OR_LESS',
+  'SIX_TO_TWELVE_MONTHS',
+  'MORE_THAN_TWELVE_MONTHS',
+]);
 const MIDDLE_NAMES_MAX = 30;
 const CONTACT_NUMBER_MAX = 16;
 
@@ -265,6 +283,20 @@ export class VisaService {
     }));
   }
 
+  // PR-VISA5: same shape for the TB-risk countries repeating table.
+  private async loadTbRiskCountries(visaApplicationId: string) {
+    const rows = await this.prisma.visaTbRiskCountry.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      country: r.country,
+      totalDurationDays: r.totalDurationDays,
+      sortOrder: r.sortOrder,
+    }));
+  }
+
   // Ownership helper for the citizenship CRUD routes — the row must belong
   // to a visa_application whose admission chain resolves to this userId.
   // Mirrors AdmissionService.assertEducationEntryOwnership.
@@ -288,6 +320,27 @@ export class VisaService {
     return row;
   }
 
+  // Same ownership shape for the TB-risk-country rows (PR-VISA5).
+  private async assertTbRiskCountryOwnership(rowId: string, userId: string) {
+    const row = await this.prisma.visaTbRiskCountry.findUnique({
+      where: { id: rowId },
+      include: {
+        visaApplication: {
+          include: {
+            admissionApplication: {
+              include: { contact: true },
+            },
+          },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('TB-risk-country row not found');
+    if (row.visaApplication.admissionApplication.contact.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    return row;
+  }
+
   // GET — returns { exists, visaApplication?, readonly, otherCitizenships }.
   // Does not auto-create the row; the client POSTs explicitly. This mirrors
   // the admission pattern.
@@ -300,13 +353,14 @@ export class VisaService {
     const readonly = this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice);
 
     if (!visa) {
-      return { exists: false as const, readonly, otherCitizenships: [] };
+      return { exists: false as const, readonly, otherCitizenships: [], tbRiskCountries: [] };
     }
     return {
       exists: true as const,
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
       readonly,
       otherCitizenships: await this.loadOtherCitizenships(visa.id),
+      tbRiskCountries: await this.loadTbRiskCountries(visa.id),
     };
   }
 
@@ -326,6 +380,7 @@ export class VisaService {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
       readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice),
       otherCitizenships: await this.loadOtherCitizenships(visa.id),
+      tbRiskCountries: await this.loadTbRiskCountries(visa.id),
     };
   }
 
@@ -383,6 +438,24 @@ export class VisaService {
         'studyingMastersOrPhd must be one of MASTERS, PHD, NEITHER',
       );
     }
+    if (
+      sanitized.intendedLengthOfStay !== null &&
+      sanitized.intendedLengthOfStay !== undefined &&
+      !VALID_LENGTHS_OF_STAY.has(sanitized.intendedLengthOfStay as string)
+    ) {
+      throw new BadRequestException(
+        'intendedLengthOfStay must be one of SIX_MONTHS_OR_LESS, SIX_TO_TWELVE_MONTHS, MORE_THAN_TWELVE_MONTHS',
+      );
+    }
+    // PR-VISA5: when the student answers No to "had a medical exam",
+    // clear the reference number so a stale value can't linger after a
+    // Yes→No toggle.
+    if (
+      Object.prototype.hasOwnProperty.call(sanitized, 'hadMedicalExam') &&
+      sanitized.hadMedicalExam === false
+    ) {
+      sanitized.medicalRefNumber = null;
+    }
 
     // PII encryption — move plaintext keys to `<field>Encrypted: Buffer | null`
     const data: Record<string, unknown> = {};
@@ -424,6 +497,7 @@ export class VisaService {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
       readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice),
       otherCitizenships: await this.loadOtherCitizenships(visa.id),
+      tbRiskCountries: await this.loadTbRiskCountries(visa.id),
     };
   }
 
@@ -516,6 +590,98 @@ export class VisaService {
     await this.assertCitizenshipOwnership(citizenshipId, userId);
     await this.prisma.visaOtherCitizenship.delete({
       where: { id: citizenshipId },
+    });
+  }
+
+  // ── TB-risk countries CRUD (PR-VISA5) ────────────────────────────────
+  // Same draft-then-fill pattern as the citizenship rows from PR-VISA4:
+  // empty rows allowed on create, the Step 5 save validator on the
+  // frontend enforces non-empty country + positive duration before the
+  // student can advance.
+
+  async addTbRiskCountry(
+    userId: string,
+    body: { country?: string; totalDurationDays?: number },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    if (
+      body?.totalDurationDays !== undefined &&
+      (typeof body.totalDurationDays !== 'number' ||
+        !Number.isInteger(body.totalDurationDays) ||
+        body.totalDurationDays < 0)
+    ) {
+      throw new BadRequestException(
+        'totalDurationDays must be a non-negative integer',
+      );
+    }
+    const last = await this.prisma.visaTbRiskCountry.findFirst({
+      where: { visaApplicationId: visa.id },
+      orderBy: { sortOrder: 'desc' },
+    });
+    const sortOrder = (last?.sortOrder ?? -1) + 1;
+
+    const row = await this.prisma.visaTbRiskCountry.create({
+      data: {
+        visaApplicationId: visa.id,
+        country: body?.country?.trim() ?? '',
+        totalDurationDays: body?.totalDurationDays ?? 0,
+        sortOrder,
+      },
+    });
+    return {
+      id: row.id,
+      country: row.country,
+      totalDurationDays: row.totalDurationDays,
+      sortOrder: row.sortOrder,
+    };
+  }
+
+  async updateTbRiskCountry(
+    userId: string,
+    rowId: string,
+    body: { country?: string; totalDurationDays?: number },
+  ) {
+    await this.assertTbRiskCountryOwnership(rowId, userId);
+    const data: Record<string, unknown> = {};
+    if (body.country !== undefined) {
+      data.country = body.country.trim();
+    }
+    if (body.totalDurationDays !== undefined) {
+      if (
+        typeof body.totalDurationDays !== 'number' ||
+        !Number.isInteger(body.totalDurationDays) ||
+        body.totalDurationDays < 0
+      ) {
+        throw new BadRequestException(
+          'totalDurationDays must be a non-negative integer',
+        );
+      }
+      data.totalDurationDays = body.totalDurationDays;
+    }
+    const row = await this.prisma.visaTbRiskCountry.update({
+      where: { id: rowId },
+      data,
+    });
+    return {
+      id: row.id,
+      country: row.country,
+      totalDurationDays: row.totalDurationDays,
+      sortOrder: row.sortOrder,
+    };
+  }
+
+  async deleteTbRiskCountry(userId: string, rowId: string) {
+    await this.assertTbRiskCountryOwnership(rowId, userId);
+    await this.prisma.visaTbRiskCountry.delete({
+      where: { id: rowId },
     });
   }
 }

@@ -97,6 +97,19 @@ export interface VisaApplication {
   holdsOtherCitizenships: boolean | null;
   livedOtherCountry5Years: boolean | null;
 
+  // Section 5 — Health (PR-VISA5)
+  hasTuberculosis: boolean | null;
+  needsRenalDialysis: boolean | null;
+  hasMedicalCondition: boolean | null;
+  needsResidentialCare: boolean | null;
+  isPregnant: boolean | null;
+  intendedLengthOfStay: string | null;
+  hadMedicalExam: boolean | null;
+  medicalRefNumber: string | null;
+  tbCountriesNoMore: boolean | null;
+  insuranceDeclarationAgreed: boolean | null;
+  publicHealthAckAgreed: boolean | null;
+
   currentStep: number;
   createdAt: string;
   updatedAt: string;
@@ -115,6 +128,20 @@ export interface OtherCitizenship {
 export interface OtherCitizenshipInput {
   country: string;
   holdsPassport: boolean;
+}
+
+// Repeating child rows for the Step 5 "TB-risk countries" block
+// (PR-VISA5). Persisted via /students/me/visa/tb-countries endpoints.
+export interface TbRiskCountry {
+  id: string;
+  country: string;
+  totalDurationDays: number;
+  sortOrder: number;
+}
+
+export interface TbRiskCountryInput {
+  country: string;
+  totalDurationDays: number;
 }
 
 // Read-only snapshot pulled from admission + contacts. The Visa Section
@@ -160,11 +187,20 @@ interface ContextValue {
   // server reconciles holdsOtherCitizenships → false (server-side delete
   // already happened; this just syncs UI state).
   resetOtherCitizenships: () => void;
+
+  // TB-risk countries (Step 5 block). Same live-API shape.
+  tbRiskCountries: TbRiskCountry[];
+  addTbRiskCountry: (data: TbRiskCountryInput) => Promise<TbRiskCountry>;
+  updateTbRiskCountry: (
+    id: string,
+    data: Partial<TbRiskCountryInput>,
+  ) => Promise<TbRiskCountry>;
+  deleteTbRiskCountry: (id: string) => Promise<void>;
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA4 brings this to 4).
-export const VISA_TOTAL_STEPS = 4;
+// each later INZ section is built (PR-VISA5 brings this to 5).
+export const VISA_TOTAL_STEPS = 5;
 
 const VisaContext = createContext<ContextValue | null>(null);
 
@@ -173,17 +209,22 @@ export function VisaProvider({
   initialVisa,
   initialReadonly,
   initialOtherCitizenships,
+  initialTbRiskCountries,
 }: {
   children: ReactNode;
   initialVisa: VisaApplication;
   initialReadonly: VisaReadonly;
   initialOtherCitizenships: OtherCitizenship[];
+  initialTbRiskCountries: TbRiskCountry[];
 }) {
   const [visa, setVisa] = useState<VisaApplication>(initialVisa);
   const [readonlyState] = useState<VisaReadonly>(initialReadonly);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [otherCitizenships, setOtherCitizenships] = useState<OtherCitizenship[]>(
     initialOtherCitizenships ?? [],
+  );
+  const [tbRiskCountries, setTbRiskCountries] = useState<TbRiskCountry[]>(
+    initialTbRiskCountries ?? [],
   );
   // Clamp the initial step in case the row has a stale value from before
   // VISA_TOTAL_STEPS bumped — we never want the UI in an off-by-one state.
@@ -196,6 +237,7 @@ export function VisaProvider({
       visaApplication: VisaApplication;
       readonly: VisaReadonly;
       otherCitizenships?: OtherCitizenship[];
+      tbRiskCountries?: TbRiskCountry[];
     }>(
       '/students/me/visa/application',
       fields,
@@ -206,6 +248,9 @@ export function VisaProvider({
     // as the new source of truth.
     if (Array.isArray(res.otherCitizenships)) {
       setOtherCitizenships(res.otherCitizenships);
+    }
+    if (Array.isArray(res.tbRiskCountries)) {
+      setTbRiskCountries(res.tbRiskCountries);
     }
   }, []);
 
@@ -241,6 +286,34 @@ export function VisaProvider({
     setOtherCitizenships([]);
   }, []);
 
+  const addTbRiskCountry = useCallback(async (data: TbRiskCountryInput) => {
+    const row = await api.post<TbRiskCountry>(
+      '/students/me/visa/tb-countries',
+      data,
+    );
+    setTbRiskCountries(prev =>
+      [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder),
+    );
+    return row;
+  }, []);
+
+  const updateTbRiskCountry = useCallback(
+    async (id: string, data: Partial<TbRiskCountryInput>) => {
+      const row = await api.patch<TbRiskCountry>(
+        `/students/me/visa/tb-countries/${id}`,
+        data,
+      );
+      setTbRiskCountries(prev => prev.map(r => (r.id === id ? row : r)));
+      return row;
+    },
+    [],
+  );
+
+  const deleteTbRiskCountry = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/tb-countries/${id}`);
+    setTbRiskCountries(prev => prev.filter(r => r.id !== id));
+  }, []);
+
   return (
     <VisaContext.Provider value={{
       visa,
@@ -255,6 +328,10 @@ export function VisaProvider({
       updateOtherCitizenship,
       deleteOtherCitizenship,
       resetOtherCitizenships,
+      tbRiskCountries,
+      addTbRiskCountry,
+      updateTbRiskCountry,
+      deleteTbRiskCountry,
     }}>
       {children}
     </VisaContext.Provider>

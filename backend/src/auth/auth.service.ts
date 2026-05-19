@@ -75,6 +75,14 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
+    // Guard: a malformed POST with no body (or no email/password key) used
+    // to reach findUnique with `email: undefined`, which throws a
+    // PrismaClientValidationError and surfaces as an opaque HTTP 500.
+    // Treat missing credentials as the same 401 we use for wrong
+    // credentials — no info leak, no Prisma noise in the logs.
+    if (!email || !password) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
     // Find user by email
     const user = await this.prisma.user.findUnique({
       where: { email },

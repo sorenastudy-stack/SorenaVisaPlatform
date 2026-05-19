@@ -1351,14 +1351,47 @@ model VisaApplication {
   holdsOtherCitizenships         Boolean?
   livedOtherCountry5Years        Boolean?
 
+  // Section 5 — Health (PR-VISA5)
+  hasTuberculosis                Boolean?
+  needsRenalDialysis             Boolean?
+  hasMedicalCondition            Boolean?
+  needsResidentialCare           Boolean?
+  isPregnant                     Boolean?
+  intendedLengthOfStay           String?
+  hadMedicalExam                 Boolean?
+  medicalRefNumber               String?
+  tbCountriesNoMore              Boolean?
+  insuranceDeclarationAgreed     Boolean?
+  publicHealthAckAgreed          Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
   admissionApplication    AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   otherCitizenships       VisaOtherCitizenship[]
+  tbRiskCountries         VisaTbRiskCountry[]
 
   @@map("visa_applications")
+}
+
+// Repeating rows for the TB-risk countries block (PR-VISA5). One row per
+// country the student has visited or lived in over the last 5 years.
+// Same shape as VisaOtherCitizenship — live-API per row (POST/PATCH/DELETE
+// endpoints), cascade-deleted with the parent visa application.
+model VisaTbRiskCountry {
+  id                String   @id @default(cuid())
+  visaApplicationId String
+  country           String
+  totalDurationDays Int
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  visaApplication   VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_tb_risk_countries")
 }
 
 // Repeating rows for "Do you hold any other citizenships?" = Yes

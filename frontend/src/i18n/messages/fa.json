@@ -639,5 +639,70 @@
   "visaCharacterSaveSuccess": "بخش شخصیت ذخیره شد.",
   "visaCharacterSaveError": "ذخیرهٔ بخش شخصیت ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaCharacterValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
-  "visaCharacterSavedBanner": "بخش شخصیت ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند."
+  "visaCharacterSavedBanner": "بخش شخصیت ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
+
+  "visaHealthSectionTitle": "سلامت",
+  "visaHealthIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای بررسی این‌که از سطح قابل قبول سلامت برخوردار هستید استفاده می‌کنیم.",
+
+  "visaHealthSubsectionGuidance": "راهنما",
+  "visaHealthGuidanceNote": "همهٔ متقاضیان ویزا باید از سطح قابل قبول سلامت برخوردار باشند. پس از ارسال درخواست ویزا، سوابق پزشکی قبلی که برای ما فرستاده‌اید را بررسی می‌کنیم. اگر نیاز به معاینهٔ پزشکی داشته باشید، با اطلاعات بیشتر با شما تماس می‌گیریم.",
+
+  "visaHealthSubsectionTuberculosis": "بیماری سل",
+  "visaHealthHasTbLabel": "آیا به بیماری سل (TB) مبتلا هستید؟",
+
+  "visaHealthSubsectionMedicalCare": "مراقبت پزشکی در مدت اقامت در نیوزیلند",
+  "visaHealthRenalDialysisLabel": "آیا در مدت اقامت در نیوزیلند به دیالیز کلیه نیاز خواهید داشت؟",
+  "visaHealthMedicalConditionLabel": "آیا بیماری دارید که در مدت اقامت در نیوزیلند نیاز به مراقبت بیمارستانی یا تخصصی دارد یا ممکن است داشته باشد؟",
+  "visaHealthMedicalConditionHelper": "اگر نگران احتمال تصادف یا بیماری غیرمنتظره هستید، نیازی به پاسخ «بله» نیست.",
+  "visaHealthResidentialCareLabel": "آیا در مدت اقامت در نیوزیلند به مراقبت اقامتی نیاز خواهید داشت یا ممکن است نیاز پیدا کنید؟",
+  "visaHealthResidentialCareHelper": "مراقبت اقامتی، مراقبت طولانی‌مدتی است که در مراکز مسکونی برای سالمندان یا افراد دارای معلولیت‌های جسمی، حسی، ذهنی یا روانی ارائه می‌شود.",
+
+  "visaHealthSubsectionPregnancy": "بارداری",
+  "visaHealthIsPregnantLabel": "آیا باردار هستید؟",
+
+  "visaHealthSubsectionLengthOfStay": "مدت اقامت",
+  "visaHealthLengthHelperIntro": "مدت اقامت در نظر گرفته‌شدهٔ شما به ما کمک می‌کند تشخیص دهیم آیا نیاز به معاینهٔ پزشکی دارید.",
+  "visaHealthLengthLabel": "چه مدت قصد اقامت در نیوزیلند را دارید؟",
+  "visaHealthLengthHelperCount": "اگر در حال حاضر در نیوزیلند هستید، مدتی را که قبلاً در این سفر گذرانده‌اید نیز در نظر بگیرید. از تاریخ آخرین ورود به نیوزیلند تا تاریخ خروج برنامه‌ریزی‌شده محاسبه کنید.",
+  "visaHealthLengthSixOrLess": "۶ ماه یا کمتر",
+  "visaHealthLengthSixToTwelve": "بیشتر از ۶ ماه تا ۱۲ ماه",
+  "visaHealthLengthMoreThanTwelve": "بیشتر از ۱۲ ماه",
+
+  "visaHealthSubsectionMedicalExams": "معاینات پزشکی",
+  "visaHealthHadMedicalExamLabel": "آیا برای این درخواست ویزا قبلاً معاینهٔ پزشکی انجام داده‌اید؟",
+  "visaHealthMedicalRefLabel": "شمارهٔ مرجع eMedical (NZER) یا شمارهٔ مرجع پروندهٔ سلامت INZ (NZHR) مربوط به آخرین معاینهٔ پزشکی خود را وارد کنید.",
+  "visaHealthMedicalRefHelper": "ارائهٔ شمارهٔ مرجع eMedical (NZER) یا شمارهٔ مرجع پروندهٔ سلامت INZ (NZHR) از تأخیر در پردازش درخواست شما جلوگیری می‌کند. NZER با حرف «N» و ۹ رقم آغاز می‌شود. NZHR با «HR» و ۷ رقم آغاز می‌شود.",
+
+  "visaHealthSubsectionTbRisk": "ریسک سل (TB)",
+  "visaHealthTbRiskNote": "اگر از آخرین رادیولوژی قفسهٔ سینهٔ شما تاکنون مدتی را در مناطقی با ریسک سل گذرانده‌اید، ممکن است از شما گواهی رادیولوژی جدید بخواهیم.",
+  "visaHealthTbRiskHeading": "کشورهایی را که در ۵ سال گذشته بازدید کرده‌اید یا در آن‌ها زندگی کرده‌اید فهرست کنید.",
+  "visaHealthTbAtLeastOneOrNoMore": "لطفاً حداقل یک کشور یا قلمرو اضافه کنید، یا گزینهٔ «کشور یا قلمرو دیگری برای افزودن ندارم» را علامت بزنید.",
+  "visaHealthTbRowHeading": "کشور {n}",
+  "visaHealthTbCountryLabel": "کشور یا قلمرو",
+  "visaHealthTbDurationLabel": "مجموع مدت زمان به روز",
+  "visaHealthTbDurationHelper": "کل زمانی که در ۵ سال گذشته در این کشور گذرانده‌اید را به روز وارد کنید. برای مثال، دو سفر ۳ ماهه باید ۱۸۳ روز ثبت شود.",
+  "visaHealthTbAddButton": "افزودن کشور یا قلمرو دیگر",
+  "visaHealthTbRemoveTooltip": "حذف این کشور",
+  "visaHealthTbRemoveConfirm": "این کشور حذف شود؟",
+  "visaHealthTbAddError": "افزودن کشور ممکن نشد. لطفاً دوباره تلاش کنید.",
+  "visaHealthTbUpdateError": "به‌روزرسانی کشور ممکن نشد. لطفاً دوباره تلاش کنید.",
+  "visaHealthTbRemoveError": "حذف کشور ممکن نشد. لطفاً دوباره تلاش کنید.",
+  "visaHealthTbDurationInvalid": "مجموع مدت زمان باید یک عدد صحیح غیر منفی به روز باشد.",
+  "visaHealthTbNoMoreLabel": "کشور یا قلمرو دیگری برای افزودن ندارم.",
+
+  "visaHealthSubsectionInsurance": "اعلامیهٔ مربوط به الزامات بیمه",
+  "visaHealthInsuranceIntro": "این اعلامیه از شما می‌خواهد که با الزام داشتن بیمهٔ قابل قبول به عنوان شرط ویزای دانشجویی خود و پیامدهای نداشتن بیمهٔ قابل قبول موافقت کرده و درک خود را تأیید کنید.",
+  "visaHealthInsuranceP1": "موافقت می‌کنم که از زمان شروع ثبت‌نام تا انقضای ویزای دانشجویی خود — مگر اینکه زودتر از نیوزیلند خارج شوم — بیمه‌ای را که مؤسسهٔ آموزشی من قابل قبول می‌داند تهیه کرده و حفظ کنم.",
+  "visaHealthInsuranceP2": "می‌دانم که داشتن بیمه شرط ویزای من خواهد بود و اگر در مدت ثبت‌نام تا انقضای ویزای خود — مگر اینکه زودتر از نیوزیلند خارج شوم — بیمه نداشته باشم، ممکن است مشمول اخراج (deportation) شوم.",
+  "visaHealthInsuranceP3": "می‌دانم که اگر برای ویزای دیگری درخواست دهم، ممکن است از من خواسته شود مدرکی ارائه کنم که در مدت اقامت در نیوزیلند به عنوان دارندهٔ ویزای دانشجویی بین‌المللی، بیمهٔ قابل قبولی داشته‌ام.",
+  "visaHealthInsuranceAgreeLabel": "با این اعلامیه موافقت می‌کنم.",
+
+  "visaHealthSubsectionPublicHealth": "تأییدیهٔ سلامت عمومی",
+  "visaHealthPublicHealthAckLabel": "می‌دانم که دولت نیوزیلند توصیه کرده است اگر مواد مخدر تزریقی مصرف کرده‌ام یا در فعالیت‌هایی شرکت داشته‌ام که ممکن است مرا در معرض هپاتیت یا HIV قرار داده باشد، پیش از ورود به نیوزیلند برای آزمایش‌های مناسب و شروع درمان به یک متخصص سلامت مراجعه کنم.",
+
+  "visaHealthSaveButton": "ذخیره و ادامه",
+  "visaHealthSaveSuccess": "بخش سلامت ذخیره شد.",
+  "visaHealthSaveError": "ذخیرهٔ بخش سلامت ممکن نشد. لطفاً دوباره تلاش کنید.",
+  "visaHealthValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
+  "visaHealthSavedBanner": "بخش سلامت ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند."
 }
