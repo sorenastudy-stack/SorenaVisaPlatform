@@ -72,14 +72,31 @@ export function Step2AdditionalInfo() {
   } = useAdmission();
 
   const {
+    dateOfBirth, maritalStatus, hasChildren,
     phone, phoneType, countryOfBirth,
     citizenship, ethnicity, passportNumber,
     respondedYesToAdditionalQuestion,
   } = step2Fields;
 
   const handler = useCallback(async (): Promise<boolean> => {
-    if (!phone || !phoneType || !countryOfBirth || !citizenship || !ethnicity || !passportNumber) {
+    if (!dateOfBirth || !maritalStatus || !phone || !phoneType || !countryOfBirth
+        || !citizenship || !ethnicity || !passportNumber) {
       toast.error(t('admissionStep2ValidationFields'));
+      return false;
+    }
+    if (hasChildren === null) {
+      toast.error(t('admissionStep2ValidationFields'));
+      return false;
+    }
+    // DOB sanity: parseable, not in the future, plausible age 10–100.
+    const dob = new Date(dateOfBirth);
+    if (isNaN(dob.getTime()) || dob > new Date()) {
+      toast.error(t('admissionStep2ValidationDobInvalid'));
+      return false;
+    }
+    const ageYears = (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    if (ageYears < 10 || ageYears > 100) {
+      toast.error(t('admissionStep2ValidationDobRange'));
       return false;
     }
     if (!documents.some(d => d.documentType === 'PASSPORT')) {
@@ -96,6 +113,7 @@ export function Step2AdditionalInfo() {
     }
     try {
       await patchApplication({
+        dateOfBirth, maritalStatus, hasChildren,
         phone, phoneType, countryOfBirth, citizenship, ethnicity, passportNumber,
         visaRefused: respondedYesToAdditionalQuestion,
       });
@@ -104,7 +122,8 @@ export function Step2AdditionalInfo() {
       toast.error(t('admissionStep2SaveError'));
       return false;
     }
-  }, [phone, phoneType, countryOfBirth, citizenship, ethnicity, passportNumber,
+  }, [dateOfBirth, maritalStatus, hasChildren,
+      phone, phoneType, countryOfBirth, citizenship, ethnicity, passportNumber,
       respondedYesToAdditionalQuestion, documents, patchApplication, t]);
 
   useEffect(() => {
@@ -120,6 +139,19 @@ export function Step2AdditionalInfo() {
       </div>
 
       <div className="flex flex-col gap-4 rounded-xl border border-sorena-navy/10 bg-white p-4">
+        {/* Date of birth */}
+        <div>
+          <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+            {t('admissionStep2DobLabel')}
+          </label>
+          <input
+            type="date"
+            value={dateOfBirth}
+            onChange={(e) => setStep2Fields({ dateOfBirth: e.target.value })}
+            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy focus:border-sorena-navy/60 focus:outline-none"
+          />
+        </div>
+
         {/* Field A — phone */}
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
@@ -192,6 +224,60 @@ export function Step2AdditionalInfo() {
               <option key={opt} value={opt}>{opt}</option>
             ))}
           </select>
+        </div>
+
+        {/* Marital status */}
+        <div>
+          <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+            {t('admissionStep2MaritalStatusLabel')}
+          </label>
+          <select
+            value={maritalStatus}
+            onChange={(e) => setStep2Fields({ maritalStatus: e.target.value })}
+            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy focus:border-sorena-navy/60 focus:outline-none"
+          >
+            <option value="" disabled>{t('admissionStep2MaritalStatusPlaceholder')}</option>
+            <option value="SINGLE">{t('admissionStep2MaritalOptionSingle')}</option>
+            <option value="MARRIED">{t('admissionStep2MaritalOptionMarried')}</option>
+            <option value="DE_FACTO">{t('admissionStep2MaritalOptionDeFacto')}</option>
+            <option value="WIDOWED">{t('admissionStep2MaritalOptionWidowed')}</option>
+            <option value="DIVORCED">{t('admissionStep2MaritalOptionDivorced')}</option>
+            <option value="SEPARATED">{t('admissionStep2MaritalOptionSeparated')}</option>
+          </select>
+        </div>
+
+        {/* Has children — Y/N pills */}
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
+            {t('admissionStep2HasChildrenLabel')}
+            <span className="ml-0.5 text-red-500">*</span>
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setStep2Fields({ hasChildren: true })}
+              className={[
+                'rounded-lg border px-5 py-2 text-base font-medium transition-colors',
+                hasChildren === true
+                  ? 'border-sorena-navy bg-sorena-navy text-white'
+                  : 'border-sorena-navy/20 text-sorena-navy hover:bg-sorena-navy/5',
+              ].join(' ')}
+            >
+              {t('admissionStep2Question1OptionYes')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep2Fields({ hasChildren: false })}
+              className={[
+                'rounded-lg border px-5 py-2 text-base font-medium transition-colors',
+                hasChildren === false
+                  ? 'border-sorena-navy bg-sorena-navy text-white'
+                  : 'border-sorena-navy/20 text-sorena-navy hover:bg-sorena-navy/5',
+              ].join(' ')}
+            >
+              {t('admissionStep2Question1OptionNo')}
+            </button>
+          </div>
         </div>
 
         {/* Field F — passportNumber */}

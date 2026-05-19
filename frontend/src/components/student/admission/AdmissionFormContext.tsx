@@ -22,6 +22,9 @@ export interface ProgrammeChoice {
 }
 
 export interface Step2Fields {
+  dateOfBirth: string;
+  maritalStatus: string;
+  hasChildren: boolean | null;
   phone: string;
   phoneType: string;
   countryOfBirth: string;
@@ -186,6 +189,10 @@ export function AdmissionProvider({
   const [documents, setDocumentsRaw] = useState<AdmissionDocument[]>(initialDocuments ?? []);
   const [currentStep, setCurrentStep] = useState(initialApplication?.currentStep ?? 1);
   const [step2FieldsRaw, setStep2FieldsRaw] = useState<Step2Fields>({
+    // dateOfBirth from the DB is an ISO timestamp; HTML date inputs need YYYY-MM-DD.
+    dateOfBirth:                        ((initialApplication?.dateOfBirth     as string) ?? '').slice(0, 10),
+    maritalStatus:                      (initialApplication?.maritalStatus    as string)          ?? '',
+    hasChildren:                        (initialApplication?.hasChildren      as boolean | null)  ?? null,
     phone:                              (initialApplication?.phone            as string)          ?? '',
     phoneType:                          (initialApplication?.phoneType        as string)          ?? '',
     countryOfBirth:                     (initialApplication?.countryOfBirth   as string)          ?? '',

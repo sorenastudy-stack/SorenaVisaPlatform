@@ -1081,6 +1081,12 @@ model AdmissionApplication {
   termsAgreedAt DateTime?
 
   // Step 2 — Additional student info
+  // dateOfBirth is plaintext for now; candidate for encryption in a future
+  // SEC PR (same envelope as the PR-SEC3 fields). Marital status and
+  // hasChildren are not PII-sensitive enough to warrant encryption.
+  dateOfBirth                 DateTime?
+  maritalStatus               String?
+  hasChildren                 Boolean?
   phone                       String?
   phoneType                   String?
   countryOfBirth              String?

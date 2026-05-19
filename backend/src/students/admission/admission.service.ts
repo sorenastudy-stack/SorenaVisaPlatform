@@ -35,6 +35,15 @@ const VALID_QUALIFICATION_LEVELS = [
   'OTHER',
 ] as const;
 
+const VALID_MARITAL_STATUSES = [
+  'SINGLE',
+  'MARRIED',
+  'DE_FACTO',
+  'WIDOWED',
+  'DIVORCED',
+  'SEPARATED',
+] as const;
+
 // ── Auto-ticket triggers ──────────────────────────────────────────────────────
 
 const ENGLISH_PRECOURSE_TICKET_SUBJECT = 'English pre-course consultation requested';
@@ -46,6 +55,9 @@ const ENGLISH_PRECOURSE_TICKET_BODY =
 const PATCHABLE_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'datetime'> = {
   currentStep:            'int',
   // Step 2
+  dateOfBirth:            'datetime',
+  maritalStatus:          'text',
+  hasChildren:            'boolean',
   phone:                  'text',
   phoneType:              'text',
   countryOfBirth:         'text',
@@ -144,6 +156,7 @@ function validateRequiredFields(application: any, role: string): string[] {
   const missing: string[] = [];
 
   const textChecks: Array<{ field: string; label: string; condition?: boolean }> = [
+    { field: 'maritalStatus',        label: 'maritalStatus' },
     { field: 'phone',                label: 'phone' },
     { field: 'phoneType',            label: 'phoneType' },
     { field: 'countryOfBirth',       label: 'countryOfBirth' },
@@ -179,10 +192,11 @@ function validateRequiredFields(application: any, role: string): string[] {
   }
 
   // Boolean fields: false IS a valid answer — only null/undefined means unanswered
-  for (const field of ['englishTestSat', 'hasDisability', 'needsEvacAssistance'] as const) {
+  for (const field of ['hasChildren', 'englishTestSat', 'hasDisability', 'needsEvacAssistance'] as const) {
     if (application[field] === null || application[field] === undefined) missing.push(field);
   }
 
+  if (!application.dateOfBirth) missing.push('dateOfBirth');
   if (!application.termsAgreedAt) missing.push('termsAgreedAt');
 
   if (role === 'AGENT' && !application.agentDeclarationAgreed) {
@@ -469,6 +483,17 @@ export class AdmissionService {
     }
 
     const data = stripAndCoerce(body);
+
+    // Allow-list validation for fields that have a fixed value set on the
+    // frontend (server is the final authority).
+    if (data.maritalStatus !== undefined && data.maritalStatus !== null) {
+      if (!VALID_MARITAL_STATUSES.includes(data.maritalStatus as any)) {
+        throw new BadRequestException(
+          `Invalid maritalStatus. Valid values: ${VALID_MARITAL_STATUSES.join(', ')}`,
+        );
+      }
+    }
+
     const changedKeys = Object.keys(data);
     // PII fields in `data` are still plaintext; encryptPiiFields renames each
     // accepted PII key to `<name>Encrypted` with an AES-256-GCM Buffer value
