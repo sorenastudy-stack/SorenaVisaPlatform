@@ -1172,10 +1172,15 @@ model AdmissionEducationEntry {
   qualificationLevel     String
   institutionName        String
   country                String
+  // fieldOfStudy is required at the application layer (PR-C1) but stays
+  // nullable in the DB to accept legacy rows that pre-date the requirement.
   fieldOfStudy           String?
   startYear              Int?
   endYear                Int?
   completed              Boolean  @default(false)
+  // PR-C1: student indicates "I have not received the certificate yet".
+  // Informational for now; the submit-gate that uses it ships in PR-C2.
+  certificateNotReceived Boolean  @default(false)
   sortOrder              Int      @default(0)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt

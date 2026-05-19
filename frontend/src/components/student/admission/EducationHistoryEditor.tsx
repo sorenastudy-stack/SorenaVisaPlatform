@@ -6,15 +6,78 @@ import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { useAdmission, type EducationEntry, type EducationEntryInput } from './AdmissionFormContext';
 import { DocumentUploader } from './DocumentUploader';
+import { COUNTRIES } from '@/lib/data/countries';
 
+// PR-C1: added INTERMEDIATE (lowest rung). Order is lowest → highest, with
+// OTHER as a fallback at the end.
 const QUALIFICATION_LEVELS = [
-  { value: 'HIGH_SCHOOL', key: 'admissionEducationHistoryLevelHighSchool' },
-  { value: 'DIPLOMA',     key: 'admissionEducationHistoryLevelDiploma'    },
-  { value: 'BACHELORS',   key: 'admissionEducationHistoryLevelBachelors'  },
-  { value: 'MASTERS',     key: 'admissionEducationHistoryLevelMasters'    },
-  { value: 'DOCTORATE',   key: 'admissionEducationHistoryLevelDoctorate'  },
-  { value: 'OTHER',       key: 'admissionEducationHistoryLevelOther'      },
+  { value: 'INTERMEDIATE',     key: 'admissionEducationHistoryLevelIntermediate'     },
+  { value: 'HIGH_SCHOOL',      key: 'admissionEducationHistoryLevelHighSchool'       },
+  { value: 'CERTIFICATE',      key: 'admissionEducationHistoryLevelCertificate'      },
+  { value: 'DIPLOMA',          key: 'admissionEducationHistoryLevelDiploma'          },
+  { value: 'ASSOCIATE_DEGREE', key: 'admissionEducationHistoryLevelAssociateDegree'  },
+  { value: 'BACHELORS',        key: 'admissionEducationHistoryLevelBachelors'        },
+  { value: 'MASTERS',          key: 'admissionEducationHistoryLevelMasters'          },
+  { value: 'DOCTORATE',        key: 'admissionEducationHistoryLevelDoctorate'        },
+  { value: 'OTHER',            key: 'admissionEducationHistoryLevelOther'            },
 ] as const;
+
+// Searchable country select — inlined here to match the existing
+// Step2/Step5 pattern (no shared component yet). Mirrors that signature
+// so swapping later is mechanical.
+function SearchableSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen]   = useState(false);
+  const inputValue        = open ? query : value;
+  const filtered          = query
+    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={inputValue}
+        onChange={(e) => { setQuery(e.target.value); onChange(''); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-sorena-navy/20 bg-white shadow-lg">
+          {filtered.map(opt => (
+            <li
+              key={opt}
+              onMouseDown={() => { onChange(opt); setQuery(''); setOpen(false); }}
+              className={[
+                'cursor-pointer px-3 py-2 text-sm text-sorena-navy hover:bg-sorena-navy/5',
+                opt === value ? 'bg-sorena-navy/5 font-medium' : '',
+              ].join(' ')}
+            >
+              {opt}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && filtered.length === 0 && query && (
+        <div className="absolute z-20 mt-1 w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2 text-sm text-sorena-navy/50 shadow-lg">
+          No results
+        </div>
+      )}
+    </div>
+  );
+}
 
 // In-memory shape of a card that hasn't been POSTed yet. Drafts have a
 // locally-generated id (prefixed `draft-`) which never reaches the server;
@@ -28,6 +91,7 @@ interface DraftEntry {
   startYear: string; // raw input value, parsed to int on save
   endYear: string;
   completed: boolean;
+  certificateNotReceived: boolean;
 }
 
 function emptyDraft(): DraftEntry {
@@ -40,6 +104,7 @@ function emptyDraft(): DraftEntry {
     startYear: '',
     endYear: '',
     completed: false,
+    certificateNotReceived: false,
   };
 }
 
@@ -82,14 +147,19 @@ export function EducationHistoryEditor() {
       toast.error(t('admissionEducationHistoryValidationCountry'));
       return;
     }
+    if (!draft.fieldOfStudy.trim()) {
+      toast.error(t('admissionEducationHistoryValidationFieldOfStudy'));
+      return;
+    }
     const payload: EducationEntryInput = {
       qualificationLevel: draft.qualificationLevel,
       institutionName: draft.institutionName.trim(),
       country: draft.country.trim(),
-      fieldOfStudy: draft.fieldOfStudy.trim() || null,
+      fieldOfStudy: draft.fieldOfStudy.trim(),
       startYear: parseYearOrNull(draft.startYear),
       endYear: parseYearOrNull(draft.endYear),
       completed: draft.completed,
+      certificateNotReceived: draft.certificateNotReceived,
     };
     setSavingDraftId(draft.draftId);
     try {
@@ -260,25 +330,30 @@ function SavedEntryCard({
           />
         </div>
 
-        {/* country */}
+        {/* country — PR-C1: now a SearchableSelect over ISO country names */}
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryCountryLabel')}
+            <span className="ml-0.5 text-red-500">*</span>
           </label>
-          <input
-            type="text"
+          <SearchableSelect
+            options={COUNTRIES}
             value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            onBlur={() => blurIfChanged('country', country, entry.country)}
+            onChange={(v) => {
+              setCountry(v);
+              if (v && v !== entry.country) {
+                onFieldChange(entry.id, { country: v });
+              }
+            }}
             placeholder={t('admissionEducationHistoryCountryPlaceholder')}
-            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
           />
         </div>
 
-        {/* fieldOfStudy */}
+        {/* fieldOfStudy — PR-C1: now required */}
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryFieldOfStudyLabel')}
+            <span className="ml-0.5 text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -321,38 +396,61 @@ function SavedEntryCard({
         </div>
       </div>
 
-      {/* completed checkbox */}
-      <label className="flex cursor-pointer items-center gap-3">
-        <input
-          type="checkbox"
-          checked={entry.completed}
-          onChange={(e) => onFieldChange(entry.id, { completed: e.target.checked })}
-          className="h-4 w-4 cursor-pointer rounded border-sorena-navy/20 accent-sorena-navy"
-        />
-        <span className="text-sm text-sorena-navy/80">
-          {t('admissionEducationHistoryCompletedLabel')}
-        </span>
-      </label>
+      {/* PR-C1: "Qualification completed" + (conditional) "I have not received
+          the certificate yet" — side by side on the same row. The second
+          checkbox is informational for now; the submit-gate that uses it
+          ships in PR-C2. */}
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={entry.completed}
+            onChange={(e) => onFieldChange(entry.id, { completed: e.target.checked })}
+            className="h-4 w-4 cursor-pointer rounded border-sorena-navy/20 accent-sorena-navy"
+          />
+          <span className="text-sm text-sorena-navy/80">
+            {t('admissionEducationHistoryCompletedLabel')}
+          </span>
+        </label>
 
-      {/* Per-entry document uploaders */}
-      <div className="flex flex-col gap-4 border-t border-sorena-navy/10 pt-4">
-        <DocumentUploader
-          documentType="NOTARIZED_CERTIFICATE"
-          educationEntryId={entry.id}
-          label={t('admissionEducationHistoryCertificateLabel')}
-          helperText={t('admissionEducationHistoryCertificateHelper')}
-          single={true}
-          required={false}
-        />
-        <DocumentUploader
-          documentType="NOTARIZED_TRANSCRIPT"
-          educationEntryId={entry.id}
-          label={t('admissionEducationHistoryTranscriptLabel')}
-          helperText={t('admissionEducationHistoryTranscriptHelper')}
-          single={true}
-          required={false}
-        />
+        {entry.completed && (
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={entry.certificateNotReceived}
+              onChange={(e) => onFieldChange(entry.id, { certificateNotReceived: e.target.checked })}
+              className="h-4 w-4 cursor-pointer rounded border-sorena-navy/20 accent-sorena-navy"
+            />
+            <span className="text-sm text-sorena-navy/80">
+              {t('admissionEducationHistoryCertNotReceivedLabel')}
+            </span>
+          </label>
+        )}
       </div>
+
+      {/* Per-entry document uploaders — only visible once the qualification
+          is marked completed. (Transcript uploader stays visible even when
+          "certificate not received" is ticked; submit-gate handling is in PR-C2.) */}
+      {entry.completed && (
+        <div className="flex flex-col gap-4 border-t border-sorena-navy/10 pt-4">
+          <DocumentUploader
+            documentType="NOTARIZED_CERTIFICATE"
+            educationEntryId={entry.id}
+            label={t('admissionEducationHistoryCertificateLabel')}
+            helperText={t('admissionEducationHistoryCertificateHelper')}
+            single={true}
+            required={false}
+          />
+          <DocumentUploader
+            documentType="NOTARIZED_TRANSCRIPT"
+            educationEntryId={entry.id}
+            label={t('admissionEducationHistoryTranscriptLabel')}
+            helperText={t('admissionEducationHistoryTranscriptHelper')}
+            single={true}
+            required={false}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -426,18 +524,18 @@ function DraftEntryCard({
             {t('admissionEducationHistoryCountryLabel')}
             <span className="ml-0.5 text-red-500">*</span>
           </label>
-          <input
-            type="text"
+          <SearchableSelect
+            options={COUNTRIES}
             value={draft.country}
-            onChange={(e) => onChange({ country: e.target.value })}
+            onChange={(v) => onChange({ country: v })}
             placeholder={t('admissionEducationHistoryCountryPlaceholder')}
-            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
           />
         </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryFieldOfStudyLabel')}
+            <span className="ml-0.5 text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -475,17 +573,34 @@ function DraftEntryCard({
         </div>
       </div>
 
-      <label className="flex cursor-pointer items-center gap-3">
-        <input
-          type="checkbox"
-          checked={draft.completed}
-          onChange={(e) => onChange({ completed: e.target.checked })}
-          className="h-4 w-4 cursor-pointer rounded border-sorena-navy/20 accent-sorena-navy"
-        />
-        <span className="text-sm text-sorena-navy/80">
-          {t('admissionEducationHistoryCompletedLabel')}
-        </span>
-      </label>
+      {/* PR-C1: same side-by-side layout as SavedEntryCard. */}
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={draft.completed}
+            onChange={(e) => onChange({ completed: e.target.checked })}
+            className="h-4 w-4 cursor-pointer rounded border-sorena-navy/20 accent-sorena-navy"
+          />
+          <span className="text-sm text-sorena-navy/80">
+            {t('admissionEducationHistoryCompletedLabel')}
+          </span>
+        </label>
+
+        {draft.completed && (
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={draft.certificateNotReceived}
+              onChange={(e) => onChange({ certificateNotReceived: e.target.checked })}
+              className="h-4 w-4 cursor-pointer rounded border-sorena-navy/20 accent-sorena-navy"
+            />
+            <span className="text-sm text-sorena-navy/80">
+              {t('admissionEducationHistoryCertNotReceivedLabel')}
+            </span>
+          </label>
+        )}
+      </div>
 
       {/* Save-first message replacing the uploaders for drafts */}
       <p className="rounded-lg border border-dashed border-sorena-navy/20 bg-sorena-navy/[0.02] p-3 text-sm text-sorena-navy/60">

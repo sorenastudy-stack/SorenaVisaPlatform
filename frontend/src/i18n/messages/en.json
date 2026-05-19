@@ -300,8 +300,11 @@
   "admissionEducationHistoryNewEntryHeading": "New education entry",
   "admissionEducationHistoryLevelLabel": "Qualification level",
   "admissionEducationHistoryLevelPlaceholder": "Select qualification level",
+  "admissionEducationHistoryLevelIntermediate": "Intermediate",
   "admissionEducationHistoryLevelHighSchool": "High School",
+  "admissionEducationHistoryLevelCertificate": "Certificate",
   "admissionEducationHistoryLevelDiploma": "Diploma",
+  "admissionEducationHistoryLevelAssociateDegree": "Associate degree",
   "admissionEducationHistoryLevelBachelors": "Bachelor's Degree",
   "admissionEducationHistoryLevelMasters": "Master's Degree",
   "admissionEducationHistoryLevelDoctorate": "Doctorate",
@@ -310,7 +313,7 @@
   "admissionEducationHistoryInstitutionPlaceholder": "e.g. University of Auckland",
   "admissionEducationHistoryCountryLabel": "Country",
   "admissionEducationHistoryCountryPlaceholder": "e.g. New Zealand",
-  "admissionEducationHistoryFieldOfStudyLabel": "Field of study (optional)",
+  "admissionEducationHistoryFieldOfStudyLabel": "Field of study",
   "admissionEducationHistoryFieldOfStudyPlaceholder": "e.g. Computer Science",
   "admissionEducationHistoryStartYearLabel": "Start year",
   "admissionEducationHistoryStartYearPlaceholder": "e.g. 2018",
@@ -331,5 +334,7 @@
   "admissionEducationHistorySaveError": "Could not save this entry. Please try again.",
   "admissionEducationHistoryValidationLevel": "Please select a qualification level.",
   "admissionEducationHistoryValidationInstitution": "Please enter the institution name.",
-  "admissionEducationHistoryValidationCountry": "Please enter the country."
+  "admissionEducationHistoryValidationCountry": "Please enter the country.",
+  "admissionEducationHistoryValidationFieldOfStudy": "Please enter the field of study.",
+  "admissionEducationHistoryCertNotReceivedLabel": "I have not received the certificate yet."
 }

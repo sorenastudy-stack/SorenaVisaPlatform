@@ -109,6 +109,7 @@ export interface EducationEntry {
   startYear: number | null;
   endYear: number | null;
   completed: boolean;
+  certificateNotReceived: boolean;
   sortOrder: number;
 }
 
@@ -120,6 +121,7 @@ export interface EducationEntryInput {
   startYear?: number | null;
   endYear?: number | null;
   completed?: boolean;
+  certificateNotReceived?: boolean;
 }
 
 interface ApplicationResponse {

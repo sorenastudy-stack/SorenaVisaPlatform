@@ -27,8 +27,11 @@ const VALID_DOCUMENT_TYPES = [
 ] as const;
 
 const VALID_QUALIFICATION_LEVELS = [
+  'INTERMEDIATE',
   'HIGH_SCHOOL',
+  'CERTIFICATE',
   'DIPLOMA',
+  'ASSOCIATE_DEGREE',
   'BACHELORS',
   'MASTERS',
   'DOCTORATE',
@@ -335,6 +338,7 @@ export class AdmissionService {
         startYear: e.startYear,
         endYear: e.endYear,
         completed: e.completed,
+        certificateNotReceived: e.certificateNotReceived,
         sortOrder: e.sortOrder,
       })),
       documents: documents.map((doc) => ({
@@ -749,6 +753,7 @@ export class AdmissionService {
       startYear?: number | null;
       endYear?: number | null;
       completed?: boolean;
+      certificateNotReceived?: boolean;
     },
   ) {
     const { contact, caseRecord } = await this.resolveContactAndCase(userId);
@@ -763,6 +768,11 @@ export class AdmissionService {
     }
     if (!body.country?.trim()) {
       throw new BadRequestException('country is required');
+    }
+    // PR-C1: fieldOfStudy is now app-required (column stays nullable for
+    // backward compat with rows created before the rule).
+    if (!body.fieldOfStudy?.trim()) {
+      throw new BadRequestException('fieldOfStudy is required');
     }
 
     const application = await this.findOrCreateApplication(caseRecord.id, contact.id);
@@ -780,10 +790,11 @@ export class AdmissionService {
         qualificationLevel: body.qualificationLevel,
         institutionName: body.institutionName.trim(),
         country: body.country.trim(),
-        fieldOfStudy: body.fieldOfStudy?.trim() || null,
+        fieldOfStudy: body.fieldOfStudy.trim(),
         startYear: body.startYear ?? null,
         endYear: body.endYear ?? null,
         completed: body.completed ?? false,
+        certificateNotReceived: body.certificateNotReceived ?? false,
         sortOrder,
       },
     });
@@ -797,6 +808,7 @@ export class AdmissionService {
       startYear: entry.startYear,
       endYear: entry.endYear,
       completed: entry.completed,
+      certificateNotReceived: entry.certificateNotReceived,
       sortOrder: entry.sortOrder,
     };
   }
@@ -834,7 +846,10 @@ export class AdmissionService {
       data.country = v;
     }
     if (body.fieldOfStudy !== undefined) {
-      const v = body.fieldOfStudy === null ? null : String(body.fieldOfStudy).trim() || null;
+      // PR-C1: fieldOfStudy is now app-required. If a client tries to clear
+      // it (passes null or empty), reject — they can never PATCH it to empty.
+      const v = body.fieldOfStudy === null ? '' : String(body.fieldOfStudy).trim();
+      if (!v) throw new BadRequestException('fieldOfStudy cannot be empty');
       data.fieldOfStudy = v;
     }
     if (body.startYear !== undefined) {
@@ -845,6 +860,9 @@ export class AdmissionService {
     }
     if (body.completed !== undefined) {
       data.completed = Boolean(body.completed);
+    }
+    if (body.certificateNotReceived !== undefined) {
+      data.certificateNotReceived = Boolean(body.certificateNotReceived);
     }
 
     const entry = await this.prisma.admissionEducationEntry.update({
@@ -861,6 +879,7 @@ export class AdmissionService {
       startYear: entry.startYear,
       endYear: entry.endYear,
       completed: entry.completed,
+      certificateNotReceived: entry.certificateNotReceived,
       sortOrder: entry.sortOrder,
     };
   }

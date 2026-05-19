@@ -300,8 +300,11 @@
   "admissionEducationHistoryNewEntryHeading": "سابقه تحصیلی جدید",
   "admissionEducationHistoryLevelLabel": "سطح مدرک",
   "admissionEducationHistoryLevelPlaceholder": "سطح مدرک را انتخاب کنید",
+  "admissionEducationHistoryLevelIntermediate": "متوسطه (راهنمایی)",
   "admissionEducationHistoryLevelHighSchool": "دبیرستان",
+  "admissionEducationHistoryLevelCertificate": "گواهی‌نامه",
   "admissionEducationHistoryLevelDiploma": "دیپلم",
+  "admissionEducationHistoryLevelAssociateDegree": "کاردانی",
   "admissionEducationHistoryLevelBachelors": "کارشناسی",
   "admissionEducationHistoryLevelMasters": "کارشناسی ارشد",
   "admissionEducationHistoryLevelDoctorate": "دکتری",
@@ -310,7 +313,7 @@
   "admissionEducationHistoryInstitutionPlaceholder": "مانند دانشگاه تهران",
   "admissionEducationHistoryCountryLabel": "کشور",
   "admissionEducationHistoryCountryPlaceholder": "مانند ایران",
-  "admissionEducationHistoryFieldOfStudyLabel": "رشته تحصیلی (اختیاری)",
+  "admissionEducationHistoryFieldOfStudyLabel": "رشته تحصیلی",
   "admissionEducationHistoryFieldOfStudyPlaceholder": "مانند مهندسی کامپیوتر",
   "admissionEducationHistoryStartYearLabel": "سال شروع",
   "admissionEducationHistoryStartYearPlaceholder": "مانند ۲۰۱۸",
@@ -331,5 +334,7 @@
   "admissionEducationHistorySaveError": "ذخیره این سابقه با خطا مواجه شد. لطفاً دوباره تلاش کنید.",
   "admissionEducationHistoryValidationLevel": "لطفاً سطح مدرک را انتخاب کنید.",
   "admissionEducationHistoryValidationInstitution": "لطفاً نام مؤسسه را وارد کنید.",
-  "admissionEducationHistoryValidationCountry": "لطفاً کشور را وارد کنید."
+  "admissionEducationHistoryValidationCountry": "لطفاً کشور را وارد کنید.",
+  "admissionEducationHistoryValidationFieldOfStudy": "لطفاً رشته تحصیلی را وارد کنید.",
+  "admissionEducationHistoryCertNotReceivedLabel": "هنوز گواهی این مدرک را دریافت نکرده‌ام."
 }
