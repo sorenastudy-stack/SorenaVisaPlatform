@@ -1292,6 +1292,48 @@ model VisaApplication {
   alternativeContactCountryCode  String?
   alternativeContactNumber       String?
 
+  // Section 3 — Eligibility (PR-VISA3)
+  // Study history
+  holdsNzStudentVisa             Boolean?
+  // Offer of Place assistance
+  usedEducationAgent             Boolean?
+  agentOrganisationName          String?
+  agentCountry                   String?
+  agentGivenName                 String?
+  agentSurname                   String?
+  agentEmail                     String?
+  // Study details
+  studyingSchoolLevel            Boolean?
+  studyingMastersOrPhd           String?
+  educationProviderName          String?
+  studyLocation                  String?
+  courseRequiresOtherLocation    Boolean?
+  courseProgrammeName            String?
+  courseStartDate                DateTime?
+  courseEndDate                  DateTime?
+  intendedArrivalDate            DateTime?
+  // PhD details — only relevant when studyingMastersOrPhd = "PHD"
+  phdDiscipline                  String?
+  phdSubject                     String?
+  phdSupervisorTitle             String?
+  phdSupervisorGivenName         String?
+  phdSupervisorSurname           String?
+  phdSupervisorOrganisation      String?
+  phdPublishedPapers             Boolean?
+  phdSupervisorOutsideNz         Boolean?
+  // Student identification number
+  providerIssuedStudentId        Boolean?
+  studentIdNumber                String?
+  // Your situation and plans — six free-text fields are PII (AES-256-GCM)
+  homeCommitmentsEncrypted       Bytes?
+  studyRelatesToPrevious         Boolean?
+  studyRelatesDetailsEncrypted   Bytes?
+  whyStudyNzEncrypted            Bytes?
+  whyThisProviderEncrypted       Bytes?
+  howCourseBenefitsEncrypted     Bytes?
+  plansAfterStudyEncrypted       Bytes?
+  studyingMultiYear              Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

@@ -12,6 +12,7 @@ import {
 import { VisaStepper } from './VisaStepper';
 import { Step1IdentityDetails } from './steps/Step1IdentityDetails';
 import { Step2AddressContact } from './steps/Step2AddressContact';
+import { Step3Eligibility } from './steps/Step3Eligibility';
 
 interface InitialData {
   visaApplication: VisaApplication;
@@ -73,6 +74,7 @@ export function VisaFormShell({ initialData }: Props) {
 // the new step with values pre-filled from visa.* (the server-of-record).
 function ActiveStep() {
   const { activeStep } = useVisa();
+  if (activeStep === 3) return <Step3Eligibility />;
   if (activeStep === 2) return <Step2AddressContact />;
   return <Step1IdentityDetails />;
 }

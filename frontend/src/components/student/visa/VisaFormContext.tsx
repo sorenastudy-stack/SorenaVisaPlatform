@@ -50,6 +50,42 @@ export interface VisaApplication {
   alternativeContactCountryCode: string | null;
   alternativeContactNumber: string | null;
 
+  // Section 3 — Eligibility (PR-VISA3)
+  holdsNzStudentVisa: boolean | null;
+  usedEducationAgent: boolean | null;
+  agentOrganisationName: string | null;
+  agentCountry: string | null;
+  agentGivenName: string | null;
+  agentSurname: string | null;
+  agentEmail: string | null;
+  studyingSchoolLevel: boolean | null;
+  studyingMastersOrPhd: string | null;
+  educationProviderName: string | null;
+  studyLocation: string | null;
+  courseRequiresOtherLocation: boolean | null;
+  courseProgrammeName: string | null;
+  courseStartDate: string | null;
+  courseEndDate: string | null;
+  intendedArrivalDate: string | null;
+  phdDiscipline: string | null;
+  phdSubject: string | null;
+  phdSupervisorTitle: string | null;
+  phdSupervisorGivenName: string | null;
+  phdSupervisorSurname: string | null;
+  phdSupervisorOrganisation: string | null;
+  phdPublishedPapers: boolean | null;
+  phdSupervisorOutsideNz: boolean | null;
+  providerIssuedStudentId: boolean | null;
+  studentIdNumber: string | null;
+  homeCommitments: string | null;
+  studyRelatesToPrevious: boolean | null;
+  studyRelatesDetails: string | null;
+  whyStudyNz: string | null;
+  whyThisProvider: string | null;
+  howCourseBenefits: string | null;
+  plansAfterStudy: string | null;
+  studyingMultiYear: boolean | null;
+
   currentStep: number;
   createdAt: string;
   updatedAt: string;
@@ -66,6 +102,11 @@ export interface VisaReadonly {
   citizenship: string | null;
   dateOfBirth: string | null;
   countryOfBirth: string | null;
+  // PR-VISA3: from admission's first-priority programme choice. Used to
+  // pre-fill Step 3's "education provider" + "course or programme name" as
+  // read-only so the student doesn't enter the same data twice.
+  programmeName: string | null;
+  providerName: string | null;
 }
 
 interface ContextValue {
@@ -82,8 +123,8 @@ interface ContextValue {
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA2 brings this to 2).
-export const VISA_TOTAL_STEPS = 2;
+// each later INZ section is built (PR-VISA3 brings this to 3).
+export const VISA_TOTAL_STEPS = 3;
 
 const VisaContext = createContext<ContextValue | null>(null);
 

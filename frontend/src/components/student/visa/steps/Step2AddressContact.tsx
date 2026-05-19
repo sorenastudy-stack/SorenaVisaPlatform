@@ -136,6 +136,8 @@ export function Step2AddressContact() {
       await patchVisa(payload);
       setSavedAt(new Date().toISOString());
       toast.success(t('visaAddressSaveSuccess'));
+      // PR-VISA3: advance the stepper now that Section 3 exists.
+      setActiveStep(3);
     } catch {
       toast.error(t('visaAddressSaveError'));
     } finally {

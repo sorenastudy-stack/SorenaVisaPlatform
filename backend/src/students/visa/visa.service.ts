@@ -12,11 +12,19 @@ import { decryptPiiFields } from '../admission/admission-encryption.util';
 // BYTEA column via the standard AES-256-GCM envelope.
 //   - otherNames, nationalId            (PR-VISA1)
 //   - physicalStreet, postalStreet      (PR-VISA2 — street addresses)
+//   - homeCommitments, studyRelatesDetails, whyStudyNz, whyThisProvider,
+//     howCourseBenefits, plansAfterStudy  (PR-VISA3 — Section 3 free-text)
 const VISA_ENCRYPTED_FIELDS = new Set([
   'otherNames',
   'nationalId',
   'physicalStreet',
   'postalStreet',
+  'homeCommitments',
+  'studyRelatesDetails',
+  'whyStudyNz',
+  'whyThisProvider',
+  'howCourseBenefits',
+  'plansAfterStudy',
 ]);
 
 // PATCH allow-list. Fields are stored as-is on the row except the PII fields
@@ -63,10 +71,47 @@ const PATCHABLE_VISA_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'dateti
   alternativeContactCountryCode:  'text',
   alternativeContactNumber:       'text',
 
+  // Section 3 — Eligibility (PR-VISA3)
+  holdsNzStudentVisa:           'boolean',
+  usedEducationAgent:           'boolean',
+  agentOrganisationName:        'text',
+  agentCountry:                 'text',
+  agentGivenName:               'text',
+  agentSurname:                 'text',
+  agentEmail:                   'text',
+  studyingSchoolLevel:          'boolean',
+  studyingMastersOrPhd:         'text',
+  educationProviderName:        'text',
+  studyLocation:                'text',
+  courseRequiresOtherLocation:  'boolean',
+  courseProgrammeName:          'text',
+  courseStartDate:              'datetime',
+  courseEndDate:                'datetime',
+  intendedArrivalDate:          'datetime',
+  phdDiscipline:                'text',
+  phdSubject:                   'text',
+  phdSupervisorTitle:           'text',
+  phdSupervisorGivenName:       'text',
+  phdSupervisorSurname:         'text',
+  phdSupervisorOrganisation:    'text',
+  phdPublishedPapers:           'boolean',
+  phdSupervisorOutsideNz:       'boolean',
+  providerIssuedStudentId:      'boolean',
+  studentIdNumber:              'text',
+  homeCommitments:              'text',
+  studyRelatesToPrevious:       'boolean',
+  studyRelatesDetails:          'text',
+  whyStudyNz:                   'text',
+  whyThisProvider:              'text',
+  howCourseBenefits:            'text',
+  plansAfterStudy:              'text',
+  studyingMultiYear:            'boolean',
+
   currentStep:            'int',
 };
 
 const VALID_GENDERS = new Set(['MALE', 'FEMALE', 'GENDER_DIVERSE']);
+const VALID_MASTERS_OR_PHD = new Set(['MASTERS', 'PHD', 'NEITHER']);
 const MIDDLE_NAMES_MAX = 30;
 const CONTACT_NUMBER_MAX = 16;
 
@@ -134,16 +179,28 @@ export class VisaService {
       );
     }
 
-    return { contact, admission };
+    // First-priority programme choice — used by PR-VISA3 to pre-fill the
+    // education provider + course/programme names read-only.
+    const topChoice = await this.prisma.admissionProgrammeChoice.findFirst({
+      where:   { admissionApplicationId: admission.id },
+      orderBy: { priority: 'asc' },
+      include: { programme: { include: { provider: true } } },
+    });
+
+    return { contact, admission, topChoice };
   }
 
   // Pull the values that the Visa Section displays read-only — these are
   // collected during admission/intake and must not be re-asked here (per
   // docs/VISA_FIELD_INVENTORY.md). passportNumber comes back decrypted.
   // PR-VISA2: email + countryOfResidence are also exposed for Section 2.
+  // PR-VISA3: programmeName + providerName are derived from the student's
+  // first-priority admission programme choice (lowest priority number) so
+  // Step 3 doesn't have to re-ask the same provider/course question.
   private buildReadonlySnapshot(
     contact: { fullName: string; email: string | null; countryOfResidence: string | null },
     admission: Record<string, unknown>,
+    topChoice: { programme: { name: string; provider: { name: string } } } | null,
   ) {
     const decryptedAdmission = decryptPiiFields(
       this.crypto,
@@ -157,6 +214,8 @@ export class VisaService {
       citizenship:        (admission.citizenship as string | null) ?? null,
       dateOfBirth:        (admission.dateOfBirth as Date | null) ?? null,
       countryOfBirth:     (admission.countryOfBirth as string | null) ?? null,
+      programmeName:      topChoice?.programme.name          ?? null,
+      providerName:       topChoice?.programme.provider.name ?? null,
     };
   }
 
@@ -182,12 +241,12 @@ export class VisaService {
   // GET — returns { exists, visaApplication?, readonly }. Does not auto-create
   // the row; the client POSTs explicitly. This mirrors the admission pattern.
   async getApplication(userId: string) {
-    const { contact, admission } = await this.resolveAdmissionApplication(userId);
+    const { contact, admission, topChoice } = await this.resolveAdmissionApplication(userId);
     const visa = await this.prisma.visaApplication.findUnique({
       where: { applicationId: admission.id },
     });
 
-    const readonly = this.buildReadonlySnapshot(contact, admission as Record<string, unknown>);
+    const readonly = this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice);
 
     if (!visa) {
       return { exists: false as const, readonly };
@@ -201,7 +260,7 @@ export class VisaService {
 
   // POST — idempotent get-or-create. Returns the row plus the readonly snapshot.
   async getOrCreateApplication(userId: string) {
-    const { contact, admission } = await this.resolveAdmissionApplication(userId);
+    const { contact, admission, topChoice } = await this.resolveAdmissionApplication(userId);
     let visa = await this.prisma.visaApplication.findUnique({
       where: { applicationId: admission.id },
     });
@@ -212,7 +271,7 @@ export class VisaService {
     }
     return {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
-      readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>),
+      readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice),
     };
   }
 
@@ -220,7 +279,7 @@ export class VisaService {
   // encryption. Plaintext PII keys (`otherNames`, `nationalId`) are encrypted
   // and written to their `<field>Encrypted` BYTEA column.
   async updateApplication(userId: string, body: Record<string, unknown>) {
-    const { contact, admission } = await this.resolveAdmissionApplication(userId);
+    const { contact, admission, topChoice } = await this.resolveAdmissionApplication(userId);
 
     // Coerce + allow-list filter
     const sanitized: Record<string, unknown> = {};
@@ -261,6 +320,15 @@ export class VisaService {
         );
       }
     }
+    if (
+      sanitized.studyingMastersOrPhd !== null &&
+      sanitized.studyingMastersOrPhd !== undefined &&
+      !VALID_MASTERS_OR_PHD.has(sanitized.studyingMastersOrPhd as string)
+    ) {
+      throw new BadRequestException(
+        'studyingMastersOrPhd must be one of MASTERS, PHD, NEITHER',
+      );
+    }
 
     // PII encryption — move plaintext keys to `<field>Encrypted: Buffer | null`
     const data: Record<string, unknown> = {};
@@ -287,7 +355,7 @@ export class VisaService {
 
     return {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
-      readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>),
+      readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice),
     };
   }
 }
