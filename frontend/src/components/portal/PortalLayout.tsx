@@ -56,7 +56,7 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
   student: [
     { label: 'Dashboard', href: '/student',            icon: <LayoutDashboard size={18} /> },
     { label: 'My Case',   href: '/student/case',       icon: <Briefcase size={18} /> },
-    { label: 'Documents', href: '/student/documents',  icon: <FileText size={18} /> },
+    { label: 'Visa Section', href: '/student/documents',  icon: <FileText size={18} /> },
     { label: 'Messages',  href: '/student/messages',   icon: <MessageSquare size={18} /> },
     { label: 'Payments',  href: '/student/payments',   icon: <CreditCard size={18} /> },
     { label: 'Apply',     href: '/student/admission',  icon: <ClipboardList size={18} />, requiresCase: true },

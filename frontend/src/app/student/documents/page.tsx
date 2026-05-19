@@ -1,38 +1,38 @@
-import { Card, CardContent } from '@/components/ui/Card';
-import { FileText } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { getSession } from '@/lib/auth';
 import { apiServer } from '@/lib/apiServer';
-import { StudentHeader } from '@/components/student/StudentHeader';
+import { VisaFormShell } from '@/components/student/visa/VisaFormShell';
+import type {
+  VisaApplication,
+  VisaReadonly,
+} from '@/components/student/visa/VisaFormContext';
 
-interface MeResponse {
-  fullName: string;
-  photoUrl: string | null;
+interface InitialResponse {
+  exists: boolean;
+  visaApplication?: VisaApplication;
+  readonly: VisaReadonly;
 }
 
-export default async function StudentDocumentsPage() {
-  let me: MeResponse = { fullName: 'Your Account', photoUrl: null };
+// The Visa Section lives at /student/documents (the route is unchanged from
+// the old "Documents" stub — see docs/VISA_FIELD_INVENTORY.md and the
+// PR that renamed the user-facing label). Server-side fetches the existing
+// visa row (or returns "exists: false" with a readonly snapshot). When the
+// row doesn't exist yet the client shell POSTs to create it on mount.
+export default async function StudentVisaSectionPage() {
+  const session = await getSession();
+  if (!session) redirect('/login?next=/student/documents');
+
+  let initialData: { visaApplication: VisaApplication; readonly: VisaReadonly } | null = null;
+
   try {
-    me = await apiServer.get<MeResponse>('/students/me');
+    const res = await apiServer.get<InitialResponse>('/students/me/visa/application');
+    if (res.exists && res.visaApplication) {
+      initialData = { visaApplication: res.visaApplication, readonly: res.readonly };
+    }
   } catch {
-    /* keep fallback */
+    // No admission row yet, or other transient error — the shell will surface
+    // the failure on mount.
   }
 
-  return (
-    <div>
-      <StudentHeader
-        name={me.fullName}
-        photoUrl={me.photoUrl}
-        subtitle="Upload and track your application documents."
-        showBack
-      />
-      <Card>
-        <CardContent className="py-16 text-center">
-          <FileText size={32} className="mx-auto text-[#1E3A5F]/30 mb-3" />
-          <p className="text-[#4A4A4A] font-medium">Coming soon</p>
-          <p className="text-sm text-[#4A4A4A]/60 mt-1">
-            This section is under construction.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return <VisaFormShell initialData={initialData} />;
 }

@@ -1159,6 +1159,7 @@ model AdmissionApplication {
   programmeChoices AdmissionProgrammeChoice[]
   educationEntries AdmissionEducationEntry[]
   documents        AdmissionDocument[]
+  visaApplication  VisaApplication?
 
   @@index([caseId])
   @@index([contactId])
@@ -1239,4 +1240,43 @@ model AgentProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("agent_profiles")
+}
+
+// ─── VISA APPLICATION (INZ 1200) ──────────────────────────────────────────────
+// One row per admission application. Grows section by section as the student
+// works through the INZ 1200 form. All editable fields stay nullable so the
+// student can save a partial draft; required-ness is enforced in the UI and
+// at save-time. otherNames + nationalId are PII — encrypted via CryptoService
+// using the same AES-256-GCM envelope as admission's PR-SEC3 columns.
+model VisaApplication {
+  id                      String   @id @default(cuid())
+  applicationId           String   @unique
+
+  // Section 1 — Identity Details
+  hasMononym              Boolean?
+  middleNames             String?
+  hasUsedOtherNames       Boolean?
+  otherNamesEncrypted     Bytes?
+  countryWhenSubmitting   String?
+  prevAppliedNzVisa       Boolean?
+  prevRequestedNzeta      Boolean?
+  everTravelledNz         Boolean?
+  totalNzTime24Plus       Boolean?
+  passportIssueDate       DateTime?
+  passportExpiryDate      DateTime?
+  passportCountryOfIssue  String?
+  passportGender          String?
+  stateOfBirth            String?
+  cityOfBirth             String?
+  hasNationalId           Boolean?
+  nationalIdEncrypted     Bytes?
+  nationalIdCountry       String?
+
+  currentStep             Int      @default(1)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  admissionApplication    AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("visa_applications")
 }

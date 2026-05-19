@@ -213,9 +213,9 @@ export default async function StudentDashboard() {
                   <FileText size={20} className="text-[#E8B923]" />
                 </div>
                 <div>
-                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Documents</p>
+                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Visa Section</p>
                   <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">Upload Area</p>
-                  <p className="text-xs text-[#4A4A4A]/70 mt-1">View and upload your documents →</p>
+                  <p className="text-xs text-[#4A4A4A]/70 mt-1">View and upload your visa section →</p>
                 </div>
               </div>
             </CardContent>
