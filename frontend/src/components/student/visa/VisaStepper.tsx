@@ -13,11 +13,12 @@ export function VisaStepper() {
   const { visa, activeStep, setActiveStep } = useVisa();
 
   const steps = [
-    { n: 1, key: 'visaIdentitySectionTitle'    as const },
-    { n: 2, key: 'visaAddressSectionTitle'     as const },
-    { n: 3, key: 'visaEligibilitySectionTitle' as const },
-    { n: 4, key: 'visaCharacterSectionTitle'   as const },
-    { n: 5, key: 'visaHealthSectionTitle'      as const },
+    { n: 1, key: 'visaIdentitySectionTitle'         as const },
+    { n: 2, key: 'visaAddressSectionTitle'          as const },
+    { n: 3, key: 'visaEligibilitySectionTitle'      as const },
+    { n: 4, key: 'visaCharacterSectionTitle'        as const },
+    { n: 5, key: 'visaHealthSectionTitle'           as const },
+    { n: 6, key: 'visaEducationHistorySectionTitle' as const },
   ];
 
   // Reachable = either the active step itself or a step <= the highest the

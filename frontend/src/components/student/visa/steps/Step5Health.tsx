@@ -179,6 +179,8 @@ export function Step5Health() {
       await patchVisa(payload);
       setSavedAt(new Date().toISOString());
       toast.success(t('visaHealthSaveSuccess'));
+      // PR-VISA6: advance the stepper now that Section 6 exists.
+      setActiveStep(6);
     } catch {
       toast.error(t('visaHealthSaveError'));
     } finally {

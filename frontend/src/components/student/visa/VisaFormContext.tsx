@@ -144,6 +144,41 @@ export interface TbRiskCountryInput {
   totalDurationDays: number;
 }
 
+// Step 6 (PR-VISA6) reads existing admission education entries
+// read-only and pairs each with a visa-side supplement holding only the
+// INZ-extra fields. Both arrays come back from GET /students/me/visa/
+// application; the frontend joins them on educationEntry.id ===
+// supplement.educationEntryId.
+export interface EducationEntryRow {
+  id: string;
+  qualificationLevel: string;
+  institutionName: string;
+  country: string;
+  fieldOfStudy: string | null;
+  startYear: number | null;
+  endYear: number | null;
+  completed: boolean;
+  sortOrder: number;
+}
+
+export interface EducationSupplement {
+  id: string;
+  educationEntryId: string;
+  startMonth: number | null;
+  endMonth: number | null;
+  institutionState: string | null;
+  institutionTown: string | null;
+  qualificationAwarded: boolean | null;
+}
+
+export interface EducationSupplementPatch {
+  startMonth?: number | null;
+  endMonth?: number | null;
+  institutionState?: string | null;
+  institutionTown?: string | null;
+  qualificationAwarded?: boolean | null;
+}
+
 // Read-only snapshot pulled from admission + contacts. The Visa Section
 // never re-collects these — they are displayed inline and the student
 // edits them on the admission/account profile if a correction is needed.
@@ -196,11 +231,20 @@ interface ContextValue {
     data: Partial<TbRiskCountryInput>,
   ) => Promise<TbRiskCountry>;
   deleteTbRiskCountry: (id: string) => Promise<void>;
+
+  // Step 6 — admission education entries (read-only here) + the visa
+  // supplements that hold the INZ-extra columns (live-API upsert).
+  educationEntries: EducationEntryRow[];
+  educationSupplements: EducationSupplement[];
+  upsertEducationSupplement: (
+    educationEntryId: string,
+    patch: EducationSupplementPatch,
+  ) => Promise<EducationSupplement>;
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA5 brings this to 5).
-export const VISA_TOTAL_STEPS = 5;
+// each later INZ section is built (PR-VISA6 brings this to 6).
+export const VISA_TOTAL_STEPS = 6;
 
 const VisaContext = createContext<ContextValue | null>(null);
 
@@ -210,12 +254,16 @@ export function VisaProvider({
   initialReadonly,
   initialOtherCitizenships,
   initialTbRiskCountries,
+  initialEducationEntries,
+  initialEducationSupplements,
 }: {
   children: ReactNode;
   initialVisa: VisaApplication;
   initialReadonly: VisaReadonly;
   initialOtherCitizenships: OtherCitizenship[];
   initialTbRiskCountries: TbRiskCountry[];
+  initialEducationEntries: EducationEntryRow[];
+  initialEducationSupplements: EducationSupplement[];
 }) {
   const [visa, setVisa] = useState<VisaApplication>(initialVisa);
   const [readonlyState] = useState<VisaReadonly>(initialReadonly);
@@ -225,6 +273,10 @@ export function VisaProvider({
   );
   const [tbRiskCountries, setTbRiskCountries] = useState<TbRiskCountry[]>(
     initialTbRiskCountries ?? [],
+  );
+  const [educationEntries] = useState<EducationEntryRow[]>(initialEducationEntries ?? []);
+  const [educationSupplements, setEducationSupplements] = useState<EducationSupplement[]>(
+    initialEducationSupplements ?? [],
   );
   // Clamp the initial step in case the row has a stale value from before
   // VISA_TOTAL_STEPS bumped — we never want the UI in an off-by-one state.
@@ -238,6 +290,7 @@ export function VisaProvider({
       readonly: VisaReadonly;
       otherCitizenships?: OtherCitizenship[];
       tbRiskCountries?: TbRiskCountry[];
+      educationSupplements?: EducationSupplement[];
     }>(
       '/students/me/visa/application',
       fields,
@@ -251,6 +304,9 @@ export function VisaProvider({
     }
     if (Array.isArray(res.tbRiskCountries)) {
       setTbRiskCountries(res.tbRiskCountries);
+    }
+    if (Array.isArray(res.educationSupplements)) {
+      setEducationSupplements(res.educationSupplements);
     }
   }, []);
 
@@ -314,6 +370,24 @@ export function VisaProvider({
     setTbRiskCountries(prev => prev.filter(r => r.id !== id));
   }, []);
 
+  const upsertEducationSupplement = useCallback(
+    async (educationEntryId: string, patch: EducationSupplementPatch) => {
+      const row = await api.patch<EducationSupplement>(
+        `/students/me/visa/education-supplements/${educationEntryId}`,
+        patch,
+      );
+      setEducationSupplements(prev => {
+        const idx = prev.findIndex(s => s.educationEntryId === educationEntryId);
+        if (idx === -1) return [...prev, row];
+        const next = prev.slice();
+        next[idx] = row;
+        return next;
+      });
+      return row;
+    },
+    [],
+  );
+
   return (
     <VisaContext.Provider value={{
       visa,
@@ -332,6 +406,9 @@ export function VisaProvider({
       addTbRiskCountry,
       updateTbRiskCountry,
       deleteTbRiskCountry,
+      educationEntries,
+      educationSupplements,
+      upsertEducationSupplement,
     }}>
       {children}
     </VisaContext.Provider>

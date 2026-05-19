@@ -96,4 +96,28 @@ export class VisaController {
   deleteTbCountry(@Req() req: any, @Param('id') id: string) {
     return this.visaService.deleteTbRiskCountry(req.user.userId, id);
   }
+
+  // ── Education supplements (PR-VISA6) ─────────────────────────────
+  // Single upsert route keyed by the admission education-entry id. No
+  // POST/DELETE — the supplement's lifecycle is bound to the admission
+  // entry (cascade FK), so creation happens implicitly on the first
+  // PATCH and deletion happens automatically with the parent entry.
+  @Patch('education-supplements/:educationEntryId')
+  upsertEducationSupplement(
+    @Req() req: any,
+    @Param('educationEntryId') educationEntryId: string,
+    @Body() body: {
+      startMonth?: number | null;
+      endMonth?: number | null;
+      institutionState?: string | null;
+      institutionTown?: string | null;
+      qualificationAwarded?: boolean | null;
+    },
+  ) {
+    return this.visaService.upsertEducationSupplement(
+      req.user.userId,
+      educationEntryId,
+      body,
+    );
+  }
 }

@@ -297,6 +297,43 @@ export class VisaService {
     }));
   }
 
+  // PR-VISA6: education entries (read-only, from admission) + their visa
+  // supplements (editable, this step's own data). Returned as two parallel
+  // arrays; the frontend joins them on educationEntry.id ===
+  // supplement.educationEntryId.
+  private async loadEducationEntries(admissionApplicationId: string) {
+    const rows = await this.prisma.admissionEducationEntry.findMany({
+      where: { admissionApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      qualificationLevel: r.qualificationLevel,
+      institutionName: r.institutionName,
+      country: r.country,
+      fieldOfStudy: r.fieldOfStudy,
+      startYear: r.startYear,
+      endYear: r.endYear,
+      completed: r.completed,
+      sortOrder: r.sortOrder,
+    }));
+  }
+
+  private async loadEducationSupplements(visaApplicationId: string) {
+    const rows = await this.prisma.visaEducationSupplement.findMany({
+      where: { visaApplicationId },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      educationEntryId: r.educationEntryId,
+      startMonth: r.startMonth,
+      endMonth: r.endMonth,
+      institutionState: r.institutionState,
+      institutionTown: r.institutionTown,
+      qualificationAwarded: r.qualificationAwarded,
+    }));
+  }
+
   // Ownership helper for the citizenship CRUD routes — the row must belong
   // to a visa_application whose admission chain resolves to this userId.
   // Mirrors AdmissionService.assertEducationEntryOwnership.
@@ -341,6 +378,36 @@ export class VisaService {
     return row;
   }
 
+  // PR-VISA6: ownership check for an admission education entry. We
+  // verify the chain admission_education_entry → admission_application
+  // → contact.userId, then return the entry along with the resolved
+  // visa application (creating it lazily on first supplement upsert is
+  // out of scope — the visa row already exists by Step 6).
+  private async resolveEducationEntryForUser(
+    educationEntryId: string,
+    userId: string,
+  ) {
+    const entry = await this.prisma.admissionEducationEntry.findUnique({
+      where: { id: educationEntryId },
+      include: {
+        admissionApplication: {
+          include: { contact: true, visaApplication: true },
+        },
+      },
+    });
+    if (!entry) throw new NotFoundException('Education entry not found');
+    if (entry.admissionApplication.contact.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    const visa = entry.admissionApplication.visaApplication;
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    return { entry, visaApplicationId: visa.id };
+  }
+
   // GET — returns { exists, visaApplication?, readonly, otherCitizenships }.
   // Does not auto-create the row; the client POSTs explicitly. This mirrors
   // the admission pattern.
@@ -353,7 +420,14 @@ export class VisaService {
     const readonly = this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice);
 
     if (!visa) {
-      return { exists: false as const, readonly, otherCitizenships: [], tbRiskCountries: [] };
+      return {
+        exists: false as const,
+        readonly,
+        otherCitizenships: [],
+        tbRiskCountries: [],
+        educationEntries: await this.loadEducationEntries(admission.id),
+        educationSupplements: [],
+      };
     }
     return {
       exists: true as const,
@@ -361,6 +435,8 @@ export class VisaService {
       readonly,
       otherCitizenships: await this.loadOtherCitizenships(visa.id),
       tbRiskCountries: await this.loadTbRiskCountries(visa.id),
+      educationEntries: await this.loadEducationEntries(admission.id),
+      educationSupplements: await this.loadEducationSupplements(visa.id),
     };
   }
 
@@ -381,6 +457,8 @@ export class VisaService {
       readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice),
       otherCitizenships: await this.loadOtherCitizenships(visa.id),
       tbRiskCountries: await this.loadTbRiskCountries(visa.id),
+      educationEntries: await this.loadEducationEntries(admission.id),
+      educationSupplements: await this.loadEducationSupplements(visa.id),
     };
   }
 
@@ -498,6 +576,8 @@ export class VisaService {
       readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice),
       otherCitizenships: await this.loadOtherCitizenships(visa.id),
       tbRiskCountries: await this.loadTbRiskCountries(visa.id),
+      educationEntries: await this.loadEducationEntries(admission.id),
+      educationSupplements: await this.loadEducationSupplements(visa.id),
     };
   }
 
@@ -683,5 +763,88 @@ export class VisaService {
     await this.prisma.visaTbRiskCountry.delete({
       where: { id: rowId },
     });
+  }
+
+  // ── Education supplements (PR-VISA6) ─────────────────────────────────
+  // One supplement row per admission_education_entry, holding only the
+  // INZ Section-6 extras (start/end month, institution state/town,
+  // qualificationAwarded). PATCH is upsert — creates the row on first
+  // call, updates thereafter. Per-field validation keeps month in 1..12
+  // and qualificationAwarded a strict boolean.
+
+  async upsertEducationSupplement(
+    userId: string,
+    educationEntryId: string,
+    body: {
+      startMonth?: number | null;
+      endMonth?: number | null;
+      institutionState?: string | null;
+      institutionTown?: string | null;
+      qualificationAwarded?: boolean | null;
+    },
+  ) {
+    const { visaApplicationId } = await this.resolveEducationEntryForUser(
+      educationEntryId,
+      userId,
+    );
+
+    const data: Record<string, unknown> = {};
+    if (body.startMonth !== undefined) {
+      if (body.startMonth === null) {
+        data.startMonth = null;
+      } else if (
+        !Number.isInteger(body.startMonth) ||
+        body.startMonth < 1 ||
+        body.startMonth > 12
+      ) {
+        throw new BadRequestException('startMonth must be an integer between 1 and 12');
+      } else {
+        data.startMonth = body.startMonth;
+      }
+    }
+    if (body.endMonth !== undefined) {
+      if (body.endMonth === null) {
+        data.endMonth = null;
+      } else if (
+        !Number.isInteger(body.endMonth) ||
+        body.endMonth < 1 ||
+        body.endMonth > 12
+      ) {
+        throw new BadRequestException('endMonth must be an integer between 1 and 12');
+      } else {
+        data.endMonth = body.endMonth;
+      }
+    }
+    if (body.institutionState !== undefined) {
+      data.institutionState = body.institutionState === null ? null : String(body.institutionState).trim();
+    }
+    if (body.institutionTown !== undefined) {
+      data.institutionTown = body.institutionTown === null ? null : String(body.institutionTown).trim();
+    }
+    if (body.qualificationAwarded !== undefined) {
+      if (body.qualificationAwarded === null) {
+        data.qualificationAwarded = null;
+      } else if (typeof body.qualificationAwarded !== 'boolean') {
+        throw new BadRequestException('qualificationAwarded must be a boolean');
+      } else {
+        data.qualificationAwarded = body.qualificationAwarded;
+      }
+    }
+
+    const row = await this.prisma.visaEducationSupplement.upsert({
+      where:  { educationEntryId },
+      create: { visaApplicationId, educationEntryId, ...data },
+      update: data,
+    });
+
+    return {
+      id: row.id,
+      educationEntryId: row.educationEntryId,
+      startMonth: row.startMonth,
+      endMonth: row.endMonth,
+      institutionState: row.institutionState,
+      institutionTown: row.institutionTown,
+      qualificationAwarded: row.qualificationAwarded,
+    };
   }
 }

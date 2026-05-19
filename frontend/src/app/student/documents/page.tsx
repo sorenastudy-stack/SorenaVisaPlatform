@@ -7,6 +7,8 @@ import type {
   VisaReadonly,
   OtherCitizenship,
   TbRiskCountry,
+  EducationEntryRow,
+  EducationSupplement,
 } from '@/components/student/visa/VisaFormContext';
 
 interface InitialResponse {
@@ -15,6 +17,8 @@ interface InitialResponse {
   readonly: VisaReadonly;
   otherCitizenships?: OtherCitizenship[];
   tbRiskCountries?: TbRiskCountry[];
+  educationEntries?: EducationEntryRow[];
+  educationSupplements?: EducationSupplement[];
 }
 
 // The Visa Section lives at /student/documents (the route is unchanged from
@@ -32,6 +36,8 @@ export default async function StudentVisaSectionPage() {
         readonly: VisaReadonly;
         otherCitizenships: OtherCitizenship[];
         tbRiskCountries: TbRiskCountry[];
+        educationEntries: EducationEntryRow[];
+        educationSupplements: EducationSupplement[];
       }
     | null = null;
 
@@ -43,6 +49,8 @@ export default async function StudentVisaSectionPage() {
         readonly: res.readonly,
         otherCitizenships: res.otherCitizenships ?? [],
         tbRiskCountries: res.tbRiskCountries ?? [],
+        educationEntries: res.educationEntries ?? [],
+        educationSupplements: res.educationSupplements ?? [],
       };
     }
   } catch {

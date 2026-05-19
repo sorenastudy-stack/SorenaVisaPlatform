@@ -1190,6 +1190,7 @@ model AdmissionEducationEntry {
 
   admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
   documents            AdmissionDocument[]
+  visaSupplement       VisaEducationSupplement?
 
   @@index([admissionApplicationId])
   @@map("admission_education_entries")
@@ -1371,8 +1372,41 @@ model VisaApplication {
   admissionApplication    AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   otherCitizenships       VisaOtherCitizenship[]
   tbRiskCountries         VisaTbRiskCountry[]
+  educationSupplements    VisaEducationSupplement[]
 
   @@map("visa_applications")
+}
+
+// Visa-side extras for an admission education entry (PR-VISA6). One row
+// per admission_education_entry — the admission row holds the data INZ
+// already collects via the admission form (qualification level, field of
+// study, institution name, country, start/end YEAR, completed/awarded
+// status). This supplement holds only what INZ Section 6 needs on top:
+//   * startMonth / endMonth — admission stores year-only
+//   * institutionState / institutionTown — admission has no address fields
+//   * qualificationAwarded — distinct semantic from admission's
+//     `completed` (student-finished) vs `certificateNotReceived` (cert in
+//     transit). INZ asks specifically whether the institution conferred
+//     the qualification.
+// Cascade-deletes with either parent so a deleted admission entry never
+// strands an orphan supplement.
+model VisaEducationSupplement {
+  id                    String   @id @default(cuid())
+  visaApplicationId     String
+  educationEntryId      String   @unique
+  startMonth            Int?
+  endMonth              Int?
+  institutionState      String?
+  institutionTown       String?
+  qualificationAwarded  Boolean?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  visaApplication       VisaApplication         @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  educationEntry        AdmissionEducationEntry @relation(fields: [educationEntryId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_education_supplements")
 }
 
 // Repeating rows for the TB-risk countries block (PR-VISA5). One row per
