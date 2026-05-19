@@ -28,6 +28,10 @@ const VALID_DOCUMENT_TYPES = [
   // Same admission_documents row layout, scoped to the same admission
   // application as the visa row.
   'VISA_PHOTO',
+  // Visa Section character step (PR-VISA4) — police certificate(s).
+  // Reuses the same upload/list/delete endpoints; the visa UI filters by
+  // documentType.
+  'VISA_POLICE_CERTIFICATE',
 ] as const;
 
 const VALID_QUALIFICATION_LEVELS = [

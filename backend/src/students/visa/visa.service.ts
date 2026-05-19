@@ -107,6 +107,17 @@ const PATCHABLE_VISA_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'dateti
   plansAfterStudy:              'text',
   studyingMultiYear:            'boolean',
 
+  // Section 4 — Character (PR-VISA4)
+  everConvicted:                'boolean',
+  underInvestigation:           'boolean',
+  everDeportedExcluded:         'boolean',
+  everRefusedVisa:              'boolean',
+  policeCertIssueDate:          'datetime',
+  policeCertCountryOfIssue:     'text',
+  policeCertInEnglish:          'boolean',
+  holdsOtherCitizenships:       'boolean',
+  livedOtherCountry5Years:      'boolean',
+
   currentStep:            'int',
 };
 
@@ -238,8 +249,48 @@ export class VisaService {
     return out;
   }
 
-  // GET — returns { exists, visaApplication?, readonly }. Does not auto-create
-  // the row; the client POSTs explicitly. This mirrors the admission pattern.
+  // Fetch and shape the otherCitizenships rows for a visa application.
+  // Sorted ascending by sortOrder so the UI renders in the order the
+  // student created them.
+  private async loadOtherCitizenships(visaApplicationId: string) {
+    const rows = await this.prisma.visaOtherCitizenship.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      country: r.country,
+      holdsPassport: r.holdsPassport,
+      sortOrder: r.sortOrder,
+    }));
+  }
+
+  // Ownership helper for the citizenship CRUD routes — the row must belong
+  // to a visa_application whose admission chain resolves to this userId.
+  // Mirrors AdmissionService.assertEducationEntryOwnership.
+  private async assertCitizenshipOwnership(citizenshipId: string, userId: string) {
+    const row = await this.prisma.visaOtherCitizenship.findUnique({
+      where: { id: citizenshipId },
+      include: {
+        visaApplication: {
+          include: {
+            admissionApplication: {
+              include: { contact: true },
+            },
+          },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Citizenship row not found');
+    if (row.visaApplication.admissionApplication.contact.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    return row;
+  }
+
+  // GET — returns { exists, visaApplication?, readonly, otherCitizenships }.
+  // Does not auto-create the row; the client POSTs explicitly. This mirrors
+  // the admission pattern.
   async getApplication(userId: string) {
     const { contact, admission, topChoice } = await this.resolveAdmissionApplication(userId);
     const visa = await this.prisma.visaApplication.findUnique({
@@ -249,16 +300,18 @@ export class VisaService {
     const readonly = this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice);
 
     if (!visa) {
-      return { exists: false as const, readonly };
+      return { exists: false as const, readonly, otherCitizenships: [] };
     }
     return {
       exists: true as const,
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
       readonly,
+      otherCitizenships: await this.loadOtherCitizenships(visa.id),
     };
   }
 
-  // POST — idempotent get-or-create. Returns the row plus the readonly snapshot.
+  // POST — idempotent get-or-create. Returns the row plus the readonly
+  // snapshot plus any existing citizenship rows.
   async getOrCreateApplication(userId: string) {
     const { contact, admission, topChoice } = await this.resolveAdmissionApplication(userId);
     let visa = await this.prisma.visaApplication.findUnique({
@@ -272,6 +325,7 @@ export class VisaService {
     return {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
       readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice),
+      otherCitizenships: await this.loadOtherCitizenships(visa.id),
     };
   }
 
@@ -353,9 +407,115 @@ export class VisaService {
       update: data,
     });
 
+    // PR-VISA4 fix: reconcile the other-citizenships rows. If the save
+    // sets holdsOtherCitizenships to false (or clears it to null), wipe
+    // every child row so we don't leave orphans visible the next time
+    // the student toggles back to Yes.
+    if (
+      Object.prototype.hasOwnProperty.call(sanitized, 'holdsOtherCitizenships') &&
+      sanitized.holdsOtherCitizenships !== true
+    ) {
+      await this.prisma.visaOtherCitizenship.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+    }
+
     return {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
       readonly: this.buildReadonlySnapshot(contact, admission as Record<string, unknown>, topChoice),
+      otherCitizenships: await this.loadOtherCitizenships(visa.id),
     };
+  }
+
+  // ── Other citizenships CRUD (PR-VISA4 fix) ───────────────────────────
+  // Live-API pattern matching admission.education-entries: each add /
+  // update / delete is its own endpoint, the parent visa row is fetched
+  // once via the standard get/getOrCreate.
+
+  async addOtherCitizenship(
+    userId: string,
+    body: { country?: string; holdsPassport?: boolean },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    // Rows are created empty and filled in via subsequent PATCHes — same
+    // shape as the admission "draft entry" UX. country is not required at
+    // create-time; the Step 4 frontend save-validator enforces non-empty
+    // country before the Save and continue button accepts the step.
+    // holdsPassport defaults to false when omitted (the DB column is NOT
+    // NULL); the frontend Y/N pill toggles it on first click.
+    if (
+      body?.holdsPassport !== undefined &&
+      typeof body.holdsPassport !== 'boolean'
+    ) {
+      throw new BadRequestException('holdsPassport must be a boolean');
+    }
+    // sortOrder = current max + 1 — append to the end, same shape as
+    // admission's education entries.
+    const last = await this.prisma.visaOtherCitizenship.findFirst({
+      where: { visaApplicationId: visa.id },
+      orderBy: { sortOrder: 'desc' },
+    });
+    const sortOrder = (last?.sortOrder ?? -1) + 1;
+
+    const row = await this.prisma.visaOtherCitizenship.create({
+      data: {
+        visaApplicationId: visa.id,
+        country: body?.country?.trim() ?? '',
+        holdsPassport: body?.holdsPassport ?? false,
+        sortOrder,
+      },
+    });
+    return {
+      id: row.id,
+      country: row.country,
+      holdsPassport: row.holdsPassport,
+      sortOrder: row.sortOrder,
+    };
+  }
+
+  async updateOtherCitizenship(
+    userId: string,
+    citizenshipId: string,
+    body: { country?: string; holdsPassport?: boolean },
+  ) {
+    await this.assertCitizenshipOwnership(citizenshipId, userId);
+    const data: Record<string, unknown> = {};
+    if (body.country !== undefined) {
+      if (!body.country.trim()) {
+        throw new BadRequestException('country must not be empty');
+      }
+      data.country = body.country.trim();
+    }
+    if (body.holdsPassport !== undefined) {
+      if (typeof body.holdsPassport !== 'boolean') {
+        throw new BadRequestException('holdsPassport must be a boolean');
+      }
+      data.holdsPassport = body.holdsPassport;
+    }
+    const row = await this.prisma.visaOtherCitizenship.update({
+      where: { id: citizenshipId },
+      data,
+    });
+    return {
+      id: row.id,
+      country: row.country,
+      holdsPassport: row.holdsPassport,
+      sortOrder: row.sortOrder,
+    };
+  }
+
+  async deleteOtherCitizenship(userId: string, citizenshipId: string) {
+    await this.assertCitizenshipOwnership(citizenshipId, userId);
+    await this.prisma.visaOtherCitizenship.delete({
+      where: { id: citizenshipId },
+    });
   }
 }

@@ -5,12 +5,14 @@ import { VisaFormShell } from '@/components/student/visa/VisaFormShell';
 import type {
   VisaApplication,
   VisaReadonly,
+  OtherCitizenship,
 } from '@/components/student/visa/VisaFormContext';
 
 interface InitialResponse {
   exists: boolean;
   visaApplication?: VisaApplication;
   readonly: VisaReadonly;
+  otherCitizenships?: OtherCitizenship[];
 }
 
 // The Visa Section lives at /student/documents (the route is unchanged from
@@ -22,12 +24,22 @@ export default async function StudentVisaSectionPage() {
   const session = await getSession();
   if (!session) redirect('/login?next=/student/documents');
 
-  let initialData: { visaApplication: VisaApplication; readonly: VisaReadonly } | null = null;
+  let initialData:
+    | {
+        visaApplication: VisaApplication;
+        readonly: VisaReadonly;
+        otherCitizenships: OtherCitizenship[];
+      }
+    | null = null;
 
   try {
     const res = await apiServer.get<InitialResponse>('/students/me/visa/application');
     if (res.exists && res.visaApplication) {
-      initialData = { visaApplication: res.visaApplication, readonly: res.readonly };
+      initialData = {
+        visaApplication: res.visaApplication,
+        readonly: res.readonly,
+        otherCitizenships: res.otherCitizenships ?? [],
+      };
     }
   } catch {
     // No admission row yet, or other transient error — the shell will surface

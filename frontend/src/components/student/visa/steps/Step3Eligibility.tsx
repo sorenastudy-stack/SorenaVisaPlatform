@@ -234,6 +234,8 @@ export function Step3Eligibility() {
       await patchVisa(payload);
       setSavedAt(new Date().toISOString());
       toast.success(t('visaEligibilitySaveSuccess'));
+      // PR-VISA4: advance the stepper now that Section 4 exists.
+      setActiveStep(4);
     } catch {
       toast.error(t('visaEligibilitySaveError'));
     } finally {

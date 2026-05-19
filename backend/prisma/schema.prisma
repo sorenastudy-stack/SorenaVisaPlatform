@@ -1068,6 +1068,7 @@ enum AdmissionDocumentType {
   NOTARIZED_CERTIFICATE
   NOTARIZED_TRANSCRIPT
   VISA_PHOTO
+  VISA_POLICE_CERTIFICATE
 }
 
 model AdmissionApplication {
@@ -1334,11 +1335,50 @@ model VisaApplication {
   plansAfterStudyEncrypted       Bytes?
   studyingMultiYear              Boolean?
 
+  // Section 4 — Character (PR-VISA4)
+  // Character details (4 mandatory Y/N declarations)
+  everConvicted                  Boolean?
+  underInvestigation             Boolean?
+  everDeportedExcluded           Boolean?
+  everRefusedVisa                Boolean?
+  // Police certificate from the country of citizenship — the file itself
+  // is uploaded via the admission documents pipeline with documentType =
+  // VISA_POLICE_CERTIFICATE; these three columns capture the cert metadata.
+  policeCertIssueDate            DateTime?
+  policeCertCountryOfIssue       String?
+  policeCertInEnglish            Boolean?
+  // Other citizenships + 5+ years branch (no further inputs in this PR)
+  holdsOtherCitizenships         Boolean?
+  livedOtherCountry5Years        Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
   admissionApplication    AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  otherCitizenships       VisaOtherCitizenship[]
 
   @@map("visa_applications")
+}
+
+// Repeating rows for "Do you hold any other citizenships?" = Yes
+// (PR-VISA4 fix). Mirrors the admission_education_entries pattern: each
+// row is mutated via its own POST/PATCH/DELETE endpoint, the rows are
+// returned alongside the parent application on GET, and they cascade
+// delete when the parent visa_application is removed. When the student
+// toggles holdsOtherCitizenships back to false on save, the service
+// deletes every row atomically — no orphans.
+model VisaOtherCitizenship {
+  id                String   @id @default(cuid())
+  visaApplicationId String
+  country           String
+  holdsPassport     Boolean
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  visaApplication   VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_other_citizenships")
 }

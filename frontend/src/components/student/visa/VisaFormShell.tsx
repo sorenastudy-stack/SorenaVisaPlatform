@@ -8,15 +8,18 @@ import {
   VisaProvider, useVisa,
   type VisaApplication,
   type VisaReadonly,
+  type OtherCitizenship,
 } from './VisaFormContext';
 import { VisaStepper } from './VisaStepper';
 import { Step1IdentityDetails } from './steps/Step1IdentityDetails';
 import { Step2AddressContact } from './steps/Step2AddressContact';
 import { Step3Eligibility } from './steps/Step3Eligibility';
+import { Step4Character } from './steps/Step4Character';
 
 interface InitialData {
   visaApplication: VisaApplication;
   readonly: VisaReadonly;
+  otherCitizenships: OtherCitizenship[];
 }
 
 interface Props {
@@ -55,6 +58,7 @@ export function VisaFormShell({ initialData }: Props) {
     <VisaProvider
       initialVisa={data.visaApplication}
       initialReadonly={data.readonly}
+      initialOtherCitizenships={data.otherCitizenships ?? []}
     >
       <div className="flex flex-col gap-6">
         <div>
@@ -74,6 +78,7 @@ export function VisaFormShell({ initialData }: Props) {
 // the new step with values pre-filled from visa.* (the server-of-record).
 function ActiveStep() {
   const { activeStep } = useVisa();
+  if (activeStep === 4) return <Step4Character />;
   if (activeStep === 3) return <Step3Eligibility />;
   if (activeStep === 2) return <Step2AddressContact />;
   return <Step1IdentityDetails />;

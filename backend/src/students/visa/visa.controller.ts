@@ -1,7 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
+  Param,
   Patch,
   Post,
   Req,
@@ -36,5 +40,33 @@ export class VisaController {
   @Patch('application')
   updateApplication(@Req() req: any, @Body() body: Record<string, unknown>) {
     return this.visaService.updateApplication(req.user.userId, body);
+  }
+
+  // ── Other citizenships CRUD (PR-VISA4 fix) ────────────────────────
+  // Same shape as AdmissionController's education-entries routes; the
+  // service enforces ownership via the userId → contact → visa
+  // application chain so a student can only touch their own rows.
+
+  @Post('citizenships')
+  addCitizenship(
+    @Req() req: any,
+    @Body() body: { country: string; holdsPassport: boolean },
+  ) {
+    return this.visaService.addOtherCitizenship(req.user.userId, body);
+  }
+
+  @Patch('citizenships/:id')
+  updateCitizenship(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { country?: string; holdsPassport?: boolean },
+  ) {
+    return this.visaService.updateOtherCitizenship(req.user.userId, id, body);
+  }
+
+  @Delete('citizenships/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteCitizenship(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteOtherCitizenship(req.user.userId, id);
   }
 }

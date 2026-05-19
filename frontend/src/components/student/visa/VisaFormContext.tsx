@@ -86,9 +86,35 @@ export interface VisaApplication {
   plansAfterStudy: string | null;
   studyingMultiYear: boolean | null;
 
+  // Section 4 — Character (PR-VISA4)
+  everConvicted: boolean | null;
+  underInvestigation: boolean | null;
+  everDeportedExcluded: boolean | null;
+  everRefusedVisa: boolean | null;
+  policeCertIssueDate: string | null;
+  policeCertCountryOfIssue: string | null;
+  policeCertInEnglish: boolean | null;
+  holdsOtherCitizenships: boolean | null;
+  livedOtherCountry5Years: boolean | null;
+
   currentStep: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// Repeating child rows for "Do you hold any other citizenships?" = Yes
+// (PR-VISA4 fix). Persisted via /students/me/visa/citizenships endpoints,
+// returned alongside the visa application on every read.
+export interface OtherCitizenship {
+  id: string;
+  country: string;
+  holdsPassport: boolean;
+  sortOrder: number;
+}
+
+export interface OtherCitizenshipInput {
+  country: string;
+  holdsPassport: boolean;
 }
 
 // Read-only snapshot pulled from admission + contacts. The Visa Section
@@ -120,11 +146,25 @@ interface ContextValue {
   setActiveStep: (n: number) => void;
   savedAt: string | null;
   setSavedAt: (iso: string) => void;
+  // Other-citizenship rows (Step 4 branch). Live-API pattern same as
+  // admission education entries: add/update/delete each hit their own
+  // endpoint and update local state.
+  otherCitizenships: OtherCitizenship[];
+  addOtherCitizenship: (data: OtherCitizenshipInput) => Promise<OtherCitizenship>;
+  updateOtherCitizenship: (
+    id: string,
+    data: Partial<OtherCitizenshipInput>,
+  ) => Promise<OtherCitizenship>;
+  deleteOtherCitizenship: (id: string) => Promise<void>;
+  // Clears the in-memory rows. Used by Step 4's save handler after the
+  // server reconciles holdsOtherCitizenships → false (server-side delete
+  // already happened; this just syncs UI state).
+  resetOtherCitizenships: () => void;
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA3 brings this to 3).
-export const VISA_TOTAL_STEPS = 3;
+// each later INZ section is built (PR-VISA4 brings this to 4).
+export const VISA_TOTAL_STEPS = 4;
 
 const VisaContext = createContext<ContextValue | null>(null);
 
@@ -132,14 +172,19 @@ export function VisaProvider({
   children,
   initialVisa,
   initialReadonly,
+  initialOtherCitizenships,
 }: {
   children: ReactNode;
   initialVisa: VisaApplication;
   initialReadonly: VisaReadonly;
+  initialOtherCitizenships: OtherCitizenship[];
 }) {
   const [visa, setVisa] = useState<VisaApplication>(initialVisa);
   const [readonlyState] = useState<VisaReadonly>(initialReadonly);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [otherCitizenships, setOtherCitizenships] = useState<OtherCitizenship[]>(
+    initialOtherCitizenships ?? [],
+  );
   // Clamp the initial step in case the row has a stale value from before
   // VISA_TOTAL_STEPS bumped — we never want the UI in an off-by-one state.
   const [activeStep, setActiveStep] = useState<number>(() =>
@@ -147,11 +192,53 @@ export function VisaProvider({
   );
 
   const patchVisa = useCallback(async (fields: Record<string, unknown>) => {
-    const res = await api.patch<{ visaApplication: VisaApplication; readonly: VisaReadonly }>(
+    const res = await api.patch<{
+      visaApplication: VisaApplication;
+      readonly: VisaReadonly;
+      otherCitizenships?: OtherCitizenship[];
+    }>(
       '/students/me/visa/application',
       fields,
     );
     setVisa(res.visaApplication);
+    // Backend reconciles the citizenship rows on save (clears them when
+    // holdsOtherCitizenships is patched to false). Trust its return value
+    // as the new source of truth.
+    if (Array.isArray(res.otherCitizenships)) {
+      setOtherCitizenships(res.otherCitizenships);
+    }
+  }, []);
+
+  const addOtherCitizenship = useCallback(async (data: OtherCitizenshipInput) => {
+    const row = await api.post<OtherCitizenship>(
+      '/students/me/visa/citizenships',
+      data,
+    );
+    setOtherCitizenships(prev =>
+      [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder),
+    );
+    return row;
+  }, []);
+
+  const updateOtherCitizenship = useCallback(
+    async (id: string, data: Partial<OtherCitizenshipInput>) => {
+      const row = await api.patch<OtherCitizenship>(
+        `/students/me/visa/citizenships/${id}`,
+        data,
+      );
+      setOtherCitizenships(prev => prev.map(r => (r.id === id ? row : r)));
+      return row;
+    },
+    [],
+  );
+
+  const deleteOtherCitizenship = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/citizenships/${id}`);
+    setOtherCitizenships(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const resetOtherCitizenships = useCallback(() => {
+    setOtherCitizenships([]);
   }, []);
 
   return (
@@ -163,6 +250,11 @@ export function VisaProvider({
       setActiveStep,
       savedAt,
       setSavedAt,
+      otherCitizenships,
+      addOtherCitizenship,
+      updateOtherCitizenship,
+      deleteOtherCitizenship,
+      resetOtherCitizenships,
     }}>
       {children}
     </VisaContext.Provider>
