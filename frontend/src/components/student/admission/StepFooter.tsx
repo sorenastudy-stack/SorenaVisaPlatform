@@ -5,16 +5,15 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAdmission } from './AdmissionFormContext';
 import { ApiError } from '@/lib/api';
-
-const STUDENT_STEPS = [1, 2, 3, 4, 5, 6, 8];
-const AGENT_STEPS   = [1, 2, 3, 4, 5, 6, 7, 8];
+import { getVisibleSteps } from './stepVisibility';
 
 export function StepFooter({ isAgent }: { isAgent: boolean }) {
   const t = useTranslations();
   const router = useRouter();
-  const { currentStep, setCurrentStep, programmeChoices, patchApplication, submitApplication, stepHandler } = useAdmission();
-  const steps  = isAgent ? AGENT_STEPS : STUDENT_STEPS;
-  const idx    = steps.indexOf(currentStep);
+  const { currentStep, setCurrentStep, programmeChoices, patchApplication, submitApplication, stepHandler, step2Fields } = useAdmission();
+  const role  = isAgent ? 'AGENT' : 'STUDENT';
+  const steps = getVisibleSteps(role, step2Fields.dateOfBirth);
+  const idx   = steps.indexOf(currentStep);
   const isFirst = idx === 0;
   const isLast  = idx === steps.length - 1;
 

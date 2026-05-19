@@ -23,9 +23,7 @@ import { Step7AgentDetails }      from './steps/Step7AgentDetails';
 import { Step8Acceptance }        from './steps/Step8Acceptance';
 import { StudentHeader }    from '@/components/student/StudentHeader';
 import type { Session }     from '@/lib/auth';
-
-const STUDENT_STEPS = [1, 2, 3, 4, 5, 6, 8];
-const AGENT_STEPS   = [1, 2, 3, 4, 5, 6, 7, 8];
+import { getVisibleSteps }  from './stepVisibility';
 
 interface InitialData {
   exists: boolean;
@@ -79,13 +77,28 @@ export function AdmissionFormShell({ session, initialData }: Props) {
 
 function ShellInner({ session }: { session: Session }) {
   const t = useTranslations();
-  const { currentStep, isReadOnly, application } = useAdmission();
+  const { currentStep, setCurrentStep, isReadOnly, application, step2Fields } = useAdmission();
   const isAgent = session.role === 'AGENT';
 
-  // correction 5: guard stale DB data or URL tampering writing step 7 for non-agents
-  const safeStep = !isAgent && currentStep === 7 ? 8 : currentStep;
-  const visibleSteps = isAgent ? AGENT_STEPS : STUDENT_STEPS;
+  // Visible steps depend on the live DOB in Step 2: 18+ skips Steps 5 & 6.
+  // For non-AGENT users, Step 7 is always excluded by getVisibleSteps too,
+  // subsuming the old `safeStep === 7 ? 8` redirect.
+  const visibleSteps = getVisibleSteps(session.role, step2Fields.dateOfBirth);
+
+  // If currentStep is no longer visible (e.g. the user changed DOB from 17 → 18
+  // while sitting on Step 5, or arrived via stale URL state), forward to the
+  // next visible step. Falls back to the last visible step if none ≥ current.
+  const safeStep = visibleSteps.includes(currentStep)
+    ? currentStep
+    : (visibleSteps.find((s) => s >= currentStep) ?? visibleSteps[visibleSteps.length - 1]);
   const displayStep = visibleSteps.indexOf(safeStep) + 1;
+
+  // Sync context's currentStep to the safe value so the footer's Next/Back
+  // arithmetic operates on a valid index. Only fires when they actually
+  // diverge (otherwise it's a no-op).
+  useEffect(() => {
+    if (safeStep !== currentStep) setCurrentStep(safeStep);
+  }, [safeStep, currentStep, setCurrentStep]);
 
   return (
     <div className="flex flex-col gap-6">

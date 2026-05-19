@@ -152,8 +152,39 @@ function stripAndCoerce(body: Record<string, unknown>): Record<string, unknown> 
 
 // ── Submit validation ─────────────────────────────────────────────────────────
 
+/**
+ * Whole-years age today, or null when DOB is missing/invalid.
+ * Mirrors the frontend's stepVisibility.calculateAge logic.
+ */
+function calculateAge(dob: Date | null | undefined): number | null {
+  if (!dob) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+    age--;
+  }
+  if (age < 0 || age > 150) return null;
+  return age;
+}
+
+/**
+ * Fail-safe: missing/invalid DOB is treated as under-18 (so guardian and
+ * accommodation fields stay required when we don't know the age).
+ */
+function isApplicantUnder18(dob: Date | null | undefined): boolean {
+  const age = calculateAge(dob);
+  if (age === null) return true;
+  return age < 18;
+}
+
 function validateRequiredFields(application: any, role: string): string[] {
   const missing: string[] = [];
+
+  // Steps 5 (Guardian) and 6 (Accommodation) are hidden from the UI for 18+
+  // applicants — their fields are therefore not required at submit either.
+  // This must mirror the frontend stepVisibility.isUnder18 logic.
+  const under18 = isApplicantUnder18(application.dateOfBirth);
 
   const textChecks: Array<{ field: string; label: string; condition?: boolean }> = [
     { field: 'maritalStatus',        label: 'maritalStatus' },
@@ -169,17 +200,17 @@ function validateRequiredFields(application: any, role: string): string[] {
     { field: 'highestQualification', label: 'highestQualification' },
     { field: 'sponsorshipProgramme', label: 'sponsorshipProgramme' },
     { field: 'lastYearOfSchool',     label: 'lastYearOfSchool' },
-    { field: 'guardianRelationship', label: 'guardianRelationship' },
-    { field: 'guardianFirstName',    label: 'guardianFirstName' },
-    { field: 'guardianLastName',     label: 'guardianLastName' },
-    { field: 'guardianEmail',        label: 'guardianEmail' },
-    { field: 'guardianMobile',       label: 'guardianMobile' },
-    { field: 'guardianStreet',       label: 'guardianStreet' },
-    { field: 'guardianSuburb',       label: 'guardianSuburb' },
-    { field: 'guardianCity',         label: 'guardianCity' },
-    { field: 'guardianCountry',      label: 'guardianCountry' },
-    { field: 'guardianPostcode',     label: 'guardianPostcode' },
-    { field: 'accommodationType',    label: 'accommodationType' },
+    { field: 'guardianRelationship', label: 'guardianRelationship', condition: under18 },
+    { field: 'guardianFirstName',    label: 'guardianFirstName',    condition: under18 },
+    { field: 'guardianLastName',     label: 'guardianLastName',     condition: under18 },
+    { field: 'guardianEmail',        label: 'guardianEmail',        condition: under18 },
+    { field: 'guardianMobile',       label: 'guardianMobile',       condition: under18 },
+    { field: 'guardianStreet',       label: 'guardianStreet',       condition: under18 },
+    { field: 'guardianSuburb',       label: 'guardianSuburb',       condition: under18 },
+    { field: 'guardianCity',         label: 'guardianCity',         condition: under18 },
+    { field: 'guardianCountry',      label: 'guardianCountry',      condition: under18 },
+    { field: 'guardianPostcode',     label: 'guardianPostcode',     condition: under18 },
+    { field: 'accommodationType',    label: 'accommodationType',    condition: under18 },
     { field: 'counsellorFirstName',  label: 'counsellorFirstName',  condition: role === 'AGENT' },
     { field: 'counsellorLastName',   label: 'counsellorLastName',   condition: role === 'AGENT' },
     { field: 'counsellorEmail',      label: 'counsellorEmail',      condition: role === 'AGENT' },

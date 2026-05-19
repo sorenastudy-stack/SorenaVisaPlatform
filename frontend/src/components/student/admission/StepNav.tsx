@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { useAdmission } from './AdmissionFormContext';
+import { getVisibleSteps } from './stepVisibility';
 
 const STEP_LABELS: Record<number, string> = {
   1: 'admissionStep1Title',
@@ -15,14 +16,14 @@ const STEP_LABELS: Record<number, string> = {
   8: 'admissionStep8Title',
 };
 
-// Step 7 (Agent information) is hidden for non-agent users
-const STUDENT_STEPS = [1, 2, 3, 4, 5, 6, 8];
-const AGENT_STEPS   = [1, 2, 3, 4, 5, 6, 7, 8];
+// Step 7 is hidden for non-agent users; Steps 5 & 6 are hidden for 18+ users
+// (see stepVisibility.ts).
 
 export function StepNav({ isAgent }: { isAgent: boolean }) {
   const t = useTranslations();
-  const { currentStep, setCurrentStep, isReadOnly, application } = useAdmission();
-  const visibleSteps = isAgent ? AGENT_STEPS : STUDENT_STEPS;
+  const { currentStep, setCurrentStep, isReadOnly, application, step2Fields } = useAdmission();
+  const role = isAgent ? 'AGENT' : 'STUDENT';
+  const visibleSteps = getVisibleSteps(role, step2Fields.dateOfBirth);
   const savedStep = application?.currentStep ?? 1;
 
   return (
