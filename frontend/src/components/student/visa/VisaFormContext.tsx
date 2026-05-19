@@ -97,6 +97,13 @@ export interface VisaApplication {
   holdsOtherCitizenships: boolean | null;
   livedOtherCountry5Years: boolean | null;
 
+  // Section 7 — Employment history (PR-VISA7)
+  everGovernmentEmployed: boolean | null;
+  everPrisonGuard: boolean | null;
+  currentlyWorking: boolean | null;
+  hadPreviousEmployment: boolean | null;
+  everUnemployed: boolean | null;
+
   // Section 5 — Health (PR-VISA5)
   hasTuberculosis: boolean | null;
   needsRenalDialysis: boolean | null;
@@ -179,6 +186,72 @@ export interface EducationSupplementPatch {
   qualificationAwarded?: boolean | null;
 }
 
+// Step 7 (PR-VISA7) — jobs table. Same row shape for CURRENT and
+// PREVIOUS entries; `entryKind` discriminates. `duties` is the plaintext
+// value of the encrypted dutiesEncrypted column.
+export interface EmploymentEntry {
+  id: string;
+  entryKind: 'CURRENT' | 'PREVIOUS' | string;
+  startDate: string | null;
+  endDate: string | null;
+  roleTitle: string | null;
+  duties: string | null;
+  countryOfWork: string | null;
+  stateOfWork: string | null;
+  supervisorName: string | null;
+  organisationField: string | null;
+  organisationCountry: string | null;
+  organisationState: string | null;
+  employerName: string | null;
+  employerStreet: string | null;
+  employerSuburb: string | null;
+  employerTownCity: string | null;
+  employerSubregion: string | null;
+  employerRegion: string | null;
+  employerPostcode: string | null;
+  employerPhone: string | null;
+  employerEmail: string | null;
+  sortOrder: number;
+}
+
+export interface EmploymentEntryPatch {
+  startDate?: string | null;
+  endDate?: string | null;
+  roleTitle?: string | null;
+  duties?: string | null;
+  countryOfWork?: string | null;
+  stateOfWork?: string | null;
+  supervisorName?: string | null;
+  organisationField?: string | null;
+  organisationCountry?: string | null;
+  organisationState?: string | null;
+  employerName?: string | null;
+  employerStreet?: string | null;
+  employerSuburb?: string | null;
+  employerTownCity?: string | null;
+  employerSubregion?: string | null;
+  employerRegion?: string | null;
+  employerPostcode?: string | null;
+  employerPhone?: string | null;
+  employerEmail?: string | null;
+}
+
+export interface UnemploymentEntry {
+  id: string;
+  startDate: string | null;
+  endDate: string | null;
+  activity: string | null;
+  financialSupport: string | null;
+  sortOrder: number;
+}
+
+export interface UnemploymentEntryPatch {
+  startDate?: string | null;
+  endDate?: string | null;
+  activity?: string | null;
+  financialSupport?: string | null;
+}
+
 // Read-only snapshot pulled from admission + contacts. The Visa Section
 // never re-collects these — they are displayed inline and the student
 // edits them on the admission/account profile if a correction is needed.
@@ -240,11 +313,28 @@ interface ContextValue {
     educationEntryId: string,
     patch: EducationSupplementPatch,
   ) => Promise<EducationSupplement>;
+
+  // Step 7 — employment + unemployment repeating tables.
+  employmentEntries: EmploymentEntry[];
+  addEmploymentEntry: (entryKind: 'CURRENT' | 'PREVIOUS') => Promise<EmploymentEntry>;
+  updateEmploymentEntry: (
+    id: string,
+    patch: EmploymentEntryPatch,
+  ) => Promise<EmploymentEntry>;
+  deleteEmploymentEntry: (id: string) => Promise<void>;
+
+  unemploymentEntries: UnemploymentEntry[];
+  addUnemploymentEntry: () => Promise<UnemploymentEntry>;
+  updateUnemploymentEntry: (
+    id: string,
+    patch: UnemploymentEntryPatch,
+  ) => Promise<UnemploymentEntry>;
+  deleteUnemploymentEntry: (id: string) => Promise<void>;
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA6 brings this to 6).
-export const VISA_TOTAL_STEPS = 6;
+// each later INZ section is built (PR-VISA7 brings this to 7).
+export const VISA_TOTAL_STEPS = 7;
 
 const VisaContext = createContext<ContextValue | null>(null);
 
@@ -256,6 +346,8 @@ export function VisaProvider({
   initialTbRiskCountries,
   initialEducationEntries,
   initialEducationSupplements,
+  initialEmploymentEntries,
+  initialUnemploymentEntries,
 }: {
   children: ReactNode;
   initialVisa: VisaApplication;
@@ -264,6 +356,8 @@ export function VisaProvider({
   initialTbRiskCountries: TbRiskCountry[];
   initialEducationEntries: EducationEntryRow[];
   initialEducationSupplements: EducationSupplement[];
+  initialEmploymentEntries: EmploymentEntry[];
+  initialUnemploymentEntries: UnemploymentEntry[];
 }) {
   const [visa, setVisa] = useState<VisaApplication>(initialVisa);
   const [readonlyState] = useState<VisaReadonly>(initialReadonly);
@@ -278,6 +372,12 @@ export function VisaProvider({
   const [educationSupplements, setEducationSupplements] = useState<EducationSupplement[]>(
     initialEducationSupplements ?? [],
   );
+  const [employmentEntries, setEmploymentEntries] = useState<EmploymentEntry[]>(
+    initialEmploymentEntries ?? [],
+  );
+  const [unemploymentEntries, setUnemploymentEntries] = useState<UnemploymentEntry[]>(
+    initialUnemploymentEntries ?? [],
+  );
   // Clamp the initial step in case the row has a stale value from before
   // VISA_TOTAL_STEPS bumped — we never want the UI in an off-by-one state.
   const [activeStep, setActiveStep] = useState<number>(() =>
@@ -291,6 +391,8 @@ export function VisaProvider({
       otherCitizenships?: OtherCitizenship[];
       tbRiskCountries?: TbRiskCountry[];
       educationSupplements?: EducationSupplement[];
+      employmentEntries?: EmploymentEntry[];
+      unemploymentEntries?: UnemploymentEntry[];
     }>(
       '/students/me/visa/application',
       fields,
@@ -307,6 +409,12 @@ export function VisaProvider({
     }
     if (Array.isArray(res.educationSupplements)) {
       setEducationSupplements(res.educationSupplements);
+    }
+    if (Array.isArray(res.employmentEntries)) {
+      setEmploymentEntries(res.employmentEntries);
+    }
+    if (Array.isArray(res.unemploymentEntries)) {
+      setUnemploymentEntries(res.unemploymentEntries);
     }
   }, []);
 
@@ -370,6 +478,71 @@ export function VisaProvider({
     setTbRiskCountries(prev => prev.filter(r => r.id !== id));
   }, []);
 
+  const addEmploymentEntry = useCallback(
+    async (entryKind: 'CURRENT' | 'PREVIOUS') => {
+      const row = await api.post<EmploymentEntry>(
+        '/students/me/visa/employment-entries',
+        { entryKind },
+      );
+      // CURRENT is singleton at the server — replace any existing one
+      // locally; PREVIOUS appends.
+      setEmploymentEntries((prev) => {
+        if (entryKind === 'CURRENT') {
+          const others = prev.filter(e => e.entryKind !== 'CURRENT');
+          return [...others, row].sort((a, b) => a.sortOrder - b.sortOrder);
+        }
+        return [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder);
+      });
+      return row;
+    },
+    [],
+  );
+
+  const updateEmploymentEntry = useCallback(
+    async (id: string, patch: EmploymentEntryPatch) => {
+      const row = await api.patch<EmploymentEntry>(
+        `/students/me/visa/employment-entries/${id}`,
+        patch,
+      );
+      setEmploymentEntries(prev => prev.map(r => (r.id === id ? row : r)));
+      return row;
+    },
+    [],
+  );
+
+  const deleteEmploymentEntry = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/employment-entries/${id}`);
+    setEmploymentEntries(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const addUnemploymentEntry = useCallback(async () => {
+    const row = await api.post<UnemploymentEntry>(
+      '/students/me/visa/unemployment-entries',
+      {},
+    );
+    setUnemploymentEntries(prev =>
+      [...prev, row].sort((a, b) => a.sortOrder - b.sortOrder),
+    );
+    return row;
+  }, []);
+
+  const updateUnemploymentEntry = useCallback(
+    async (id: string, patch: UnemploymentEntryPatch) => {
+      const row = await api.patch<UnemploymentEntry>(
+        `/students/me/visa/unemployment-entries/${id}`,
+        patch,
+      );
+      setUnemploymentEntries(prev => prev.map(r => (r.id === id ? row : r)));
+      return row;
+    },
+    [],
+  );
+
+  const deleteUnemploymentEntry = useCallback(async (id: string) => {
+    await api.delete<void>(`/students/me/visa/unemployment-entries/${id}`);
+    setUnemploymentEntries(prev => prev.filter(r => r.id !== id));
+  }, []);
+
   const upsertEducationSupplement = useCallback(
     async (educationEntryId: string, patch: EducationSupplementPatch) => {
       const row = await api.patch<EducationSupplement>(
@@ -409,6 +582,14 @@ export function VisaProvider({
       educationEntries,
       educationSupplements,
       upsertEducationSupplement,
+      employmentEntries,
+      addEmploymentEntry,
+      updateEmploymentEntry,
+      deleteEmploymentEntry,
+      unemploymentEntries,
+      addUnemploymentEntry,
+      updateUnemploymentEntry,
+      deleteUnemploymentEntry,
     }}>
       {children}
     </VisaContext.Provider>

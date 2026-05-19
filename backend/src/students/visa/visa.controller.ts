@@ -120,4 +120,52 @@ export class VisaController {
       body,
     );
   }
+
+  // ── Employment entries CRUD (PR-VISA7) ───────────────────────────
+  @Post('employment-entries')
+  addEmploymentEntry(
+    @Req() req: any,
+    @Body() body: { entryKind: string; [k: string]: unknown },
+  ) {
+    return this.visaService.addEmploymentEntry(req.user.userId, body);
+  }
+
+  @Patch('employment-entries/:id')
+  updateEmploymentEntry(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.visaService.updateEmploymentEntry(req.user.userId, id, body);
+  }
+
+  @Delete('employment-entries/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteEmploymentEntry(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteEmploymentEntry(req.user.userId, id);
+  }
+
+  // ── Unemployment entries CRUD (PR-VISA7) ─────────────────────────
+  @Post('unemployment-entries')
+  addUnemploymentEntry(
+    @Req() req: any,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.visaService.addUnemploymentEntry(req.user.userId, body);
+  }
+
+  @Patch('unemployment-entries/:id')
+  updateUnemploymentEntry(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.visaService.updateUnemploymentEntry(req.user.userId, id, body);
+  }
+
+  @Delete('unemployment-entries/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteUnemploymentEntry(@Req() req: any, @Param('id') id: string) {
+    return this.visaService.deleteUnemploymentEntry(req.user.userId, id);
+  }
 }

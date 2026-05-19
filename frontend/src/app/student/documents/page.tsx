@@ -9,6 +9,8 @@ import type {
   TbRiskCountry,
   EducationEntryRow,
   EducationSupplement,
+  EmploymentEntry,
+  UnemploymentEntry,
 } from '@/components/student/visa/VisaFormContext';
 
 interface InitialResponse {
@@ -19,6 +21,8 @@ interface InitialResponse {
   tbRiskCountries?: TbRiskCountry[];
   educationEntries?: EducationEntryRow[];
   educationSupplements?: EducationSupplement[];
+  employmentEntries?: EmploymentEntry[];
+  unemploymentEntries?: UnemploymentEntry[];
 }
 
 // The Visa Section lives at /student/documents (the route is unchanged from
@@ -38,6 +42,8 @@ export default async function StudentVisaSectionPage() {
         tbRiskCountries: TbRiskCountry[];
         educationEntries: EducationEntryRow[];
         educationSupplements: EducationSupplement[];
+        employmentEntries: EmploymentEntry[];
+        unemploymentEntries: UnemploymentEntry[];
       }
     | null = null;
 
@@ -51,6 +57,8 @@ export default async function StudentVisaSectionPage() {
         tbRiskCountries: res.tbRiskCountries ?? [],
         educationEntries: res.educationEntries ?? [],
         educationSupplements: res.educationSupplements ?? [],
+        employmentEntries: res.employmentEntries ?? [],
+        unemploymentEntries: res.unemploymentEntries ?? [],
       };
     }
   } catch {

@@ -1365,6 +1365,13 @@ model VisaApplication {
   insuranceDeclarationAgreed     Boolean?
   publicHealthAckAgreed          Boolean?
 
+  // Section 7 — Employment history (PR-VISA7)
+  everGovernmentEmployed         Boolean?
+  everPrisonGuard                Boolean?
+  currentlyWorking               Boolean?
+  hadPreviousEmployment          Boolean?
+  everUnemployed                 Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -1373,8 +1380,68 @@ model VisaApplication {
   otherCitizenships       VisaOtherCitizenship[]
   tbRiskCountries         VisaTbRiskCountry[]
   educationSupplements    VisaEducationSupplement[]
+  employmentEntries       VisaEmploymentEntry[]
+  unemploymentEntries     VisaUnemploymentEntry[]
 
   @@map("visa_applications")
+}
+
+// Step 7 employment history (PR-VISA7). One table covers both the
+// single CURRENT job and any number of PREVIOUS jobs — distinguished by
+// entryKind. duties is PII (free-text role description) and stored
+// encrypted via CryptoService using the standard AES-256-GCM envelope.
+// startDate carries month-precision (we store the 1st of the month);
+// endDate is null on the CURRENT row.
+model VisaEmploymentEntry {
+  id                   String   @id @default(cuid())
+  visaApplicationId    String
+  entryKind            String
+  startDate            DateTime?
+  endDate              DateTime?
+  roleTitle            String?
+  dutiesEncrypted      Bytes?
+  countryOfWork        String?
+  stateOfWork          String?
+  supervisorName       String?
+  organisationField    String?
+  organisationCountry  String?
+  organisationState    String?
+  employerName         String?
+  employerStreet       String?
+  employerSuburb       String?
+  employerTownCity     String?
+  employerSubregion    String?
+  employerRegion       String?
+  employerPostcode     String?
+  employerPhone        String?
+  employerEmail        String?
+  sortOrder            Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  visaApplication      VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_employment_entries")
+}
+
+// Step 7 unemployment / unpaid-service periods (PR-VISA7). Both
+// free-text descriptions are PII and stored encrypted.
+model VisaUnemploymentEntry {
+  id                          String   @id @default(cuid())
+  visaApplicationId           String
+  startDate                   DateTime?
+  endDate                     DateTime?
+  activityEncrypted           Bytes?
+  financialSupportEncrypted   Bytes?
+  sortOrder                   Int      @default(0)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  visaApplication             VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_unemployment_entries")
 }
 
 // Visa-side extras for an admission education entry (PR-VISA6). One row

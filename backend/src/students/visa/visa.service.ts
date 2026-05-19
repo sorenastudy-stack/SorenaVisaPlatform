@@ -131,8 +131,17 @@ const PATCHABLE_VISA_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'dateti
   insuranceDeclarationAgreed:   'boolean',
   publicHealthAckAgreed:        'boolean',
 
+  // Section 7 — Employment history (PR-VISA7) — five screening Y/Ns.
+  everGovernmentEmployed:       'boolean',
+  everPrisonGuard:              'boolean',
+  currentlyWorking:             'boolean',
+  hadPreviousEmployment:        'boolean',
+  everUnemployed:               'boolean',
+
   currentStep:            'int',
 };
+
+const VALID_EMPLOYMENT_KINDS = new Set(['CURRENT', 'PREVIOUS']);
 
 const VALID_GENDERS = new Set(['MALE', 'FEMALE', 'GENDER_DIVERSE']);
 const VALID_MASTERS_OR_PHD = new Set(['MASTERS', 'PHD', 'NEITHER']);
@@ -334,6 +343,58 @@ export class VisaService {
     }));
   }
 
+  // PR-VISA7: employment + unemployment loaders. duties / activity /
+  // financialSupport are encrypted on disk; this returns plaintext keys.
+  private async loadEmploymentEntries(visaApplicationId: string) {
+    const rows = await this.prisma.visaEmploymentEntry.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      entryKind: r.entryKind,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      roleTitle: r.roleTitle,
+      duties: r.dutiesEncrypted ? this.crypto.decrypt(Buffer.from(r.dutiesEncrypted)) : null,
+      countryOfWork: r.countryOfWork,
+      stateOfWork: r.stateOfWork,
+      supervisorName: r.supervisorName,
+      organisationField: r.organisationField,
+      organisationCountry: r.organisationCountry,
+      organisationState: r.organisationState,
+      employerName: r.employerName,
+      employerStreet: r.employerStreet,
+      employerSuburb: r.employerSuburb,
+      employerTownCity: r.employerTownCity,
+      employerSubregion: r.employerSubregion,
+      employerRegion: r.employerRegion,
+      employerPostcode: r.employerPostcode,
+      employerPhone: r.employerPhone,
+      employerEmail: r.employerEmail,
+      sortOrder: r.sortOrder,
+    }));
+  }
+
+  private async loadUnemploymentEntries(visaApplicationId: string) {
+    const rows = await this.prisma.visaUnemploymentEntry.findMany({
+      where: { visaApplicationId },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      activity: r.activityEncrypted
+        ? this.crypto.decrypt(Buffer.from(r.activityEncrypted))
+        : null,
+      financialSupport: r.financialSupportEncrypted
+        ? this.crypto.decrypt(Buffer.from(r.financialSupportEncrypted))
+        : null,
+      sortOrder: r.sortOrder,
+    }));
+  }
+
   // Ownership helper for the citizenship CRUD routes — the row must belong
   // to a visa_application whose admission chain resolves to this userId.
   // Mirrors AdmissionService.assertEducationEntryOwnership.
@@ -408,6 +469,43 @@ export class VisaService {
     return { entry, visaApplicationId: visa.id };
   }
 
+  // PR-VISA7: ownership helpers for employment + unemployment rows.
+  private async assertEmploymentEntryOwnership(rowId: string, userId: string) {
+    const row = await this.prisma.visaEmploymentEntry.findUnique({
+      where: { id: rowId },
+      include: {
+        visaApplication: {
+          include: {
+            admissionApplication: { include: { contact: true } },
+          },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Employment entry not found');
+    if (row.visaApplication.admissionApplication.contact.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    return row;
+  }
+
+  private async assertUnemploymentEntryOwnership(rowId: string, userId: string) {
+    const row = await this.prisma.visaUnemploymentEntry.findUnique({
+      where: { id: rowId },
+      include: {
+        visaApplication: {
+          include: {
+            admissionApplication: { include: { contact: true } },
+          },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Unemployment entry not found');
+    if (row.visaApplication.admissionApplication.contact.userId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+    return row;
+  }
+
   // GET — returns { exists, visaApplication?, readonly, otherCitizenships }.
   // Does not auto-create the row; the client POSTs explicitly. This mirrors
   // the admission pattern.
@@ -427,6 +525,8 @@ export class VisaService {
         tbRiskCountries: [],
         educationEntries: await this.loadEducationEntries(admission.id),
         educationSupplements: [],
+        employmentEntries: [],
+        unemploymentEntries: [],
       };
     }
     return {
@@ -437,6 +537,8 @@ export class VisaService {
       tbRiskCountries: await this.loadTbRiskCountries(visa.id),
       educationEntries: await this.loadEducationEntries(admission.id),
       educationSupplements: await this.loadEducationSupplements(visa.id),
+      employmentEntries: await this.loadEmploymentEntries(visa.id),
+      unemploymentEntries: await this.loadUnemploymentEntries(visa.id),
     };
   }
 
@@ -459,6 +561,8 @@ export class VisaService {
       tbRiskCountries: await this.loadTbRiskCountries(visa.id),
       educationEntries: await this.loadEducationEntries(admission.id),
       educationSupplements: await this.loadEducationSupplements(visa.id),
+      employmentEntries: await this.loadEmploymentEntries(visa.id),
+      unemploymentEntries: await this.loadUnemploymentEntries(visa.id),
     };
   }
 
@@ -570,6 +674,31 @@ export class VisaService {
         where: { visaApplicationId: visa.id },
       });
     }
+    // PR-VISA7: same reconcile pattern for the three Step-7 child sets.
+    if (
+      Object.prototype.hasOwnProperty.call(sanitized, 'currentlyWorking') &&
+      sanitized.currentlyWorking !== true
+    ) {
+      await this.prisma.visaEmploymentEntry.deleteMany({
+        where: { visaApplicationId: visa.id, entryKind: 'CURRENT' },
+      });
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(sanitized, 'hadPreviousEmployment') &&
+      sanitized.hadPreviousEmployment !== true
+    ) {
+      await this.prisma.visaEmploymentEntry.deleteMany({
+        where: { visaApplicationId: visa.id, entryKind: 'PREVIOUS' },
+      });
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(sanitized, 'everUnemployed') &&
+      sanitized.everUnemployed !== true
+    ) {
+      await this.prisma.visaUnemploymentEntry.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+    }
 
     return {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
@@ -578,6 +707,8 @@ export class VisaService {
       tbRiskCountries: await this.loadTbRiskCountries(visa.id),
       educationEntries: await this.loadEducationEntries(admission.id),
       educationSupplements: await this.loadEducationSupplements(visa.id),
+      employmentEntries: await this.loadEmploymentEntries(visa.id),
+      unemploymentEntries: await this.loadUnemploymentEntries(visa.id),
     };
   }
 
@@ -846,5 +977,264 @@ export class VisaService {
       institutionTown: row.institutionTown,
       qualificationAwarded: row.qualificationAwarded,
     };
+  }
+
+  // ── Employment entries CRUD (PR-VISA7) ───────────────────────────────
+  // Same draft-then-fill pattern as the citizenship / TB tables: empty
+  // rows allowed on create, the Step 7 save validator on the frontend
+  // enforces required fields. duties is the only PII column; encrypted
+  // via CryptoService on every write, decrypted on every read in the
+  // loader above.
+
+  private serializeEmploymentEntry(r: {
+    id: string; entryKind: string;
+    startDate: Date | null; endDate: Date | null;
+    roleTitle: string | null;
+    dutiesEncrypted: Buffer | Uint8Array | null;
+    countryOfWork: string | null; stateOfWork: string | null;
+    supervisorName: string | null;
+    organisationField: string | null; organisationCountry: string | null; organisationState: string | null;
+    employerName: string | null;
+    employerStreet: string | null; employerSuburb: string | null; employerTownCity: string | null;
+    employerSubregion: string | null; employerRegion: string | null; employerPostcode: string | null;
+    employerPhone: string | null; employerEmail: string | null;
+    sortOrder: number;
+  }) {
+    return {
+      id: r.id,
+      entryKind: r.entryKind,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      roleTitle: r.roleTitle,
+      duties: r.dutiesEncrypted ? this.crypto.decrypt(Buffer.from(r.dutiesEncrypted)) : null,
+      countryOfWork: r.countryOfWork,
+      stateOfWork: r.stateOfWork,
+      supervisorName: r.supervisorName,
+      organisationField: r.organisationField,
+      organisationCountry: r.organisationCountry,
+      organisationState: r.organisationState,
+      employerName: r.employerName,
+      employerStreet: r.employerStreet,
+      employerSuburb: r.employerSuburb,
+      employerTownCity: r.employerTownCity,
+      employerSubregion: r.employerSubregion,
+      employerRegion: r.employerRegion,
+      employerPostcode: r.employerPostcode,
+      employerPhone: r.employerPhone,
+      employerEmail: r.employerEmail,
+      sortOrder: r.sortOrder,
+    };
+  }
+
+  // Shared coercion for the employment editable columns. Returns a Prisma
+  // data object with `dutiesEncrypted` already encrypted when duties is
+  // provided. Throws BadRequest for invalid shapes.
+  private buildEmploymentData(body: Record<string, unknown>): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+    const passText = (k: string) => {
+      if (body[k] === undefined) return;
+      data[k] = body[k] === null ? null : String(body[k]).trim();
+    };
+    if (body.startDate !== undefined) {
+      data.startDate = body.startDate === null ? null : new Date(body.startDate as string);
+      if (data.startDate instanceof Date && isNaN(data.startDate.getTime())) {
+        throw new BadRequestException('startDate must be a valid ISO date');
+      }
+    }
+    if (body.endDate !== undefined) {
+      data.endDate = body.endDate === null ? null : new Date(body.endDate as string);
+      if (data.endDate instanceof Date && isNaN(data.endDate.getTime())) {
+        throw new BadRequestException('endDate must be a valid ISO date');
+      }
+    }
+    passText('roleTitle');
+    if (body.duties !== undefined) {
+      if (body.duties === null || body.duties === '') {
+        data.dutiesEncrypted = null;
+      } else if (typeof body.duties === 'string') {
+        data.dutiesEncrypted = this.crypto.encrypt(body.duties);
+      } else {
+        throw new BadRequestException('duties must be a string');
+      }
+    }
+    passText('countryOfWork');
+    passText('stateOfWork');
+    passText('supervisorName');
+    passText('organisationField');
+    passText('organisationCountry');
+    passText('organisationState');
+    passText('employerName');
+    passText('employerStreet');
+    passText('employerSuburb');
+    passText('employerTownCity');
+    passText('employerSubregion');
+    passText('employerRegion');
+    passText('employerPostcode');
+    passText('employerPhone');
+    passText('employerEmail');
+    return data;
+  }
+
+  async addEmploymentEntry(
+    userId: string,
+    body: { entryKind: string; [k: string]: unknown },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    if (!body?.entryKind || !VALID_EMPLOYMENT_KINDS.has(body.entryKind)) {
+      throw new BadRequestException(
+        'entryKind must be one of CURRENT, PREVIOUS',
+      );
+    }
+    // CURRENT is meant to be singleton — refuse to create a second.
+    if (body.entryKind === 'CURRENT') {
+      const existing = await this.prisma.visaEmploymentEntry.findFirst({
+        where: { visaApplicationId: visa.id, entryKind: 'CURRENT' },
+      });
+      if (existing) {
+        return this.serializeEmploymentEntry(existing);
+      }
+    }
+    const last = await this.prisma.visaEmploymentEntry.findFirst({
+      where: { visaApplicationId: visa.id },
+      orderBy: { sortOrder: 'desc' },
+    });
+    const sortOrder = (last?.sortOrder ?? -1) + 1;
+    const data = this.buildEmploymentData(body);
+    const row = await this.prisma.visaEmploymentEntry.create({
+      data: {
+        visaApplicationId: visa.id,
+        entryKind: body.entryKind,
+        sortOrder,
+        ...data,
+      },
+    });
+    return this.serializeEmploymentEntry(row);
+  }
+
+  async updateEmploymentEntry(
+    userId: string,
+    rowId: string,
+    body: Record<string, unknown>,
+  ) {
+    await this.assertEmploymentEntryOwnership(rowId, userId);
+    const data = this.buildEmploymentData(body);
+    const row = await this.prisma.visaEmploymentEntry.update({
+      where: { id: rowId },
+      data,
+    });
+    return this.serializeEmploymentEntry(row);
+  }
+
+  async deleteEmploymentEntry(userId: string, rowId: string) {
+    await this.assertEmploymentEntryOwnership(rowId, userId);
+    await this.prisma.visaEmploymentEntry.delete({ where: { id: rowId } });
+  }
+
+  // ── Unemployment entries CRUD (PR-VISA7) ─────────────────────────────
+
+  private serializeUnemploymentEntry(r: {
+    id: string;
+    startDate: Date | null;
+    endDate: Date | null;
+    activityEncrypted: Buffer | Uint8Array | null;
+    financialSupportEncrypted: Buffer | Uint8Array | null;
+    sortOrder: number;
+  }) {
+    return {
+      id: r.id,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      activity: r.activityEncrypted
+        ? this.crypto.decrypt(Buffer.from(r.activityEncrypted))
+        : null,
+      financialSupport: r.financialSupportEncrypted
+        ? this.crypto.decrypt(Buffer.from(r.financialSupportEncrypted))
+        : null,
+      sortOrder: r.sortOrder,
+    };
+  }
+
+  private buildUnemploymentData(body: Record<string, unknown>): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+    if (body.startDate !== undefined) {
+      data.startDate = body.startDate === null ? null : new Date(body.startDate as string);
+      if (data.startDate instanceof Date && isNaN(data.startDate.getTime())) {
+        throw new BadRequestException('startDate must be a valid ISO date');
+      }
+    }
+    if (body.endDate !== undefined) {
+      data.endDate = body.endDate === null ? null : new Date(body.endDate as string);
+      if (data.endDate instanceof Date && isNaN(data.endDate.getTime())) {
+        throw new BadRequestException('endDate must be a valid ISO date');
+      }
+    }
+    if (body.activity !== undefined) {
+      if (body.activity === null || body.activity === '') {
+        data.activityEncrypted = null;
+      } else if (typeof body.activity === 'string') {
+        data.activityEncrypted = this.crypto.encrypt(body.activity);
+      } else {
+        throw new BadRequestException('activity must be a string');
+      }
+    }
+    if (body.financialSupport !== undefined) {
+      if (body.financialSupport === null || body.financialSupport === '') {
+        data.financialSupportEncrypted = null;
+      } else if (typeof body.financialSupport === 'string') {
+        data.financialSupportEncrypted = this.crypto.encrypt(body.financialSupport);
+      } else {
+        throw new BadRequestException('financialSupport must be a string');
+      }
+    }
+    return data;
+  }
+
+  async addUnemploymentEntry(userId: string, body: Record<string, unknown>) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    const last = await this.prisma.visaUnemploymentEntry.findFirst({
+      where: { visaApplicationId: visa.id },
+      orderBy: { sortOrder: 'desc' },
+    });
+    const sortOrder = (last?.sortOrder ?? -1) + 1;
+    const data = this.buildUnemploymentData(body);
+    const row = await this.prisma.visaUnemploymentEntry.create({
+      data: { visaApplicationId: visa.id, sortOrder, ...data },
+    });
+    return this.serializeUnemploymentEntry(row);
+  }
+
+  async updateUnemploymentEntry(
+    userId: string,
+    rowId: string,
+    body: Record<string, unknown>,
+  ) {
+    await this.assertUnemploymentEntryOwnership(rowId, userId);
+    const data = this.buildUnemploymentData(body);
+    const row = await this.prisma.visaUnemploymentEntry.update({
+      where: { id: rowId },
+      data,
+    });
+    return this.serializeUnemploymentEntry(row);
+  }
+
+  async deleteUnemploymentEntry(userId: string, rowId: string) {
+    await this.assertUnemploymentEntryOwnership(rowId, userId);
+    await this.prisma.visaUnemploymentEntry.delete({ where: { id: rowId } });
   }
 }

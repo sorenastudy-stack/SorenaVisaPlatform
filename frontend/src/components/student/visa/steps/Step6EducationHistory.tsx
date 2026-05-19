@@ -190,6 +190,8 @@ export function Step6EducationHistory() {
       await patchVisa({ currentStep: 7 });
       setSavedAt(new Date().toISOString());
       toast.success(t('visaEducationHistorySaveSuccess'));
+      // PR-VISA7: advance the stepper now that Section 7 exists.
+      setActiveStep(7);
     } catch {
       toast.error(t('visaEducationHistorySaveError'));
     } finally {
