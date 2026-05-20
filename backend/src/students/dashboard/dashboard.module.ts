@@ -3,6 +3,7 @@ import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
+import { TicketsModule } from '../tickets/tickets.module';
 
 // PR-DASH-1 — Client-dashboard module.
 //
@@ -15,8 +16,12 @@ import { CryptoModule } from '../../common/crypto/crypto.module';
 // AssessmentReport on first load, idempotently, in a single
 // transaction. Decrypts the AssessmentReport's summaryNarrative
 // before returning.
+//
+// PR-DASH-2: now imports TicketsModule so the dashboard payload
+// can include a small "tickets" summary block (open count + the
+// three latest open tickets) without duplicating ownership logic.
 @Module({
-  imports: [PrismaModule, CryptoModule],
+  imports: [PrismaModule, CryptoModule, TicketsModule],
   controllers: [DashboardController],
   providers: [DashboardService],
 })

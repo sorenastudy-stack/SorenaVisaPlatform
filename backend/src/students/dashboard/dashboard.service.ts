@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { TicketsService } from '../tickets/tickets.service';
 
 // PR-DASH-1 — Client-dashboard service.
 //
@@ -48,6 +49,9 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    // PR-DASH-2: pulled in so the dashboard payload can include a
+    // tickets summary block without duplicating ownership logic.
+    private readonly tickets: TicketsService,
   ) {}
 
   // Same chain visa.service uses. Returns the admission row and the
@@ -395,6 +399,11 @@ export class DashboardService {
       },
       documents: docs,
       recentActivity: auditRows.map((r) => this.mapAuditRow(r)),
+      // PR-DASH-2: tickets summary block. Delegates to the tickets
+      // service so the ownership-chain logic lives in one place. The
+      // shape matches the spec's `tickets: { openCount, latestOpen }`
+      // contract.
+      tickets: await this.tickets.getDashboardSummary(userId),
     };
   }
 

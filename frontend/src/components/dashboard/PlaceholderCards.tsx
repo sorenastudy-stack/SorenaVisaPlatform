@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Ticket, Video, MessageCircle } from 'lucide-react';
+import { Video, MessageCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 
 // PR-DASH-1 — Disabled "coming soon" cards.
@@ -40,15 +40,9 @@ function Placeholder({
   );
 }
 
-export function TicketsPlaceholderCard() {
-  return (
-    <Placeholder
-      titleKey="dashboard.tickets.placeholder.title"
-      bodyKey="dashboard.tickets.placeholder.body"
-      icon={<Ticket size={20} />}
-    />
-  );
-}
+// PR-DASH-2: TicketsPlaceholderCard removed — tickets are live now.
+// MeetingsPlaceholderCard and ChatbotPlaceholderCard remain until
+// PR-DASH-3 and PR-DASH-4 activate them.
 
 export function MeetingsPlaceholderCard() {
   return (

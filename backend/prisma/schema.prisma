@@ -302,6 +302,18 @@ model User {
   consultantVisaCases   VisaCase[]        @relation("VisaCaseConsultant")
   assessmentReport      AssessmentReport?
 
+  // PR-DASH-2: support-ticket relations.
+  // `visaSupportTicketsAsClient`: tickets this user opened.
+  // `visaSupportTicketsAsStaff`: tickets assigned to this user.
+  // `visaSupportTicketMessages`: messages authored by this user
+  // (CLIENT or STAFF).
+  // `visaCaseFileNotesCreated`: file notes created by this user
+  // (nullable on the row — system-generated notes have no author).
+  visaSupportTicketsAsClient  VisaSupportTicket[]        @relation("VisaSupportTicketClient")
+  visaSupportTicketsAsStaff   VisaSupportTicket[]        @relation("VisaSupportTicketStaff")
+  visaSupportTicketMessages   VisaSupportTicketMessage[]
+  visaCaseFileNotesCreated    VisaCaseFileNote[]         @relation("VisaCaseFileNoteCreator")
+
   @@map("users")
 }
 
@@ -2005,6 +2017,10 @@ model VisaCase {
   client                User            @relation("VisaCaseClient", fields: [clientId], references: [id], onDelete: Cascade)
   assignedConsultant    User?           @relation("VisaCaseConsultant", fields: [assignedConsultantId], references: [id])
 
+  // PR-DASH-2 children
+  supportTickets        VisaSupportTicket[]
+  fileNotes             VisaCaseFileNote[]
+
   @@index([clientId])
   @@index([assignedConsultantId])
   @@index([status])
@@ -2033,6 +2049,144 @@ model AssessmentReport {
   client                      User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@map("assessment_reports")
+}
+
+// ─── PR-DASH-2 — Client-side support tickets + case file notes ───────
+//
+// Three new tables + five enums. Tickets are 1-N off the dashboard's
+// VisaCase row (not the CRM-side Case at line 639 — that's the
+// consultant pipeline artifact). Messages are 1-N off a ticket and
+// store an encrypted free-text body. File notes are an append-only
+// log of significant events that affect the case (ticket creation,
+// status changes — and in later PRs, meeting transcripts and
+// consultant notes).
+//
+// Body / subject / summary text is ALWAYS encrypted via CryptoService
+// (AES-256-GCM), same envelope as every other PII column in the
+// project.
+
+// What part of Sorena the ticket is about. Drives badge colour on
+// the client UI and (in a future PR) routes the inbox a staff
+// member sees.
+enum VisaTicketDepartment {
+  ADMISSIONS
+  VISA_APPLICATION
+  DOCUMENTS
+  PAYMENTS_FINANCE
+  TECHNICAL_SUPPORT
+  GENERAL_INQUIRY
+}
+
+// Workflow status. CLOSED is terminal — clients can't reopen; they
+// open a new ticket if they need further help (per spec).
+enum VisaTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum VisaTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+// Who wrote a given message row. SYSTEM is reserved for the service-
+// generated rows (e.g. "Status changed from OPEN to RESOLVED") so
+// the UI can render them as gray italic banners rather than chat
+// bubbles.
+enum VisaTicketMessageAuthorRole {
+  CLIENT
+  STAFF
+  SYSTEM
+}
+
+// Kind of event the file note records. TICKET / SYSTEM_EVENT are
+// emitted by this PR; MEETING_TRANSCRIPT and CONSULTANT_NOTE are
+// reserved for PR-DASH-3.
+enum VisaCaseFileNoteType {
+  TICKET
+  MEETING_TRANSCRIPT
+  CONSULTANT_NOTE
+  SYSTEM_EVENT
+}
+
+// One ticket per client question. subjectEncrypted is the only PII
+// column on the row; all timestamps + foreign keys are cleartext for
+// indexable filtering. assignedStaffId nulls out on staff deletion
+// rather than cascading the ticket itself (a deleted consultant
+// shouldn't tear down the client's ticket history).
+model VisaSupportTicket {
+  id                    String                @id @default(uuid())
+  clientId              String
+  caseId                String
+  assignedStaffId       String?
+  department            VisaTicketDepartment
+  subjectEncrypted      Bytes
+  status                VisaTicketStatus      @default(OPEN)
+  priority              VisaTicketPriority    @default(NORMAL)
+  lastClientMessageAt   DateTime?
+  lastStaffMessageAt    DateTime?
+  resolvedAt            DateTime?
+  closedAt              DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  client                User                  @relation("VisaSupportTicketClient", fields: [clientId], references: [id], onDelete: Cascade)
+  assignedStaff         User?                 @relation("VisaSupportTicketStaff", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  case                  VisaCase              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  messages              VisaSupportTicketMessage[]
+
+  @@index([clientId, status])
+  @@index([assignedStaffId, status])
+  @@index([caseId])
+  @@map("visa_support_tickets")
+}
+
+// One row per message in a thread. isInternalNote is reserved for
+// staff-side internal commentary in a future PR — this PR's client
+// endpoints filter it out. The author FK uses a non-named relation
+// because messages are not user-deletable.
+model VisaSupportTicketMessage {
+  id              String                          @id @default(uuid())
+  ticketId        String
+  authorId        String
+  authorRole      VisaTicketMessageAuthorRole
+  bodyEncrypted   Bytes
+  isInternalNote  Boolean                         @default(false)
+  createdAt       DateTime                        @default(now())
+  updatedAt       DateTime                        @updatedAt
+
+  ticket          VisaSupportTicket               @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author          User                            @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("visa_support_ticket_messages")
+}
+
+// Append-only log of events that affect the case. Acts as the
+// consultant's "case file" — a single chronological view they can
+// scroll through to catch up. summaryEncrypted holds a short
+// human-readable string (e.g. "Ticket opened — DOCUMENTS: 'Scholarship
+// question'"). createdById is nullable for system-emitted notes.
+model VisaCaseFileNote {
+  id                String                @id @default(uuid())
+  caseId            String
+  noteType          VisaCaseFileNoteType
+  // Uuid of the source row (ticket id / meeting id / etc). Not a
+  // typed FK because the source table varies by noteType.
+  referenceId       String
+  summaryEncrypted  Bytes
+  createdById       String?
+  createdAt         DateTime              @default(now())
+
+  case              VisaCase              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdBy         User?                 @relation("VisaCaseFileNoteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([caseId, createdAt])
+  @@index([referenceId])
+  @@map("visa_case_file_notes")
 }
 
 // Step 11 (PR-VISA11) — Travel history child row. The gate flag
