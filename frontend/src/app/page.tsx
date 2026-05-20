@@ -1,9 +1,7 @@
-'use client';
+﻿'use client';
 import { useRouter } from 'next/navigation';
-
 export default function Home() {
   const router = useRouter();
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -38,7 +36,7 @@ export default function Home() {
           Global education and migration support
         </p>
         <button
-          onClick={() => router.push('/eligibility')}
+          onClick={() => router.push('/login')}
           style={{
             padding: '14px 40px',
             background: '#0d7a6e',
@@ -50,7 +48,7 @@ export default function Home() {
             cursor: 'pointer'
           }}
         >
-          Check Your Eligibility
+          Sign In
         </button>
       </div>
     </div>
