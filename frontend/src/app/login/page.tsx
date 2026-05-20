@@ -16,6 +16,9 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
+// PR-DASH-1: students land on the dashboard, not the visa shell.
+// SUPPORT keeps the legacy /student entry point until PR-DASH-2 brings
+// them onto the dashboard too.
 const ROLE_REDIRECT: Record<string, string> = {
   SUPER_ADMIN: '/admin',
   ADMIN:       '/admin',
@@ -23,7 +26,7 @@ const ROLE_REDIRECT: Record<string, string> = {
   SALES:       '/sales',
   LIA:         '/lia',
   SUPPORT:     '/student',
-  STUDENT:     '/student',
+  STUDENT:     '/student/dashboard',
 };
 
 function LoginForm() {

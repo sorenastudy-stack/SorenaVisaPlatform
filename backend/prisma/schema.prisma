@@ -293,6 +293,15 @@ model User {
   agentProfile      AgentProfile?
   agentApplications AdmissionApplication[]  @relation("ApplicationAgent")
 
+  // PR-DASH-1: client dashboard relations. `clientVisaCases` are the
+  // dashboard-side visa cases this user OWNS as a student (1:1 with
+  // their VisaApplication). `consultantVisaCases` are visa cases this
+  // user is ASSIGNED TO as a consultant. `assessmentReport` is the
+  // Friday AI scoring bot's writeback target (1:1 per student).
+  clientVisaCases       VisaCase[]        @relation("VisaCaseClient")
+  consultantVisaCases   VisaCase[]        @relation("VisaCaseConsultant")
+  assessmentReport      AssessmentReport?
+
   @@map("users")
 }
 
@@ -929,6 +938,13 @@ model AuditLog {
   id         String   @id @default(cuid())
   userId     String?
   action     String
+  // PR-DASH-1: structured event type that maps to a client-dashboard
+  // activity-feed i18n key (STEP_STARTED / STEP_SAVED / DOCUMENT_RECORDED
+  // / DOCUMENT_REMOVED / STATUS_CHANGED). Nullable on existing rows —
+  // the dashboard read endpoint falls back to deriving the event type
+  // from the `action` string for rows written before this PR. Future
+  // mutation paths should populate this directly.
+  eventType  String?
   entityType String?
   entityId   String?
   oldValue   Json?
@@ -1494,6 +1510,7 @@ model VisaApplication {
   travelHistoryEntries    VisaTravelHistoryEntry[]
   supportingDocuments     VisaSupportingDocument[]
   otherEvidenceEntries    VisaOtherEvidenceEntry[]
+  visaCase                VisaCase?
 
   @@map("visa_applications")
 }
@@ -1947,6 +1964,75 @@ model VisaOtherEvidenceEntry {
 
   @@index([visaApplicationId])
   @@map("visa_other_evidence_entries")
+}
+
+// PR-DASH-1 — Client-dashboard workflow status.
+//
+// The existing `Case` model (line 639) is a CRM/sales-side artifact
+// keyed to Lead, with a `CaseStage` enum (ADMISSION / VISA / etc.) and
+// a free-text `status`. VisaCase is a separate, dashboard-side row
+// keyed to VisaApplication 1:1, with a structured status enum the
+// client UI renders. They coexist by design — the CRM Case tracks the
+// consultant's pipeline; the VisaCase tracks the student-facing visa
+// workflow status.
+//
+// Auto-created on first dashboard load alongside the VisaApplication
+// and AssessmentReport rows (single transaction, idempotent upsert by
+// clientId / visaApplicationId).
+enum VisaCaseStatus {
+  DRAFT
+  SUBMITTED_FOR_REVIEW
+  REVIEWED
+  READY_FOR_INZ
+  INZ_SUBMITTED
+  APPROVED
+  DECLINED
+}
+
+model VisaCase {
+  id                    String          @id @default(cuid())
+  visaApplicationId     String          @unique
+  clientId              String
+  assignedConsultantId  String?
+  status                VisaCaseStatus  @default(DRAFT)
+  statusChangedAt       DateTime        @default(now())
+  // userId of whoever changed status; null when system-set on creation.
+  statusChangedBy       String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  visaApplication       VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  client                User            @relation("VisaCaseClient", fields: [clientId], references: [id], onDelete: Cascade)
+  assignedConsultant    User?           @relation("VisaCaseConsultant", fields: [assignedConsultantId], references: [id])
+
+  @@index([clientId])
+  @@index([assignedConsultantId])
+  @@index([status])
+  @@map("visa_cases")
+}
+
+// PR-DASH-1 — Friday AI scoring bot writeback target. Empty (all
+// fields nullable) until the Wix pipe is wired and the bot posts a
+// real report. summaryNarrative is free-text PII (the model's prose
+// commentary) and stored encrypted via CryptoService (AES-256-GCM,
+// same envelope as the visa-section encrypted columns).
+model AssessmentReport {
+  id                          String   @id @default(cuid())
+  clientId                    String   @unique
+  score                       Int?
+  band                        Int?
+  route                       String?
+  summaryNarrativeEncrypted   Bytes?
+  // Free-form JSON the AI bot returns alongside the narrative.
+  aiRecommendations           Json?
+  // Wix submission id once the lead-capture pipe is wired.
+  sourceSubmissionId          String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  client                      User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("assessment_reports")
 }
 
 // Step 11 (PR-VISA11) — Travel history child row. The gate flag
