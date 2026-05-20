@@ -144,6 +144,18 @@ const PATCHABLE_VISA_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'dateti
   hasSiblings:                  'boolean',
   hasNzContacts:                'boolean',
 
+  // Section 9 — Background details (PR-VISA9). Flat set of Y/Ns.
+  heldReligiousCulturalPosition: 'boolean',
+  heldPoliticalAppointment:      'boolean',
+  hadPoliticalAssociation:       'boolean',
+  associatedIntelligenceAgency:  'boolean',
+  witnessedIllTreatment:         'boolean',
+  involvedArmedConflict:         'boolean',
+  associatedViolentGroup:        'boolean',
+  involvedWarCrimes:             'boolean',
+  memberLiberationMilitia:       'boolean',
+  everDetainedImprisoned:        'boolean',
+
   currentStep:            'int',
 };
 

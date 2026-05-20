@@ -338,6 +338,8 @@ export function Step8Relationships() {
       });
       setSavedAt(new Date().toISOString());
       toast.success(t('visaRelSaveSuccess'));
+      // PR-VISA9: advance the stepper now that Section 9 exists.
+      setActiveStep(9);
     } catch {
       toast.error(t('visaRelSaveError'));
     } finally {

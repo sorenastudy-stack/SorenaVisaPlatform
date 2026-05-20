@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useTranslations } from 'next-intl';
 import { useVisa, VISA_TOTAL_STEPS } from './VisaFormContext';
@@ -7,7 +7,7 @@ import { useVisa, VISA_TOTAL_STEPS } from './VisaFormContext';
 // to any step they have already reached (visa.currentStep tracks the
 // highest step persisted to the backend; later steps stay locked until that
 // catches up). Matches the styling of admission's StageProgressBar without
-// dragging that component in — visa has its own progression rules.
+// dragging that component in â€” visa has its own progression rules.
 export function VisaStepper() {
   const t = useTranslations();
   const { visa, activeStep, setActiveStep } = useVisa();
@@ -21,6 +21,7 @@ export function VisaStepper() {
     { n: 6, key: 'visaEducationHistorySectionTitle'  as const },
     { n: 7, key: 'visaEmploymentHistorySectionTitle' as const },
     { n: 8, key: 'visaRelationshipsSectionTitle'     as const },
+    { n: 9, key: 'visaBackgroundSectionTitle'        as const },
   ];
 
   // Reachable = either the active step itself or a step <= the highest the
@@ -62,3 +63,5 @@ export function VisaStepper() {
     </ol>
   );
 }
+
+

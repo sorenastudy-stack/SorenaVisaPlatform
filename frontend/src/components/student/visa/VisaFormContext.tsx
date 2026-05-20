@@ -111,6 +111,18 @@ export interface VisaApplication {
   hasSiblings: boolean | null;
   hasNzContacts: boolean | null;
 
+  // Section 9 — Background details (PR-VISA9). Flat Y/N declarations.
+  heldReligiousCulturalPosition: boolean | null;
+  heldPoliticalAppointment: boolean | null;
+  hadPoliticalAssociation: boolean | null;
+  associatedIntelligenceAgency: boolean | null;
+  witnessedIllTreatment: boolean | null;
+  involvedArmedConflict: boolean | null;
+  associatedViolentGroup: boolean | null;
+  involvedWarCrimes: boolean | null;
+  memberLiberationMilitia: boolean | null;
+  everDetainedImprisoned: boolean | null;
+
   // Section 5 — Health (PR-VISA5)
   hasTuberculosis: boolean | null;
   needsRenalDialysis: boolean | null;
@@ -478,8 +490,8 @@ interface ContextValue {
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA8 brings this to 8).
-export const VISA_TOTAL_STEPS = 8;
+// each later INZ section is built (PR-VISA9 brings this to 9).
+export const VISA_TOTAL_STEPS = 9;
 
 const VisaContext = createContext<ContextValue | null>(null);
 

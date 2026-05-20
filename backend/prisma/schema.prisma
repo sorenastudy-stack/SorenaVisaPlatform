@@ -1381,6 +1381,19 @@ model VisaApplication {
   hasSiblings                    Boolean?
   hasNzContacts                  Boolean?
 
+  // Section 9 — Background details (PR-VISA9). Flat set of Y/N
+  // declarations; all nullable so partial drafts can save.
+  heldReligiousCulturalPosition  Boolean?
+  heldPoliticalAppointment       Boolean?
+  hadPoliticalAssociation        Boolean?
+  associatedIntelligenceAgency   Boolean?
+  witnessedIllTreatment          Boolean?
+  involvedArmedConflict          Boolean?
+  associatedViolentGroup         Boolean?
+  involvedWarCrimes              Boolean?
+  memberLiberationMilitia        Boolean?
+  everDetainedImprisoned         Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

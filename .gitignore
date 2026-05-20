@@ -35,3 +35,21 @@ Thumbs.db
 
 # User uploads (binary files — tracked via DB, not git)
 backend/uploads/admission-documents/
+
+# Database backups (NEVER commit)
+backup_*.sql
+backend/backup_*.sql
+
+# Local helper / debug scripts (NEVER commit)
+backend/check-*.js
+backend/reset-*.js
+
+# Test fixtures (local only)
+test_*.pdf
+test_*.exe
+backend/test_*.pdf
+backend/test_*.exe
+
+# Next.js build cache
+tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
