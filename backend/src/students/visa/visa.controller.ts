@@ -17,6 +17,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { VisaService } from './visa.service';
 import { MilitaryHistoryDto } from './dto/military-history.dto';
 import { TravelHistoryDto } from './dto/travel-history.dto';
+import { ImmigrationAssistanceDto } from './dto/immigration-assistance.dto';
 
 // All endpoints are gated by JwtAuthGuard + RolesGuard. STUDENT and AGENT are
 // the only roles allowed — same scope as AdmissionController. Every method
@@ -287,5 +288,23 @@ export class VisaController {
     @Body() body: TravelHistoryDto,
   ) {
     return this.visaService.saveTravelHistory(req.user.userId, body);
+  }
+
+  // ── Step 12 — Immigration assistance (PR-VISA12) ─────────────────
+  // Single-instance section (no child table). Same controller-level
+  // JwtAuthGuard + RolesGuard + @Roles('STUDENT','AGENT') gate as
+  // every other route on this controller.
+
+  @Get('immigration-assistance')
+  getImmigrationAssistance(@Req() req: any) {
+    return this.visaService.getImmigrationAssistance(req.user.userId);
+  }
+
+  @Patch('immigration-assistance')
+  saveImmigrationAssistance(
+    @Req() req: any,
+    @Body() body: ImmigrationAssistanceDto,
+  ) {
+    return this.visaService.saveImmigrationAssistance(req.user.userId, body);
   }
 }

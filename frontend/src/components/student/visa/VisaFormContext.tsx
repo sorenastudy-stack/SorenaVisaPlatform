@@ -137,6 +137,15 @@ export interface VisaApplication {
   // are encrypted PII and the entries are a replace-on-save child table.
   hasTravelledInternationally: boolean | null;
 
+  // Section 12 — Immigration assistance (PR-VISA12). Single-instance.
+  // The four adviser-* fields hold the decrypted plaintext when
+  // present; the actual fetch happens via /students/me/visa/
+  // immigration-assistance so the encrypted blobs never reach the
+  // browser. completingOnBehalf + capacity arrive on the same
+  // payload and are mirrored here so the stepper can render gate
+  // state without an extra round-trip.
+  completingOnBehalf: boolean | null;
+
   // Section 5 — Health (PR-VISA5)
   hasTuberculosis: boolean | null;
   needsRenalDialysis: boolean | null;
@@ -504,8 +513,8 @@ interface ContextValue {
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA11 brings this to 11).
-export const VISA_TOTAL_STEPS = 11;
+// each later INZ section is built (PR-VISA12 brings this to 12).
+export const VISA_TOTAL_STEPS = 12;
 
 const VisaContext = createContext<ContextValue | null>(null);
 

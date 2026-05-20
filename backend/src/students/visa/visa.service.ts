@@ -2298,4 +2298,173 @@ export class VisaService {
 
     return this.getTravelHistory(userId);
   }
+
+  // ── Step 12 — Immigration assistance (PR-VISA12) ────────────────────
+  // Single-instance (no child table) so all 7 fields live on
+  // visa_applications. PATCH /students/me/visa/immigration-assistance
+  // receives the gate boolean + optional capacity + the optional
+  // five-field adviser block. The service validates, encrypts the
+  // four PII strings, and *clears* downstream fields server-side when
+  // the gate flag or capacity removes their need (so a stale adviser
+  // block can't linger after a Yes→No toggle).
+
+  // Capacities that unlock the five-field adviser block. The other
+  // three (FAMILY_MEMBER, FRIEND, OTHER) only need the gate +
+  // capacity selection.
+  private readonly ADVISER_CAPACITIES = new Set<string>([
+    'LICENSED_IMMIGRATION_ADVISER',
+    'EXEMPT_PERSON',
+  ]);
+
+  // GET /students/me/visa/immigration-assistance
+  async getImmigrationAssistance(userId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    return {
+      completingOnBehalf:      visa.completingOnBehalf,
+      capacity:                visa.immigrationAssistanceCapacity,
+      adviserNumber:           this.decryptOrNull(visa.adviserNumberEncrypted),
+      adviserFullName:         this.decryptOrNull(visa.adviserFullNameEncrypted),
+      adviserEmail:            this.decryptOrNull(visa.adviserEmailEncrypted),
+      adviserContactNumber:    this.decryptOrNull(visa.adviserContactNumberEncrypted),
+      adviserIsPrimaryContact: visa.adviserIsPrimaryContact,
+    };
+  }
+
+  // PATCH /students/me/visa/immigration-assistance
+  // Validates the gate + the conditional capacity + (when capacity ∈
+  // ADVISER_CAPACITIES) the five adviser fields. Encrypts the four
+  // PII strings, clears unused downstream fields, bumps currentStep
+  // to max(current, 13).
+  async saveImmigrationAssistance(
+    userId: string,
+    body: {
+      completingOnBehalf: boolean;
+      capacity?:
+        | 'LICENSED_IMMIGRATION_ADVISER' | 'EXEMPT_PERSON'
+        | 'FAMILY_MEMBER' | 'FRIEND' | 'OTHER'
+        | null;
+      adviserNumber?: string | null;
+      adviserFullName?: string | null;
+      adviserEmail?: string | null;
+      adviserContactNumber?: string | null;
+      adviserIsPrimaryContact?: boolean | null;
+    },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    if (typeof body.completingOnBehalf !== 'boolean') {
+      throw new BadRequestException('completingOnBehalf is required');
+    }
+
+    // When gate = false: capacity + all adviser fields must clear.
+    let capacity: typeof body.capacity = null;
+    let adviserNumber: string | null = null;
+    let adviserFullName: string | null = null;
+    let adviserEmail: string | null = null;
+    let adviserContactNumber: string | null = null;
+    let adviserIsPrimaryContact: boolean | null = null;
+
+    if (body.completingOnBehalf === true) {
+      if (!body.capacity) {
+        throw new BadRequestException(
+          'capacity is required when completingOnBehalf = true',
+        );
+      }
+      capacity = body.capacity;
+
+      if (this.ADVISER_CAPACITIES.has(capacity!)) {
+        // All five adviser fields required.
+        adviserNumber  = (body.adviserNumber  ?? '').trim();
+        adviserFullName = (body.adviserFullName ?? '').trim();
+        adviserEmail   = (body.adviserEmail   ?? '').trim();
+        adviserContactNumber = (body.adviserContactNumber ?? '').trim();
+        if (adviserNumber === '') {
+          throw new BadRequestException(
+            'adviserNumber is required when capacity ∈ {LICENSED_IMMIGRATION_ADVISER, EXEMPT_PERSON}',
+          );
+        }
+        if (adviserFullName === '') {
+          throw new BadRequestException(
+            'adviserFullName is required when capacity ∈ {LICENSED_IMMIGRATION_ADVISER, EXEMPT_PERSON}',
+          );
+        }
+        if (adviserEmail === '') {
+          throw new BadRequestException(
+            'adviserEmail is required when capacity ∈ {LICENSED_IMMIGRATION_ADVISER, EXEMPT_PERSON}',
+          );
+        }
+        // Defensive email format check — class-validator already ran
+        // @IsEmail, but it's @IsOptional, so a missing value reaches
+        // here as ''. A loose RFC-ish check matching the DTO contract.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adviserEmail)) {
+          throw new BadRequestException('adviserEmail must be a valid email address');
+        }
+        if (adviserContactNumber === '') {
+          throw new BadRequestException(
+            'adviserContactNumber is required when capacity ∈ {LICENSED_IMMIGRATION_ADVISER, EXEMPT_PERSON}',
+          );
+        }
+        if (!/^[+\d\s]{1,16}$/.test(adviserContactNumber)) {
+          throw new BadRequestException(
+            'adviserContactNumber must contain only digits, +, spaces (max 16 characters)',
+          );
+        }
+        if (typeof body.adviserIsPrimaryContact !== 'boolean') {
+          throw new BadRequestException(
+            'adviserIsPrimaryContact is required when capacity ∈ {LICENSED_IMMIGRATION_ADVISER, EXEMPT_PERSON}',
+          );
+        }
+        adviserIsPrimaryContact = body.adviserIsPrimaryContact;
+      }
+      // capacity ∈ {FAMILY_MEMBER, FRIEND, OTHER}: adviser fields stay null.
+    }
+    // gate = false: capacity + all adviser fields stay null.
+
+    const nextStep = Math.max(visa.currentStep ?? 1, 13);
+
+    // Single update — no child table to wipe. Prisma's generated
+    // input types expect Uint8Array<ArrayBuffer>; Node's Buffer is
+    // Uint8Array<ArrayBufferLike>. Cast at the boundary, matching
+    // the Step 10 / 11 pattern.
+    const updateData: Record<string, unknown> = {
+      completingOnBehalf:            body.completingOnBehalf,
+      immigrationAssistanceCapacity: capacity,
+      adviserNumberEncrypted:        adviserNumber === null
+        ? null
+        : this.crypto.encrypt(adviserNumber),
+      adviserFullNameEncrypted:      adviserFullName === null
+        ? null
+        : this.crypto.encrypt(adviserFullName),
+      adviserEmailEncrypted:         adviserEmail === null
+        ? null
+        : this.crypto.encrypt(adviserEmail),
+      adviserContactNumberEncrypted: adviserContactNumber === null
+        ? null
+        : this.crypto.encrypt(adviserContactNumber),
+      adviserIsPrimaryContact:       adviserIsPrimaryContact,
+      currentStep:                   nextStep,
+    };
+    await this.prisma.visaApplication.update({
+      where: { id: visa.id },
+      data: updateData as never,
+    });
+
+    return this.getImmigrationAssistance(userId);
+  }
 }

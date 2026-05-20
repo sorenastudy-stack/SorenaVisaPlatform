@@ -1408,6 +1408,22 @@ model VisaApplication {
   // stored encrypted via CryptoService, same envelope as Section 10).
   hasTravelledInternationally    Boolean?
 
+  // Section 12 — Immigration assistance (PR-VISA12). Single-instance
+  // (no child table). Gate Y/N + capacity enum + a five-field adviser
+  // block that only applies when capacity ∈ {LICENSED_IMMIGRATION_
+  // ADVISER, EXEMPT_PERSON}. adviserNumber / adviserFullName /
+  // adviserEmail / adviserContactNumber are all third-party PII and
+  // stored encrypted via CryptoService (AES-256-GCM, same envelope as
+  // Section 10 / 11). Server-side clearing: completingOnBehalf = false
+  // OR capacity ∉ {ADVISER set} nulls every downstream field on save.
+  completingOnBehalf             Boolean?
+  immigrationAssistanceCapacity  ImmigrationAssistanceCapacity?
+  adviserNumberEncrypted         Bytes?
+  adviserFullNameEncrypted       Bytes?
+  adviserEmailEncrypted          Bytes?
+  adviserContactNumberEncrypted  Bytes?
+  adviserIsPrimaryContact        Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -1745,6 +1761,19 @@ enum VisaPurposeOfTravel {
   MEDICAL
   TRANSIT
   WORK
+  OTHER
+}
+
+// Capacity in which a third party is completing the visa form on
+// behalf of the applicant (PR-VISA12). Only LICENSED_IMMIGRATION_
+// ADVISER and EXEMPT_PERSON unlock the five-field adviser block —
+// the other three capacities (FAMILY_MEMBER, FRIEND, OTHER) only
+// need the gate flag + capacity selection.
+enum ImmigrationAssistanceCapacity {
+  LICENSED_IMMIGRATION_ADVISER
+  EXEMPT_PERSON
+  FAMILY_MEMBER
+  FRIEND
   OTHER
 }
 
