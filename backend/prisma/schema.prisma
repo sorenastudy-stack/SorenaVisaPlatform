@@ -1439,6 +1439,41 @@ model VisaApplication {
   countryOfResidenceEncrypted    Bytes?
   areAllDocsInEnglish            Boolean?
 
+  // Section 14 — Supporting documents page 2 (PR-VISA14). 28 parent
+  // flags driving a tree of conditional sections plus three encrypted
+  // free-text fields. The repeating "Other evidence" block lives in
+  // its own child table (VisaOtherEvidenceEntry). All conditional
+  // children are reconciled server-side on save — see
+  // visa.service.saveSupportingDocuments2 for the cascade-clear
+  // rules. File storage is still deferred; only metadata flows.
+  tuitionFeesPaid                 Boolean?
+  tuitionPaymentMethod            TuitionPaymentMethod?
+  fundsSourceSavings              Boolean?
+  fundsSourceNZSponsor            Boolean?
+  fundsSourceInz1014              Boolean?
+  fundsSourcePrepaidAccom         Boolean?
+  fundsSourceScholarship          Boolean?
+  outwardSourceSufficientFunds    Boolean?
+  outwardSourceInz1014            Boolean?
+  outwardSourcePrepaidBooking     Boolean?
+  outwardSourceScholarship        Boolean?
+  fundsFormatBankAccount          Boolean?
+  fundsFormatProvidentFund        Boolean?
+  fundsFormatEducationLoan        Boolean?
+  fundsFormatFixedTermDeposit     Boolean?
+  fundsFormatOther                Boolean?
+  savingsSourceWages              Boolean?
+  savingsSourceSelfEmployment     Boolean?
+  savingsSourceRentalIncome       Boolean?
+  savingsSourceOther              Boolean?
+  depositExplanationEncrypted     Bytes?
+  scholarshipNameEncrypted        Bytes?
+  scholarshipOrganisationEncrypted Bytes?
+  studyIs120CreditsOrMore         Boolean?
+  courseRequiresPracticalWork     Boolean?
+  tookEnglishTest                 Boolean?
+  declarationChecked              Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -1458,6 +1493,7 @@ model VisaApplication {
   militaryServices        VisaMilitaryService[]
   travelHistoryEntries    VisaTravelHistoryEntry[]
   supportingDocuments     VisaSupportingDocument[]
+  otherEvidenceEntries    VisaOtherEvidenceEntry[]
 
   @@map("visa_applications")
 }
@@ -1808,6 +1844,49 @@ enum VisaSupportingDocumentType {
   MILITARY_RECORD
   TRAVEL_HISTORY
   AUTHORITY_DOC
+  // PR-VISA14 (page 2) additions. The enum is shared between page 1
+  // and page 2 because the metadata table is keyed on
+  // (visaApplicationId, documentType) and one unique constraint
+  // covers both pages cleanly.
+  OFFER_OF_PLACE
+  PHD_RESEARCH_PROPOSAL
+  PUBLICATIONS_LIST
+  PERSONAL_CIRCUMSTANCES_EVIDENCE
+  PREVIOUS_TERTIARY_EVIDENCE
+  CURRENT_EMPLOYMENT_EVIDENCE
+  PREVIOUS_EMPLOYMENT_EVIDENCE
+  ENGLISH_TEST_RESULTS
+  TUITION_PAYMENT_CONFIRMATION
+  INZ1014_FINANCIAL_UNDERTAKING
+  PREPAID_ACCOMMODATION_EVIDENCE
+  SCHOLARSHIP_EVIDENCE
+  OUTWARD_TRAVEL_EVIDENCE
+  BANK_STATEMENTS
+  EMPLOYMENT_INCOME_EVIDENCE
+  SCHEDULED_HOLIDAY_EVIDENCE
+  OTHER_EVIDENCE
+}
+
+// PR-VISA14 (page 2 — Tuition fees section). The four ways a student
+// can have arranged to pay tuition: self / partner-provider-or-loan /
+// third-party sponsor / scholarship. Only relevant when
+// tuitionFeesPaid = false; if fees are already paid we don't ask how.
+enum TuitionPaymentMethod {
+  SELF_PAID
+  PARTNER_PROVIDER_OR_GOVT_LOAN
+  THIRD_PARTY_SPONSOR
+  SCHOLARSHIP
+}
+
+// PR-VISA14 (page 2 — "Other evidence" repeating block). Five
+// categories the applicant can attach extra evidence rows under;
+// OTHER unlocks the free-text customLabel column on the child row.
+enum OtherEvidenceType {
+  COVER_LETTER
+  STATEMENT_OF_PURPOSE
+  ADDITIONAL_FUNDS_EVIDENCE
+  FAMILY_TIES_EVIDENCE
+  OTHER
 }
 
 // Step 13 (PR-VISA13) — Supporting documents page 1 metadata row.
@@ -1843,6 +1922,31 @@ model VisaSupportingDocument {
   @@unique([visaApplicationId, documentType])
   @@index([visaApplicationId])
   @@map("visa_supporting_documents")
+}
+
+// Step 14 (PR-VISA14) — repeating "Other evidence" entries. Multiple
+// rows allowed per application (unlike visa_supporting_documents
+// which is keyed UNIQUE on (visaApplicationId, documentType)).
+// customLabelEncrypted is required when evidenceType = OTHER —
+// service validates, encrypts at the boundary, decrypts on read.
+// File storage is deferred: only originalFilename / mimeType /
+// sizeBytes are stored; bytes never reach the backend.
+model VisaOtherEvidenceEntry {
+  id                    String            @id @default(cuid())
+  visaApplicationId     String
+  evidenceType          OtherEvidenceType
+  customLabelEncrypted  Bytes?
+  originalFilename      String
+  mimeType              String
+  sizeBytes             Int
+  uploadedAt            DateTime          @default(now())
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  visaApplication       VisaApplication   @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_other_evidence_entries")
 }
 
 // Step 11 (PR-VISA11) — Travel history child row. The gate flag

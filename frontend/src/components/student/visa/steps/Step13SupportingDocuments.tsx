@@ -159,8 +159,8 @@ export function Step13SupportingDocuments() {
       setDocuments(next.documents ?? []);
       setSavedAt(new Date().toISOString());
       toast.success(t('visaDocsSaveSuccess'));
-      // Step 14 doesn't exist yet — stay on Step 13 (same fallback
-      // PR-11/PR-12 used while the next step was unbuilt).
+      // PR-VISA14: advance the stepper now that Section 14 exists.
+      setActiveStep(14);
     } catch (caught) {
       const msg = caught instanceof Error ? caught.message : t('visaDocsSaveError');
       setBannerError(msg);

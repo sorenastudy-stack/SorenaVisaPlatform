@@ -35,6 +35,7 @@ import { Step10MilitaryHistory } from './steps/Step10MilitaryHistory';
 import { Step11TravelHistory } from './steps/Step11TravelHistory';
 import { Step12ImmigrationAssistance } from './steps/Step12ImmigrationAssistance';
 import { Step13SupportingDocuments } from './steps/Step13SupportingDocuments';
+import { Step14SupportingDocuments2 } from './steps/Step14SupportingDocuments2';
 
 interface InitialData {
   visaApplication: VisaApplication;
@@ -120,6 +121,7 @@ export function VisaFormShell({ initialData }: Props) {
 // the new step with values pre-filled from visa.* (the server-of-record).
 function ActiveStep() {
   const { activeStep } = useVisa();
+  if (activeStep === 14) return <Step14SupportingDocuments2 />;
   if (activeStep === 13) return <Step13SupportingDocuments />;
   if (activeStep === 12) return <Step12ImmigrationAssistance />;
   if (activeStep === 11) return <Step11TravelHistory />;

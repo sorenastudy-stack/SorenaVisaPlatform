@@ -154,6 +154,41 @@ export interface VisaApplication {
   livingInDifferentCountry: boolean | null;
   areAllDocsInEnglish: boolean | null;
 
+  // Section 14 — Supporting documents page 2 (PR-VISA14). 28 parent
+  // flags driving a tree of conditional sections + a repeating
+  // "Other evidence" child table. The encrypted free-text values
+  // (depositExplanation / scholarshipName / scholarshipOrganisation)
+  // are fetched separately via /students/me/visa/supporting-
+  // documents-2 — only the booleans / enum land on this mirror so
+  // the stepper can render conditional gates without an extra
+  // round-trip. File storage is still deferred — metadata only.
+  tuitionFeesPaid: boolean | null;
+  tuitionPaymentMethod:
+    | 'SELF_PAID' | 'PARTNER_PROVIDER_OR_GOVT_LOAN'
+    | 'THIRD_PARTY_SPONSOR' | 'SCHOLARSHIP' | null;
+  fundsSourceSavings: boolean | null;
+  fundsSourceNZSponsor: boolean | null;
+  fundsSourceInz1014: boolean | null;
+  fundsSourcePrepaidAccom: boolean | null;
+  fundsSourceScholarship: boolean | null;
+  outwardSourceSufficientFunds: boolean | null;
+  outwardSourceInz1014: boolean | null;
+  outwardSourcePrepaidBooking: boolean | null;
+  outwardSourceScholarship: boolean | null;
+  fundsFormatBankAccount: boolean | null;
+  fundsFormatProvidentFund: boolean | null;
+  fundsFormatEducationLoan: boolean | null;
+  fundsFormatFixedTermDeposit: boolean | null;
+  fundsFormatOther: boolean | null;
+  savingsSourceWages: boolean | null;
+  savingsSourceSelfEmployment: boolean | null;
+  savingsSourceRentalIncome: boolean | null;
+  savingsSourceOther: boolean | null;
+  studyIs120CreditsOrMore: boolean | null;
+  courseRequiresPracticalWork: boolean | null;
+  tookEnglishTest: boolean | null;
+  declarationChecked: boolean | null;
+
   // Section 5 — Health (PR-VISA5)
   hasTuberculosis: boolean | null;
   needsRenalDialysis: boolean | null;
@@ -521,8 +556,8 @@ interface ContextValue {
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA13 brings this to 13).
-export const VISA_TOTAL_STEPS = 13;
+// each later INZ section is built (PR-VISA14 brings this to 14).
+export const VISA_TOTAL_STEPS = 14;
 
 const VisaContext = createContext<ContextValue | null>(null);
 

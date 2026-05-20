@@ -24,6 +24,10 @@ import {
   SupportingDocumentMetadataDto,
   VisaSupportingDocumentTypeDto,
 } from './dto/supporting-documents.dto';
+import {
+  SupportingDocuments2Dto,
+  OtherEvidenceEntryDto,
+} from './dto/supporting-documents-2.dto';
 
 // All endpoints are gated by JwtAuthGuard + RolesGuard. STUDENT and AGENT are
 // the only roles allowed — same scope as AdmissionController. Every method
@@ -353,6 +357,45 @@ export class VisaController {
     return this.visaService.deleteSupportingDocumentMetadata(
       req.user.userId,
       documentType,
+    );
+  }
+
+  // ── Step 14 — Supporting documents page 2 (PR-VISA14) ────────────
+  // FINAL Visa Section step. File storage still deferred — the four
+  // routes below only handle metadata. The 17 new document types
+  // (OFFER_OF_PLACE, BANK_STATEMENTS, …) reuse PR-13's metadata
+  // endpoint above; what's new here is the 28-field parent PATCH +
+  // the "Other evidence" repeating block.
+
+  @Get('supporting-documents-2')
+  getSupportingDocuments2(@Req() req: any) {
+    return this.visaService.getSupportingDocuments2(req.user.userId);
+  }
+
+  @Patch('supporting-documents-2')
+  saveSupportingDocuments2(
+    @Req() req: any,
+    @Body() body: SupportingDocuments2Dto,
+  ) {
+    return this.visaService.saveSupportingDocuments2(req.user.userId, body);
+  }
+
+  @Put('supporting-documents-2/other-evidence')
+  upsertOtherEvidenceEntry(
+    @Req() req: any,
+    @Body() body: OtherEvidenceEntryDto,
+  ) {
+    return this.visaService.upsertOtherEvidenceEntry(req.user.userId, body);
+  }
+
+  @Delete('supporting-documents-2/other-evidence/:entryId')
+  deleteOtherEvidenceEntry(
+    @Req() req: any,
+    @Param('entryId') entryId: string,
+  ) {
+    return this.visaService.deleteOtherEvidenceEntry(
+      req.user.userId,
+      entryId,
     );
   }
 }

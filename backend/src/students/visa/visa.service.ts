@@ -2653,4 +2653,394 @@ export class VisaService {
     });
     return this.getSupportingDocuments(userId);
   }
+
+  // ── Step 14 — Supporting documents page 2 (PR-VISA14) ───────────────
+  // FINAL Visa Section step. File storage still deferred — metadata
+  // only. 28 parent flags driving a tree of conditional sections plus
+  // a repeating "Other evidence" child table. Server-side cascade
+  // clearing is the load-bearing piece here: when a higher gate flips
+  // false the service nulls every downstream flag and deletes the
+  // dependent metadata rows in the same transaction so stale data
+  // can't linger.
+
+  private serializeOtherEvidence(r: {
+    id: string;
+    evidenceType:
+      | 'COVER_LETTER' | 'STATEMENT_OF_PURPOSE'
+      | 'ADDITIONAL_FUNDS_EVIDENCE' | 'FAMILY_TIES_EVIDENCE' | 'OTHER';
+    customLabelEncrypted: Buffer | Uint8Array | null;
+    originalFilename: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: Date;
+  }) {
+    return {
+      id:               r.id,
+      evidenceType:     r.evidenceType,
+      customLabel:      this.decryptOrNull(r.customLabelEncrypted),
+      originalFilename: r.originalFilename,
+      mimeType:         r.mimeType,
+      sizeBytes:        r.sizeBytes,
+      uploadedAt:       r.uploadedAt,
+    };
+  }
+
+  // GET /students/me/visa/supporting-documents-2
+  async getSupportingDocuments2(userId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    const otherEvidence = await this.prisma.visaOtherEvidenceEntry.findMany({
+      where: { visaApplicationId: visa.id },
+      orderBy: { uploadedAt: 'asc' },
+    });
+    return {
+      tuitionFeesPaid:                 visa.tuitionFeesPaid,
+      tuitionPaymentMethod:            visa.tuitionPaymentMethod,
+      fundsSourceSavings:              visa.fundsSourceSavings,
+      fundsSourceNZSponsor:            visa.fundsSourceNZSponsor,
+      fundsSourceInz1014:              visa.fundsSourceInz1014,
+      fundsSourcePrepaidAccom:         visa.fundsSourcePrepaidAccom,
+      fundsSourceScholarship:          visa.fundsSourceScholarship,
+      outwardSourceSufficientFunds:    visa.outwardSourceSufficientFunds,
+      outwardSourceInz1014:            visa.outwardSourceInz1014,
+      outwardSourcePrepaidBooking:     visa.outwardSourcePrepaidBooking,
+      outwardSourceScholarship:        visa.outwardSourceScholarship,
+      fundsFormatBankAccount:          visa.fundsFormatBankAccount,
+      fundsFormatProvidentFund:        visa.fundsFormatProvidentFund,
+      fundsFormatEducationLoan:        visa.fundsFormatEducationLoan,
+      fundsFormatFixedTermDeposit:     visa.fundsFormatFixedTermDeposit,
+      fundsFormatOther:                visa.fundsFormatOther,
+      savingsSourceWages:              visa.savingsSourceWages,
+      savingsSourceSelfEmployment:     visa.savingsSourceSelfEmployment,
+      savingsSourceRentalIncome:       visa.savingsSourceRentalIncome,
+      savingsSourceOther:              visa.savingsSourceOther,
+      depositExplanation:              this.decryptOrNull(visa.depositExplanationEncrypted),
+      scholarshipName:                 this.decryptOrNull(visa.scholarshipNameEncrypted),
+      scholarshipOrganisation:         this.decryptOrNull(visa.scholarshipOrganisationEncrypted),
+      studyIs120CreditsOrMore:         visa.studyIs120CreditsOrMore,
+      courseRequiresPracticalWork:     visa.courseRequiresPracticalWork,
+      tookEnglishTest:                 visa.tookEnglishTest,
+      declarationChecked:              visa.declarationChecked,
+      otherEvidence: otherEvidence.map((r) => this.serializeOtherEvidence(r)),
+    };
+  }
+
+  // PATCH /students/me/visa/supporting-documents-2
+  // Applies every cascade-clear rule the frontend enforces, so a
+  // hand-rolled curl can't leave the row in an inconsistent state.
+  // Single transaction wraps the parent update + every dependent
+  // metadata row delete. Bumps currentStep to max(current, 15).
+  async saveSupportingDocuments2(
+    userId: string,
+    body: {
+      tuitionFeesPaid?: boolean | null;
+      tuitionPaymentMethod?:
+        | 'SELF_PAID' | 'PARTNER_PROVIDER_OR_GOVT_LOAN'
+        | 'THIRD_PARTY_SPONSOR' | 'SCHOLARSHIP' | null;
+      fundsSourceSavings?: boolean | null;
+      fundsSourceNZSponsor?: boolean | null;
+      fundsSourceInz1014?: boolean | null;
+      fundsSourcePrepaidAccom?: boolean | null;
+      fundsSourceScholarship?: boolean | null;
+      outwardSourceSufficientFunds?: boolean | null;
+      outwardSourceInz1014?: boolean | null;
+      outwardSourcePrepaidBooking?: boolean | null;
+      outwardSourceScholarship?: boolean | null;
+      fundsFormatBankAccount?: boolean | null;
+      fundsFormatProvidentFund?: boolean | null;
+      fundsFormatEducationLoan?: boolean | null;
+      fundsFormatFixedTermDeposit?: boolean | null;
+      fundsFormatOther?: boolean | null;
+      savingsSourceWages?: boolean | null;
+      savingsSourceSelfEmployment?: boolean | null;
+      savingsSourceRentalIncome?: boolean | null;
+      savingsSourceOther?: boolean | null;
+      depositExplanation?: string | null;
+      scholarshipName?: string | null;
+      scholarshipOrganisation?: string | null;
+      studyIs120CreditsOrMore?: boolean | null;
+      courseRequiresPracticalWork?: boolean | null;
+      tookEnglishTest?: boolean | null;
+      declarationChecked?: boolean | null;
+    },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    // Resolve the effective value of each field: caller value if
+    // present, otherwise the persisted value. This way a PATCH can
+    // send a partial body without nuking unrelated fields.
+    const pick = <K extends keyof typeof body, V>(key: K, fallback: V): V =>
+      (body[key] === undefined ? fallback : (body[key] as unknown as V));
+
+    let tuitionFeesPaid             = pick('tuitionFeesPaid',             visa.tuitionFeesPaid);
+    let tuitionPaymentMethod        = pick('tuitionPaymentMethod',        visa.tuitionPaymentMethod);
+    let fundsSourceSavings          = pick('fundsSourceSavings',          visa.fundsSourceSavings);
+    const fundsSourceNZSponsor        = pick('fundsSourceNZSponsor',        visa.fundsSourceNZSponsor);
+    const fundsSourceInz1014          = pick('fundsSourceInz1014',          visa.fundsSourceInz1014);
+    let fundsSourcePrepaidAccom     = pick('fundsSourcePrepaidAccom',     visa.fundsSourcePrepaidAccom);
+    const fundsSourceScholarship      = pick('fundsSourceScholarship',      visa.fundsSourceScholarship);
+    const outwardSourceSufficientFunds = pick('outwardSourceSufficientFunds', visa.outwardSourceSufficientFunds);
+    const outwardSourceInz1014         = pick('outwardSourceInz1014',         visa.outwardSourceInz1014);
+    let outwardSourcePrepaidBooking = pick('outwardSourcePrepaidBooking', visa.outwardSourcePrepaidBooking);
+    const outwardSourceScholarship     = pick('outwardSourceScholarship',     visa.outwardSourceScholarship);
+    let fundsFormatBankAccount      = pick('fundsFormatBankAccount',      visa.fundsFormatBankAccount);
+    let fundsFormatProvidentFund    = pick('fundsFormatProvidentFund',    visa.fundsFormatProvidentFund);
+    let fundsFormatEducationLoan    = pick('fundsFormatEducationLoan',    visa.fundsFormatEducationLoan);
+    let fundsFormatFixedTermDeposit = pick('fundsFormatFixedTermDeposit', visa.fundsFormatFixedTermDeposit);
+    let fundsFormatOther            = pick('fundsFormatOther',            visa.fundsFormatOther);
+    let savingsSourceWages          = pick('savingsSourceWages',          visa.savingsSourceWages);
+    let savingsSourceSelfEmployment = pick('savingsSourceSelfEmployment', visa.savingsSourceSelfEmployment);
+    let savingsSourceRentalIncome   = pick('savingsSourceRentalIncome',   visa.savingsSourceRentalIncome);
+    let savingsSourceOther          = pick('savingsSourceOther',          visa.savingsSourceOther);
+
+    let depositExplanation       = body.depositExplanation       === undefined
+      ? this.decryptOrNull(visa.depositExplanationEncrypted)
+      : (body.depositExplanation ?? null);
+    let scholarshipName          = body.scholarshipName          === undefined
+      ? this.decryptOrNull(visa.scholarshipNameEncrypted)
+      : (body.scholarshipName ?? null);
+    let scholarshipOrganisation  = body.scholarshipOrganisation  === undefined
+      ? this.decryptOrNull(visa.scholarshipOrganisationEncrypted)
+      : (body.scholarshipOrganisation ?? null);
+
+    const studyIs120CreditsOrMore     = pick('studyIs120CreditsOrMore',     visa.studyIs120CreditsOrMore);
+    const courseRequiresPracticalWork = pick('courseRequiresPracticalWork', visa.courseRequiresPracticalWork);
+    const tookEnglishTest             = pick('tookEnglishTest',             visa.tookEnglishTest);
+    const declarationChecked          = pick('declarationChecked',          visa.declarationChecked);
+
+    // ── Cascade-clear rules ───────────────────────────────────────────
+    const docsToDelete = new Set<string>();
+
+    // tuitionFeesPaid = true → tuitionPaymentMethod cleared.
+    if (tuitionFeesPaid === true) {
+      tuitionPaymentMethod = null;
+    }
+
+    // fundsSourceSavings = false → wipe entire savings subtree.
+    if (fundsSourceSavings !== true) {
+      fundsFormatBankAccount      = null;
+      fundsFormatProvidentFund    = null;
+      fundsFormatEducationLoan    = null;
+      fundsFormatFixedTermDeposit = null;
+      fundsFormatOther            = null;
+      savingsSourceWages          = null;
+      savingsSourceSelfEmployment = null;
+      savingsSourceRentalIncome   = null;
+      savingsSourceOther          = null;
+      depositExplanation          = null;
+      docsToDelete.add('BANK_STATEMENTS');
+      docsToDelete.add('EMPLOYMENT_INCOME_EVIDENCE');
+    } else if (fundsFormatBankAccount !== true) {
+      // savings on but no bank account → savings-source subtree clears.
+      savingsSourceWages          = null;
+      savingsSourceSelfEmployment = null;
+      savingsSourceRentalIncome   = null;
+      savingsSourceOther          = null;
+      depositExplanation          = null;
+      docsToDelete.add('BANK_STATEMENTS');
+      docsToDelete.add('EMPLOYMENT_INCOME_EVIDENCE');
+    } else if (savingsSourceWages !== true && savingsSourceSelfEmployment !== true) {
+      // bank account on but neither wages nor self-emp → income evidence cleared.
+      docsToDelete.add('EMPLOYMENT_INCOME_EVIDENCE');
+    }
+
+    // INZ1014 document only needed when either funds or outward source flag = true.
+    if (fundsSourceInz1014 !== true && outwardSourceInz1014 !== true) {
+      docsToDelete.add('INZ1014_FINANCIAL_UNDERTAKING');
+    }
+    if (fundsSourcePrepaidAccom !== true) {
+      docsToDelete.add('PREPAID_ACCOMMODATION_EVIDENCE');
+    } else {
+      // Defensive: not strictly required to set, but keeps the
+      // intent explicit if a stray local var was nulled above.
+      fundsSourcePrepaidAccom = true;
+    }
+    if (outwardSourcePrepaidBooking !== true) {
+      docsToDelete.add('OUTWARD_TRAVEL_EVIDENCE');
+    } else {
+      outwardSourcePrepaidBooking = true;
+    }
+
+    // Scholarship "active" = any of the three triggers.
+    const scholarshipActive =
+      fundsSourceScholarship  === true ||
+      outwardSourceScholarship === true ||
+      tuitionPaymentMethod    === 'SCHOLARSHIP';
+    if (!scholarshipActive) {
+      scholarshipName         = null;
+      scholarshipOrganisation = null;
+      docsToDelete.add('SCHOLARSHIP_EVIDENCE');
+    }
+
+    if (tookEnglishTest !== true) {
+      docsToDelete.add('ENGLISH_TEST_RESULTS');
+    }
+
+    const nextStep = Math.max(visa.currentStep ?? 1, 15);
+
+    await this.prisma.$transaction(async (tx) => {
+      const updateData: Record<string, unknown> = {
+        tuitionFeesPaid,
+        tuitionPaymentMethod,
+        fundsSourceSavings,
+        fundsSourceNZSponsor,
+        fundsSourceInz1014,
+        fundsSourcePrepaidAccom,
+        fundsSourceScholarship,
+        outwardSourceSufficientFunds,
+        outwardSourceInz1014,
+        outwardSourcePrepaidBooking,
+        outwardSourceScholarship,
+        fundsFormatBankAccount,
+        fundsFormatProvidentFund,
+        fundsFormatEducationLoan,
+        fundsFormatFixedTermDeposit,
+        fundsFormatOther,
+        savingsSourceWages,
+        savingsSourceSelfEmployment,
+        savingsSourceRentalIncome,
+        savingsSourceOther,
+        depositExplanationEncrypted: depositExplanation === null || depositExplanation === ''
+          ? null
+          : this.crypto.encrypt(depositExplanation),
+        scholarshipNameEncrypted: scholarshipName === null || scholarshipName === ''
+          ? null
+          : this.crypto.encrypt(scholarshipName),
+        scholarshipOrganisationEncrypted: scholarshipOrganisation === null || scholarshipOrganisation === ''
+          ? null
+          : this.crypto.encrypt(scholarshipOrganisation),
+        studyIs120CreditsOrMore,
+        courseRequiresPracticalWork,
+        tookEnglishTest,
+        declarationChecked,
+        currentStep: nextStep,
+      };
+      await tx.visaApplication.update({
+        where: { id: visa.id },
+        data: updateData as never,
+      });
+
+      if (docsToDelete.size > 0) {
+        await tx.visaSupportingDocument.deleteMany({
+          where: {
+            visaApplicationId: visa.id,
+            documentType: { in: Array.from(docsToDelete) as never },
+          },
+        });
+      }
+    });
+
+    return this.getSupportingDocuments2(userId);
+  }
+
+  // PUT /students/me/visa/supporting-documents-2/other-evidence
+  // Create-or-update by optional id. customLabel required iff
+  // evidenceType = OTHER (encrypted at the boundary). File metadata
+  // follows the PR-13 pattern; bytes never reach us.
+  async upsertOtherEvidenceEntry(
+    userId: string,
+    body: {
+      id?: string;
+      evidenceType:
+        | 'COVER_LETTER' | 'STATEMENT_OF_PURPOSE'
+        | 'ADDITIONAL_FUNDS_EVIDENCE' | 'FAMILY_TIES_EVIDENCE' | 'OTHER';
+      customLabel?: string | null;
+      originalFilename: string;
+      mimeType: string;
+      sizeBytes: number;
+    },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    const label = (body.customLabel ?? '').trim();
+    if (body.evidenceType === 'OTHER' && label === '') {
+      throw new BadRequestException(
+        'customLabel is required when evidenceType = OTHER',
+      );
+    }
+
+    const customLabelEncrypted = body.evidenceType === 'OTHER'
+      ? this.crypto.encrypt(label)
+      : null;
+
+    if (body.id) {
+      // Verify the row belongs to this application before updating.
+      const existing = await this.prisma.visaOtherEvidenceEntry.findUnique({
+        where: { id: body.id },
+      });
+      if (!existing || existing.visaApplicationId !== visa.id) {
+        throw new ForbiddenException('Entry does not belong to this application');
+      }
+      const updateData: Record<string, unknown> = {
+        evidenceType:         body.evidenceType,
+        customLabelEncrypted,
+        originalFilename:     body.originalFilename,
+        mimeType:             body.mimeType,
+        sizeBytes:            body.sizeBytes,
+        uploadedAt:           new Date(),
+      };
+      await this.prisma.visaOtherEvidenceEntry.update({
+        where: { id: body.id },
+        data: updateData as never,
+      });
+    } else {
+      const createData: Record<string, unknown> = {
+        visaApplicationId:    visa.id,
+        evidenceType:         body.evidenceType,
+        customLabelEncrypted,
+        originalFilename:     body.originalFilename,
+        mimeType:             body.mimeType,
+        sizeBytes:            body.sizeBytes,
+      };
+      await this.prisma.visaOtherEvidenceEntry.create({
+        data: createData as never,
+      });
+    }
+
+    return this.getSupportingDocuments2(userId);
+  }
+
+  // DELETE /students/me/visa/supporting-documents-2/other-evidence/:entryId
+  async deleteOtherEvidenceEntry(userId: string, entryId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    const existing = await this.prisma.visaOtherEvidenceEntry.findUnique({
+      where: { id: entryId },
+    });
+    if (!existing || existing.visaApplicationId !== visa.id) {
+      throw new ForbiddenException('Entry does not belong to this application');
+    }
+    await this.prisma.visaOtherEvidenceEntry.delete({ where: { id: entryId } });
+    return this.getSupportingDocuments2(userId);
+  }
 }
