@@ -16,6 +16,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { VisaService } from './visa.service';
 import { MilitaryHistoryDto } from './dto/military-history.dto';
+import { TravelHistoryDto } from './dto/travel-history.dto';
 
 // All endpoints are gated by JwtAuthGuard + RolesGuard. STUDENT and AGENT are
 // the only roles allowed — same scope as AdmissionController. Every method
@@ -267,5 +268,24 @@ export class VisaController {
     @Body() body: MilitaryHistoryDto,
   ) {
     return this.visaService.saveMilitaryHistory(req.user.userId, body);
+  }
+
+  // ── Step 11 — Travel history (PR-VISA11) ─────────────────────────
+  // Single GET + single PATCH (replace-on-save), mirroring Step 10.
+  // Controller-level JwtAuthGuard + RolesGuard + @Roles('STUDENT',
+  // 'AGENT') gate every method; the service-level resolver ensures
+  // the caller can only touch their own visa application.
+
+  @Get('travel-history')
+  getTravelHistory(@Req() req: any) {
+    return this.visaService.getTravelHistory(req.user.userId);
+  }
+
+  @Patch('travel-history')
+  saveTravelHistory(
+    @Req() req: any,
+    @Body() body: TravelHistoryDto,
+  ) {
+    return this.visaService.saveTravelHistory(req.user.userId, body);
   }
 }

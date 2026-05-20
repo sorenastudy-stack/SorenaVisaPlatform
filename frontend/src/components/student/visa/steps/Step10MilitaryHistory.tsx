@@ -217,7 +217,8 @@ export function Step10MilitaryHistory() {
       await api.patch<ServerPayload>('/students/me/visa/military-history', payload);
       setSavedAt(new Date().toISOString());
       toast.success(t('visaMilitarySaveSuccess'));
-      // Step 11 doesn't exist yet — stay on Step 10 per spec.
+      // PR-VISA11: advance the stepper now that Section 11 exists.
+      setActiveStep(11);
     } catch (caught) {
       const msg =
         caught instanceof Error ? caught.message : t('visaMilitarySaveError');

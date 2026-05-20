@@ -2063,4 +2063,239 @@ export class VisaService {
 
     return this.getMilitaryHistory(userId);
   }
+
+  // ── Step 11 — Travel history (PR-VISA11) ────────────────────────────
+  // Mirrors PR-10's replace-on-save shape. The controller's PATCH
+  // /students/me/visa/travel-history receives the gate boolean + the
+  // full entries array; the service validates, encrypts destination /
+  // pointOfEntry / otherPurpose, wipes any prior
+  // visa_travel_history_entries rows, and re-inserts atomically.
+
+  private serializeTravelHistoryEntry(r: {
+    id: string;
+    destinationEncrypted: Buffer | Uint8Array | null;
+    dateEnteredMonth: number | null;
+    dateEnteredYear: number | null;
+    dateExitedMonth: number | null;
+    dateExitedYear: number | null;
+    arrivalMode: 'AIR' | 'SEA' | 'LAND' | null;
+    pointOfEntryEncrypted: Buffer | Uint8Array | null;
+    purposeOfTravel:
+      | 'EDUCATION' | 'TOURISM' | 'BUSINESS' | 'FAMILY'
+      | 'MEDICAL'   | 'TRANSIT' | 'WORK'     | 'OTHER'
+      | null;
+    otherPurposeEncrypted: Buffer | Uint8Array | null;
+    sortOrder: number;
+  }) {
+    return {
+      id: r.id,
+      destination:      this.decryptOrNull(r.destinationEncrypted),
+      dateEnteredMonth: r.dateEnteredMonth,
+      dateEnteredYear:  r.dateEnteredYear,
+      dateExitedMonth:  r.dateExitedMonth,
+      dateExitedYear:   r.dateExitedYear,
+      arrivalMode:      r.arrivalMode,
+      pointOfEntry:     this.decryptOrNull(r.pointOfEntryEncrypted),
+      purposeOfTravel:  r.purposeOfTravel,
+      otherPurpose:     this.decryptOrNull(r.otherPurposeEncrypted),
+      sortOrder:        r.sortOrder,
+    };
+  }
+
+  // GET /students/me/visa/travel-history
+  async getTravelHistory(userId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    const rows = await this.prisma.visaTravelHistoryEntry.findMany({
+      where: { visaApplicationId: visa.id },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return {
+      hasTravelledInternationally: visa.hasTravelledInternationally,
+      entries: rows.map((r) => this.serializeTravelHistoryEntry(r)),
+    };
+  }
+
+  // PATCH /students/me/visa/travel-history
+  // Single replace-on-save endpoint. Validates the gate boolean +
+  // (when gate = true) every required field on every entry + the
+  // conditional otherPurpose + the month/year ranges + the exit-date-
+  // after-entered-date rule. Wipes the entries table for this visa
+  // app and re-inserts in one transaction. Bumps currentStep to
+  // max(current, 12) so the stepper unlocks Step 12.
+  async saveTravelHistory(
+    userId: string,
+    body: {
+      hasTravelledInternationally: boolean;
+      entries?: Array<{
+        destination: string;
+        dateEnteredMonth: number;
+        dateEnteredYear: number;
+        dateExitedMonth?: number | null;
+        dateExitedYear?: number | null;
+        arrivalMode: 'AIR' | 'SEA' | 'LAND';
+        pointOfEntry: string;
+        purposeOfTravel:
+          | 'EDUCATION' | 'TOURISM' | 'BUSINESS' | 'FAMILY'
+          | 'MEDICAL'   | 'TRANSIT' | 'WORK'     | 'OTHER';
+        otherPurpose?: string | null;
+      }>;
+    },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    // Gate flag is required. ValidationPipe enforces type; we re-check
+    // for truthy presence so a half-typed body fails closed with a
+    // clear message (same defensive pattern as Step 10).
+    if (typeof body.hasTravelledInternationally !== 'boolean') {
+      throw new BadRequestException('hasTravelledInternationally is required');
+    }
+
+    const entries = body.entries ?? [];
+    const currentYear = new Date().getUTCFullYear();
+
+    if (body.hasTravelledInternationally === true) {
+      if (entries.length === 0) {
+        throw new BadRequestException(
+          'At least one travel history entry is required when hasTravelledInternationally = true',
+        );
+      }
+      entries.forEach((entry, i) => {
+        // Required strings.
+        for (const k of ['destination', 'pointOfEntry'] as const) {
+          const v = entry[k];
+          if (typeof v !== 'string' || v.trim() === '') {
+            throw new BadRequestException(
+              `entries[${i}].${k} is required`,
+            );
+          }
+        }
+        // Required enums.
+        if (!entry.arrivalMode) {
+          throw new BadRequestException(`entries[${i}].arrivalMode is required`);
+        }
+        if (!entry.purposeOfTravel) {
+          throw new BadRequestException(
+            `entries[${i}].purposeOfTravel is required`,
+          );
+        }
+        // Required date-entered fields + range.
+        if (!Number.isInteger(entry.dateEnteredMonth) ||
+            entry.dateEnteredMonth < 1 || entry.dateEnteredMonth > 12) {
+          throw new BadRequestException(
+            `entries[${i}].dateEnteredMonth must be between 1 and 12`,
+          );
+        }
+        if (!Number.isInteger(entry.dateEnteredYear) ||
+            entry.dateEnteredYear < 1900 || entry.dateEnteredYear > currentYear) {
+          throw new BadRequestException(
+            `entries[${i}].dateEnteredYear must be between 1900 and ${currentYear}`,
+          );
+        }
+        // Optional date-exited pair: both or neither, validate together.
+        const exitMonth = entry.dateExitedMonth;
+        const exitYear  = entry.dateExitedYear;
+        const exitMonthPresent = exitMonth !== null && exitMonth !== undefined;
+        const exitYearPresent  = exitYear  !== null && exitYear  !== undefined;
+        if (exitMonthPresent !== exitYearPresent) {
+          throw new BadRequestException(
+            `entries[${i}].dateExited month and year must be provided together`,
+          );
+        }
+        if (exitMonthPresent && exitYearPresent) {
+          if (!Number.isInteger(exitMonth) || exitMonth! < 1 || exitMonth! > 12) {
+            throw new BadRequestException(
+              `entries[${i}].dateExitedMonth must be between 1 and 12`,
+            );
+          }
+          if (!Number.isInteger(exitYear) ||
+              exitYear! < 1900 || exitYear! > currentYear) {
+            throw new BadRequestException(
+              `entries[${i}].dateExitedYear must be between 1900 and ${currentYear}`,
+            );
+          }
+          // Exit must be >= entered (month/year comparison).
+          const enteredKey = entry.dateEnteredYear * 12 + (entry.dateEnteredMonth - 1);
+          const exitKey    = exitYear! * 12 + (exitMonth! - 1);
+          if (exitKey < enteredKey) {
+            throw new BadRequestException(
+              `entries[${i}].dateExited cannot be before dateEntered`,
+            );
+          }
+        }
+        // Conditional otherPurpose.
+        if (entry.purposeOfTravel === 'OTHER') {
+          const op = (entry.otherPurpose ?? '').trim();
+          if (op === '') {
+            throw new BadRequestException(
+              `entries[${i}].otherPurpose is required when purposeOfTravel = OTHER`,
+            );
+          }
+        }
+      });
+    } else if (entries.length > 0) {
+      // gate = false → no entries allowed (defensive; the frontend
+      // won't send them, but a hand-rolled curl could).
+      throw new BadRequestException(
+        'entries must be empty when hasTravelledInternationally = false',
+      );
+    }
+
+    const nextStep = Math.max(visa.currentStep ?? 1, 12);
+
+    // Transactional replace-on-save (same pattern as Step 10). Prisma's
+    // generated input types want Uint8Array<ArrayBuffer>; Node's Buffer
+    // is Uint8Array<ArrayBufferLike> — cast at the boundary as the
+    // existing visa code paths do.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.visaTravelHistoryEntry.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+      const updateData: Record<string, unknown> = {
+        hasTravelledInternationally: body.hasTravelledInternationally,
+        currentStep:                 nextStep,
+      };
+      await tx.visaApplication.update({
+        where: { id: visa.id },
+        data: updateData as never,
+      });
+      if (body.hasTravelledInternationally === true) {
+        const rows: Record<string, unknown>[] = entries.map((entry, i) => ({
+          visaApplicationId:     visa.id,
+          destinationEncrypted:  this.crypto.encrypt(String(entry.destination).trim()),
+          dateEnteredMonth:      entry.dateEnteredMonth,
+          dateEnteredYear:       entry.dateEnteredYear,
+          dateExitedMonth:       entry.dateExitedMonth ?? null,
+          dateExitedYear:        entry.dateExitedYear  ?? null,
+          arrivalMode:           entry.arrivalMode,
+          pointOfEntryEncrypted: this.crypto.encrypt(String(entry.pointOfEntry).trim()),
+          purposeOfTravel:       entry.purposeOfTravel,
+          otherPurposeEncrypted: entry.purposeOfTravel === 'OTHER'
+            ? this.crypto.encrypt(String(entry.otherPurpose ?? '').trim())
+            : null,
+          sortOrder:             i,
+        }));
+        await tx.visaTravelHistoryEntry.createMany({
+          data: rows as never,
+        });
+      }
+    });
+
+    return this.getTravelHistory(userId);
+  }
 }

@@ -131,6 +131,12 @@ export interface VisaApplication {
   everUndertakenMilitaryService: boolean | null;
   wasExemptFromMilitaryService: boolean | null;
 
+  // Section 11 — Travel history (PR-VISA11). Single gate Y/N; the
+  // entries array is fetched separately via /students/me/visa/
+  // travel-history because destination + pointOfEntry + otherPurpose
+  // are encrypted PII and the entries are a replace-on-save child table.
+  hasTravelledInternationally: boolean | null;
+
   // Section 5 — Health (PR-VISA5)
   hasTuberculosis: boolean | null;
   needsRenalDialysis: boolean | null;
@@ -498,8 +504,8 @@ interface ContextValue {
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA10 brings this to 10).
-export const VISA_TOTAL_STEPS = 10;
+// each later INZ section is built (PR-VISA11 brings this to 11).
+export const VISA_TOTAL_STEPS = 11;
 
 const VisaContext = createContext<ContextValue | null>(null);
 

@@ -1402,6 +1402,12 @@ model VisaApplication {
   wasExemptFromMilitaryService   Boolean?
   exemptExplanationEncrypted     Bytes?
 
+  // Section 11 — Travel history (PR-VISA11). Single gate Y/N; when Yes
+  // the repeating visa_travel_history_entries rows hold each trip
+  // (destination / pointOfEntry / otherPurpose are free-text PII and
+  // stored encrypted via CryptoService, same envelope as Section 10).
+  hasTravelledInternationally    Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -1419,6 +1425,7 @@ model VisaApplication {
   siblings                VisaSibling[]
   nzContacts              VisaNzContact[]
   militaryServices        VisaMilitaryService[]
+  travelHistoryEntries    VisaTravelHistoryEntry[]
 
   @@map("visa_applications")
 }
@@ -1717,6 +1724,65 @@ model VisaMilitaryService {
 
   @@index([visaApplicationId])
   @@map("visa_military_services")
+}
+
+// Mode of arrival for a Section 11 travel-history entry (PR-VISA11).
+// INZ 1200 lists Air / Sea / Land — encoded directly to avoid any
+// free-text drift on this dropdown.
+enum VisaArrivalMode {
+  AIR
+  SEA
+  LAND
+}
+
+// Purpose of the trip for a Section 11 entry (PR-VISA11). Same INZ
+// dropdown; OTHER unlocks the free-text otherPurpose column on the row.
+enum VisaPurposeOfTravel {
+  EDUCATION
+  TOURISM
+  BUSINESS
+  FAMILY
+  MEDICAL
+  TRANSIT
+  WORK
+  OTHER
+}
+
+// Step 11 (PR-VISA11) — Travel history child row. The gate flag
+// hasTravelledInternationally lives on the parent visa_application;
+// when Yes the student adds one entry per trip taken in the last 5
+// years (excluding NZ). Month + year are stored as Ints rather than
+// a DateTime because INZ collects month-precision and a synthetic
+// day-1 timestamp would be a footgun for downstream date math.
+//
+// destinationEncrypted / pointOfEntryEncrypted / otherPurposeEncrypted
+// are the only PII columns — country names + ports of entry can
+// re-identify a student against open border crossing records, and
+// otherPurpose is free-text. Same AES-256-GCM envelope as Section 10.
+//
+// Replace-on-save: visa.service.saveTravelHistory wipes the array
+// with deleteMany before reinserting on every Step 11 PATCH, matching
+// the Step 10 transactional pattern.
+model VisaTravelHistoryEntry {
+  id                       String   @id @default(cuid())
+  visaApplicationId        String
+  destinationEncrypted     Bytes?
+  dateEnteredMonth         Int?
+  dateEnteredYear          Int?
+  dateExitedMonth          Int?
+  dateExitedYear           Int?
+  arrivalMode              VisaArrivalMode?
+  pointOfEntryEncrypted    Bytes?
+  purposeOfTravel          VisaPurposeOfTravel?
+  otherPurposeEncrypted    Bytes?
+  sortOrder                Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_travel_history_entries")
 }
 
 // Repeating rows for "Do you hold any other citizenships?" = Yes
