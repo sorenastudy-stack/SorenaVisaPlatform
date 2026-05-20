@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,11 @@ import { VisaService } from './visa.service';
 import { MilitaryHistoryDto } from './dto/military-history.dto';
 import { TravelHistoryDto } from './dto/travel-history.dto';
 import { ImmigrationAssistanceDto } from './dto/immigration-assistance.dto';
+import {
+  SupportingDocumentsDto,
+  SupportingDocumentMetadataDto,
+  VisaSupportingDocumentTypeDto,
+} from './dto/supporting-documents.dto';
 
 // All endpoints are gated by JwtAuthGuard + RolesGuard. STUDENT and AGENT are
 // the only roles allowed — same scope as AdmissionController. Every method
@@ -306,5 +312,47 @@ export class VisaController {
     @Body() body: ImmigrationAssistanceDto,
   ) {
     return this.visaService.saveImmigrationAssistance(req.user.userId, body);
+  }
+
+  // ── Step 13 — Supporting documents page 1 (PR-VISA13) ────────────
+  // File storage is deferred. The four routes below handle only
+  // metadata: the three parent-row fields (gate / country /
+  // areAllDocsInEnglish) save via PATCH; individual metadata rows
+  // upsert via PUT and delete via DELETE. The file bytes never reach
+  // the backend under this PR.
+
+  @Get('supporting-documents')
+  getSupportingDocuments(@Req() req: any) {
+    return this.visaService.getSupportingDocuments(req.user.userId);
+  }
+
+  @Patch('supporting-documents')
+  saveSupportingDocuments(
+    @Req() req: any,
+    @Body() body: SupportingDocumentsDto,
+  ) {
+    return this.visaService.saveSupportingDocuments(req.user.userId, body);
+  }
+
+  @Put('supporting-documents/metadata')
+  upsertSupportingDocumentMetadata(
+    @Req() req: any,
+    @Body() body: SupportingDocumentMetadataDto,
+  ) {
+    return this.visaService.upsertSupportingDocumentMetadata(
+      req.user.userId,
+      body,
+    );
+  }
+
+  @Delete('supporting-documents/metadata/:documentType')
+  deleteSupportingDocumentMetadata(
+    @Req() req: any,
+    @Param('documentType') documentType: VisaSupportingDocumentTypeDto,
+  ) {
+    return this.visaService.deleteSupportingDocumentMetadata(
+      req.user.userId,
+      documentType,
+    );
   }
 }

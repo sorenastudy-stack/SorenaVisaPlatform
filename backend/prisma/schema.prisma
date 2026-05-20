@@ -1424,6 +1424,21 @@ model VisaApplication {
   adviserContactNumberEncrypted  Bytes?
   adviserIsPrimaryContact        Boolean?
 
+  // Section 13 — Supporting documents page 1 (PR-VISA13). Three
+  // parent-row fields plus a repeating visa_supporting_documents
+  // child table (one row per documentType per application). The
+  // actual file bytes are NEVER sent to or stored by the backend;
+  // file storage is deferred to a later PR — we record only
+  // originalFilename / mimeType / sizeBytes / uploadedAt as metadata.
+  // countryOfResidence is free-text PII (identifying location) and
+  // encrypted via CryptoService, same envelope as the Section 12
+  // adviser fields. areAllDocsInEnglish is the "are all the documents
+  // you intend to upload in English?" gate from the page-1 guidance
+  // block.
+  livingInDifferentCountry       Boolean?
+  countryOfResidenceEncrypted    Bytes?
+  areAllDocsInEnglish            Boolean?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -1442,6 +1457,7 @@ model VisaApplication {
   nzContacts              VisaNzContact[]
   militaryServices        VisaMilitaryService[]
   travelHistoryEntries    VisaTravelHistoryEntry[]
+  supportingDocuments     VisaSupportingDocument[]
 
   @@map("visa_applications")
 }
@@ -1775,6 +1791,58 @@ enum ImmigrationAssistanceCapacity {
   FAMILY_MEMBER
   FRIEND
   OTHER
+}
+
+// Supporting document types (PR-VISA13). Page 1 of INZ's "Supporting
+// documents" introduces the first six values; PR-VISA14 (page 2)
+// will reuse this same enum and add more values for the page-2
+// document categories. The UNIQUE constraint on
+// (visaApplicationId, documentType) in VisaSupportingDocument means
+// each application can only have one metadata row per type at a
+// time — re-uploading replaces the existing row in a single
+// transaction.
+enum VisaSupportingDocumentType {
+  PASSPORT
+  NATIONAL_ID
+  RESIDENCE_VISA
+  MILITARY_RECORD
+  TRAVEL_HISTORY
+  AUTHORITY_DOC
+}
+
+// Step 13 (PR-VISA13) — Supporting documents page 1 metadata row.
+// File storage is deferred to a later PR; this table stores ONLY
+// the metadata extracted from the File object in the browser
+// (originalFilename / mimeType / sizeBytes). The bytes themselves
+// never reach the backend.
+//
+// originalFilename is the user's chosen filename — not encrypted
+// (it's a label, not personally identifying on its own). mimeType
+// and sizeBytes are technical fields. uploadedAt records when the
+// metadata row was created — distinct from createdAt because we'll
+// eventually want to know "when did the user originally pick this
+// file?" separately from row-creation timestamps after PR-14
+// introduces actual storage.
+//
+// UNIQUE (visaApplicationId, documentType): enforces one row per
+// type per application — replace-on-upload (service deletes the
+// existing row by composite key before inserting the new one).
+model VisaSupportingDocument {
+  id                 String                     @id @default(cuid())
+  visaApplicationId  String
+  documentType       VisaSupportingDocumentType
+  originalFilename   String
+  mimeType           String
+  sizeBytes          Int
+  uploadedAt         DateTime                   @default(now())
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  visaApplication    VisaApplication            @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@unique([visaApplicationId, documentType])
+  @@index([visaApplicationId])
+  @@map("visa_supporting_documents")
 }
 
 // Step 11 (PR-VISA11) — Travel history child row. The gate flag

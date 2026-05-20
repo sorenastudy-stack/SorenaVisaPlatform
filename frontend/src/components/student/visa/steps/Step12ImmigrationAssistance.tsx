@@ -163,8 +163,8 @@ export function Step12ImmigrationAssistance() {
       await api.patch<ServerPayload>('/students/me/visa/immigration-assistance', payload);
       setSavedAt(new Date().toISOString());
       toast.success(t('visaImmigrationSaveSuccess'));
-      // Step 13 doesn't exist yet — stay on Step 12 (same fallback
-      // PR-11 used while Step 12 was unbuilt).
+      // PR-VISA13: advance the stepper now that Section 13 exists.
+      setActiveStep(13);
     } catch (caught) {
       const msg = caught instanceof Error ? caught.message : t('visaImmigrationSaveError');
       setBannerError(msg);

@@ -2467,4 +2467,190 @@ export class VisaService {
 
     return this.getImmigrationAssistance(userId);
   }
+
+  // ── Step 13 — Supporting documents page 1 (PR-VISA13) ───────────────
+  // File storage is deferred to a later PR. The backend stores only
+  // metadata rows (originalFilename / mimeType / sizeBytes /
+  // uploadedAt); the bytes never reach us. Replace-on-upload by
+  // (visaApplicationId, documentType) — the UNIQUE constraint on
+  // that pair makes the delete-then-insert pattern safe.
+
+  // GET /students/me/visa/supporting-documents
+  async getSupportingDocuments(userId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    const documents = await this.prisma.visaSupportingDocument.findMany({
+      where: { visaApplicationId: visa.id },
+      orderBy: { uploadedAt: 'asc' },
+    });
+    return {
+      livingInDifferentCountry: visa.livingInDifferentCountry,
+      countryOfResidence:       this.decryptOrNull(visa.countryOfResidenceEncrypted),
+      areAllDocsInEnglish:      visa.areAllDocsInEnglish,
+      documents: documents.map((d) => ({
+        documentType:     d.documentType,
+        originalFilename: d.originalFilename,
+        mimeType:         d.mimeType,
+        sizeBytes:        d.sizeBytes,
+        uploadedAt:       d.uploadedAt,
+      })),
+    };
+  }
+
+  // PATCH /students/me/visa/supporting-documents
+  // Saves the three parent-row fields. Server-side clearing:
+  // livingInDifferentCountry = false → nulls countryOfResidence +
+  // deletes any stale RESIDENCE_VISA metadata row in the same
+  // transaction. Bumps currentStep to max(current, 14).
+  async saveSupportingDocuments(
+    userId: string,
+    body: {
+      livingInDifferentCountry?: boolean | null;
+      countryOfResidence?: string | null;
+      areAllDocsInEnglish?: boolean | null;
+    },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    // Resolve gate + country reconciliation. We accept null/undefined
+    // on a draft save (partial) but, when livingInDifferentCountry
+    // explicitly = true on this PATCH, require countryOfResidence to
+    // be non-empty so we don't persist a half-state.
+    const living =
+      body.livingInDifferentCountry === undefined
+        ? visa.livingInDifferentCountry
+        : body.livingInDifferentCountry;
+
+    let countryOfResidence: string | null = null;
+    if (living === true) {
+      const c = (body.countryOfResidence ?? '').trim();
+      if (c === '') {
+        // Allow saving the gate alone (so a user can flip the toggle
+        // and come back to fill country) only if the persisted
+        // countryOfResidence was already set. Otherwise reject.
+        const existing = this.decryptOrNull(visa.countryOfResidenceEncrypted);
+        if (!existing || existing.trim() === '') {
+          throw new BadRequestException(
+            'countryOfResidence is required when livingInDifferentCountry = true',
+          );
+        }
+        countryOfResidence = existing;
+      } else {
+        countryOfResidence = c;
+      }
+    }
+    // living === false / null: countryOfResidence stays null; the
+    // RESIDENCE_VISA metadata row is wiped in the transaction below.
+
+    const areAllDocsInEnglish =
+      body.areAllDocsInEnglish === undefined
+        ? visa.areAllDocsInEnglish
+        : body.areAllDocsInEnglish;
+
+    const nextStep = Math.max(visa.currentStep ?? 1, 14);
+
+    await this.prisma.$transaction(async (tx) => {
+      const updateData: Record<string, unknown> = {
+        livingInDifferentCountry:    living,
+        countryOfResidenceEncrypted: countryOfResidence === null
+          ? null
+          : this.crypto.encrypt(countryOfResidence),
+        areAllDocsInEnglish:         areAllDocsInEnglish,
+        currentStep:                 nextStep,
+      };
+      await tx.visaApplication.update({
+        where: { id: visa.id },
+        data: updateData as never,
+      });
+      // Reconcile child metadata row when gate flips to false.
+      if (living !== true) {
+        await tx.visaSupportingDocument.deleteMany({
+          where: { visaApplicationId: visa.id, documentType: 'RESIDENCE_VISA' },
+        });
+      }
+    });
+
+    return this.getSupportingDocuments(userId);
+  }
+
+  // PUT /students/me/visa/supporting-documents/metadata
+  // Replace-on-upload one metadata row. Single transaction:
+  // deleteMany by composite key, then create. The UNIQUE constraint
+  // protects against any race, but the delete-then-insert pattern
+  // matches Step 10 / 11 / 12 style. File bytes are NEVER stored.
+  async upsertSupportingDocumentMetadata(
+    userId: string,
+    body: {
+      documentType:
+        | 'PASSPORT' | 'NATIONAL_ID' | 'RESIDENCE_VISA'
+        | 'MILITARY_RECORD' | 'TRAVEL_HISTORY' | 'AUTHORITY_DOC';
+      originalFilename: string;
+      mimeType: string;
+      sizeBytes: number;
+    },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.visaSupportingDocument.deleteMany({
+        where: { visaApplicationId: visa.id, documentType: body.documentType },
+      });
+      await tx.visaSupportingDocument.create({
+        data: {
+          visaApplicationId: visa.id,
+          documentType:      body.documentType,
+          originalFilename:  body.originalFilename,
+          mimeType:          body.mimeType,
+          sizeBytes:         body.sizeBytes,
+        },
+      });
+    });
+
+    return this.getSupportingDocuments(userId);
+  }
+
+  // DELETE /students/me/visa/supporting-documents/metadata/:documentType
+  async deleteSupportingDocumentMetadata(
+    userId: string,
+    documentType:
+      | 'PASSPORT' | 'NATIONAL_ID' | 'RESIDENCE_VISA'
+      | 'MILITARY_RECORD' | 'TRAVEL_HISTORY' | 'AUTHORITY_DOC',
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    await this.prisma.visaSupportingDocument.deleteMany({
+      where: { visaApplicationId: visa.id, documentType },
+    });
+    return this.getSupportingDocuments(userId);
+  }
 }

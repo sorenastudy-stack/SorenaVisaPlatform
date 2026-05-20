@@ -146,6 +146,14 @@ export interface VisaApplication {
   // state without an extra round-trip.
   completingOnBehalf: boolean | null;
 
+  // Section 13 — Supporting documents page 1 (PR-VISA13). Three
+  // parent-row fields; the document metadata array is fetched
+  // separately via /students/me/visa/supporting-documents. File
+  // storage is deferred to a later PR — we capture only metadata
+  // (originalFilename / mimeType / sizeBytes / uploadedAt) here.
+  livingInDifferentCountry: boolean | null;
+  areAllDocsInEnglish: boolean | null;
+
   // Section 5 — Health (PR-VISA5)
   hasTuberculosis: boolean | null;
   needsRenalDialysis: boolean | null;
@@ -513,8 +521,8 @@ interface ContextValue {
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA12 brings this to 12).
-export const VISA_TOTAL_STEPS = 12;
+// each later INZ section is built (PR-VISA13 brings this to 13).
+export const VISA_TOTAL_STEPS = 13;
 
 const VisaContext = createContext<ContextValue | null>(null);
 
