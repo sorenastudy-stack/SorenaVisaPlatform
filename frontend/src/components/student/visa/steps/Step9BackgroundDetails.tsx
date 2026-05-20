@@ -92,6 +92,8 @@ export function Step9BackgroundDetails() {
       await patchVisa({ ...form, currentStep: 10 });
       setSavedAt(new Date().toISOString());
       toast.success(t('visaBackgroundSaveSuccess'));
+      // PR-VISA10: advance the stepper now that Section 10 exists.
+      setActiveStep(10);
     } catch {
       toast.error(t('visaBackgroundSaveError'));
     } finally {

@@ -1394,6 +1394,14 @@ model VisaApplication {
   memberLiberationMilitia        Boolean?
   everDetainedImprisoned         Boolean?
 
+  // Section 10 — Military service (PR-VISA10). Three gating Y/Ns plus
+  // a conditional explanation (only when D3 = true). exemptExplanation
+  // is PII (free-text reason) and stored encrypted via CryptoService.
+  militaryServiceCompulsoryHome  Boolean?
+  everUndertakenMilitaryService  Boolean?
+  wasExemptFromMilitaryService   Boolean?
+  exemptExplanationEncrypted     Bytes?
+
   currentStep             Int      @default(1)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -1410,6 +1418,7 @@ model VisaApplication {
   parents                 VisaParent[]
   siblings                VisaSibling[]
   nzContacts              VisaNzContact[]
+  militaryServices        VisaMilitaryService[]
 
   @@map("visa_applications")
 }
@@ -1678,6 +1687,36 @@ model VisaTbRiskCountry {
 
   @@index([visaApplicationId])
   @@map("visa_tb_risk_countries")
+}
+
+// Step 10 military service declarations (PR-VISA10). One row per
+// service period — INZ Section D's D4 repeating block. duties is PII
+// (free-text role description) and stored encrypted via CryptoService.
+// dateStarted/dateFinished carry day precision (INZ wants full dates,
+// not month-year). Replace-on-save: visa.service.ts wipes the array
+// with deleteMany before reinserting on every Step 10 PATCH.
+model VisaMilitaryService {
+  id                 String   @id @default(cuid())
+  visaApplicationId  String
+  dateStarted        DateTime?
+  dateFinished       DateTime?
+  location           String?
+  corps              String?
+  division           String?
+  brigade            String?
+  battalion          String?
+  unit               String?
+  rank               String?
+  dutiesEncrypted    Bytes?
+  commandingOfficer  String?
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  visaApplication    VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([visaApplicationId])
+  @@map("visa_military_services")
 }
 
 // Repeating rows for "Do you hold any other citizenships?" = Yes

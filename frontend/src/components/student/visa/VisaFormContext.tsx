@@ -123,6 +123,14 @@ export interface VisaApplication {
   memberLiberationMilitia: boolean | null;
   everDetainedImprisoned: boolean | null;
 
+  // Section 10 — Military service (PR-VISA10). Three gating Y/Ns; the
+  // D3 explanation + D4 service-period array are fetched separately
+  // via /students/me/visa/military-history because the explanation is
+  // encrypted PII and the entries are a child-table replace-on-save.
+  militaryServiceCompulsoryHome: boolean | null;
+  everUndertakenMilitaryService: boolean | null;
+  wasExemptFromMilitaryService: boolean | null;
+
   // Section 5 — Health (PR-VISA5)
   hasTuberculosis: boolean | null;
   needsRenalDialysis: boolean | null;
@@ -490,8 +498,8 @@ interface ContextValue {
 }
 
 // Total number of Visa Section steps the UI knows how to render. Bumps as
-// each later INZ section is built (PR-VISA9 brings this to 9).
-export const VISA_TOTAL_STEPS = 9;
+// each later INZ section is built (PR-VISA10 brings this to 10).
+export const VISA_TOTAL_STEPS = 10;
 
 const VisaContext = createContext<ContextValue | null>(null);
 

@@ -1843,4 +1843,224 @@ export class VisaService {
     await this.assertRelationshipOwnership('nzContact', rowId, userId);
     await this.prisma.visaNzContact.delete({ where: { id: rowId } });
   }
+
+  // ── Step 10 — Military service (PR-VISA10) ───────────────────────────
+  // Replace-on-save shape (unlike Step 8's live-API per row). The
+  // controller's PATCH /students/me/visa/military-history receives the
+  // three D1/D2/D3 booleans + the conditional D3 explanation + the
+  // full D4 array; the service validates, encrypts, wipes any prior
+  // visa_military_services rows, and re-inserts.
+
+  // Shape returned to the frontend on GET / after PATCH. Plaintext
+  // values for the encrypted columns are decrypted here.
+  private serializeMilitaryService(r: {
+    id: string;
+    dateStarted: Date | null;
+    dateFinished: Date | null;
+    location: string | null;
+    corps: string | null;
+    division: string | null;
+    brigade: string | null;
+    battalion: string | null;
+    unit: string | null;
+    rank: string | null;
+    dutiesEncrypted: Buffer | Uint8Array | null;
+    commandingOfficer: string | null;
+    sortOrder: number;
+  }) {
+    return {
+      id: r.id,
+      dateStarted: r.dateStarted,
+      dateFinished: r.dateFinished,
+      location: r.location,
+      corps: r.corps,
+      division: r.division,
+      brigade: r.brigade,
+      battalion: r.battalion,
+      unit: r.unit,
+      rank: r.rank,
+      duties: this.decryptOrNull(r.dutiesEncrypted),
+      commandingOfficer: r.commandingOfficer,
+      sortOrder: r.sortOrder,
+    };
+  }
+
+  // GET /students/me/visa/military-history
+  async getMilitaryHistory(userId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+    const rows = await this.prisma.visaMilitaryService.findMany({
+      where: { visaApplicationId: visa.id },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return {
+      militaryServiceCompulsoryHome: visa.militaryServiceCompulsoryHome,
+      everUndertakenMilitaryService: visa.everUndertakenMilitaryService,
+      wasExemptFromMilitaryService:  visa.wasExemptFromMilitaryService,
+      exemptExplanation:             this.decryptOrNull(visa.exemptExplanationEncrypted),
+      militaryServices: rows.map((r) => this.serializeMilitaryService(r)),
+    };
+  }
+
+  // PATCH /students/me/visa/military-history
+  // Single replace-on-save endpoint. Validates the three Y/Ns + the
+  // conditional D3 explanation + (when D2 = true) every required field
+  // on every D4 entry. Wipes the entries table for this visa app and
+  // re-inserts in one transaction. Bumps currentStep to max(current, 11)
+  // so the stepper unlocks Step 11.
+  async saveMilitaryHistory(
+    userId: string,
+    body: {
+      militaryServiceCompulsoryHome: boolean;
+      everUndertakenMilitaryService: boolean;
+      wasExemptFromMilitaryService: boolean;
+      exemptExplanation?: string | null;
+      militaryServices?: Array<{
+        dateStarted: string;
+        dateFinished: string;
+        location: string;
+        corps: string;
+        division: string;
+        brigade: string;
+        battalion: string;
+        unit: string;
+        rank: string;
+        duties: string;
+        commandingOfficer: string;
+      }>;
+    },
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    // D1/D2/D3 are required booleans (the ValidationPipe enforces type,
+    // but we re-check for truthy presence here so a missing key on a
+    // half-typed body fails closed with a clear message).
+    if (typeof body.militaryServiceCompulsoryHome !== 'boolean') {
+      throw new BadRequestException('militaryServiceCompulsoryHome is required');
+    }
+    if (typeof body.everUndertakenMilitaryService !== 'boolean') {
+      throw new BadRequestException('everUndertakenMilitaryService is required');
+    }
+    if (typeof body.wasExemptFromMilitaryService !== 'boolean') {
+      throw new BadRequestException('wasExemptFromMilitaryService is required');
+    }
+
+    // D3 explanation gating — only required (and only stored) when
+    // wasExemptFromMilitaryService = true. Min 20 chars after trim.
+    let explanationBuf: Buffer | null = null;
+    if (body.wasExemptFromMilitaryService === true) {
+      const expl = (body.exemptExplanation ?? '').trim();
+      if (expl.length < 20) {
+        throw new BadRequestException(
+          'exemptExplanation must be at least 20 characters when wasExemptFromMilitaryService = true',
+        );
+      }
+      explanationBuf = this.crypto.encrypt(expl);
+    }
+
+    // D4 gating — when D2 = true, require ≥1 entry and every field on
+    // each entry must be non-empty (12 columns total).
+    const entries = body.militaryServices ?? [];
+    if (body.everUndertakenMilitaryService === true) {
+      if (entries.length === 0) {
+        throw new BadRequestException(
+          'At least one military service entry is required when everUndertakenMilitaryService = true',
+        );
+      }
+      entries.forEach((entry, i) => {
+        const required: Array<keyof typeof entry> = [
+          'dateStarted', 'dateFinished', 'location', 'corps', 'division',
+          'brigade', 'battalion', 'unit', 'rank', 'duties', 'commandingOfficer',
+        ];
+        for (const k of required) {
+          const v = entry[k];
+          if (v === undefined || v === null || String(v).trim() === '') {
+            throw new BadRequestException(
+              `militaryServices[${i}].${k} is required`,
+            );
+          }
+        }
+        // Validate dates parse cleanly
+        for (const k of ['dateStarted', 'dateFinished'] as const) {
+          const d = new Date(entry[k]);
+          if (isNaN(d.getTime())) {
+            throw new BadRequestException(
+              `militaryServices[${i}].${k} must be a valid ISO date`,
+            );
+          }
+        }
+      });
+    } else if (entries.length > 0) {
+      // D2 = false → no entries allowed in the payload (defensive — the
+      // frontend won't send them, but a hand-rolled curl could).
+      throw new BadRequestException(
+        'militaryServices must be empty when everUndertakenMilitaryService = false',
+      );
+    }
+
+    const nextStep = Math.max(visa.currentStep ?? 1, 11);
+
+    // Transactional replace-on-save: clear existing rows, write the
+    // booleans + explanation, insert the new rows. Wrapped in a single
+    // transaction so a partial write can't leave the row count out of
+    // sync with the D2 flag.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.visaMilitaryService.deleteMany({
+        where: { visaApplicationId: visa.id },
+      });
+      // Prisma's generated input types expect Uint8Array<ArrayBuffer>
+      // specifically; Node's Buffer is Uint8Array<ArrayBufferLike>. We
+      // cast at the boundary — runtime is identical, this is purely a
+      // structural-typing escape hatch matching the pattern used by
+      // the Step 8 encrypted-field code paths.
+      const updateData: Record<string, unknown> = {
+        militaryServiceCompulsoryHome: body.militaryServiceCompulsoryHome,
+        everUndertakenMilitaryService: body.everUndertakenMilitaryService,
+        wasExemptFromMilitaryService:  body.wasExemptFromMilitaryService,
+        exemptExplanationEncrypted:    explanationBuf,
+        currentStep:                   nextStep,
+      };
+      await tx.visaApplication.update({
+        where: { id: visa.id },
+        data: updateData as never,
+      });
+      if (body.everUndertakenMilitaryService === true) {
+        const rows: Record<string, unknown>[] = entries.map((entry, i) => ({
+          visaApplicationId: visa.id,
+          dateStarted:       new Date(entry.dateStarted),
+          dateFinished:      new Date(entry.dateFinished),
+          location:          String(entry.location).trim(),
+          corps:             String(entry.corps).trim(),
+          division:          String(entry.division).trim(),
+          brigade:           String(entry.brigade).trim(),
+          battalion:         String(entry.battalion).trim(),
+          unit:              String(entry.unit).trim(),
+          rank:              String(entry.rank).trim(),
+          dutiesEncrypted:   this.crypto.encrypt(String(entry.duties).trim()),
+          commandingOfficer: String(entry.commandingOfficer).trim(),
+          sortOrder:         i,
+        }));
+        await tx.visaMilitaryService.createMany({
+          data: rows as never,
+        });
+      }
+    });
+
+    return this.getMilitaryHistory(userId);
+  }
 }

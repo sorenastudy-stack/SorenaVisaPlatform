@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { VisaService } from './visa.service';
+import { MilitaryHistoryDto } from './dto/military-history.dto';
 
 // All endpoints are gated by JwtAuthGuard + RolesGuard. STUDENT and AGENT are
 // the only roles allowed — same scope as AdmissionController. Every method
@@ -247,5 +248,24 @@ export class VisaController {
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteNzContact(@Req() req: any, @Param('id') id: string) {
     return this.visaService.deleteNzContact(req.user.userId, id);
+  }
+
+  // ── Step 10 — Military service (PR-VISA10) ───────────────────────
+  // Single GET + single PATCH (replace-on-save). The controller-level
+  // JwtAuthGuard + RolesGuard + @Roles('STUDENT','AGENT') decorators
+  // gate every method on this controller; the service-level resolver
+  // ensures the caller can only read/write their own visa application.
+
+  @Get('military-history')
+  getMilitaryHistory(@Req() req: any) {
+    return this.visaService.getMilitaryHistory(req.user.userId);
+  }
+
+  @Patch('military-history')
+  saveMilitaryHistory(
+    @Req() req: any,
+    @Body() body: MilitaryHistoryDto,
+  ) {
+    return this.visaService.saveMilitaryHistory(req.user.userId, body);
   }
 }
