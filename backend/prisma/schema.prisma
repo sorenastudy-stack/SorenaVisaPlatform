@@ -11,6 +11,9 @@ datasource db {
 // ─── ENUMS ────────────────────────────────────────────────────────────────────
 
 enum UserRole {
+  // Pre-existing values — kept verbatim to avoid breaking any row
+  // already populated with them (per PR-CONSULT-1's "no auto-migration
+  // of role values" rule). Existing staff users keep their current role.
   SUPER_ADMIN
   ADMIN
   SALES
@@ -19,6 +22,13 @@ enum UserRole {
   SUPPORT
   STUDENT
   AGENT
+  // PR-CONSULT-1 additions for the staff-roles foundation.
+  // OWNER is the only role that can approve owner-approval requests
+  // (destructive / sensitive actions enqueued by SUPER_ADMIN).
+  // CONSULTANT and FINANCE are new functional staff slots on VisaCase.
+  OWNER
+  CONSULTANT
+  FINANCE
 }
 
 enum LeadStatus {
@@ -326,6 +336,19 @@ model User {
   // escalation). Each student owns their conversations; nothing
   // crosses tenant boundaries.
   studentChatConversations VisaChatConversation[] @relation("StudentChatConversations")
+
+  // PR-CONSULT-1: staff-roles foundation.
+  // `staffAssignments`: VisaCaseAssignment rows where this user IS
+  // the staff member (LIA / CONSULTANT / SUPPORT / FINANCE).
+  // `assignmentsMade`: assignments this user CREATED (the actor side).
+  // `ownerApprovalRequests`: requests this user (SUPER_ADMIN) raised.
+  // `ownerApprovalDecisions`: requests this user (OWNER) decided.
+  // `staffActiveStatus`: 1:1 soft-deactivation flag.
+  staffAssignments        VisaCaseAssignment[]    @relation("StaffAssignments")
+  assignmentsMade         VisaCaseAssignment[]    @relation("AssignmentsMade")
+  ownerApprovalRequests   OwnerApprovalRequest[]  @relation("OwnerApprovalRequester")
+  ownerApprovalDecisions  OwnerApprovalRequest[]  @relation("OwnerApprovalDecider")
+  staffActiveStatus       StaffActiveStatus?      @relation("StaffActive")
 
   @@map("users")
 }
@@ -2034,6 +2057,11 @@ model VisaCase {
   supportTickets        VisaSupportTicket[]
   fileNotes             VisaCaseFileNote[]
 
+  // PR-CONSULT-1: per-role staff assignments. A case can have at
+  // most one active assignment per VisaCaseRoleSlot at any time;
+  // historical assignments stay on the row with unassignedAt set.
+  assignments           VisaCaseAssignment[]
+
   @@index([clientId])
   @@index([assignedConsultantId])
   @@index([status])
@@ -2418,4 +2446,145 @@ model VisaOtherCitizenship {
 
   @@index([visaApplicationId])
   @@map("visa_other_citizenships")
+}
+
+// ─── PR-CONSULT-1 — Staff roles + assignments + owner approval ────────
+//
+// Foundation for the consultant-side platform. No consultant UI yet
+// (lands in PR-CONSULT-2); this PR introduces the schema, services,
+// guards, and approval queue that the UI will plug into.
+//
+// Encryption: OwnerApprovalRequest.payload / reason / decisionNote
+// and PlatformSetting.value are stored as base64-encoded AES-256-GCM
+// ciphertext in TEXT columns (CryptoService at the boundary — same
+// envelope as PR-DASH-3/PR-DASH-4 free-text PII).
+
+// Functional staff slot on a VisaCase. A case can have at most one
+// active assignment per slot at any time; reassigning closes the
+// prior row (sets unassignedAt) and inserts a new row.
+enum VisaCaseRoleSlot {
+  LIA
+  CONSULTANT
+  SUPPORT
+  FINANCE
+}
+
+// Lifecycle for an owner-approval request. EXPIRED is set lazily on
+// read (on-read sweep — no scheduler needed for launch). EXECUTED /
+// EXECUTION_FAILED record whether the underlying action actually ran
+// after OWNER approval.
+enum OwnerApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  EXECUTED
+  EXECUTION_FAILED
+}
+
+// Set of destructive / sensitive actions that SUPER_ADMIN cannot
+// execute directly — they enqueue an OwnerApprovalRequest instead.
+// ADMIN cannot perform these actions at all (rejected with 403 at
+// the controller).
+enum OwnerApprovalActionType {
+  CREATE_STAFF_USER
+  CHANGE_STAFF_ROLE
+  DEACTIVATE_STAFF
+  DELETE_CASE
+  DELETE_STUDENT
+  ISSUE_REFUND
+  CHANGE_PLATFORM_SETTING
+}
+
+model VisaCaseAssignment {
+  id             String           @id @default(cuid())
+  caseId         String
+  staffId        String
+  roleSlot       VisaCaseRoleSlot
+  assignedAt     DateTime         @default(now())
+  assignedById   String
+  // unassignedAt IS NULL means the row is the currently-active
+  // assignment for (caseId, roleSlot). Filtering on this is the
+  // primary index access pattern; the composite index below
+  // optimises for it.
+  unassignedAt   DateTime?
+  unassignedById String?
+
+  case           VisaCase         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  staff          User             @relation("StaffAssignments", fields: [staffId], references: [id])
+  assignedBy     User             @relation("AssignmentsMade", fields: [assignedById], references: [id])
+
+  @@index([caseId, roleSlot, unassignedAt])
+  @@index([staffId, unassignedAt])
+  @@map("visa_case_assignments")
+}
+
+model OwnerApprovalRequest {
+  id              String                   @id @default(cuid())
+  requestedById   String
+  actionType      OwnerApprovalActionType
+  // Encrypted JSON payload describing the action precisely (e.g.
+  // { userId, newRole } for CHANGE_STAFF_ROLE). Stored as base64
+  // ciphertext in a TEXT column.
+  payload         String
+  reason          String?
+  status          OwnerApprovalStatus      @default(PENDING)
+  decidedById     String?
+  decidedAt       DateTime?
+  decisionNote    String?
+  // 7 days from creation; expires lazily on read.
+  expiresAt       DateTime
+  executedAt      DateTime?
+  executionError  String?
+
+  requestedBy     User                     @relation("OwnerApprovalRequester", fields: [requestedById], references: [id])
+  decidedBy       User?                    @relation("OwnerApprovalDecider", fields: [decidedById], references: [id])
+
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([status, expiresAt])
+  @@index([requestedById, createdAt])
+  @@map("owner_approval_requests")
+}
+
+// Soft-disable flag for staff users — avoids deleting historical
+// data. 1:1 with User (UNIQUE userId via @id).
+model StaffActiveStatus {
+  userId           String    @id
+  isActive         Boolean   @default(true)
+  deactivatedAt    DateTime?
+  deactivatedById  String?
+
+  user             User      @relation("StaffActive", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("staff_active_status")
+}
+
+// Placeholder for Stripe-issued refunds. Stripe isn't wired yet —
+// PR-CONSULT-1's ISSUE_REFUND executor creates a row with
+// status='PENDING_STRIPE_INTEGRATION'. A future PR replaces that
+// with a real Stripe refund call.
+model Refund {
+  id          String   @id @default(cuid())
+  paymentId   String
+  amountCents Int
+  reason      String?
+  status      String   @default("PENDING_STRIPE_INTEGRATION")
+  createdAt   DateTime @default(now())
+  createdById String
+
+  @@index([paymentId])
+  @@map("refunds")
+}
+
+// Generic key-value store for platform-wide settings the OWNER
+// updates via the approval queue. value is encrypted (CryptoService).
+model PlatformSetting {
+  key         String   @id
+  value       String
+  updatedAt   DateTime @updatedAt
+  updatedById String
+
+  @@map("platform_settings")
 }

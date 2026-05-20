@@ -38,7 +38,16 @@ interface DashboardPayload {
   user: { firstName: string };
   assessmentReport: AssessmentReportData;
   visaProgress: { currentStep: number; totalSteps: number; isComplete: boolean };
-  case: { status: string; statusLabel: string; statusChangedAt: string };
+  case: {
+    status: string;
+    statusLabel: string;
+    statusChangedAt: string;
+    // PR-CONSULT-1: assignee names from the active VisaCaseAssignment
+    // rows for the LIA + CONSULTANT slots. Null when the slot hasn't
+    // been auto-allocated yet.
+    assignedLia: string | null;
+    assignedConsultant: string | null;
+  };
   documents: DocStatus[];
   recentActivity: ActivityItem[];
   tickets: DashboardTicketsSummary;
@@ -80,6 +89,8 @@ export default async function StudentDashboardPage() {
         <CaseStatusCard
           status={payload.case.status}
           statusChangedAt={payload.case.statusChangedAt}
+          assignedLia={payload.case.assignedLia}
+          assignedConsultant={payload.case.assignedConsultant}
         />
         {/* PR-DASH-2: TicketsCard replaces the old placeholder. */}
         <TicketsCard summary={payload.tickets} />

@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { MeetingsService } from '../meetings/meetings.service';
+import { AssignmentsService } from '../../staff/assignments/assignments.service';
 
 // PR-DASH-1 — Client-dashboard service.
 //
@@ -55,6 +56,11 @@ export class DashboardService {
     private readonly tickets: TicketsService,
     // PR-DASH-3: meetings summary block.
     private readonly meetings: MeetingsService,
+    // PR-CONSULT-1: case-assignments service.
+    // - first-load auto-allocates LIA / CONSULTANT / SUPPORT /
+    //   FINANCE slots after the VisaCase is created;
+    // - dashboard case-detail block surfaces LIA + CONSULTANT names.
+    private readonly assignments: AssignmentsService,
   ) {}
 
   // Same chain visa.service uses. Returns the admission row and the
@@ -299,10 +305,35 @@ export class DashboardService {
 
     // Ensure dashboard rows exist; capture the visa application id for
     // the parallel reads below.
-    const { visaApplicationId } = await this.ensureDashboardRows(
+    const { visaApplicationId, createdVisaCase } = await this.ensureDashboardRows(
       userId,
       admission.id,
     );
+
+    // PR-CONSULT-1: when a VisaCase is freshly created, fire
+    // load-based auto-allocation for each functional slot. Each
+    // call is wrapped in try/catch so a missing staff pool for one
+    // slot doesn't block the others — the slot just stays
+    // unfilled until an admin runs manual-assign.
+    if (createdVisaCase) {
+      const caseRow = await this.prisma.visaCase.findUnique({
+        where: { visaApplicationId },
+        select: { id: true },
+      });
+      if (caseRow) {
+        const slots: Array<'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE'> = [
+          'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE',
+        ];
+        for (const slot of slots) {
+          try {
+            await this.assignments.autoAllocate(caseRow.id, slot, userId);
+          } catch {
+            // No staff of that role exists yet — leave the slot
+            // empty. Admin can manually assign later.
+          }
+        }
+      }
+    }
 
     // Parallel reads — every query is scoped to this user / this
     // visa application, so a leaky filter can't return another
@@ -367,6 +398,14 @@ export class DashboardService {
     const currentStep = visa.currentStep ?? 1;
     const isComplete = currentStep > TOTAL_VISA_STEPS;
 
+    // PR-CONSULT-1: surface the LIA + CONSULTANT names on the
+    // student dashboard so the student knows who's looking after
+    // their case. SUPPORT and FINANCE assignees are NOT exposed to
+    // students — those slots are internal-only.
+    const slotAssignments = await this.assignments.getCaseAssignments(visaCase.id);
+    const assignedLiaName = slotAssignments.LIA?.staffName ?? null;
+    const assignedConsultantName = slotAssignments.CONSULTANT?.staffName ?? null;
+
     return {
       user: {
         // The User model stores a single `name` field; expose firstName
@@ -399,6 +438,11 @@ export class DashboardService {
         status:            visaCase.status,
         statusLabel:       `dashboard.caseStatus.${visaCase.status}.label`,
         statusChangedAt:   visaCase.statusChangedAt,
+        // PR-CONSULT-1: who is looking after this case. null when
+        // the slot hasn't been auto-allocated yet (no staff of
+        // that role on the platform).
+        assignedLia:        assignedLiaName,
+        assignedConsultant: assignedConsultantName,
       },
       documents: docs,
       recentActivity: auditRows.map((r) => this.mapAuditRow(r)),

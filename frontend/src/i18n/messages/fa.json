@@ -1369,5 +1369,8 @@
   "chat.escalation.created": "تیکت ایجاد شد — یک مشاور به‌زودی پاسخ می‌دهد",
   "chat.escalation.linkedBadge": "متصل به تیکت",
   "chat.errors.unavailable": "دستیار موقتاً در دسترس نیست. لطفاً کمی بعد تلاش کنید.",
-  "chat.errors.rateLimited": "پیام‌ها را خیلی سریع ارسال می‌کنید. لطفاً کمی صبر کنید."
+  "chat.errors.rateLimited": "پیام‌ها را خیلی سریع ارسال می‌کنید. لطفاً کمی صبر کنید.",
+  "case.assignedLia": "وکیل مهاجرت شما",
+  "case.assignedConsultant": "مشاور شما",
+  "case.unassigned": "هنوز تعیین نشده"
 }

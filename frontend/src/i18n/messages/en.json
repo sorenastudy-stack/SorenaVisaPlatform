@@ -1369,5 +1369,8 @@
   "chat.escalation.created": "Ticket created — a consultant will reply soon",
   "chat.escalation.linkedBadge": "Linked to ticket",
   "chat.errors.unavailable": "Assistant is temporarily unavailable. Please try again in a moment.",
-  "chat.errors.rateLimited": "You're sending messages too quickly. Please wait a moment."
+  "chat.errors.rateLimited": "You're sending messages too quickly. Please wait a moment.",
+  "case.assignedLia": "Your immigration adviser",
+  "case.assignedConsultant": "Your consultant",
+  "case.unassigned": "Not yet assigned"
 }

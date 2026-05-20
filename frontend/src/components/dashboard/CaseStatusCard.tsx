@@ -25,9 +25,17 @@ const STATUS_TINT: Record<string, string> = {
 export function CaseStatusCard({
   status,
   statusChangedAt,
+  assignedLia,
+  assignedConsultant,
 }: {
   status: string;
   statusChangedAt: string;
+  // PR-CONSULT-1: who is looking after this case. null when the
+  // slot hasn't been auto-allocated yet (no staff of that role on
+  // the platform). SUPPORT and FINANCE assignees are NOT exposed
+  // to students — those slots are internal-only.
+  assignedLia?: string | null;
+  assignedConsultant?: string | null;
 }) {
   const t = useTranslations();
   const tint = STATUS_TINT[status] ?? STATUS_TINT.DRAFT;
@@ -50,6 +58,23 @@ export function CaseStatusCard({
             when: formatRelativeTime(statusChangedAt),
           })}
         </p>
+        {/* PR-CONSULT-1: assignee block. We render both LIA and
+            CONSULTANT slots even when unfilled, so the student can
+            see that someone will be assigned soon. */}
+        <div className="mt-1 flex flex-col gap-1 border-t border-slate-100 pt-3 text-xs">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-slate-500">{t('case.assignedLia')}</span>
+            <span className="font-semibold text-sorena-navy">
+              {assignedLia ?? t('case.unassigned')}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-slate-500">{t('case.assignedConsultant')}</span>
+            <span className="font-semibold text-sorena-navy">
+              {assignedConsultant ?? t('case.unassigned')}
+            </span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

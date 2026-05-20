@@ -24,6 +24,7 @@ import { StudentsModule } from './students/students.module';
 import { FilesModule } from './files/files.module';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { EmailHashModule } from './common/email-hash/email-hash.module';
+import { StaffModule } from './staff/staff.module';
 
 @Module({
   imports: [
@@ -60,6 +61,9 @@ import { EmailHashModule } from './common/email-hash/email-hash.module';
     FilesModule,
     CryptoModule,
     EmailHashModule,
+    // PR-CONSULT-1: staff roles, assignments, owner-approval queue,
+    // staff CRUD. Foundation for the consultant-side UI (PR-CONSULT-2+).
+    StaffModule,
   ],
 })
 export class AppModule {}

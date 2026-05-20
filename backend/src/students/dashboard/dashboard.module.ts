@@ -5,6 +5,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { MeetingsModule } from '../meetings/meetings.module';
+import { AssignmentsModule } from '../../staff/assignments/assignments.module';
 
 // PR-DASH-1 — Client-dashboard module.
 //
@@ -24,7 +25,10 @@ import { MeetingsModule } from '../meetings/meetings.module';
 @Module({
   // PR-DASH-3: pulls in MeetingsModule for the dashboard's upcoming-
   // meetings summary card.
-  imports: [PrismaModule, CryptoModule, TicketsModule, MeetingsModule],
+  // PR-CONSULT-1: pulls in AssignmentsModule so first-load auto-
+  // allocates LIA / CONSULTANT / SUPPORT / FINANCE slots after the
+  // VisaCase is created.
+  imports: [PrismaModule, CryptoModule, TicketsModule, MeetingsModule, AssignmentsModule],
   controllers: [DashboardController],
   providers: [DashboardService],
 })
