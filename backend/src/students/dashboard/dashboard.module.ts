@@ -4,6 +4,7 @@ import { DashboardService } from './dashboard.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
 import { TicketsModule } from '../tickets/tickets.module';
+import { MeetingsModule } from '../meetings/meetings.module';
 
 // PR-DASH-1 — Client-dashboard module.
 //
@@ -21,7 +22,9 @@ import { TicketsModule } from '../tickets/tickets.module';
 // can include a small "tickets" summary block (open count + the
 // three latest open tickets) without duplicating ownership logic.
 @Module({
-  imports: [PrismaModule, CryptoModule, TicketsModule],
+  // PR-DASH-3: pulls in MeetingsModule for the dashboard's upcoming-
+  // meetings summary card.
+  imports: [PrismaModule, CryptoModule, TicketsModule, MeetingsModule],
   controllers: [DashboardController],
   providers: [DashboardService],
 })

@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { TicketsService } from '../tickets/tickets.service';
+import { MeetingsService } from '../meetings/meetings.service';
 
 // PR-DASH-1 — Client-dashboard service.
 //
@@ -52,6 +53,8 @@ export class DashboardService {
     // PR-DASH-2: pulled in so the dashboard payload can include a
     // tickets summary block without duplicating ownership logic.
     private readonly tickets: TicketsService,
+    // PR-DASH-3: meetings summary block.
+    private readonly meetings: MeetingsService,
   ) {}
 
   // Same chain visa.service uses. Returns the admission row and the
@@ -404,6 +407,10 @@ export class DashboardService {
       // shape matches the spec's `tickets: { openCount, latestOpen }`
       // contract.
       tickets: await this.tickets.getDashboardSummary(userId),
+      // PR-DASH-3: meetings summary block. zoomJoinUrl on
+      // nextUpcoming is already redacted per the 24h-window rule
+      // inside MeetingsService.getDashboardSummary.
+      meetings: await this.meetings.getDashboardSummary(userId),
     };
   }
 

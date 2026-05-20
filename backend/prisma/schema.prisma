@@ -314,6 +314,14 @@ model User {
   visaSupportTicketMessages   VisaSupportTicketMessage[]
   visaCaseFileNotesCreated    VisaCaseFileNote[]         @relation("VisaCaseFileNoteCreator")
 
+  // PR-DASH-3: meetings + transcripts.
+  // `studentMeetings`: meetings this user is the student (client) on.
+  // `consultantMeetings`: meetings this user is consulting on.
+  // `transcriptUploads`: transcript metadata rows this user uploaded.
+  studentMeetings       VisaMeeting[]              @relation("StudentMeetings")
+  consultantMeetings    VisaMeeting[]              @relation("ConsultantMeetings")
+  transcriptUploads     VisaMeetingTranscript[]
+
   @@map("users")
 }
 
@@ -2188,6 +2196,89 @@ model VisaCaseFileNote {
   @@index([referenceId])
   @@map("visa_case_file_notes")
 }
+
+// ─── PR-DASH-3 — Meetings + transcripts (metadata + consultant notes) ─
+//
+// One row per consultation between a student and a consultant. Both
+// sides have their own UI surfaces — students see read-only detail
+// of their own meetings; consultants create/edit/cancel/complete and
+// attach transcript metadata + write transcript notes after the
+// session.
+//
+// PII columns encrypted via CryptoService (AES-256-GCM, same envelope
+// as every other free-text PII column in the project):
+//   * locationOrLink   — Zoom URL / office address / etc.
+//   * agenda           — consultant-authored pre-meeting agenda
+//   * transcriptNotes  — consultant-authored post-meeting notes
+//
+// cancelledReason is stored cleartext per the spec — it's a short
+// admin-facing label rather than a freely-typed PII field.
+//
+// wixBookingId is NOT included here — the spec intentionally keeps
+// the meeting row decoupled from any external booking platform.
+// Booking is handled out-of-band via the WIX_BOOKING_URL env var
+// surfaced through the existing /students/me/booking-config endpoint.
+enum VisaMeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum VisaMeetingType {
+  CONSULTATION
+  FOLLOW_UP
+  DOCUMENT_REVIEW
+  ASSESSMENT
+}
+
+model VisaMeeting {
+  id                  String              @id @default(cuid())
+  studentId           String
+  consultantId        String?
+  scheduledAt         DateTime
+  durationMinutes     Int                 @default(30)
+  status              VisaMeetingStatus   @default(SCHEDULED)
+  meetingType         VisaMeetingType     @default(CONSULTATION)
+  // Encrypted free-text PII (location / Zoom URL / agenda / post-meeting notes).
+  locationOrLink      String?
+  agenda              String?
+  transcriptNotes     String?
+  cancelledAt         DateTime?
+  cancelledReason     String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  student             User                @relation("StudentMeetings", fields: [studentId], references: [id])
+  consultant          User?               @relation("ConsultantMeetings", fields: [consultantId], references: [id])
+  transcriptFile      VisaMeetingTranscript?
+
+  @@index([studentId, scheduledAt])
+  @@index([consultantId, scheduledAt])
+  @@index([status])
+  @@map("visa_meetings")
+}
+
+// Transcript metadata. 1:1 with VisaMeeting (UNIQUE on meetingId).
+// File bytes never reach the backend — see PR-13/PR-14 metadata-only
+// pattern. PR-15 will attach the storage layer; this row stays the
+// stable anchor.
+model VisaMeetingTranscript {
+  id                String      @id @default(cuid())
+  meetingId         String      @unique
+  originalFilename  String
+  mimeType          String
+  sizeBytes         Int
+  uploadedById      String
+  uploadedAt        DateTime    @default(now())
+
+  meeting           VisaMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  uploadedBy        User        @relation(fields: [uploadedById], references: [id])
+
+  @@index([uploadedById])
+  @@map("visa_meeting_transcripts")
+}
+
 
 // Step 11 (PR-VISA11) — Travel history child row. The gate flag
 // hasTravelledInternationally lives on the parent visa_application;
