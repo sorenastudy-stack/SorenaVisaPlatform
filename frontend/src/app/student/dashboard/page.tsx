@@ -14,7 +14,6 @@ import {
   RecentActivityCard,
   type ActivityItem,
 } from '@/components/dashboard/RecentActivityCard';
-import { ChatbotPlaceholderCard } from '@/components/dashboard/PlaceholderCards';
 import {
   TicketsCard,
   type DashboardTicketsSummary,
@@ -23,6 +22,7 @@ import {
   MeetingsCard,
   type DashboardMeetingsSummary,
 } from '@/components/student/meetings/MeetingsCard';
+import { ChatbotCard } from '@/components/student/chat/ChatbotCard';
 
 // PR-DASH-1 — Client dashboard landing page.
 //
@@ -85,17 +85,12 @@ export default async function StudentDashboardPage() {
         <TicketsCard summary={payload.tickets} />
         {/* PR-DASH-3: MeetingsCard replaces the old placeholder. */}
         <MeetingsCard summary={payload.meetings} />
+        {/* PR-DASH-4: ChatbotCard replaces the old placeholder. */}
+        <ChatbotCard />
         {/* DocumentsCard spans both columns on md+ */}
         <DocumentsCard documents={payload.documents} />
         <RecentActivityCard activity={payload.recentActivity} />
       </DashboardGrid>
-
-      {/* Future-PR placeholders — visually present but disabled */}
-      <div className="mt-8">
-        <DashboardGrid>
-          <ChatbotPlaceholderCard />
-        </DashboardGrid>
-      </div>
     </DashboardLayout>
   );
 }

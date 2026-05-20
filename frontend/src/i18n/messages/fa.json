@@ -1352,5 +1352,22 @@
   "meetings.consultant.removeTranscript": "حذف",
   "meetings.consultant.cancelReason": "دلیل (اختیاری)",
   "meetings.errors.notFound": "جلسه یافت نشد.",
-  "meetings.errors.staffRateLimit": "تعداد تغییرات شما بیش از حد است. لطفاً لحظه‌ای صبر کنید."
+  "meetings.errors.staffRateLimit": "تعداد تغییرات شما بیش از حد است. لطفاً لحظه‌ای صبر کنید.",
+  "chat.title": "دستیار",
+  "chat.empty.title": "هر سوالی دارید بپرسید",
+  "chat.empty.subtitle": "می‌توانم درباره پرونده، جلسات و سوالات پلتفرم کمک کنم.",
+  "chat.input.placeholder": "پیام خود را بنویسید...",
+  "chat.input.send": "ارسال",
+  "chat.input.thinking": "در حال فکر کردن...",
+  "chat.conversations.new": "گفت‌وگوی جدید",
+  "chat.conversations.empty": "هنوز گفت‌وگویی ندارید",
+  "chat.escalation.title": "می‌خواهید این را به یک مشاور ارجاع دهم؟",
+  "chat.escalation.body": "یک تیکت پشتیبانی ایجاد می‌کنم و یک مشاور پاسخ خواهد داد.",
+  "chat.escalation.extraContextLabel": "نکته دیگری هست که مشاور باید بداند؟ (اختیاری)",
+  "chat.escalation.accept": "ایجاد تیکت پشتیبانی",
+  "chat.escalation.decline": "نه ممنون",
+  "chat.escalation.created": "تیکت ایجاد شد — یک مشاور به‌زودی پاسخ می‌دهد",
+  "chat.escalation.linkedBadge": "متصل به تیکت",
+  "chat.errors.unavailable": "دستیار موقتاً در دسترس نیست. لطفاً کمی بعد تلاش کنید.",
+  "chat.errors.rateLimited": "پیام‌ها را خیلی سریع ارسال می‌کنید. لطفاً کمی صبر کنید."
 }

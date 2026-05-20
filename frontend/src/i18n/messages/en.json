@@ -1352,5 +1352,22 @@
   "meetings.consultant.removeTranscript": "Remove",
   "meetings.consultant.cancelReason": "Reason (optional)",
   "meetings.errors.notFound": "Meeting not found.",
-  "meetings.errors.staffRateLimit": "You're making too many changes. Please wait a moment."
+  "meetings.errors.staffRateLimit": "You're making too many changes. Please wait a moment.",
+  "chat.title": "Assistant",
+  "chat.empty.title": "Ask me anything",
+  "chat.empty.subtitle": "I can help with your case, meetings, and platform questions.",
+  "chat.input.placeholder": "Type your message...",
+  "chat.input.send": "Send",
+  "chat.input.thinking": "Thinking...",
+  "chat.conversations.new": "New conversation",
+  "chat.conversations.empty": "No conversations yet",
+  "chat.escalation.title": "Want me to escalate this to a consultant?",
+  "chat.escalation.body": "I'll create a support ticket and a consultant will reply.",
+  "chat.escalation.extraContextLabel": "Anything else the consultant should know? (optional)",
+  "chat.escalation.accept": "Create support ticket",
+  "chat.escalation.decline": "No thanks",
+  "chat.escalation.created": "Ticket created — a consultant will reply soon",
+  "chat.escalation.linkedBadge": "Linked to ticket",
+  "chat.errors.unavailable": "Assistant is temporarily unavailable. Please try again in a moment.",
+  "chat.errors.rateLimited": "You're sending messages too quickly. Please wait a moment."
 }

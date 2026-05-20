@@ -322,6 +322,11 @@ model User {
   consultantMeetings    VisaMeeting[]              @relation("ConsultantMeetings")
   transcriptUploads     VisaMeetingTranscript[]
 
+  // PR-DASH-4: in-platform AI chatbot (student-side, Pattern 1
+  // escalation). Each student owns their conversations; nothing
+  // crosses tenant boundaries.
+  studentChatConversations VisaChatConversation[] @relation("StudentChatConversations")
+
   @@map("users")
 }
 
@@ -2146,6 +2151,12 @@ model VisaSupportTicket {
   case                  VisaCase              @relation(fields: [caseId], references: [id], onDelete: Cascade)
   messages              VisaSupportTicketMessage[]
 
+  // PR-DASH-4: chat messages that escalated INTO this ticket. One
+  // ticket can have at most one origin chat message (the escalation
+  // event); the relation is plural because the FK column lives on
+  // the message side and Prisma needs the reverse list.
+  chatEscalations       VisaChatMessage[]      @relation("ChatEscalations")
+
   @@index([clientId, status])
   @@index([assignedStaffId, status])
   @@index([caseId])
@@ -2277,6 +2288,76 @@ model VisaMeetingTranscript {
 
   @@index([uploadedById])
   @@map("visa_meeting_transcripts")
+}
+
+// ─── PR-DASH-4 — In-platform AI chatbot (student-side, Pattern 1) ─────
+//
+// One conversation per student "thread". Messages are 1-N off the
+// conversation. The chatbot is powered by Anthropic Claude Haiku;
+// when the assistant detects it can't safely answer (sentinel token
+// in its reply), the message is flagged for ESCALATION — the
+// student then explicitly accepts or declines, and on accept a real
+// VisaSupportTicket (PR-DASH-2) is created and linked back to the
+// originating assistant message via escalatedTicketId.
+//
+// PII handling:
+//   * VisaChatConversation.title  — encrypted (first user message,
+//     truncated to 80 chars).
+//   * VisaChatMessage.content     — encrypted, both user and assistant
+//     messages. Cleartext is only held in memory long enough to send
+//     to / receive from Anthropic, never logged.
+//
+// We don't store any of Anthropic's response metadata (request_id,
+// stop_reason, etc.) other than the model name + token counts, to
+// keep our row narrow and the audit trail clean.
+
+enum VisaChatMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model VisaChatConversation {
+  id          String              @id @default(cuid())
+  studentId   String
+  // Encrypted base64 (CryptoService). First user message truncated
+  // to 80 chars after trim — only used as a list-row label.
+  title       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  archivedAt  DateTime?
+
+  student     User                @relation("StudentChatConversations", fields: [studentId], references: [id])
+  messages    VisaChatMessage[]
+
+  @@index([studentId, updatedAt])
+  @@map("visa_chat_conversations")
+}
+
+model VisaChatMessage {
+  id                  String                  @id @default(cuid())
+  conversationId      String
+  role                VisaChatMessageRole
+  // Encrypted base64 (CryptoService). Cleartext only ever passes
+  // through the service layer to the model and back.
+  content             String
+  tokensIn            Int?
+  tokensOut           Int?
+  // Model identifier string (e.g. "claude-haiku-4-5-20251001").
+  // Stored so future migrations across model versions can be audited.
+  modelUsed           String?
+  escalationOffered   Boolean                 @default(false)
+  // Set when the student accepted escalation; FK to the resulting
+  // support ticket so we can render a "Linked to ticket #..." badge
+  // in the chat thread.
+  escalatedTicketId   String?
+  createdAt           DateTime                @default(now())
+
+  conversation        VisaChatConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  escalatedTicket     VisaSupportTicket?      @relation("ChatEscalations", fields: [escalatedTicketId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@map("visa_chat_messages")
 }
 
 

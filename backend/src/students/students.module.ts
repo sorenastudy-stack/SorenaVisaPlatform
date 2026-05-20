@@ -8,6 +8,7 @@ import { VisaService } from './visa/visa.service';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { MeetingsModule } from './meetings/meetings.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EmailModule } from '../email/email.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
@@ -20,6 +21,7 @@ import { CryptoModule } from '../common/crypto/crypto.module';
     DashboardModule,
     TicketsModule,
     MeetingsModule,
+    ChatbotModule,
   ],
   controllers: [StudentsController, AdmissionController, VisaController],
   providers: [StudentsService, AdmissionService, VisaService],
