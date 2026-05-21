@@ -16,16 +16,20 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-// PR-DASH-1: students land on the dashboard, not the visa shell.
-// SUPPORT keeps the legacy /student entry point until PR-DASH-2 brings
-// them onto the dashboard too.
+// PR-CONSULT-2: all 7 staff roles now land on the unified `/staff`
+// portal. STUDENT keeps the existing dashboard route. The legacy
+// per-role shells (/admin, /ops, /sales, /lia) still exist and
+// remain reachable by direct URL.
 const ROLE_REDIRECT: Record<string, string> = {
-  SUPER_ADMIN: '/admin',
-  ADMIN:       '/admin',
+  OWNER:       '/staff',
+  SUPER_ADMIN: '/staff',
+  ADMIN:       '/staff',
   OPERATIONS:  '/ops',
   SALES:       '/sales',
-  LIA:         '/lia',
-  SUPPORT:     '/student',
+  LIA:         '/staff',
+  CONSULTANT:  '/staff',
+  SUPPORT:     '/staff',
+  FINANCE:     '/staff',
   STUDENT:     '/student/dashboard',
 };
 

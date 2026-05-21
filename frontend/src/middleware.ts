@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
+// PR-CONSULT-2 — `/staff/*` is the new combined staff portal that
+// replaces the per-role `/admin`, `/ops`, `/sales`, `/lia` shells
+// going forward. All 7 staff roles (OWNER / SUPER_ADMIN / ADMIN /
+// LIA / CONSULTANT / SUPPORT / FINANCE) can reach `/staff`.
 const ROLE_ROUTES: Record<string, string[]> = {
   '/admin':   ['SUPER_ADMIN', 'ADMIN'],
   '/ops':     ['OPERATIONS', 'SUPER_ADMIN', 'ADMIN'],
   '/sales':   ['SALES', 'SUPER_ADMIN', 'ADMIN'],
   '/lia':     ['LIA', 'SUPER_ADMIN', 'ADMIN'],
+  '/staff':   ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'],
   '/student': ['STUDENT'],
 };
 
@@ -44,5 +49,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/ops/:path*', '/sales/:path*', '/lia/:path*', '/student/:path*'],
+  matcher: [
+    '/admin/:path*',
+    '/ops/:path*',
+    '/sales/:path*',
+    '/lia/:path*',
+    '/staff/:path*',
+    '/student/:path*',
+  ],
 };
