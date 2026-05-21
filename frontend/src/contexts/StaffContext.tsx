@@ -20,10 +20,14 @@ export type StaffRole =
   | 'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE';
 
 export interface StaffPermissions {
-  canManageStaff: boolean;
-  canApprove:     boolean;
-  canSeeAllCases: boolean;
-  canReassign:    boolean;
+  canManageStaff:   boolean;
+  canApprove:       boolean;
+  // PR-CONSULT-3: SUPER_ADMIN + OWNER can view the Approvals page
+  // (OWNER for Pending, SUPER_ADMIN for Mine). Distinct from
+  // canApprove which gates the Approve/Reject buttons themselves.
+  canViewApprovals: boolean;
+  canSeeAllCases:   boolean;
+  canReassign:      boolean;
 }
 
 export interface StaffMe {
@@ -44,10 +48,11 @@ interface StaffContextValue {
 }
 
 const DEFAULT_PERMISSIONS: StaffPermissions = {
-  canManageStaff: false,
-  canApprove:     false,
-  canSeeAllCases: false,
-  canReassign:    false,
+  canManageStaff:   false,
+  canApprove:       false,
+  canViewApprovals: false,
+  canSeeAllCases:   false,
+  canReassign:      false,
 };
 
 const StaffContext = createContext<StaffContextValue>({

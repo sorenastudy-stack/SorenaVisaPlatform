@@ -1433,6 +1433,94 @@
       "CONSULTANT": "مشاور",
       "SUPPORT": "پشتیبانی",
       "FINANCE": "مالی"
+    },
+    "users": {
+      "title": "کارکنان",
+      "search": "جست‌وجو بر اساس نام یا ایمیل...",
+      "filter": {
+        "role": "نقش",
+        "active": "فقط فعال"
+      },
+      "create": "ایجاد کارمند",
+      "empty": "هنوز کارمندی وجود ندارد",
+      "columns": {
+        "name": "نام",
+        "email": "ایمیل",
+        "role": "نقش",
+        "active": "فعال",
+        "created": "ایجاد شد",
+        "actions": "اقدامات"
+      },
+      "form": {
+        "firstName": "نام",
+        "lastName": "نام خانوادگی",
+        "email": "ایمیل",
+        "role": "نقش",
+        "locale": "زبان ترجیحی",
+        "submit": "ایجاد"
+      },
+      "detail": {
+        "workload": "حجم کاری",
+        "totalAssignments": "{count} ارجاع فعال",
+        "changeRole": "تغییر نقش",
+        "deactivate": "غیرفعال‌سازی",
+        "reactivate": "فعال‌سازی مجدد"
+      },
+      "changeRole": {
+        "warning": "تغییر این نقش ممکن است باعث ارجاع مجدد پرونده‌های فعال شود."
+      },
+      "deactivate": {
+        "warning": "غیرفعال‌سازی همه ارجاع‌های فعال را می‌بندد و دوباره ارجاع می‌دهد.",
+        "reason": "دلیل (اختیاری)"
+      },
+      "passwordModal": {
+        "title": "رمز عبور موقت تولید شد",
+        "body": "این رمز عبور را به‌طور امن با کارمند به اشتراک بگذارید. این رمز دوباره نمایش داده نخواهد شد.",
+        "copy": "کپی رمز عبور",
+        "copied": "کپی شد",
+        "done": "تمام"
+      },
+      "sentForApproval": "برای تأیید مالک ارسال شد.",
+      "sentForApprovalLink": "مشاهده وضعیت"
+    },
+    "approvals": {
+      "title": "تأییدها",
+      "tabs": {
+        "pending": "در انتظار",
+        "mine": "درخواست‌های من"
+      },
+      "empty": {
+        "pending": "تأییدی در انتظار نیست.",
+        "mine": "هیچ درخواستی ارسال نکرده‌اید."
+      },
+      "actionType": {
+        "CREATE_STAFF_USER": "ایجاد کارمند",
+        "CHANGE_STAFF_ROLE": "تغییر نقش کارمند",
+        "DEACTIVATE_STAFF": "غیرفعال‌سازی کارمند",
+        "DELETE_CASE": "حذف پرونده",
+        "DELETE_STUDENT": "حذف دانشجو",
+        "ISSUE_REFUND": "صدور بازپرداخت",
+        "CHANGE_PLATFORM_SETTING": "تغییر تنظیمات پلتفرم"
+      },
+      "requester": "درخواست توسط",
+      "submitted": "ارسال شد",
+      "expires": "منقضی می‌شود",
+      "reason": "دلیل",
+      "approve": "تأیید",
+      "reject": "رد",
+      "decisionNote": "یادداشت تصمیم (اختیاری)",
+      "confirmApprove": "تأیید تصمیم",
+      "confirmReject": "تأیید رد",
+      "status": {
+        "PENDING": "در انتظار",
+        "APPROVED": "تأیید شد",
+        "REJECTED": "رد شد",
+        "EXPIRED": "منقضی",
+        "EXECUTED": "اجرا شد",
+        "EXECUTION_FAILED": "اجرا ناموفق"
+      },
+      "executionFailed": "اجرا ناموفق: {error}",
+      "executed": "تأیید و اجرا شد."
     }
   }
 }

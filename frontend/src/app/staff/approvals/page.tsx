@@ -1,18 +1,18 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { PlaceholderPanel } from '@/components/staff/PlaceholderPanel';
+import { ApprovalsPageClient } from '@/components/staff/approvals/ApprovalsPageClient';
 
-// PR-CONSULT-2 — Owner-approval queue placeholder.
+// PR-CONSULT-3 — Approvals page.
 //
-// OWNER and SUPER_ADMIN can view this section; OWNER is the only
-// role that can actually approve / reject queue items. Other roles
-// get bounced to the staff overview rather than seeing an
-// "Access Restricted" page.
+// OWNER + SUPER_ADMIN only. OWNER lands on Pending by default;
+// SUPER_ADMIN lands on My Requests. The "Sent for owner approval"
+// toast deep-links to `?tab=mine` so a SUPER_ADMIN can verify
+// their request landed.
 const QUEUE_ROLES = new Set(['OWNER', 'SUPER_ADMIN']);
 
 export default async function StaffApprovalsPage() {
   const session = await getSession();
   if (!session) redirect('/login?next=/staff/approvals');
   if (!QUEUE_ROLES.has(session.role)) redirect('/staff');
-  return <PlaceholderPanel section="Approvals" />;
+  return <ApprovalsPageClient />;
 }

@@ -1433,6 +1433,94 @@
       "CONSULTANT": "Consultant",
       "SUPPORT": "Support",
       "FINANCE": "Finance"
+    },
+    "users": {
+      "title": "Staff",
+      "search": "Search by name or email...",
+      "filter": {
+        "role": "Role",
+        "active": "Active only"
+      },
+      "create": "Create staff",
+      "empty": "No staff yet",
+      "columns": {
+        "name": "Name",
+        "email": "Email",
+        "role": "Role",
+        "active": "Active",
+        "created": "Created",
+        "actions": "Actions"
+      },
+      "form": {
+        "firstName": "First name",
+        "lastName": "Last name",
+        "email": "Email",
+        "role": "Role",
+        "locale": "Preferred language",
+        "submit": "Create"
+      },
+      "detail": {
+        "workload": "Workload",
+        "totalAssignments": "{count} active assignments",
+        "changeRole": "Change role",
+        "deactivate": "Deactivate",
+        "reactivate": "Reactivate"
+      },
+      "changeRole": {
+        "warning": "Changing this role may trigger reallocation of their active cases."
+      },
+      "deactivate": {
+        "warning": "Deactivating will close all active case assignments and auto-reallocate them.",
+        "reason": "Reason (optional)"
+      },
+      "passwordModal": {
+        "title": "Temporary password generated",
+        "body": "Share this password with the staff member securely. It will not be shown again.",
+        "copy": "Copy password",
+        "copied": "Copied",
+        "done": "Done"
+      },
+      "sentForApproval": "Sent for owner approval.",
+      "sentForApprovalLink": "View status"
+    },
+    "approvals": {
+      "title": "Approvals",
+      "tabs": {
+        "pending": "Pending",
+        "mine": "My Requests"
+      },
+      "empty": {
+        "pending": "No pending approvals.",
+        "mine": "You haven't submitted any requests."
+      },
+      "actionType": {
+        "CREATE_STAFF_USER": "Create staff user",
+        "CHANGE_STAFF_ROLE": "Change staff role",
+        "DEACTIVATE_STAFF": "Deactivate staff",
+        "DELETE_CASE": "Delete case",
+        "DELETE_STUDENT": "Delete student",
+        "ISSUE_REFUND": "Issue refund",
+        "CHANGE_PLATFORM_SETTING": "Change platform setting"
+      },
+      "requester": "Requested by",
+      "submitted": "Submitted",
+      "expires": "Expires",
+      "reason": "Reason",
+      "approve": "Approve",
+      "reject": "Reject",
+      "decisionNote": "Decision note (optional)",
+      "confirmApprove": "Confirm approval",
+      "confirmReject": "Confirm rejection",
+      "status": {
+        "PENDING": "Pending",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected",
+        "EXPIRED": "Expired",
+        "EXECUTED": "Executed",
+        "EXECUTION_FAILED": "Execution failed"
+      },
+      "executionFailed": "Execution failed: {error}",
+      "executed": "Approved and executed."
     }
   }
 }

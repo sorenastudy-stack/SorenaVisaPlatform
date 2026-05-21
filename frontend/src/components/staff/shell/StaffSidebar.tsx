@@ -21,7 +21,10 @@ interface NavItem {
   href:   string;
   icon:   React.ReactNode;
   // Hide when this permission is false; undefined = always show.
-  gate?:  'canManageStaff' | 'canApprove';
+  // PR-CONSULT-3: Approvals uses `canViewApprovals` (OWNER + SUPER_ADMIN)
+  // rather than `canApprove` (OWNER-only) so SUPER_ADMIN can reach
+  // their own "Mine" tab.
+  gate?:  'canManageStaff' | 'canApprove' | 'canViewApprovals';
 }
 
 const NAV: NavItem[] = [
@@ -30,7 +33,7 @@ const NAV: NavItem[] = [
   { label: 'staff.nav.meetings',   href: '/staff/meetings',  icon: <Calendar size={18} /> },
   { label: 'staff.nav.tickets',    href: '/staff/tickets',   icon: <Inbox size={18} /> },
   { label: 'staff.nav.staff',      href: '/staff/users',     icon: <Users size={18} />,       gate: 'canManageStaff' },
-  { label: 'staff.nav.approvals',  href: '/staff/approvals', icon: <ShieldCheck size={18} />, gate: 'canApprove' },
+  { label: 'staff.nav.approvals',  href: '/staff/approvals', icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
 ];
 
 export function StaffSidebar() {

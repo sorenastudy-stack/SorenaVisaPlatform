@@ -20,6 +20,11 @@ export interface StaffPermissions {
   canManageStaff:   boolean;
   // Can approve / reject items in the owner-approval queue.
   canApprove:       boolean;
+  // Can navigate to /staff/approvals. OWNER + SUPER_ADMIN — OWNER
+  // to act on Pending requests, SUPER_ADMIN to see their own
+  // submissions on the Mine tab. ADMIN and below never reach the
+  // page. Distinct from `canApprove` (OWNER-only).
+  canViewApprovals: boolean;
   // Can see every VisaCase regardless of assignment (admin tier).
   // Non-admin staff see only cases where they hold an active
   // assignment in some role slot.
@@ -34,9 +39,10 @@ export function staffPermissions(role: StaffRole | string): StaffPermissions {
   const isAdmin = role === 'ADMIN';
   const adminTier = isOwner || isSuperAdmin || isAdmin;
   return {
-    canManageStaff: adminTier,
-    canApprove:     isOwner,
-    canSeeAllCases: adminTier,
-    canReassign:    adminTier,
+    canManageStaff:   adminTier,
+    canApprove:       isOwner,
+    canViewApprovals: isOwner || isSuperAdmin,
+    canSeeAllCases:   adminTier,
+    canReassign:      adminTier,
   };
 }
