@@ -1457,14 +1457,41 @@
         "email": "ایمیل",
         "role": "نقش",
         "locale": "زبان ترجیحی",
-        "submit": "ایجاد"
+        "submit": "ایجاد",
+        "mobile": "شماره موبایل",
+        "country": "کشور محل اقامت",
+        "countryPlaceholder": "کشور را انتخاب کنید...",
+        "address": "آدرس (اختیاری)",
+        "emergencyContact": "تماس اضطراری (اختیاری)"
       },
       "detail": {
         "workload": "حجم کاری",
         "totalAssignments": "{count} ارجاع فعال",
         "changeRole": "تغییر نقش",
         "deactivate": "غیرفعال‌سازی",
-        "reactivate": "فعال‌سازی مجدد"
+        "reactivate": "فعال‌سازی مجدد",
+        "mobile": "موبایل",
+        "country": "کشور",
+        "address": "آدرس",
+        "emergencyContact": "تماس اضطراری",
+        "archived": "بایگانی شده",
+        "archivedOn": "در {date} توسط {actor} بایگانی شد",
+        "editProfile": "ویرایش پروفایل",
+        "archive": "بایگانی",
+        "restore": "بازگردانی از بایگانی",
+        "hardDelete": "حذف کامل"
+      },
+      "hardDelete": {
+        "title": "حذف کامل کارمند",
+        "warning": "این رکورد را به‌طور دائم حذف می‌کند. تاریخچه ممیزی حفظ می‌شود اما دیگر امکان ارجاع از طریق رابطه وجود ندارد. برای کارمندانی که ترک کرده‌اند، بایگانی توصیه می‌شود.",
+        "confirmName": "برای تأیید نام کامل را تایپ کنید: {name}",
+        "confirmButton": "حذف دائم"
+      },
+      "showArchived": "نمایش بایگانی‌شده‌ها",
+      "editProfile": {
+        "title": "ویرایش پروفایل کارمند",
+        "submit": "ذخیره تغییرات",
+        "saved": "تغییرات ذخیره شد"
       },
       "changeRole": {
         "warning": "تغییر این نقش ممکن است باعث ارجاع مجدد پرونده‌های فعال شود."
@@ -1500,7 +1527,8 @@
         "DELETE_CASE": "حذف پرونده",
         "DELETE_STUDENT": "حذف دانشجو",
         "ISSUE_REFUND": "صدور بازپرداخت",
-        "CHANGE_PLATFORM_SETTING": "تغییر تنظیمات پلتفرم"
+        "CHANGE_PLATFORM_SETTING": "تغییر تنظیمات پلتفرم",
+        "HARD_DELETE_STAFF": "حذف کامل کارمند"
       },
       "requester": "درخواست توسط",
       "submitted": "ارسال شد",

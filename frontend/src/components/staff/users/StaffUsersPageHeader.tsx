@@ -18,17 +18,17 @@ export function StaffUsersPageHeader({
   onSearchChange,
   role,
   onRoleChange,
-  active,
-  onActiveChange,
+  showArchived,
+  onShowArchivedChange,
   onCreate,
 }: {
-  search:         string;
-  onSearchChange: (v: string) => void;
-  role:           StaffRole | '';
-  onRoleChange:   (v: StaffRole | '') => void;
-  active:         boolean;
-  onActiveChange: (v: boolean) => void;
-  onCreate:       () => void;
+  search:                string;
+  onSearchChange:        (v: string) => void;
+  role:                  StaffRole | '';
+  onRoleChange:          (v: StaffRole | '') => void;
+  showArchived:          boolean;
+  onShowArchivedChange:  (v: boolean) => void;
+  onCreate:              () => void;
 }) {
   const t = useTranslations();
 
@@ -63,11 +63,11 @@ export function StaffUsersPageHeader({
         <label className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200 text-sm cursor-pointer select-none min-h-[48px]">
           <input
             type="checkbox"
-            checked={active}
-            onChange={(e) => onActiveChange(e.target.checked)}
+            checked={showArchived}
+            onChange={(e) => onShowArchivedChange(e.target.checked)}
             className="rounded border-gray-300 text-[#1e3a5f] focus:ring-[#1e3a5f]/30"
           />
-          {t('staff.users.filter.active')}
+          {t('staff.users.showArchived')}
         </label>
 
         <PermissionGate require="canManageStaff">

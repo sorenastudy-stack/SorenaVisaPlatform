@@ -7,6 +7,7 @@ import { DeleteCasePayload } from './payload-renderers/DeleteCasePayload';
 import { DeleteStudentPayload } from './payload-renderers/DeleteStudentPayload';
 import { IssueRefundPayload } from './payload-renderers/IssueRefundPayload';
 import { ChangePlatformSettingPayload } from './payload-renderers/ChangePlatformSettingPayload';
+import { HardDeleteStaffPayload } from './payload-renderers/HardDeleteStaffPayload';
 import type { ApprovalActionType } from './types';
 
 // PR-CONSULT-3 — Approval payload dispatcher.
@@ -30,6 +31,7 @@ export function ApprovalPayloadPreview({
     case 'DELETE_STUDENT':          return <DeleteStudentPayload payload={payload} />;
     case 'ISSUE_REFUND':            return <IssueRefundPayload payload={payload} />;
     case 'CHANGE_PLATFORM_SETTING': return <ChangePlatformSettingPayload payload={payload} />;
+    case 'HARD_DELETE_STAFF':       return <HardDeleteStaffPayload payload={payload} />;
     default:
       return (
         <pre className="text-xs bg-gray-50 rounded-lg px-3 py-2 overflow-x-auto">

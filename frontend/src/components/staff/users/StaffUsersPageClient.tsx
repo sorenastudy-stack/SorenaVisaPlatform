@@ -10,22 +10,21 @@ import type { StaffUserRow } from './types';
 import type { StaffRole } from '@/contexts/StaffContext';
 
 // PR-CONSULT-3 — Staff Users page client component.
-//
-// Hoists filter state, owns the create + detail overlay visibility,
-// re-fetches the table after any write. The page itself is a thin
-// server-component wrapper that only enforces the role redirect.
+// PR-CONSULT-4 — `Active only` toggle replaced by `Show archived`
+// (matching the new server-side ?archived=… filter). Archived rows
+// render visually muted in the table.
 
 export function StaffUsersPageClient() {
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<StaffRole | ''>('');
-  const [activeOnly, setActiveOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<StaffUserRow | null>(null);
 
   const { rows, loading, error, refresh } = useStaffUsersQuery({
-    q:      search,
+    q:        search,
     role,
-    active: activeOnly ? 'true' : 'all',
+    archived: showArchived ? 'all' : 'false',
   });
 
   return (
@@ -35,8 +34,8 @@ export function StaffUsersPageClient() {
         onSearchChange={setSearch}
         role={role}
         onRoleChange={setRole}
-        active={activeOnly}
-        onActiveChange={setActiveOnly}
+        showArchived={showArchived}
+        onShowArchivedChange={setShowArchived}
         onCreate={() => setCreating(true)}
       />
 

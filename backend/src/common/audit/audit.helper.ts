@@ -80,6 +80,26 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
       return 'Support ticket closed';
     case 'CHAT_ESCALATION_ACCEPTED':
       return 'Chat conversation escalated to support ticket';
+    case 'STAFF_PROFILE_UPDATED': {
+      // PR-CONSULT-4: newValue carries { changedFields: [...] }
+      if (typeof newV === 'object' && newV !== null) {
+        const fields = (newV as { changedFields?: unknown }).changedFields;
+        if (Array.isArray(fields) && fields.length > 0) {
+          return `Staff profile updated (${fields.join(', ')})`;
+        }
+      }
+      return 'Staff profile updated';
+    }
+    case 'STAFF_HARD_DELETED': {
+      // PR-CONSULT-4: newValue carries deletedUserName + role + email.
+      const name = pickString(newV, 'deletedUserName');
+      const role = pickString(newV, 'deletedUserRole');
+      if (name && role) return `Hard-deleted staff: ${name} (${role})`;
+      if (name)         return `Hard-deleted staff: ${name}`;
+      return 'Staff user permanently deleted';
+    }
+    case 'STAFF_ROLE_NORMALIZED_FROM_SALES':
+      return 'Staff role normalised from SALES to CONSULTANT';
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';

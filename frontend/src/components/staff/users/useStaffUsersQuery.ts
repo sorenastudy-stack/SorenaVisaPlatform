@@ -6,16 +6,16 @@ import type { StaffUserRow } from './types';
 import type { StaffRole } from '@/contexts/StaffContext';
 
 // PR-CONSULT-3 — Staff users list hook.
-//
-// `GET /api/staff/users` returns the full list (no pagination on
-// the server — staff counts are small). We filter / search client
-// side. Returning `refresh` lets the caller refetch after a
-// create / change / deactivate succeeds.
+// PR-CONSULT-4 — extended with the `archived` filter (default
+// `false`, i.e. show active only). Filter is server-side via
+// ?archived=…; q and role still filter client-side because staff
+// counts are small and we don't want to fire a request per
+// keystroke.
 
 interface Filters {
-  q?:      string;
-  role?:   StaffRole | '';
-  active?: 'true' | 'false' | 'all';
+  q?:        string;
+  role?:     StaffRole | '';
+  archived?: 'false' | 'true' | 'all';
 }
 
 export function useStaffUsersQuery(filters: Filters) {
@@ -24,12 +24,14 @@ export function useStaffUsersQuery(filters: Filters) {
   const [error, setError] = useState<string | null>(null);
   const seqRef = useRef(0);
 
+  const archived = filters.archived ?? 'false';
+
   const refresh = useCallback(async () => {
     const seq = ++seqRef.current;
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get<StaffUserRow[]>('/api/staff/users');
+      const data = await api.get<StaffUserRow[]>(`/api/staff/users?archived=${archived}`);
       if (seq === seqRef.current) setRows(data);
     } catch (err) {
       if (seq === seqRef.current) {
@@ -38,7 +40,7 @@ export function useStaffUsersQuery(filters: Filters) {
     } finally {
       if (seq === seqRef.current) setLoading(false);
     }
-  }, []);
+  }, [archived]);
 
   useEffect(() => {
     refresh();
@@ -59,8 +61,6 @@ export function useStaffUsersQuery(filters: Filters) {
   const filtered = useMemo(() => {
     return rows.filter((u) => {
       if (filters.role && u.role !== filters.role) return false;
-      if (filters.active === 'true'  && !u.isActive) return false;
-      if (filters.active === 'false' &&  u.isActive) return false;
       if (debouncedQ) {
         const term = debouncedQ.toLowerCase();
         if (!u.name.toLowerCase().includes(term)
@@ -70,7 +70,7 @@ export function useStaffUsersQuery(filters: Filters) {
       }
       return true;
     });
-  }, [rows, debouncedQ, filters.role, filters.active]);
+  }, [rows, debouncedQ, filters.role]);
 
   return { rows: filtered, loading, error, refresh };
 }

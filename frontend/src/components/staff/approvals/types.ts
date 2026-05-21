@@ -11,7 +11,8 @@ export type ApprovalActionType =
   | 'DELETE_CASE'
   | 'DELETE_STUDENT'
   | 'ISSUE_REFUND'
-  | 'CHANGE_PLATFORM_SETTING';
+  | 'CHANGE_PLATFORM_SETTING'
+  | 'HARD_DELETE_STAFF';
 
 export type ApprovalStatus =
   | 'PENDING'

@@ -1457,14 +1457,41 @@
         "email": "Email",
         "role": "Role",
         "locale": "Preferred language",
-        "submit": "Create"
+        "submit": "Create",
+        "mobile": "Mobile number",
+        "country": "Country of residence",
+        "countryPlaceholder": "Select a country...",
+        "address": "Address (optional)",
+        "emergencyContact": "Emergency contact (optional)"
       },
       "detail": {
         "workload": "Workload",
         "totalAssignments": "{count} active assignments",
         "changeRole": "Change role",
         "deactivate": "Deactivate",
-        "reactivate": "Reactivate"
+        "reactivate": "Reactivate",
+        "mobile": "Mobile",
+        "country": "Country",
+        "address": "Address",
+        "emergencyContact": "Emergency contact",
+        "archived": "Archived",
+        "archivedOn": "Archived on {date} by {actor}",
+        "editProfile": "Edit profile",
+        "archive": "Archive",
+        "restore": "Restore from archive",
+        "hardDelete": "Hard delete"
+      },
+      "hardDelete": {
+        "title": "Permanently delete staff member",
+        "warning": "This permanently removes the user record. Audit history is preserved but cannot reference the user by relation. Consider Archive instead for staff who left.",
+        "confirmName": "Type the full name to confirm: {name}",
+        "confirmButton": "Permanently delete"
+      },
+      "showArchived": "Show archived",
+      "editProfile": {
+        "title": "Edit staff profile",
+        "submit": "Save changes",
+        "saved": "Changes saved"
       },
       "changeRole": {
         "warning": "Changing this role may trigger reallocation of their active cases."
@@ -1500,7 +1527,8 @@
         "DELETE_CASE": "Delete case",
         "DELETE_STUDENT": "Delete student",
         "ISSUE_REFUND": "Issue refund",
-        "CHANGE_PLATFORM_SETTING": "Change platform setting"
+        "CHANGE_PLATFORM_SETTING": "Change platform setting",
+        "HARD_DELETE_STAFF": "Hard delete staff"
       },
       "requester": "Requested by",
       "submitted": "Submitted",

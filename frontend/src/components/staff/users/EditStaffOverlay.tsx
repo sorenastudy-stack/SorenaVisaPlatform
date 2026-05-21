@@ -8,128 +8,132 @@ import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { ASSIGNABLE_ROLES, isExecutedWithPassword, isPendingApproval, type ActionResult } from './types';
-import { TempPasswordModal } from './TempPasswordModal';
-import { notifySentForApproval } from './notify';
 import { CountryPicker } from '@/components/common/CountryPicker';
+import type { StaffUserDetail } from './types';
 
-// PR-CONSULT-3 — Create staff overlay.
-// PR-CONSULT-4 — extended with mobileNumber + countryOfResidence
-// (both required) + address + emergencyContact (both optional).
+// PR-CONSULT-4 — Edit staff profile overlay.
 //
-// react-hook-form + zod. First-name + last-name are kept as two
-// inputs (the onboarding spec specifically wants both visible);
-// they're concatenated into the `fullName` field the backend DTO
-// accepts. The role dropdown excludes OWNER and STUDENT — see
-// `ASSIGNABLE_ROLES`. PR-CONSULT-4 also excludes the deprecated
-// SALES role (already absent from ASSIGNABLE_ROLES).
+// Both OWNER and SUPER_ADMIN execute inline — backend treats edits
+// as non-destructive. Role rotation still goes via the existing
+// Change-role overlay (separate endpoint, separate approval flow).
 //
-// Response handling is two-path:
-//   - OWNER inline → response carries tempPassword → open the
-//     TempPasswordModal, refresh on close.
-//   - SUPER_ADMIN  → response has PENDING_OWNER_APPROVAL → close
-//     this overlay, fire the "Sent for owner approval" toast.
+// Pre-populates from the detail snapshot. First/last name are
+// split client-side on the first whitespace so the form stays
+// consistent with Create; on submit they're joined back into a
+// single `name`.
 
 const PHONE_REGEX = /^[+0-9 ()\-]{5,32}$/;
 
 const schema = z.object({
   firstName:          z.string().trim().min(1).max(80),
-  lastName:           z.string().trim().min(1).max(80),
+  lastName:           z.string().trim().max(80),
   email:              z.string().trim().email().min(5).max(255),
-  role:               z.enum(ASSIGNABLE_ROLES as unknown as [string, ...string[]]),
-  mobileNumber:       z.string().trim().min(5).max(32).regex(PHONE_REGEX, 'Use digits, spaces, +, -, parens (5-32 chars)'),
-  countryOfResidence: z.string().regex(/^[A-Z]{2}$/, 'Pick a country'),
+  mobileNumber:       z.string().trim().min(5).max(32).regex(PHONE_REGEX, 'Use digits, spaces, +, -, parens (5-32 chars)').optional().or(z.literal('')),
+  countryOfResidence: z.string().regex(/^[A-Z]{2}$/).optional().or(z.literal('')),
   address:            z.string().max(500).optional().or(z.literal('')),
   emergencyContact:   z.string().max(200).optional().or(z.literal('')),
-  locale:             z.enum(['en', 'fa']).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-export function CreateStaffOverlay({
+function splitName(name: string): { firstName: string; lastName: string } {
+  const trimmed = name.trim();
+  if (!trimmed) return { firstName: '', lastName: '' };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
+export function EditStaffOverlay({
+  detail,
+  open,
   onClose,
   onDone,
 }: {
+  detail:  StaffUserDetail;
+  open:    boolean;
   onClose: () => void;
   onDone:  () => void;
 }) {
   const t = useTranslations();
-  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const initial = splitName(detail.name);
   const {
     register,
     handleSubmit,
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors },
     setError,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { locale: 'en', countryOfResidence: '' },
+    defaultValues: {
+      firstName:          initial.firstName,
+      lastName:           initial.lastName,
+      email:              detail.email,
+      mobileNumber:       detail.mobileNumber ?? '',
+      countryOfResidence: detail.countryOfResidence ?? '',
+      address:            detail.address ?? '',
+      emergencyContact:   detail.emergencyContact ?? '',
+    },
   });
 
+  if (!open) return null;
+
   const onSubmit = async (values: FormValues) => {
+    setSubmitting(true);
     try {
-      const fullName = `${values.firstName} ${values.lastName}`.trim();
-      const result = await api.post<ActionResult>('/api/staff/users', {
-        email:              values.email.toLowerCase().trim(),
-        fullName,
-        role:               values.role,
-        mobileNumber:       values.mobileNumber.trim(),
-        countryOfResidence: values.countryOfResidence,
-        address:            values.address?.trim() || undefined,
-        emergencyContact:   values.emergencyContact?.trim() || undefined,
-      });
-      if (isPendingApproval(result)) {
-        notifySentForApproval(t('staff.users.sentForApproval'), t('staff.users.sentForApprovalLink'));
-        onDone();
-        onClose();
-        return;
+      const name = `${values.firstName.trim()} ${values.lastName.trim()}`.trim();
+      const patch: Record<string, string | undefined> = {};
+      if (name !== detail.name) patch.name = name;
+      if (values.email.toLowerCase().trim() !== detail.email) {
+        patch.email = values.email.toLowerCase().trim();
       }
-      if (isExecutedWithPassword(result)) {
-        setTempPassword(result.tempPassword);
-        return;
+      if ((values.mobileNumber || '').trim() !== (detail.mobileNumber ?? '')) {
+        patch.mobileNumber = values.mobileNumber?.trim() || '';
       }
-      toast.success('Staff user created');
+      if ((values.countryOfResidence || '') !== (detail.countryOfResidence ?? '')) {
+        patch.countryOfResidence = values.countryOfResidence || '';
+      }
+      if ((values.address || '') !== (detail.address ?? '')) {
+        patch.address = values.address || '';
+      }
+      if ((values.emergencyContact || '') !== (detail.emergencyContact ?? '')) {
+        patch.emergencyContact = values.emergencyContact || '';
+      }
+
+      await api.patch(`/api/staff/users/${detail.id}`, patch);
+      toast.success(t('staff.users.editProfile.saved'));
       onDone();
       onClose();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to create staff';
+      const msg = err instanceof Error ? err.message : 'Failed to update';
       if (/email/i.test(msg)) {
         setError('email', { message: msg });
       } else {
         toast.error(msg);
       }
+    } finally {
+      setSubmitting(false);
     }
   };
-
-  if (tempPassword) {
-    return (
-      <TempPasswordModal
-        password={tempPassword}
-        onDone={() => {
-          setTempPassword(null);
-          onDone();
-          onClose();
-        }}
-      />
-    );
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/40"
-        onClick={() => (isSubmitting ? null : onClose())}
+        onClick={() => (submitting ? null : onClose())}
       />
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="relative w-full max-w-lg rounded-2xl bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-start justify-between mb-4">
-          <h2 className="text-lg font-bold text-[#1e3a5f]">{t('staff.users.create')}</h2>
+          <h2 className="text-lg font-bold text-[#1e3a5f]">{t('staff.users.editProfile.title')}</h2>
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
+            disabled={submitting}
             className="text-gray-400 hover:text-gray-700 disabled:opacity-50"
           >
             <X size={20} />
@@ -177,43 +181,10 @@ export function CreateStaffOverlay({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">
-              {t('staff.users.form.role')}
-            </label>
-            <select
-              {...register('role')}
-              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 min-h-[48px]"
-              defaultValue=""
-            >
-              <option value="" disabled>—</option>
-              {ASSIGNABLE_ROLES.map((r) => (
-                <option key={r} value={r}>{t(`staff.roles.${r}`)}</option>
-              ))}
-            </select>
-            {errors.role && <p className="mt-1 text-xs text-rose-600">{errors.role.message}</p>}
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              {t('staff.users.form.locale')}
-            </label>
-            <select
-              {...register('locale')}
-              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 min-h-[48px]"
-            >
-              <option value="en">English</option>
-              <option value="fa">فارسی</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
               {t('staff.users.form.mobile')}
             </label>
             <input
               type="tel"
-              autoComplete="off"
-              placeholder="+64 21 …"
               {...register('mobileNumber')}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 min-h-[48px]"
             />
@@ -244,7 +215,6 @@ export function CreateStaffOverlay({
             {...register('address')}
             className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30"
           />
-          {errors.address && <p className="mt-1 text-xs text-rose-600">{errors.address.message}</p>}
         </div>
 
         <div className="mb-5">
@@ -257,15 +227,14 @@ export function CreateStaffOverlay({
             {...register('emergencyContact')}
             className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 min-h-[48px]"
           />
-          {errors.emergencyContact && <p className="mt-1 text-xs text-rose-600">{errors.emergencyContact.message}</p>}
         </div>
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={submitting}
           className="w-full rounded-xl bg-[#1e3a5f] text-white font-semibold py-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#162d4a] transition-colors min-h-[48px]"
         >
-          {isSubmitting ? '…' : t('staff.users.form.submit')}
+          {submitting ? '…' : t('staff.users.editProfile.submit')}
         </button>
       </form>
     </div>

@@ -46,7 +46,10 @@ export function StaffUsersTable({
             <tr
               key={u.id}
               onClick={() => onRowClick(u)}
-              className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-[#faf8f3] transition-colors"
+              className={[
+                'border-b border-gray-100 last:border-0 cursor-pointer hover:bg-[#faf8f3] transition-colors',
+                u.isActive ? '' : 'opacity-50',
+              ].join(' ')}
             >
               <td className="px-4 py-3 font-medium text-gray-900">{u.name || '—'}</td>
               <td className="px-4 py-3 text-gray-600 break-all">{u.email}</td>

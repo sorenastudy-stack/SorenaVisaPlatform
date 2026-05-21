@@ -290,6 +290,16 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  // PR-CONSULT-4: staff profile fields. All three encrypted columns
+  // store base64-encoded AES-256-GCM ciphertext via CryptoService.
+  // countryOfResidence is plain text (ISO 3166-1 alpha-2 code) so
+  // we can filter / aggregate without decrypting. All four nullable
+  // because existing rows pre-date the migration.
+  mobileNumber        String?
+  countryOfResidence  String?
+  address             String?
+  emergencyContact    String?
+
   assignedLeads    Lead[]           @relation("LeadOwner")
   consultations    Consultation[]   @relation("ConsultationAdviser")
   cases            Case[]           @relation("CaseOwner")
@@ -999,6 +1009,16 @@ model AuditLog {
   newValue   Json?
   ipAddress  String?
   createdAt  DateTime @default(now())
+
+  // PR-CONSULT-4: actor name + role snapshot. Populated either at
+  // write-time (new audit paths under this PR) or at delete-time
+  // by the hard-delete service, so audit history attributes the
+  // action correctly even after the actor row is gone. Older audit
+  // rows leave both null; the summary helper falls back to
+  // "(Removed user)" when the User join returns null AND the
+  // snapshot is null.
+  actorNameSnapshot String?
+  actorRoleSnapshot String?
 
   user User? @relation(fields: [userId], references: [id])
 
@@ -2494,6 +2514,9 @@ enum OwnerApprovalActionType {
   DELETE_STUDENT
   ISSUE_REFUND
   CHANGE_PLATFORM_SETTING
+  // PR-CONSULT-4: permanent staff user deletion. OWNER inline,
+  // SUPER_ADMIN routes through this approval queue.
+  HARD_DELETE_STAFF
 }
 
 model VisaCaseAssignment {

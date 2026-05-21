@@ -14,6 +14,18 @@ export interface StaffUserRow {
   isActive:  boolean;
 }
 
+// PR-CONSULT-4 — Staff detail response (decrypted profile fields +
+// archive metadata). Matches GET /api/staff/users/:id.
+export interface StaffUserDetail extends StaffUserRow {
+  mobileNumber:       string | null;
+  countryOfResidence: string | null;
+  address:            string | null;
+  emergencyContact:   string | null;
+  archivedAt:         string | null;
+  archivedById:       string | null;
+  archivedByName:     string | null;
+}
+
 // Roles available in the Create + Change-role dropdowns. Excludes
 // STUDENT (not a staff role) and OWNER (intentionally non-promotable
 // from the UI — handover doc covers the DB-direct promotion).

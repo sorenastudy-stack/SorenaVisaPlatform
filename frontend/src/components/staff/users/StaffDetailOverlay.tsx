@@ -1,28 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { X, Check, Minus } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslations, useLocale } from 'next-intl';
+import { X, Check, Minus, Archive, ArchiveRestore, Pencil, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useStaff } from '@/contexts/StaffContext';
 import { StaffRoleBadge } from '@/components/staff/shell/StaffRoleBadge';
 import { PermissionGate } from '@/components/staff/shell/PermissionGate';
 import { formatRelativeTime } from '@/lib/format-relative-time';
+import { getCountryName, countryCodeToFlagEmoji } from '@/lib/country-codes';
 import { ChangeRoleOverlay } from './ChangeRoleOverlay';
 import { DeactivateConfirmOverlay } from './DeactivateConfirmOverlay';
 import { ReactivateConfirmOverlay } from './ReactivateConfirmOverlay';
-import type { StaffUserRow } from './types';
+import { EditStaffOverlay } from './EditStaffOverlay';
+import { HardDeleteConfirmOverlay } from './HardDeleteConfirmOverlay';
+import type { StaffUserRow, StaffUserDetail } from './types';
 
 // PR-CONSULT-3 — Staff detail overlay.
+// PR-CONSULT-4 — extended with the new profile fields, an
+// "Archived on … by …" line, an Edit-profile entry point, and a
+// Hard-delete entry point gated to OWNER + SUPER_ADMIN.
 //
-// Shows the user's basic fields, their workload snapshot (active
-// case assignments grouped by role slot), and — gated by
-// canManageStaff — the Change-role / Deactivate / Reactivate
-// triggers.
-//
-// Self-lockout guard: OWNER cannot deactivate themselves. We hide
-// the buttons rather than disabling so there's no confusing
-// "why can't I click this" moment.
+// On open we fetch /api/staff/users/:id for the full detail (the
+// list endpoint deliberately omits the encrypted profile fields).
 
 interface Workload {
   activeCount: number;
@@ -41,38 +41,51 @@ export function StaffDetailOverlay({
   onDone:  () => void;
 }) {
   const t = useTranslations();
+  const locale = useLocale() as 'en' | 'fa';
   const { me } = useStaff();
+  const [detail, setDetail] = useState<StaffUserDetail | null>(null);
   const [workload, setWorkload] = useState<Workload | null>(null);
   const [showChangeRole, setShowChangeRole] = useState(false);
   const [showDeactivate, setShowDeactivate] = useState(false);
   const [showReactivate, setShowReactivate] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showHardDelete, setShowHardDelete] = useState(false);
 
   const isSelf = me?.id === user.id;
-  // Hide all destructive actions if the user is operating on themselves
-  // (prevents owner self-lockout) or if their existing role is OWNER.
+  // PR-CONSULT-4: hide destructive actions on self (lockout guard)
+  // and on any OWNER target (OWNER role rotation / archiving is
+  // intentionally not in the UI; documented in the handover).
   const hideDestructive = isSelf || user.role === 'OWNER';
+
+  // SUPER_ADMIN + OWNER can hard delete. ADMIN cannot.
+  const canHardDelete = (me?.role === 'OWNER' || me?.role === 'SUPER_ADMIN') && !hideDestructive;
+
+  const fetchDetail = useCallback(() => {
+    setDetail(null);
+    api.get<StaffUserDetail>(`/api/staff/users/${user.id}`)
+      .then(setDetail)
+      .catch(() => setDetail(null));
+  }, [user.id]);
 
   useEffect(() => {
     if (!open) return;
     setWorkload(null);
-    api
-      .get<Workload>(`/api/staff/assignments/workload?staffId=${user.id}`)
-      .then((w) => setWorkload(w))
-      .catch(() => {
-        // Non-fatal — admin tier callers can hit /workload?staffId=
-        // but legacy permissions might 403. Just show "—".
-      });
-  }, [open, user.id]);
+    fetchDetail();
+    api.get<Workload>(`/api/staff/assignments/workload?staffId=${user.id}`)
+      .then(setWorkload)
+      .catch(() => {});
+  }, [open, user.id, fetchDetail]);
 
   if (!open) return null;
 
+  const archivedDate = detail?.archivedAt
+    ? new Date(detail.archivedAt).toISOString().slice(0, 10)
+    : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
-      />
-      <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-xl p-6 max-h-[85vh] overflow-y-auto">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-4 gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -88,11 +101,19 @@ export function StaffDetailOverlay({
               >
                 {user.isActive
                   ? <><Check size={12} /> Active</>
-                  : <><Minus size={12} /> Inactive</>
+                  : <><Minus size={12} /> {t('staff.users.detail.archived')}</>
                 }
               </span>
             </div>
             <div className="text-sm text-gray-600 break-all">{user.email}</div>
+            {!user.isActive && archivedDate && (
+              <div className="text-xs text-gray-500 mt-1">
+                {t('staff.users.detail.archivedOn', {
+                  date:  archivedDate,
+                  actor: detail?.archivedByName ?? '—',
+                })}
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -103,10 +124,22 @@ export function StaffDetailOverlay({
           </button>
         </div>
 
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-5">
-          <dt className="text-gray-500">Created</dt>
-          <dd className="text-gray-900 text-right">{formatRelativeTime(user.createdAt)}</dd>
-        </dl>
+        <section className="rounded-xl border border-gray-200 p-4 mb-5">
+          <dl className="grid grid-cols-1 gap-y-2 text-sm">
+            <Row label={t('staff.users.detail.mobile')} value={detail?.mobileNumber ?? '—'} />
+            <Row
+              label={t('staff.users.detail.country')}
+              value={
+                detail?.countryOfResidence
+                  ? `${countryCodeToFlagEmoji(detail.countryOfResidence)} ${getCountryName(detail.countryOfResidence, locale)} (${detail.countryOfResidence})`
+                  : '—'
+              }
+            />
+            <Row label={t('staff.users.detail.address')} value={detail?.address ?? '—'} />
+            <Row label={t('staff.users.detail.emergencyContact')} value={detail?.emergencyContact ?? '—'} />
+            <Row label="Created" value={formatRelativeTime(user.createdAt)} />
+          </dl>
+        </section>
 
         <section className="rounded-xl border border-gray-200 p-4 mb-5">
           <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-3">
@@ -132,34 +165,59 @@ export function StaffDetailOverlay({
         </section>
 
         <PermissionGate require="canManageStaff">
-          {!hideDestructive && (
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
+            {/* Edit profile is allowed even on self — staff need to fix their own details. */}
+            {detail && (
               <button
                 type="button"
-                onClick={() => setShowChangeRole(true)}
-                className="flex-1 min-w-[140px] rounded-xl border border-[#1e3a5f]/30 text-[#1e3a5f] font-semibold px-4 py-3 hover:bg-[#1e3a5f]/5 transition-colors min-h-[48px]"
+                onClick={() => setShowEdit(true)}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] text-white font-semibold px-4 py-3 hover:bg-[#162d4a] transition-colors min-h-[48px]"
               >
-                {t('staff.users.detail.changeRole')}
+                <Pencil size={16} />
+                {t('staff.users.detail.editProfile')}
               </button>
-              {user.isActive ? (
+            )}
+            {!hideDestructive && (
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowDeactivate(true)}
-                  className="flex-1 min-w-[140px] rounded-xl border border-rose-300 text-rose-700 font-semibold px-4 py-3 hover:bg-rose-50 transition-colors min-h-[48px]"
+                  onClick={() => setShowChangeRole(true)}
+                  className="flex-1 min-w-[140px] rounded-xl border border-[#1e3a5f]/30 text-[#1e3a5f] font-semibold px-4 py-3 hover:bg-[#1e3a5f]/5 transition-colors min-h-[48px]"
                 >
-                  {t('staff.users.detail.deactivate')}
+                  {t('staff.users.detail.changeRole')}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowReactivate(true)}
-                  className="flex-1 min-w-[140px] rounded-xl border border-emerald-300 text-emerald-700 font-semibold px-4 py-3 hover:bg-emerald-50 transition-colors min-h-[48px]"
-                >
-                  {t('staff.users.detail.reactivate')}
-                </button>
-              )}
-            </div>
-          )}
+                {user.isActive ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeactivate(true)}
+                    className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-300 text-amber-700 font-semibold px-4 py-3 hover:bg-amber-50 transition-colors min-h-[48px]"
+                  >
+                    <Archive size={16} />
+                    {t('staff.users.detail.archive')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowReactivate(true)}
+                    className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-300 text-emerald-700 font-semibold px-4 py-3 hover:bg-emerald-50 transition-colors min-h-[48px]"
+                  >
+                    <ArchiveRestore size={16} />
+                    {t('staff.users.detail.restore')}
+                  </button>
+                )}
+              </div>
+            )}
+            {canHardDelete && (
+              <button
+                type="button"
+                onClick={() => setShowHardDelete(true)}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#b91c1c] text-white font-semibold px-4 py-3 hover:bg-[#a01818] transition-colors min-h-[48px]"
+              >
+                <Trash2 size={16} />
+                {t('staff.users.detail.hardDelete')}
+              </button>
+            )}
+          </div>
         </PermissionGate>
       </div>
 
@@ -182,6 +240,30 @@ export function StaffDetailOverlay({
         onClose={() => setShowReactivate(false)}
         onDone={onDone}
       />
+      {detail && (
+        <EditStaffOverlay
+          detail={detail}
+          open={showEdit}
+          onClose={() => setShowEdit(false)}
+          onDone={() => { fetchDetail(); onDone(); }}
+        />
+      )}
+      <HardDeleteConfirmOverlay
+        userId={user.id}
+        fullName={user.name}
+        open={showHardDelete}
+        onClose={() => setShowHardDelete(false)}
+        onDone={onDone}
+      />
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-gray-500 flex-shrink-0">{label}</dt>
+      <dd className="text-gray-900 text-right break-all whitespace-pre-wrap">{value}</dd>
     </div>
   );
 }

@@ -37,6 +37,8 @@ const ACTION_TYPES = [
   'DELETE_STUDENT',
   'ISSUE_REFUND',
   'CHANGE_PLATFORM_SETTING',
+  // PR-CONSULT-4: permanent staff deletion. Same executor pattern.
+  'HARD_DELETE_STAFF',
 ] as const;
 type ActionType = typeof ACTION_TYPES[number];
 
@@ -303,6 +305,10 @@ export class OwnerApprovalService {
       case 'DELETE_STUDENT':          return this.execDeleteStudent(payload, actorId);
       case 'ISSUE_REFUND':            return this.execIssueRefund(payload, actorId);
       case 'CHANGE_PLATFORM_SETTING': return this.execChangePlatformSetting(payload, actorId);
+      // PR-CONSULT-4: executor for the queued hard-delete path.
+      // Imports the StaffUsersService at call time via the lazy
+      // moduleRef pattern below so we avoid a circular-import.
+      case 'HARD_DELETE_STAFF':       return this.execHardDeleteStaff(payload, actorId);
       default:
         throw new BadRequestException(`Unknown action type ${actionType}`);
     }
@@ -310,14 +316,29 @@ export class OwnerApprovalService {
 
   // Helper used by both direct OWNER actions (in StaffUsersService)
   // and the executor — keeps the staff-creation logic in one place.
+  //
+  // PR-CONSULT-4: extended to accept (and require) mobileNumber +
+  // countryOfResidence; optional address + emergencyContact. The
+  // three encrypted columns go through the same base64-envelope
+  // helper used elsewhere on the staff tier.
   async createStaffUserDirect(args: {
     email: string;
     name: string;
     role: string;
+    mobileNumber?: string;
+    countryOfResidence?: string;
+    address?: string;
+    emergencyContact?: string;
     actorId: string;
   }) {
     if (!args.email || !args.name || !args.role) {
       throw new BadRequestException('email, name, and role are required');
+    }
+    // PR-CONSULT-4: SALES is deprecated. The DTO already filters it
+    // but the executor is reached via raw payloads too — defensive
+    // check.
+    if (args.role === 'SALES') {
+      throw new BadRequestException('SALES role is deprecated; pick a current role');
     }
     const existing = await this.prisma.user.findUnique({
       where: { email: args.email.toLowerCase().trim() },
@@ -331,18 +352,145 @@ export class OwnerApprovalService {
     // temp password is returned in the response.
     const tempPassword = this.randomPassword(32);
     const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+    // Encrypt the three sensitive profile fields; countryOfResidence
+    // stays plain ISO 3166-1 alpha-2.
+    const mobileEncrypted    = args.mobileNumber     ? this.enc(args.mobileNumber.trim()) : null;
+    const addressEncrypted   = args.address          ? this.enc(args.address)             : null;
+    const emergencyEncrypted = args.emergencyContact ? this.enc(args.emergencyContact)    : null;
+
     const created = await this.prisma.user.create({
       data: {
-        email:        args.email.toLowerCase().trim(),
-        name:         args.name.trim(),
+        email:              args.email.toLowerCase().trim(),
+        name:               args.name.trim(),
         passwordHash,
-        role:         args.role as never,
+        role:               args.role as never,
+        mobileNumber:       mobileEncrypted,
+        countryOfResidence: args.countryOfResidence ?? null,
+        address:            addressEncrypted,
+        emergencyContact:   emergencyEncrypted,
       },
     });
     await this.writeAuditWithType(args.actorId, 'STAFF_USER_CREATED', created.id, {
       newValue: { email: created.email, role: created.role },
     });
     return { user: created, tempPassword };
+  }
+
+  // PR-CONSULT-4: hard-delete implementation. Lives here (not in
+  // StaffUsersService) for the same reason `deactivateStaffDirect`
+  // does — the executor + the inline-OWNER controller share it.
+  //
+  // Flow is documented in detail in the StaffUsersService caller;
+  // the short version:
+  //   1. Snapshot audit rows that reference this user as actor.
+  //   2. Capture active VisaCaseAssignment rows.
+  //   3. Delete every assignment row referencing this user.
+  //   4. Re-point assignedById / unassignedById to the actor.
+  //   5. NULL decidedById + delete requestedById rows on
+  //      OwnerApprovalRequest.
+  //   6. Delete the User row.
+  //   7. Audit STAFF_HARD_DELETED with snapshot in newValue.
+  //   8. Fire reallocation outside the tx (best-effort).
+  async hardDeleteStaffDirect(targetId: string, actorId: string): Promise<{
+    ok: true; reallocatedSlots: number;
+  }> {
+    if (targetId === actorId) {
+      throw new BadRequestException('Cannot hard-delete your own account');
+    }
+    const target = await this.prisma.user.findUnique({ where: { id: targetId } });
+    if (!target) throw new NotFoundException('Staff user not found');
+    if (target.role === 'STUDENT') {
+      throw new ForbiddenException('Use the student delete flow');
+    }
+    if (target.role === 'OWNER') {
+      throw new ForbiddenException('Cannot hard-delete an OWNER from the UI');
+    }
+    const snapshotName  = target.name;
+    const snapshotRole  = target.role;
+    const snapshotEmail = target.email;
+
+    const closed = await this.prisma.$transaction(async (tx) => {
+      await tx.auditLog.updateMany({
+        where: { userId: targetId, actorNameSnapshot: null },
+        data:  { actorNameSnapshot: snapshotName, actorRoleSnapshot: snapshotRole },
+      });
+
+      const active = await tx.visaCaseAssignment.findMany({
+        where:  { staffId: targetId, unassignedAt: null },
+        select: { id: true, caseId: true, roleSlot: true },
+      });
+
+      await tx.visaCaseAssignment.deleteMany({ where: { staffId: targetId } });
+      await tx.visaCaseAssignment.updateMany({
+        where: { assignedById: targetId },
+        data:  { assignedById: actorId },
+      });
+      await tx.visaCaseAssignment.updateMany({
+        where: { unassignedById: targetId },
+        data:  { unassignedById: actorId },
+      });
+
+      await tx.ownerApprovalRequest.updateMany({
+        where: { decidedById: targetId },
+        data:  { decidedById: null },
+      });
+      await tx.ownerApprovalRequest.deleteMany({
+        where: { requestedById: targetId },
+      });
+
+      try {
+        await tx.user.delete({ where: { id: targetId } });
+      } catch (err: unknown) {
+        if (typeof err === 'object' && err !== null
+            && (err as { code?: string }).code === 'P2003') {
+          throw new BadRequestException(
+            'Cannot hard-delete: user is referenced by another table. Archive instead.',
+          );
+        }
+        throw err;
+      }
+
+      const actor = await tx.user.findUnique({
+        where: { id: actorId }, select: { name: true, role: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId:            actorId,
+          action:            'STAFF_HARD_DELETED',
+          eventType:         'STAFF_HARD_DELETED',
+          entityType:        'User',
+          entityId:          targetId,
+          newValue: {
+            deletedUserName:  snapshotName,
+            deletedUserRole:  snapshotRole,
+            deletedUserEmail: snapshotEmail,
+          },
+          actorNameSnapshot: actor?.name ?? null,
+          actorRoleSnapshot: actor?.role ?? null,
+        },
+      });
+
+      return active;
+    });
+
+    for (const a of closed) {
+      try {
+        await this.assignments.autoAllocate(
+          a.caseId,
+          a.roleSlot as never,
+          actorId,
+        );
+      } catch (e) {
+        this.logger.warn(
+          `[hard-delete] could not auto-allocate ${a.roleSlot} on case ${a.caseId} after deleting ${targetId}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+    }
+
+    return { ok: true, reallocatedSlots: closed.length };
   }
 
   // ── Private executors ─────────────────────────────────────────────
@@ -352,11 +500,25 @@ export class OwnerApprovalService {
     actorId: string,
   ): Promise<void> {
     await this.createStaffUserDirect({
-      email: String(payload.email ?? ''),
-      name:  String(payload.fullName ?? payload.name ?? ''),
-      role:  String(payload.role ?? ''),
+      email:              String(payload.email ?? ''),
+      name:               String(payload.fullName ?? payload.name ?? ''),
+      role:               String(payload.role ?? ''),
+      mobileNumber:       payload.mobileNumber ? String(payload.mobileNumber) : undefined,
+      countryOfResidence: payload.countryOfResidence ? String(payload.countryOfResidence) : undefined,
+      address:            payload.address ? String(payload.address) : undefined,
+      emergencyContact:   payload.emergencyContact ? String(payload.emergencyContact) : undefined,
       actorId,
     });
+  }
+
+  // PR-CONSULT-4: executor for the queued hard-delete path.
+  private async execHardDeleteStaff(
+    payload: Record<string, unknown>,
+    actorId: string,
+  ): Promise<void> {
+    const userId = String(payload.userId ?? '');
+    if (!userId) throw new BadRequestException('userId is required');
+    await this.hardDeleteStaffDirect(userId, actorId);
   }
 
   private async execChangeStaffRole(
