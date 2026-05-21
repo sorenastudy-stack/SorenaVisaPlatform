@@ -1374,45 +1374,65 @@
   "case.assignedConsultant": "مشاور شما",
   "case.unassigned": "هنوز تعیین نشده",
 
-  "staff.nav.overview": "خلاصه",
-  "staff.nav.cases": "پرونده‌ها",
-  "staff.nav.meetings": "جلسات",
-  "staff.nav.tickets": "تیکت‌ها",
-  "staff.nav.staff": "کارکنان",
-  "staff.nav.approvals": "تأییدها",
-  "staff.signOut": "خروج",
-  "staff.comingSoon.title": "به‌زودی",
-  "staff.comingSoon.body": "این بخش در به‌روزرسانی آینده در دسترس خواهد بود.",
-  "staff.cases.title": "پرونده‌ها",
-  "staff.cases.search": "جست‌وجو بر اساس نام یا ایمیل...",
-  "staff.cases.viewMode.table": "جدول",
-  "staff.cases.viewMode.card": "کارت‌ها",
-  "staff.cases.assignedToMe": "ارجاع‌شده به من",
-  "staff.cases.columns.student": "دانشجو",
-  "staff.cases.columns.email": "ایمیل",
-  "staff.cases.columns.status": "وضعیت",
-  "staff.cases.columns.stage": "مرحله",
-  "staff.cases.columns.lia": "وکیل مهاجرت",
-  "staff.cases.columns.consultant": "مشاور",
-  "staff.cases.columns.updated": "به‌روزرسانی",
-  "staff.cases.notAssigned": "هنوز تعیین نشده",
-  "staff.cases.empty": "پرونده‌ای یافت نشد.",
-  "staff.cases.detail.assignments": "ارجاع‌ها",
-  "staff.cases.detail.reassign": "تغییر مسئول",
-  "staff.cases.detail.reassignTitle": "تغییر مسئول {{role}}",
-  "staff.cases.detail.reassignSubmit": "تأیید تغییر",
-  "staff.cases.detail.openAssignments": "{{count}} ارجاع باز",
-  "staff.cases.detail.tabs.overview": "خلاصه",
-  "staff.cases.detail.tabs.documents": "مدارک",
-  "staff.cases.detail.tabs.meetings": "جلسات",
-  "staff.cases.detail.tabs.tickets": "تیکت‌ها",
-  "staff.cases.detail.tabs.activity": "فعالیت‌ها",
-  "staff.cases.detail.activity.empty": "فعالیتی ثبت نشده.",
-  "staff.roles.OWNER": "مالک",
-  "staff.roles.SUPER_ADMIN": "سوپر ادمین",
-  "staff.roles.ADMIN": "ادمین",
-  "staff.roles.LIA": "وکیل مهاجرت",
-  "staff.roles.CONSULTANT": "مشاور",
-  "staff.roles.SUPPORT": "پشتیبانی",
-  "staff.roles.FINANCE": "مالی"
+  "staff": {
+    "nav": {
+      "overview": "خلاصه",
+      "cases": "پرونده‌ها",
+      "meetings": "جلسات",
+      "tickets": "تیکت‌ها",
+      "staff": "کارکنان",
+      "approvals": "تأییدها"
+    },
+    "signOut": "خروج",
+    "comingSoon": {
+      "title": "به‌زودی",
+      "body": "این بخش در به‌روزرسانی آینده در دسترس خواهد بود."
+    },
+    "cases": {
+      "title": "پرونده‌ها",
+      "search": "جست‌وجو بر اساس نام یا ایمیل...",
+      "viewMode": {
+        "table": "جدول",
+        "card": "کارت‌ها"
+      },
+      "assignedToMe": "ارجاع‌شده به من",
+      "columns": {
+        "student": "دانشجو",
+        "email": "ایمیل",
+        "status": "وضعیت",
+        "stage": "مرحله",
+        "lia": "وکیل مهاجرت",
+        "consultant": "مشاور",
+        "updated": "به‌روزرسانی"
+      },
+      "notAssigned": "هنوز تعیین نشده",
+      "empty": "پرونده‌ای یافت نشد.",
+      "detail": {
+        "assignments": "ارجاع‌ها",
+        "reassign": "تغییر مسئول",
+        "reassignTitle": "تغییر مسئول {role}",
+        "reassignSubmit": "تأیید تغییر",
+        "openAssignments": "{count} ارجاع باز",
+        "tabs": {
+          "overview": "خلاصه",
+          "documents": "مدارک",
+          "meetings": "جلسات",
+          "tickets": "تیکت‌ها",
+          "activity": "فعالیت‌ها"
+        },
+        "activity": {
+          "empty": "فعالیتی ثبت نشده."
+        }
+      }
+    },
+    "roles": {
+      "OWNER": "مالک",
+      "SUPER_ADMIN": "سوپر ادمین",
+      "ADMIN": "ادمین",
+      "LIA": "وکیل مهاجرت",
+      "CONSULTANT": "مشاور",
+      "SUPPORT": "پشتیبانی",
+      "FINANCE": "مالی"
+    }
+  }
 }

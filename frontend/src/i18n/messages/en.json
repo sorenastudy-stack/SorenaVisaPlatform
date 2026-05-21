@@ -1374,45 +1374,65 @@
   "case.assignedConsultant": "Your consultant",
   "case.unassigned": "Not yet assigned",
 
-  "staff.nav.overview": "Overview",
-  "staff.nav.cases": "Cases",
-  "staff.nav.meetings": "Meetings",
-  "staff.nav.tickets": "Tickets",
-  "staff.nav.staff": "Staff",
-  "staff.nav.approvals": "Approvals",
-  "staff.signOut": "Sign out",
-  "staff.comingSoon.title": "Coming soon",
-  "staff.comingSoon.body": "This section will be available in an upcoming update.",
-  "staff.cases.title": "Cases",
-  "staff.cases.search": "Search by student name or email...",
-  "staff.cases.viewMode.table": "Table",
-  "staff.cases.viewMode.card": "Cards",
-  "staff.cases.assignedToMe": "Assigned to me",
-  "staff.cases.columns.student": "Student",
-  "staff.cases.columns.email": "Email",
-  "staff.cases.columns.status": "Status",
-  "staff.cases.columns.stage": "Stage",
-  "staff.cases.columns.lia": "LIA",
-  "staff.cases.columns.consultant": "Consultant",
-  "staff.cases.columns.updated": "Updated",
-  "staff.cases.notAssigned": "Not yet assigned",
-  "staff.cases.empty": "No cases found.",
-  "staff.cases.detail.assignments": "Assignments",
-  "staff.cases.detail.reassign": "Reassign",
-  "staff.cases.detail.reassignTitle": "Reassign {{role}}",
-  "staff.cases.detail.reassignSubmit": "Confirm reassignment",
-  "staff.cases.detail.openAssignments": "{{count}} open assignments",
-  "staff.cases.detail.tabs.overview": "Overview",
-  "staff.cases.detail.tabs.documents": "Documents",
-  "staff.cases.detail.tabs.meetings": "Meetings",
-  "staff.cases.detail.tabs.tickets": "Tickets",
-  "staff.cases.detail.tabs.activity": "Activity",
-  "staff.cases.detail.activity.empty": "No activity yet.",
-  "staff.roles.OWNER": "Owner",
-  "staff.roles.SUPER_ADMIN": "Super Admin",
-  "staff.roles.ADMIN": "Admin",
-  "staff.roles.LIA": "Immigration Adviser",
-  "staff.roles.CONSULTANT": "Consultant",
-  "staff.roles.SUPPORT": "Support",
-  "staff.roles.FINANCE": "Finance"
+  "staff": {
+    "nav": {
+      "overview": "Overview",
+      "cases": "Cases",
+      "meetings": "Meetings",
+      "tickets": "Tickets",
+      "staff": "Staff",
+      "approvals": "Approvals"
+    },
+    "signOut": "Sign out",
+    "comingSoon": {
+      "title": "Coming soon",
+      "body": "This section will be available in an upcoming update."
+    },
+    "cases": {
+      "title": "Cases",
+      "search": "Search by student name or email...",
+      "viewMode": {
+        "table": "Table",
+        "card": "Cards"
+      },
+      "assignedToMe": "Assigned to me",
+      "columns": {
+        "student": "Student",
+        "email": "Email",
+        "status": "Status",
+        "stage": "Stage",
+        "lia": "LIA",
+        "consultant": "Consultant",
+        "updated": "Updated"
+      },
+      "notAssigned": "Not yet assigned",
+      "empty": "No cases found.",
+      "detail": {
+        "assignments": "Assignments",
+        "reassign": "Reassign",
+        "reassignTitle": "Reassign {role}",
+        "reassignSubmit": "Confirm reassignment",
+        "openAssignments": "{count} open assignments",
+        "tabs": {
+          "overview": "Overview",
+          "documents": "Documents",
+          "meetings": "Meetings",
+          "tickets": "Tickets",
+          "activity": "Activity"
+        },
+        "activity": {
+          "empty": "No activity yet."
+        }
+      }
+    },
+    "roles": {
+      "OWNER": "Owner",
+      "SUPER_ADMIN": "Super Admin",
+      "ADMIN": "Admin",
+      "LIA": "Immigration Adviser",
+      "CONSULTANT": "Consultant",
+      "SUPPORT": "Support",
+      "FINANCE": "Finance"
+    }
+  }
 }
