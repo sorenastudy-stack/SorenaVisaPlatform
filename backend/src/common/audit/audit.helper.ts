@@ -100,6 +100,13 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
     }
     case 'STAFF_ROLE_NORMALIZED_FROM_SALES':
       return 'Staff role normalised from SALES to CONSULTANT';
+    case 'WIX_LEAD_CAPTURED': {
+      // PR-WIX-1: newValue carries { leadId, source, email_masked }.
+      const masked = pickString(newV, 'email_masked');
+      return masked
+        ? `Lead captured via Wix (${masked})`
+        : 'Lead captured via Wix webhook';
+    }
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';

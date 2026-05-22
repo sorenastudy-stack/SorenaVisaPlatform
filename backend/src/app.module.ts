@@ -25,6 +25,7 @@ import { FilesModule } from './files/files.module';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { EmailHashModule } from './common/email-hash/email-hash.module';
 import { StaffModule } from './staff/staff.module';
+import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
 
 @Module({
   imports: [
@@ -64,6 +65,8 @@ import { StaffModule } from './staff/staff.module';
     // PR-CONSULT-1: staff roles, assignments, owner-approval queue,
     // staff CRUD. Foundation for the consultant-side UI (PR-CONSULT-2+).
     StaffModule,
+    // PR-WIX-1: public lead-capture webhook posted to by Wix.
+    WixWebhooksModule,
   ],
 })
 export class AppModule {}

@@ -568,6 +568,20 @@ model Lead {
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
 
+  // PR-WIX-1: lead-stage signal captured by the Wix lead-capture
+  // webhook. `currentEducationLevel` is free-text per the Wix form.
+  // `externalSubmissionId` is the dedupe key (sha256 of email +
+  // submittedAt + secret, first 32 chars) — unique so two retries
+  // for the same submission can't double-create.
+  // `countryRaw` holds the un-resolved country string when the
+  // alpha-2 normaliser can't map a free-form name like "Aotearoa".
+  // `webhookMetadata` keeps the original page URL / form id so we
+  // can debug submissions without log archaeology.
+  currentEducationLevel   String?
+  externalSubmissionId    String?           @unique
+  countryRaw              String?
+  webhookMetadata         Json?
+
   contact                 Contact           @relation(fields: [contactId], references: [id])
   owner                   User?             @relation("LeadOwner", fields: [ownerId], references: [id])
   intakeForm              IntakeForm?

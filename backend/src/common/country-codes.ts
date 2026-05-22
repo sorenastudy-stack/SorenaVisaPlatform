@@ -41,3 +41,18 @@ export function isValidCountryCode(code: string): boolean {
 export function getCountryName(code: string, locale: 'en' = 'en'): string {
   return countries.getName(code, locale) ?? code;
 }
+
+// PR-WIX-1: reverse lookup — country name → alpha-2 code. Used by
+// the Wix-webhook normaliser when the inbound payload sends a
+// country name ("New Zealand") instead of a code ("NZ"). Returns
+// undefined when the name doesn't match a known country at the
+// given locale; the caller stores the raw string in `countryRaw`
+// as a fallback.
+export function getAlpha2CodeFromName(name: string, locale: 'en' = 'en'): string | undefined {
+  if (typeof name !== 'string') return undefined;
+  const trimmed = name.trim();
+  if (!trimmed) return undefined;
+  const code = countries.getAlpha2Code(trimmed, locale);
+  if (!code) return undefined;
+  return isValidCountryCode(code) ? code : undefined;
+}

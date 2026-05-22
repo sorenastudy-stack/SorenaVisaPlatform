@@ -1,0 +1,15 @@
+{
+  "submissionId": "wix-sub-7a8c2f-3919",
+  "submittedAt": "2026-05-22T11:23:45.000Z",
+  "fields": {
+    "fullName": "Reza Mokhtari",
+    "email": "reza.mokhtari@example.com",
+    "phone": "+98 912 345 6789",
+    "countryOfResidence": "Iran",
+    "currentEducationLevel": "Bachelor's degree"
+  },
+  "meta": {
+    "pageUrl": "https://sorenavisa.com/study-in-nz",
+    "formId": "lead-capture-main"
+  }
+}
