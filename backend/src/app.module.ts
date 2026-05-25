@@ -26,6 +26,7 @@ import { CryptoModule } from './common/crypto/crypto.module';
 import { EmailHashModule } from './common/email-hash/email-hash.module';
 import { StaffModule } from './staff/staff.module';
 import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
+import { LegalNotesModule } from './legal-notes/legal-notes.module';
 
 @Module({
   imports: [
@@ -67,6 +68,8 @@ import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
     StaffModule,
     // PR-WIX-1: public lead-capture webhook posted to by Wix.
     WixWebhooksModule,
+    // PR-LIA-1: LIA notes + decisions + risk overrides on CRM Cases.
+    LegalNotesModule,
   ],
 })
 export class AppModule {}

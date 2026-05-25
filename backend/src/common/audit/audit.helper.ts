@@ -107,6 +107,23 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
         ? `Lead captured via Wix (${masked})`
         : 'Lead captured via Wix webhook';
     }
+    case 'LEGAL_NOTE_ADDED':
+      return 'Legal note added by LIA';
+    case 'LEGAL_DECISION_RECORDED': {
+      // PR-LIA-1: newValue carries { legalNoteId, decision, reasonLength }.
+      const decision = pickString(newV, 'decision');
+      return decision
+        ? `Legal decision recorded: ${decision}`
+        : 'Legal decision recorded';
+    }
+    case 'LIA_RISK_OVERRIDDEN': {
+      const next = pickString(newV, 'riskLevel');
+      return next
+        ? `Risk level overridden to ${next} by LIA`
+        : 'Case risk level overridden by LIA';
+    }
+    case 'LIA_HARD_STOP_CLEARED':
+      return 'Hard stop cleared by LIA';
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';

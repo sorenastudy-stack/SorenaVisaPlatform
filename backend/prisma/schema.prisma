@@ -58,6 +58,16 @@ enum RiskLevel {
   BLOCKED
 }
 
+// PR-LIA-1: formal outcomes the LIA can record on a Case. Set on a
+// LegalNote row when the LIA records a decision; null when the row
+// is just a free-form note (or a system-generated audit-paired note).
+enum LegalDecision {
+  APPROVED
+  REJECTED
+  NEEDS_MORE_INFO
+  WITHDRAWN
+}
+
 enum RecommendedRoute {
   CONTENT_NURTURE
   WEBINAR
@@ -359,6 +369,11 @@ model User {
   ownerApprovalRequests   OwnerApprovalRequest[]  @relation("OwnerApprovalRequester")
   ownerApprovalDecisions  OwnerApprovalRequest[]  @relation("OwnerApprovalDecider")
   staffActiveStatus       StaffActiveStatus?      @relation("StaffActive")
+
+  // PR-LIA-1: LegalNote rows this user authored (notes + decisions
+  // on CRM-side Cases). LIA / ADMIN / SUPER_ADMIN-gated at the
+  // endpoint layer.
+  legalNotes              LegalNote[]             @relation("LegalNoteAuthor")
 
   @@map("users")
 }
@@ -735,6 +750,8 @@ model Case {
   tickets               Ticket[]
   invoices              Invoice[]
   admissionApplications AdmissionApplication[]
+  // PR-LIA-1: free-form legal notes + formal decisions on this case.
+  legalNotes            LegalNote[]
 
   @@index([leadId])
   @@index([stage])
@@ -811,6 +828,35 @@ model Contract {
   case Case @relation(fields: [caseId], references: [id])
 
   @@map("contracts")
+}
+
+// ─── LEGAL NOTES (PR-LIA-1) ──────────────────────────────────────────────────
+//
+// Free-form notes and formal decisions attached to a CRM-side Case by
+// the LIA (Legal & Immigration Adviser) team. Two row variants:
+//   * Note      — decision IS NULL, decisionReasonEncrypted IS NULL.
+//                 `bodyEncrypted` holds the LIA's free-form note.
+//   * Decision  — decision IS NOT NULL. Both encrypted body and
+//                 decisionReasonEncrypted are populated (the body is
+//                 a one-line system summary of the decision; the
+//                 reason carries the LIA's written justification).
+//
+// Both encrypted columns hold AES-256-GCM ciphertext via CryptoService
+// (same envelope as every other PII column in the project).
+model LegalNote {
+  id                       String         @id @default(uuid())
+  caseId                   String
+  authorId                 String
+  bodyEncrypted            Bytes
+  decision                 LegalDecision?
+  decisionReasonEncrypted  Bytes?
+  createdAt                DateTime       @default(now())
+
+  case   Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author User @relation("LegalNoteAuthor", fields: [authorId], references: [id])
+
+  @@index([caseId, createdAt])
+  @@map("legal_notes")
 }
 
 // ─── COMMISSIONS ─────────────────────────────────────────────────────────────
