@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, AlertTriangle, Lock, FileText, UserCheck, Mail, Phone, Gavel, Scale, MessageSquare, FilePlus2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Lock, FileText, UserCheck, Mail, Phone, Gavel, Scale, MessageSquare, FilePlus2, CheckCircle2, Files, XCircle, HelpCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { getSession } from '@/lib/auth';
@@ -16,6 +16,8 @@ import { RecordDecisionButton } from './RecordDecisionButton';
 import { SendMessageButton } from './SendMessageButton';
 import { RequestDocumentButton } from './RequestDocumentButton';
 import { ReassignLiaButton } from './ReassignLiaButton';
+import { DownloadDocumentButton } from './DownloadDocumentButton';
+import { ReviewDocumentButton } from './ReviewDocumentButton';
 
 // PR-LIA-1 — Case detail with action panel + legal-notes timeline.
 
@@ -99,6 +101,27 @@ interface CaseMessage {
   createdAt: string;
 }
 
+// PR-LIA-5: unified client-document row across all sources.
+interface CaseDocumentRow {
+  id: string;
+  source: 'ADMISSION' | 'APPLICATION' | 'VISA_SUPPORTING';
+  sourceRowId: string;
+  docType: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+  uploadedById: string | null;
+  uploadedByName: string | null;
+  downloadable: boolean;
+  linkedToRequestMessageId: string | null;
+  liaReviewStatus: 'UNREVIEWED' | 'APPROVED' | 'REJECTED';
+  liaReviewedAt: string | null;
+  liaReviewedById: string | null;
+  liaReviewedByName: string | null;
+  liaReviewReason: string | null;
+}
+
 export default async function LiaCaseDetailPage({ params }: { params: { id: string } }) {
   // PR-LIA-2 — read viewer's role so we can show the Reassign button
   // only to OWNER / ADMIN / SUPER_ADMIN, and the "(you)" badge to the
@@ -109,6 +132,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
   let caseData: CaseDetail | null = null;
   let legalNotes: LegalNote[] = [];
   let caseMessages: CaseMessage[] = [];
+  let caseDocuments: CaseDocumentRow[] = [];
   let errorMsg: string | null = null;
 
   try {
@@ -128,6 +152,11 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
       caseMessages = await apiServer.get<CaseMessage[]>(`/cases/${params.id}/messages`);
     } catch {
       // Non-fatal; show the message thread empty if it fails.
+    }
+    try {
+      caseDocuments = await apiServer.get<CaseDocumentRow[]>(`/cases/${params.id}/documents`);
+    } catch {
+      // Non-fatal; show the documents card empty if it fails.
     }
   }
 
@@ -321,6 +350,116 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
         </CardContent>
       </Card>
 
+      <Card className="mb-6">
+        <CardContent>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h2 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2">
+              <Files size={18} className="text-[#E8B923]" />
+              All client documents
+            </h2>
+            <span className="text-xs text-[#4A4A4A]/60">
+              {caseDocuments.length} document{caseDocuments.length === 1 ? '' : 's'} across admission / application / visa
+            </span>
+          </div>
+
+          {caseDocuments.length === 0 ? (
+            <p className="text-sm text-[#4A4A4A]/60 py-6 text-center">
+              The client hasn&apos;t uploaded any documents yet.
+            </p>
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-[#FAF8F3] text-[#4A4A4A]/70 text-xs uppercase tracking-wider">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Type</th>
+                      <th className="px-3 py-2 text-left">Filename</th>
+                      <th className="px-3 py-2 text-left">Source</th>
+                      <th className="px-3 py-2 text-left">Uploaded</th>
+                      <th className="px-3 py-2 text-left">Status</th>
+                      <th className="px-3 py-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {caseDocuments.map((d) => (
+                      <tr key={d.id} className="hover:bg-[#FAF8F3]/50">
+                        <td className="px-3 py-2 font-semibold text-[#1E3A5F]">{d.docType}</td>
+                        <td className="px-3 py-2 text-[#4A4A4A] max-w-[14rem] truncate" title={d.fileName}>{d.fileName}</td>
+                        <td className="px-3 py-2 text-xs text-[#4A4A4A]/70">{sourceLabel(d.source)}</td>
+                        <td className="px-3 py-2 text-xs text-[#4A4A4A]/80">{formatRelative(d.uploadedAt)}</td>
+                        <td className="px-3 py-2"><ReviewStatusBadge status={d.liaReviewStatus} /></td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
+                            <DownloadDocumentButton
+                              caseId={caseData.id}
+                              source={d.source}
+                              sourceRowId={d.sourceRowId}
+                              downloadable={d.downloadable}
+                              fileName={d.fileName}
+                            />
+                            <ReviewDocumentButton
+                              caseId={caseData.id}
+                              source={d.source}
+                              sourceRowId={d.sourceRowId}
+                              fileName={d.fileName}
+                              existingStatus={d.liaReviewStatus}
+                              existingReason={d.liaReviewReason}
+                              existingReviewerName={d.liaReviewedByName}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile stacked cards */}
+              <ul className="md:hidden divide-y divide-gray-100">
+                {caseDocuments.map((d) => (
+                  <li key={d.id} className="py-3">
+                    <div className="flex items-start gap-2 mb-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-[#1E3A5F]">{d.docType}</div>
+                        <div className="text-xs text-[#4A4A4A]/70 truncate">{d.fileName}</div>
+                      </div>
+                      <ReviewStatusBadge status={d.liaReviewStatus} />
+                    </div>
+                    <div className="text-xs text-[#4A4A4A]/60 mb-2">
+                      {sourceLabel(d.source)} · {formatRelative(d.uploadedAt)}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <DownloadDocumentButton
+                        caseId={caseData.id}
+                        source={d.source}
+                        sourceRowId={d.sourceRowId}
+                        downloadable={d.downloadable}
+                        fileName={d.fileName}
+                      />
+                      <ReviewDocumentButton
+                        caseId={caseData.id}
+                        source={d.source}
+                        sourceRowId={d.sourceRowId}
+                        fileName={d.fileName}
+                        existingStatus={d.liaReviewStatus}
+                        existingReason={d.liaReviewReason}
+                        existingReviewerName={d.liaReviewedByName}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <p className="text-xs text-[#4A4A4A]/60 mt-4 pt-3 border-t border-gray-100">
+                Reviews are <strong>internal-only</strong> — the client doesn&apos;t see your verdict.
+                For a re-upload, send a request via the case thread.
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {caseData.contract && (
         <Card className="mb-6">
           <CardContent>
@@ -485,6 +624,36 @@ function MessageBubble({ message }: { message: CaseMessage }) {
         <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap leading-relaxed">{message.body}</p>
       </div>
     </li>
+  );
+}
+
+function sourceLabel(s: 'ADMISSION' | 'APPLICATION' | 'VISA_SUPPORTING'): string {
+  switch (s) {
+    case 'ADMISSION':       return 'Admission';
+    case 'APPLICATION':     return 'CRM application';
+    case 'VISA_SUPPORTING': return 'Visa supporting';
+  }
+}
+
+function ReviewStatusBadge({ status }: { status: 'UNREVIEWED' | 'APPROVED' | 'REJECTED' }) {
+  if (status === 'APPROVED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+        <CheckCircle2 size={12} /> Approved
+      </span>
+    );
+  }
+  if (status === 'REJECTED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
+        <XCircle size={12} /> Rejected
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+      <HelpCircle size={12} /> Unreviewed
+    </span>
   );
 }
 

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { BarChart3, Users } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
+import { BackLink } from '@/components/ui/BackLink';
 import { getSession } from '@/lib/auth';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { formatRelative, openCasesStyles } from '../_utils/format';
@@ -52,6 +53,7 @@ export default async function LiaProductivityPage() {
 
   return (
     <div className="max-w-7xl">
+      <BackLink href="/lia" label="Back to dashboard" />
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">

@@ -170,6 +170,22 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
         ? `${who} read ${count} message${count === 1 ? '' : 's'} on the case thread`
         : `${who} read the case thread`;
     }
+    case 'LIA_DOCUMENT_DOWNLOADED': {
+      // PR-LIA-5: newValue carries { source, sourceRowId, fileName }.
+      const fileName = pickString(newV, 'fileName');
+      return fileName
+        ? `LIA downloaded document: ${fileName}`
+        : 'LIA downloaded a client document';
+    }
+    case 'LIA_DOCUMENT_REVIEWED': {
+      // PR-LIA-5: newValue carries { status, source, sourceRowId, reasonLength }.
+      // status is 'APPROVED' | 'REJECTED' | 'CLEARED' (the last on DELETE).
+      const status = pickString(newV, 'status');
+      if (status === 'CLEARED') return 'LIA cleared a document review';
+      if (status === 'APPROVED') return 'LIA approved a client document';
+      if (status === 'REJECTED') return 'LIA rejected a client document';
+      return 'LIA recorded a document review';
+    }
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';

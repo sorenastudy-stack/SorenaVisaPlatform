@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, FileSearch } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
+import { BackLink } from '@/components/ui/BackLink';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import {
   riskStyles, riskLabel, docStatusStyles, formatRelative, isEscalatedRisk,
@@ -116,6 +117,7 @@ export default async function LiaDocumentsPage({ searchParams }: { searchParams:
 
   return (
     <div className="max-w-7xl">
+      <BackLink href="/lia" label="Back to dashboard" />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1E3A5F]">Documents under review</h1>
         <p className="text-sm text-[#4A4A4A]/70 mt-1">Documents on escalated cases — HIGH risk, BLOCKED, or hard-stopped.</p>

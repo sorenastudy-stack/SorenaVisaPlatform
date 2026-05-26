@@ -28,6 +28,7 @@ import { StaffModule } from './staff/staff.module';
 import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
 import { LegalNotesModule } from './legal-notes/legal-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
+import { CaseDocumentsModule } from './case-documents/case-documents.module';
 
 @Module({
   imports: [
@@ -73,6 +74,9 @@ import { CaseMessagesModule } from './case-messages/case-messages.module';
     LegalNotesModule,
     // PR-LIA-4: direct LIA ↔ client messaging on CRM Cases.
     CaseMessagesModule,
+    // PR-LIA-5: unified LIA view of client-uploaded documents on a
+    // CRM Case, with download + internal-only review verdicts.
+    CaseDocumentsModule,
   ],
 })
 export class AppModule {}

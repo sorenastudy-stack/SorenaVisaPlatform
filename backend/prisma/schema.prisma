@@ -86,6 +86,27 @@ enum CaseMessageKind {
   PROGRESS_UPDATE
 }
 
+// PR-LIA-5: which source table a CaseDocumentReview points at. The
+// review row lives in its own table — we never modify the source
+// models. The original document is keyed by the matching (source,
+// sourceRowId) pair. The user's spec named a fourth source
+// (CASE_MESSAGE_FULFILMENT) which is really just a VisaSupportingDocument
+// linked through a CaseMessage; the canonical row lives in
+// visa_supporting_documents either way, so VISA_SUPPORTING covers it.
+enum CaseDocumentReviewSource {
+  ADMISSION
+  APPLICATION
+  VISA_SUPPORTING
+}
+
+// PR-LIA-5: the LIA's verdict on a single document. UNREVIEWED is
+// the implicit default (no row exists); only APPROVED / REJECTED
+// rows are stored. Re-reviewing upserts the existing row.
+enum CaseDocumentReviewStatus {
+  APPROVED
+  REJECTED
+}
+
 enum RecommendedRoute {
   CONTENT_NURTURE
   WEBINAR
@@ -403,6 +424,10 @@ model User {
   // PR-LIA-4: CaseMessage rows this user authored (either as the LIA
   // working the case, or as the case's client replying to the thread).
   caseMessages            CaseMessage[]           @relation("CaseMessageAuthor")
+
+  // PR-LIA-5: CaseDocumentReview rows this user authored (LIA / OWNER
+  // /  ADMIN / SUPER_ADMIN — the gate is enforced at the controller).
+  documentReviews         CaseDocumentReview[]    @relation("CaseDocumentReviewer")
 
   @@map("users")
 }
@@ -801,6 +826,9 @@ model Case {
   legalNotes            LegalNote[]
   // PR-LIA-4: direct LIA ↔ client thread for this case.
   caseMessages          CaseMessage[]
+  // PR-LIA-5: LIA's internal-only review verdicts on this case's
+  // client-uploaded documents.
+  documentReviews       CaseDocumentReview[]
 
   @@index([leadId])
   @@index([stage])
@@ -947,6 +975,41 @@ model CaseMessage {
   @@index([caseId, readByClient])
   @@index([caseId, readByLia])
   @@map("case_messages")
+}
+
+// ─── CASE DOCUMENT REVIEWS (PR-LIA-5) ────────────────────────────────────────
+//
+// LIA's internal-only verdict on a client-uploaded document. The
+// source document lives in one of three tables (AdmissionDocument,
+// ApplicationDocument, VisaSupportingDocument) — we identify it by
+// `(source, sourceRowId)` rather than a typed FK so we don't have to
+// modify any of the source upload models. UNREVIEWED is the implicit
+// default (no row exists); only APPROVED / REJECTED rows are stored.
+//
+// `reasonEncrypted` carries the LIA's free-form justification in the
+// same AES-256-GCM envelope as LegalNote.bodyEncrypted. Required for
+// both APPROVED and REJECTED. Re-reviewing a document upserts the
+// existing row (UNIQUE on (source, sourceRowId)).
+//
+// Client-visible: NO. The PR-LIA-5 design is internal-only — if a
+// re-upload is needed, the LIA messages the client via PR-LIA-4.
+// Forward-compat would be a "publishToClient: Boolean" flag.
+model CaseDocumentReview {
+  id              String                     @id @default(uuid())
+  caseId          String
+  source          CaseDocumentReviewSource
+  sourceRowId     String
+  status          CaseDocumentReviewStatus
+  reasonEncrypted Bytes
+  reviewedById    String
+  reviewedAt      DateTime                   @default(now())
+
+  case            Case                       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  reviewedBy      User                       @relation("CaseDocumentReviewer", fields: [reviewedById], references: [id])
+
+  @@unique([source, sourceRowId])
+  @@index([caseId, reviewedAt])
+  @@map("case_document_reviews")
 }
 
 // ─── COMMISSIONS ─────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, Gavel, CheckCircle2, XCircle, HelpCircle, ArchiveX } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
+import { BackLink } from '@/components/ui/BackLink';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import {
   decisionStyles, decisionLabel, formatRelative, formatDateTime,
@@ -70,6 +71,7 @@ export default async function LiaDecisionsPage({ searchParams }: { searchParams:
 
   return (
     <div className="max-w-5xl">
+      <BackLink href="/lia" label="Back to dashboard" />
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1E3A5F]">Decisions</h1>
         <p className="text-sm text-[#4A4A4A]/70 mt-1">Formal LIA decisions recorded across all cases.</p>

@@ -1,6 +1,6 @@
-import Link from 'next/link';
-import { MessageCircle, FilePlus2, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { MessageCircle, FilePlus2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
+import { BackLink } from '@/components/ui/BackLink';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { ReplyComposer } from './ReplyComposer';
 import { FulfilRequestButton } from './FulfilRequestButton';
@@ -57,9 +57,7 @@ export default async function StudentCaseMessagesPage() {
 
   return (
     <div className="max-w-3xl">
-      <Link href="/student/case" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] mb-4">
-        <ArrowLeft size={14} /> Back to my case
-      </Link>
+      <BackLink href="/student" label="Back to portal" />
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1E3A5F]">Messages with your specialist</h1>
