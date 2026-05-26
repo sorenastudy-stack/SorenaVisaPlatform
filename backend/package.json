@@ -5,8 +5,10 @@
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",
+    "prestart:dev": "node scripts/kill-port.js 3001",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
+    "kill-backend": "node scripts/kill-port.js 3001",
     "postinstall": "prisma generate",
     "migrate:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",

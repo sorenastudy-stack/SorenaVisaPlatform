@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "name": "sorena-visa-platform",
+  "description": "Workspace-root scripts. Backend and frontend are independent npm projects under their respective folders; this file exists only to host cross-cutting dev-tooling scripts.",
+  "scripts": {
+    "kill-stale": "node backend/scripts/kill-port.js 3000 3001"
+  }
+}
