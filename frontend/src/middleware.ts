@@ -6,10 +6,10 @@ import { jwtVerify } from 'jose';
 // going forward. All 7 staff roles (OWNER / SUPER_ADMIN / ADMIN /
 // LIA / CONSULTANT / SUPPORT / FINANCE) can reach `/staff`.
 const ROLE_ROUTES: Record<string, string[]> = {
-  '/admin':   ['SUPER_ADMIN', 'ADMIN'],
-  '/ops':     ['OPERATIONS', 'SUPER_ADMIN', 'ADMIN'],
-  '/sales':   ['SALES', 'SUPER_ADMIN', 'ADMIN'],
-  '/lia':     ['LIA', 'SUPER_ADMIN', 'ADMIN'],
+  '/admin':   ['ADMIN', 'SUPER_ADMIN', 'OWNER'],
+  '/ops':     ['OPERATIONS', 'ADMIN', 'SUPER_ADMIN', 'OWNER'],
+  '/sales':   ['SALES', 'ADMIN', 'SUPER_ADMIN', 'OWNER'],
+  '/lia':     ['LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER'],
   '/staff':   ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'],
   '/student': ['STUDENT'],
 };
