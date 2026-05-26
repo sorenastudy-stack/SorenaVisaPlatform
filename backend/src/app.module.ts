@@ -27,6 +27,7 @@ import { EmailHashModule } from './common/email-hash/email-hash.module';
 import { StaffModule } from './staff/staff.module';
 import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
 import { LegalNotesModule } from './legal-notes/legal-notes.module';
+import { CaseMessagesModule } from './case-messages/case-messages.module';
 
 @Module({
   imports: [
@@ -70,6 +71,8 @@ import { LegalNotesModule } from './legal-notes/legal-notes.module';
     WixWebhooksModule,
     // PR-LIA-1: LIA notes + decisions + risk overrides on CRM Cases.
     LegalNotesModule,
+    // PR-LIA-4: direct LIA ↔ client messaging on CRM Cases.
+    CaseMessagesModule,
   ],
 })
 export class AppModule {}

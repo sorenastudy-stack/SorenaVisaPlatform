@@ -124,6 +124,34 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
     }
     case 'LIA_HARD_STOP_CLEARED':
       return 'Hard stop cleared by LIA';
+    case 'CASE_MESSAGE_POSTED': {
+      // PR-LIA-4: newValue carries { messageId, authorRole, kind, ... }.
+      const authorRole = pickString(newV, 'authorRole');
+      const kind = pickString(newV, 'kind');
+      if (kind === 'PROGRESS_UPDATE') return 'LIA posted a progress update';
+      return authorRole === 'CLIENT'
+        ? 'Client replied on the case thread'
+        : 'LIA sent a message to the client';
+    }
+    case 'CASE_DOCUMENT_REQUESTED': {
+      const docType = pickString(newV, 'requestedDocType');
+      return docType
+        ? `LIA requested document: ${docType}`
+        : 'LIA requested a document from the client';
+    }
+    case 'CASE_DOCUMENT_FULFILLED':
+      return 'Client fulfilled a document request';
+    case 'CASE_MESSAGE_READ': {
+      // PR-LIA-4: newValue carries { caseId, count, viewer }.
+      const count = (typeof newV === 'object' && newV !== null && typeof (newV as { count?: unknown }).count === 'number')
+        ? (newV as { count: number }).count
+        : null;
+      const viewer = pickString(newV, 'viewer');
+      const who = viewer === 'CLIENT' ? 'Client' : 'LIA';
+      return count !== null
+        ? `${who} read ${count} message${count === 1 ? '' : 's'} on the case thread`
+        : `${who} read the case thread`;
+    }
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';

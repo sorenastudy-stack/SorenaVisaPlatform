@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, AlertTriangle, Lock, FileText, UserCheck, Mail, Phone, Gavel, Scale } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Lock, FileText, UserCheck, Mail, Phone, Gavel, Scale, MessageSquare, FilePlus2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import {
@@ -12,6 +12,8 @@ import { ClearHardStopButton } from './ClearHardStopButton';
 import { OverrideRiskButton } from './OverrideRiskButton';
 import { AddLegalNoteButton } from './AddLegalNoteButton';
 import { RecordDecisionButton } from './RecordDecisionButton';
+import { SendMessageButton } from './SendMessageButton';
+import { RequestDocumentButton } from './RequestDocumentButton';
 
 // PR-LIA-1 — Case detail with action panel + legal-notes timeline.
 
@@ -74,9 +76,27 @@ interface LegalNote {
   createdAt: string;
 }
 
+interface CaseMessage {
+  id: string;
+  caseId: string;
+  authorId: string;
+  authorName: string | null;
+  authorRole: 'LIA' | 'CLIENT';
+  kind: 'MESSAGE' | 'DOCUMENT_REQUEST' | 'PROGRESS_UPDATE';
+  body: string;
+  requestedDocType: string | null;
+  fulfilledByFileId: string | null;
+  fulfilledByFileName: string | null;
+  fulfilledAt: string | null;
+  readByClient: boolean;
+  readByLia: boolean;
+  createdAt: string;
+}
+
 export default async function LiaCaseDetailPage({ params }: { params: { id: string } }) {
   let caseData: CaseDetail | null = null;
   let legalNotes: LegalNote[] = [];
+  let caseMessages: CaseMessage[] = [];
   let errorMsg: string | null = null;
 
   try {
@@ -91,6 +111,11 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
       legalNotes = await apiServer.get<LegalNote[]>(`/cases/${params.id}/legal-notes`);
     } catch {
       // Non-fatal; show the timeline empty if it fails.
+    }
+    try {
+      caseMessages = await apiServer.get<CaseMessage[]>(`/cases/${params.id}/messages`);
+    } catch {
+      // Non-fatal; show the message thread empty if it fails.
     }
   }
 
@@ -272,6 +297,32 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
         </Card>
       )}
 
+      <Card className="mb-6">
+        <CardContent>
+          <div className="flex items-center gap-2 mb-4">
+            <MessageSquare size={18} className="text-[#E8B923]" />
+            <h2 className="text-lg font-bold text-[#1E3A5F]">Messages to client</h2>
+          </div>
+
+          {caseMessages.length === 0 ? (
+            <p className="text-sm text-[#4A4A4A]/60 py-6 text-center">
+              No messages yet. Send the first one or request a document below.
+            </p>
+          ) : (
+            <ul className="space-y-3 mb-4">
+              {caseMessages.map((m) => (
+                <MessageBubble key={m.id} message={m} />
+              ))}
+            </ul>
+          )}
+
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-gray-100">
+            <SendMessageButton caseId={caseData.id} />
+            <RequestDocumentButton caseId={caseData.id} />
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent>
           <div className="flex items-center gap-2 mb-4">
@@ -325,6 +376,75 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function MessageBubble({ message }: { message: CaseMessage }) {
+  if (message.kind === 'PROGRESS_UPDATE') {
+    return (
+      <li className="rounded-xl border border-[#1E3A5F]/30 bg-[#1E3A5F]/5 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-[#1E3A5F] text-white">
+            Progress update
+          </span>
+          <span className="text-xs text-[#4A4A4A]/70 ml-auto">
+            {message.authorName ?? 'LIA'} · {formatRelative(message.createdAt)}
+          </span>
+        </div>
+        <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap leading-relaxed">{message.body}</p>
+      </li>
+    );
+  }
+
+  if (message.kind === 'DOCUMENT_REQUEST') {
+    const fulfilled = !!message.fulfilledByFileId;
+    return (
+      <li className="rounded-xl border-2 border-amber-200 bg-amber-50 p-4">
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <FilePlus2 size={14} className="text-amber-700" />
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+            Document requested: {message.requestedDocType ?? '—'}
+          </span>
+          {fulfilled && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              <CheckCircle2 size={12} /> Fulfilled
+            </span>
+          )}
+          <span className="text-xs text-amber-700/80 ml-auto">
+            {message.authorName ?? 'LIA'} · {formatRelative(message.createdAt)}
+          </span>
+        </div>
+        <p className="text-sm text-amber-900 whitespace-pre-wrap leading-relaxed">{message.body}</p>
+        {fulfilled && (
+          <div className="mt-2 pt-2 border-t border-amber-200 text-xs text-amber-800">
+            <span className="font-semibold">File linked:</span> {message.fulfilledByFileName ?? message.fulfilledByFileId}
+            {message.fulfilledAt && (
+              <span className="ml-2 text-amber-700/70">· {formatRelative(message.fulfilledAt)}</span>
+            )}
+          </div>
+        )}
+      </li>
+    );
+  }
+
+  // Plain MESSAGE — LIA right-aligned gold, client left-aligned white.
+  const isLia = message.authorRole === 'LIA';
+  return (
+    <li className={`flex ${isLia ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[85%] rounded-xl p-4 ${
+          isLia
+            ? 'bg-[#E8B923]/10 border border-[#E8B923]/30'
+            : 'bg-white border border-gray-200'
+        }`}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs font-semibold text-[#1E3A5F]">{message.authorName ?? (isLia ? 'LIA' : 'Client')}</span>
+          <span className="text-xs text-[#4A4A4A]/60">· {formatRelative(message.createdAt)}</span>
+        </div>
+        <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap leading-relaxed">{message.body}</p>
+      </div>
+    </li>
   );
 }
 

@@ -57,7 +57,7 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     { label: 'Dashboard', href: '/student',            icon: <LayoutDashboard size={18} /> },
     { label: 'My Case',   href: '/student/case',       icon: <Briefcase size={18} /> },
     { label: 'Visa Section', href: '/student/documents',  icon: <FileText size={18} /> },
-    { label: 'Messages',  href: '/student/messages',   icon: <MessageSquare size={18} /> },
+    { label: 'Messages',  href: '/student/case/messages', icon: <MessageSquare size={18} /> },
     { label: 'Payments',  href: '/student/payments',   icon: <CreditCard size={18} /> },
     { label: 'Apply',     href: '/student/admission',  icon: <ClipboardList size={18} />, requiresCase: true },
   ],
@@ -76,9 +76,14 @@ interface PortalLayoutProps {
   portal: Portal;
   session: Session;
   hasCase?: boolean;
+  // PR-LIA-4: optional unread-message count for the student portal's
+  // "Messages" nav item. Server-rendered by the student layout via
+  // GET /students/me/case-messages/unread-count. Any positive value
+  // shows a red dot on the matching nav item.
+  studentUnreadMessages?: number;
 }
 
-export function PortalLayout({ children, portal, session, hasCase }: PortalLayoutProps) {
+export function PortalLayout({ children, portal, session, hasCase, studentUnreadMessages }: PortalLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -113,6 +118,12 @@ export function PortalLayout({ children, portal, session, hasCase }: PortalLayou
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const active = pathname === item.href;
+          // PR-LIA-4: red-dot badge for unread case messages on the
+          // student portal's Messages link.
+          const showUnreadDot =
+            portal === 'student'
+            && item.href === '/student/case/messages'
+            && (studentUnreadMessages ?? 0) > 0;
           return (
             <Link
               key={item.href}
@@ -126,7 +137,13 @@ export function PortalLayout({ children, portal, session, hasCase }: PortalLayou
               )}
             >
               {item.icon}
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {showUnreadDot && (
+                <span
+                  className="inline-block w-2 h-2 rounded-full bg-red-500"
+                  aria-label={`${studentUnreadMessages} unread`}
+                />
+              )}
             </Link>
           );
         })}

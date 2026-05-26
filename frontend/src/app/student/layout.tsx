@@ -20,8 +20,25 @@ export default async function StudentLayout({ children }: { children: React.Reac
     }
   }
 
+  // PR-LIA-4: badge the Messages nav item if the LIA has unread
+  // messages for this student. Fails open on any error (no badge).
+  let studentUnreadMessages = 0;
+  try {
+    const res = await apiServer.get<{ count: number }>(
+      '/students/me/case-messages/unread-count',
+    );
+    studentUnreadMessages = res?.count ?? 0;
+  } catch {
+    /* no badge if the lookup fails — non-fatal */
+  }
+
   return (
-    <PortalLayout portal="student" session={session} hasCase={hasCase}>
+    <PortalLayout
+      portal="student"
+      session={session}
+      hasCase={hasCase}
+      studentUnreadMessages={studentUnreadMessages}
+    >
       {children}
     </PortalLayout>
   );

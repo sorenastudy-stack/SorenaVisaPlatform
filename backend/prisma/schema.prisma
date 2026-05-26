@@ -68,6 +68,24 @@ enum LegalDecision {
   WITHDRAWN
 }
 
+// PR-LIA-4: direct messaging between the LIA and the client on a CRM
+// Case. Two author roles only — system events go through AuditLog.
+enum CaseMessageAuthorRole {
+  LIA
+  CLIENT
+}
+
+// PR-LIA-4: thread-row kind. MESSAGE is a free-form message either
+// way. DOCUMENT_REQUEST is an LIA → client ask for a specific document
+// (the client links one of their existing VisaSupportingDocument rows
+// to fulfil it). PROGRESS_UPDATE is an LIA-authored status broadcast
+// (rendered full-width on the client side).
+enum CaseMessageKind {
+  MESSAGE
+  DOCUMENT_REQUEST
+  PROGRESS_UPDATE
+}
+
 enum RecommendedRoute {
   CONTENT_NURTURE
   WEBINAR
@@ -374,6 +392,10 @@ model User {
   // on CRM-side Cases). LIA / ADMIN / SUPER_ADMIN-gated at the
   // endpoint layer.
   legalNotes              LegalNote[]             @relation("LegalNoteAuthor")
+
+  // PR-LIA-4: CaseMessage rows this user authored (either as the LIA
+  // working the case, or as the case's client replying to the thread).
+  caseMessages            CaseMessage[]           @relation("CaseMessageAuthor")
 
   @@map("users")
 }
@@ -752,6 +774,8 @@ model Case {
   admissionApplications AdmissionApplication[]
   // PR-LIA-1: free-form legal notes + formal decisions on this case.
   legalNotes            LegalNote[]
+  // PR-LIA-4: direct LIA ↔ client thread for this case.
+  caseMessages          CaseMessage[]
 
   @@index([leadId])
   @@index([stage])
@@ -857,6 +881,46 @@ model LegalNote {
 
   @@index([caseId, createdAt])
   @@map("legal_notes")
+}
+
+// ─── CASE MESSAGES (PR-LIA-4) ────────────────────────────────────────────────
+//
+// Direct messaging thread between the LIA and the case's client.
+// Both encrypted body and (optional) document-request type live on
+// the same row — the shape variant is determined by `kind`.
+//
+// Read-tracking is per-thread per-viewer (readByLia / readByClient),
+// not per-message: when the LIA fetches the thread, every unread
+// CLIENT-authored row flips to readByLia=true in one update. Same on
+// the client side with the directions reversed. A single
+// CASE_MESSAGE_READ audit row captures the flip (count, not row-by-row).
+//
+// fulfilledByFileId is the optional link to the VisaSupportingDocument
+// the client used to fulfil a DOCUMENT_REQUEST. See the PR-LIA-4
+// handover for why VisaSupportingDocument (and not e.g. ApplicationDocument)
+// is the chosen FK target.
+model CaseMessage {
+  id                String                  @id @default(uuid())
+  caseId            String
+  authorId          String
+  authorRole        CaseMessageAuthorRole
+  kind              CaseMessageKind         @default(MESSAGE)
+  bodyEncrypted     Bytes
+  requestedDocType  String?
+  fulfilledByFileId String?
+  fulfilledAt       DateTime?
+  readByClient      Boolean                 @default(false)
+  readByLia         Boolean                 @default(false)
+  createdAt         DateTime                @default(now())
+
+  case            Case                    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author          User                    @relation("CaseMessageAuthor", fields: [authorId], references: [id])
+  fulfilledByFile VisaSupportingDocument? @relation("CaseMessageFulfilment", fields: [fulfilledByFileId], references: [id], onDelete: SetNull)
+
+  @@index([caseId, createdAt])
+  @@index([caseId, readByClient])
+  @@index([caseId, readByLia])
+  @@map("case_messages")
 }
 
 // ─── COMMISSIONS ─────────────────────────────────────────────────────────────
@@ -2063,6 +2127,9 @@ model VisaSupportingDocument {
   updatedAt          DateTime                   @updatedAt
 
   visaApplication    VisaApplication            @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  // PR-LIA-4: CaseMessage DOCUMENT_REQUEST rows that the client
+  // fulfilled by linking THIS supporting-document row.
+  fulfilmentMessages CaseMessage[]              @relation("CaseMessageFulfilment")
 
   @@unique([visaApplicationId, documentType])
   @@index([visaApplicationId])
