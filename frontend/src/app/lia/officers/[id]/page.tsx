@@ -10,6 +10,7 @@ import { EditOfficerButton } from './EditOfficerButton';
 import { DeleteOfficerButton } from './DeleteOfficerButton';
 import { AddObservationButton } from './AddObservationButton';
 import { DeleteObservationButton } from './DeleteObservationButton';
+import { OfficerTrendCharts } from './OfficerTrendCharts';
 
 // PR-LIA-10 — Officer detail page.
 
@@ -215,6 +216,13 @@ export default async function OfficerDetailPage({ params }: { params: { id: stri
               ))}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      {/* PR-LIA-11: per-officer decision-trend charts. */}
+      <Card className="mb-6">
+        <CardContent>
+          <OfficerTrendCharts officerId={officer.id} />
         </CardContent>
       </Card>
 

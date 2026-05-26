@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Briefcase, School, FileText, Settings,
   ArrowRightLeft, Shield, FileSearch, CheckSquare, BarChart2,
   Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
-  ClipboardList, LineChart, Clock, UserSquare2,
+  ClipboardList, LineChart, Clock, UserSquare2, BarChart3,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -61,6 +61,10 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     // PR-LIA-10: Immigration Officer knowledge base. Visible to all
     // LIA-portal roles; DELETE-officer is gated server-side to OWNER+.
     { label: 'Officers',        href: '/lia/officers',     icon: <UserSquare2 size={18} /> },
+    // PR-LIA-11: Cross-officer metrics dashboard — OWNER / ADMIN /
+    // SUPER_ADMIN only. Backend enforces too; this gate is UX.
+    { label: 'Officer Metrics', href: '/lia/officers/metrics', icon: <BarChart3 size={18} />,
+      requiresRoleIn: ['OWNER', 'ADMIN', 'SUPER_ADMIN'] },
     { label: 'Decisions',       href: '/lia/decisions',    icon: <CheckSquare size={18} /> },
     // PR-LIA-3: OWNER / ADMIN / SUPER_ADMIN only — LIA users never
     // see peer-comparison metrics. Backend endpoint enforces the

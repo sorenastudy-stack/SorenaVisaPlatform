@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { UserSquare2, ArrowRight, Search, MapPin } from 'lucide-react';
+import { UserSquare2, ArrowRight, Search, MapPin, BarChart3 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { BackLink } from '@/components/ui/BackLink';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { getSession } from '@/lib/auth';
 import { formatDate } from '../_utils/format';
 import { AddOfficerButton } from './AddOfficerButton';
 
@@ -51,6 +52,12 @@ export default async function OfficersIndexPage({
 }: {
   searchParams: SearchParams;
 }) {
+  const session = await getSession();
+  // PR-LIA-11: surface a "View metrics" entry point on the index for
+  // OWNER+ — backend enforces the role gate too.
+  const canSeeMetrics =
+    !!session && ['OWNER', 'ADMIN', 'SUPER_ADMIN'].includes(session.role);
+
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
   const sort = (['mostRecent', 'mostActive', 'name'] as const).includes(
     searchParams.sort as 'mostRecent' | 'mostActive' | 'name',
@@ -111,7 +118,18 @@ export default async function OfficersIndexPage({
             Shared knowledge base of INZ officers. Profile data is collaborative; observations are attributed and append-only.
           </p>
         </div>
-        <AddOfficerButton />
+        <div className="flex items-center gap-2 flex-wrap">
+          {canSeeMetrics && (
+            <Link
+              href="/lia/officers/metrics"
+              className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-white border border-[#1E3A5F]/30 text-[#1E3A5F] text-sm font-semibold px-4 py-2 hover:border-[#E8B923] hover:text-[#E8B923] transition-colors"
+            >
+              <BarChart3 size={16} />
+              View metrics →
+            </Link>
+          )}
+          <AddOfficerButton />
+        </div>
       </div>
 
       <Card className="mb-6">

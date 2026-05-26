@@ -338,6 +338,12 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
         ? `Reviewing officer unlinked (was ${officerName})`
         : 'Reviewing officer unlinked';
     }
+    case 'OFFICER_OUTLIER_SCAN_RUN':
+      // PR-LIA-11: reserved for a future manual-trigger pattern. The
+      // current outlier endpoint is a plain read and writes no audit
+      // row. Registered here so a follow-up "scan now + notify" path
+      // can write rows that this helper already humanises.
+      return 'Officer outlier scan triggered';
     case 'VISA_EXPIRY_MANUAL_SWEEP_TRIGGERED': {
       const dispatched = (typeof newV === 'object' && newV !== null && typeof (newV as { dispatched?: unknown }).dispatched === 'number')
         ? (newV as { dispatched: number }).dispatched
