@@ -328,9 +328,16 @@ model User {
   address             String?
   emergencyContact    String?
 
+  // PR-LIA-2: ISO 3166-1 alpha-2 codes a User is "specialised" in
+  // (LIA forward-compat; the future country-router will read this).
+  // PR-LIA-2 auto-assignment ignores it — empty array means "general".
+  specialisedCountries String[] @default([])
+
   assignedLeads    Lead[]           @relation("LeadOwner")
   consultations    Consultation[]   @relation("ConsultationAdviser")
   cases            Case[]           @relation("CaseOwner")
+  // PR-LIA-2: cases where this user is the assigned LIA.
+  liaCases         Case[]           @relation("CaseLia")
   auditLogs        AuditLog[]
   notesAuditLogs   ManagerNotesLog[]
   leadStatusChanges LeadStatusHistory[]
@@ -760,6 +767,13 @@ model Case {
   stage       CaseStage @default(ADMISSION)
   status      String    @default("active")
   ownerId     String?
+  // PR-LIA-2: the LIA (Legal & Immigration Adviser) currently
+  // responsible for this case. Set automatically when the client
+  // signs the contract (load-balanced auto-pick), reassignable by
+  // OWNER / ADMIN / SUPER_ADMIN via PATCH /cases/:id/lia. NULL
+  // until contract sign (or if no active LIA was available at sign
+  // time — the case sits unassigned and an audit row records why).
+  liaId       String?
   riskLevel   RiskLevel @default(LOW)
   notes       String?
   createdAt   DateTime  @default(now())
@@ -767,6 +781,10 @@ model Case {
 
   lead         Lead           @relation(fields: [leadId], references: [id])
   owner        User?          @relation("CaseOwner", fields: [ownerId], references: [id])
+  // PR-LIA-2: assigned LIA. SetNull on user delete so the case
+  // survives an LIA being hard-deleted (PR-CONSULT-4 audit-snapshot
+  // pattern handles attribution).
+  lia          User?          @relation("CaseLia", fields: [liaId], references: [id], onDelete: SetNull)
   applications          Application[]
   contract              Contract?
   tickets               Ticket[]
@@ -779,6 +797,7 @@ model Case {
 
   @@index([leadId])
   @@index([stage])
+  @@index([liaId])
   @@map("cases")
 }
 

@@ -122,6 +122,52 @@ export class NotificationsService {
     await this.sendEmail(email, subject, html);
   }
 
+  // PR-LIA-2 — Internal notifications for LIA assignment changes.
+  // Best-effort: the existing sendEmail catch swallows failures so a
+  // missing SMTP config never blocks a contract sign / reassignment.
+
+  async sendNewLiaAssignment(
+    email: string,
+    name: string,
+    caseId: string,
+    clientName: string,
+  ): Promise<void> {
+    const subject = `New case assigned: ${clientName}`;
+    const link = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/lia/cases/${caseId}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>New case assigned to you</h2>
+        <p>Hi ${name},</p>
+        <p>You have been assigned as the LIA for <strong>${clientName}</strong>'s case.</p>
+        <p>
+          <a href="${link}" style="background-color: #1E3A5F; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Open case
+          </a>
+        </p>
+        <p>Best regards,<br>The Sorena Visa Team</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendLiaAssignmentReleased(
+    email: string,
+    name: string,
+    caseId: string,
+    clientName: string,
+  ): Promise<void> {
+    const subject = `Case reassigned: ${clientName}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Case reassigned</h2>
+        <p>Hi ${name},</p>
+        <p>The case for <strong>${clientName}</strong> has been reassigned to another LIA. You no longer need to action it.</p>
+        <p>Best regards,<br>The Sorena Visa Team</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
   private async sendEmail(to: string, subject: string, html: string): Promise<void> {
     if (!this.transporter) {
       this.logger.warn(`Email not sent to ${to}: SMTP configuration missing`);

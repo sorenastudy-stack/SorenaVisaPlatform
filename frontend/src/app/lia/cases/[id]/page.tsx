@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, AlertTriangle, Lock, FileText, UserCheck, Mail, Phone, Gavel, Scale, MessageSquare, FilePlus2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { getSession } from '@/lib/auth';
 import {
   riskStyles, riskLabel, stageStyles, stageLabel,
   decisionStyles, decisionLabel, docStatusStyles,
@@ -14,6 +15,7 @@ import { AddLegalNoteButton } from './AddLegalNoteButton';
 import { RecordDecisionButton } from './RecordDecisionButton';
 import { SendMessageButton } from './SendMessageButton';
 import { RequestDocumentButton } from './RequestDocumentButton';
+import { ReassignLiaButton } from './ReassignLiaButton';
 
 // PR-LIA-1 — Case detail with action panel + legal-notes timeline.
 
@@ -49,6 +51,8 @@ interface CaseDetail {
     } | null;
   };
   owner: { id: string; name: string; email: string } | null;
+  // PR-LIA-2: the assigned LIA (set on contract sign / manual reassign).
+  lia: { id: string; name: string; email: string } | null;
   applications: Array<{
     id: string;
     status: string;
@@ -94,6 +98,12 @@ interface CaseMessage {
 }
 
 export default async function LiaCaseDetailPage({ params }: { params: { id: string } }) {
+  // PR-LIA-2 — read viewer's role so we can show the Reassign button
+  // only to OWNER / ADMIN / SUPER_ADMIN, and the "(you)" badge to the
+  // currently-assigned LIA.
+  const session = await getSession();
+  const canReassign = !!session && ['OWNER', 'ADMIN', 'SUPER_ADMIN'].includes(session.role);
+
   let caseData: CaseDetail | null = null;
   let legalNotes: LegalNote[] = [];
   let caseMessages: CaseMessage[] = [];
@@ -228,17 +238,40 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
 
         <Card>
           <CardContent>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#4A4A4A]/60 mb-3">Owner</h3>
-            {caseData.owner ? (
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#4A4A4A]/60">Assigned LIA</h3>
+              {canReassign && (
+                <ReassignLiaButton
+                  caseId={caseData.id}
+                  currentLiaId={caseData.lia?.id ?? null}
+                  currentLiaName={caseData.lia?.name ?? null}
+                />
+              )}
+            </div>
+            {caseData.lia ? (
               <div className="space-y-2">
-                <Row icon={<UserCheck size={14} />} value={caseData.owner.name} />
-                <Row icon={<Mail size={14} />} value={caseData.owner.email} />
+                <Row
+                  icon={<UserCheck size={14} />}
+                  value={
+                    caseData.lia.id === session?.userId
+                      ? `${caseData.lia.name} (you)`
+                      : caseData.lia.name
+                  }
+                />
+                <Row icon={<Mail size={14} />} value={caseData.lia.email} />
               </div>
             ) : (
-              <p className="text-sm text-[#4A4A4A]/60 italic">Unassigned</p>
+              <p className="text-sm text-[#4A4A4A]/60 italic">
+                No LIA assigned yet. Auto-assignment fires on contract sign.
+              </p>
             )}
             <p className="text-xs text-[#4A4A4A]/60 mt-3 border-t border-gray-100 pt-3">
               Case opened {formatDate(caseData.createdAt)} · updated {formatRelative(caseData.updatedAt)}
+              {caseData.owner && (
+                <>
+                  <br />CRM owner: {caseData.owner.name}
+                </>
+              )}
             </p>
           </CardContent>
         </Card>

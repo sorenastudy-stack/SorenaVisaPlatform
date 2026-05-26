@@ -124,6 +124,24 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
     }
     case 'LIA_HARD_STOP_CLEARED':
       return 'Hard stop cleared by LIA';
+    case 'LIA_AUTO_ASSIGNED': {
+      // PR-LIA-2: newValue carries { liaId, liaName, candidates }.
+      const name = pickString(newV, 'liaName');
+      return name
+        ? `LIA auto-assigned: ${name}`
+        : 'LIA auto-assigned (load-balanced)';
+    }
+    case 'LIA_AUTO_ASSIGN_NO_CANDIDATES':
+      return 'Contract signed but no active LIA was available';
+    case 'LIA_MANUAL_REASSIGNED': {
+      // PR-LIA-2: oldValue { liaId, liaName }, newValue { liaId, liaName, reasonLength }.
+      const next = pickString(newV, 'liaName');
+      const prev = pickString(entry.oldValue, 'liaName');
+      if (next && prev) return `LIA reassigned: ${prev} → ${next}`;
+      if (next)         return `LIA assigned manually: ${next}`;
+      if (prev)         return `LIA cleared (was ${prev})`;
+      return 'LIA assignment changed';
+    }
     case 'CASE_MESSAGE_POSTED': {
       // PR-LIA-4: newValue carries { messageId, authorRole, kind, ... }.
       const authorRole = pickString(newV, 'authorRole');

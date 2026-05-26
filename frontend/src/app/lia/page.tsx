@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertTriangle, ShieldAlert, FileSearch, Briefcase, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, FileSearch, Briefcase, ArrowRight, CheckCircle2, UserCheck } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { getSession } from '@/lib/auth';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
@@ -14,6 +14,8 @@ interface CaseRow {
   riskLevel: string;
   notes: string | null;
   ownerId: string | null;
+  // PR-LIA-2: assigned LIA — used for the "Assigned to me" stat.
+  liaId: string | null;
   createdAt: string;
   updatedAt: string;
   lead: {
@@ -23,6 +25,7 @@ interface CaseRow {
     contact: { id: string; fullName: string | null; email: string | null } | null;
   };
   owner: { id: string; name: string } | null;
+  lia: { id: string; name: string } | null;
 }
 
 export default async function LiaDashboardPage() {
@@ -42,6 +45,11 @@ export default async function LiaDashboardPage() {
   const high = cases.filter(c => c.riskLevel === 'HIGH').length;
   const needsReview = cases.filter(c => isEscalatedRisk(c.riskLevel) || c.lead?.hardStopFlag).length;
   const active = cases.filter(c => c.stage !== 'COMPLETED' && c.stage !== 'WITHDRAWN').length;
+  // PR-LIA-2: count open cases where the viewer is the assigned LIA.
+  const myId = session?.userId ?? '';
+  const assignedToMe = cases.filter(
+    c => c.liaId === myId && c.stage !== 'COMPLETED' && c.stage !== 'WITHDRAWN',
+  ).length;
 
   const recentEscalations = cases
     .filter(c => isEscalatedRisk(c.riskLevel) || c.lead?.hardStopFlag)
@@ -62,11 +70,12 @@ export default async function LiaDashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatCard href="/lia/cases?risk=escalated" label="Needs Review" value={needsReview} icon={<FileSearch size={20} />} tone="amber" />
         <StatCard href="/lia/cases?risk=blocked" label="Blocked" value={blocked} icon={<ShieldAlert size={20} />} tone="red" />
         <StatCard href="/lia/cases?risk=high" label="High Risk" value={high} icon={<AlertTriangle size={20} />} tone="orange" />
         <StatCard href="/lia/cases" label="Active Cases" value={active} icon={<Briefcase size={20} />} tone="navy" />
+        <StatCard href="/lia/cases?assignment=mine" label="Assigned to me" value={assignedToMe} icon={<UserCheck size={20} />} tone="gold" />
       </div>
 
       <Card className="mb-8">
@@ -142,13 +151,14 @@ export default async function LiaDashboardPage() {
 
 function StatCard({ href, label, value, icon, tone }: {
   href: string; label: string; value: number; icon: React.ReactNode;
-  tone: 'red' | 'amber' | 'orange' | 'navy';
+  tone: 'red' | 'amber' | 'orange' | 'navy' | 'gold';
 }) {
   const tones = {
     red: 'text-[#C0392B] bg-red-50',
     amber: 'text-[#D97706] bg-amber-50',
     orange: 'text-orange-700 bg-orange-50',
     navy: 'text-[#1E3A5F] bg-[#1E3A5F]/10',
+    gold: 'text-[#1E3A5F] bg-[#E8B923]/20',
   };
   return (
     <Link href={href} className="block rounded-xl border border-gray-100 bg-white p-5 hover:shadow-md transition-shadow">

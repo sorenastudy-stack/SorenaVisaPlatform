@@ -1,12 +1,23 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ArrowRight, Search } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { getSession } from '@/lib/auth';
 import {
   riskStyles, riskLabel, stageStyles, stageLabel, formatRelative, isEscalatedRisk,
 } from '../_utils/format';
 
-// PR-LIA-1 — Escalated cases queue.
+// PR-LIA-1 + PR-LIA-2 — Escalated cases queue.
+//
+// PR-LIA-2 additions:
+//   * "Owner" column replaced with "LIA" — the assignment that
+//     actually matters on this surface. CRM-side ownership is still
+//     visible from the case-detail page.
+//   * URL-driven "Assignment" chip: All / Mine / Unassigned. For
+//     LIA viewers the page defaults to ?assignment=mine (one-shot
+//     redirect on first load); OWNER / ADMIN / SUPER_ADMIN see the
+//     whole pipeline.
 
 interface CaseRow {
   id: string;
@@ -14,6 +25,7 @@ interface CaseRow {
   status: string;
   riskLevel: string;
   ownerId: string | null;
+  liaId: string | null;
   createdAt: string;
   updatedAt: string;
   lead: {
@@ -22,15 +34,33 @@ interface CaseRow {
     contact: { id: string; fullName: string | null; email: string | null } | null;
   };
   owner: { id: string; name: string } | null;
+  lia: { id: string; name: string } | null;
 }
+
+type AssignmentFilter = 'mine' | 'unassigned';
 
 type SearchParams = {
   risk?: string;
   stage?: string;
+  assignment?: string;
 };
 
 export default async function LiaCasesPage({ searchParams }: { searchParams: SearchParams }) {
+  const session = await getSession();
+  // PR-LIA-2 default-to-mine for LIA users. The viewer is "LIA" if
+  // they're not in the broader OWNER/ADMIN/SUPER_ADMIN set. Honours
+  // any explicit URL value (so an LIA can still click "All").
+  if (
+    session?.role === 'LIA'
+    && searchParams.assignment === undefined
+    && searchParams.risk === undefined
+    && searchParams.stage === undefined
+  ) {
+    redirect('/lia/cases?assignment=mine');
+  }
+
   const stageParam = searchParams.stage && searchParams.stage !== 'ALL' ? searchParams.stage : '';
+  const myId = session?.userId ?? '';
 
   let cases: CaseRow[] = [];
   let errorMsg: string | null = null;
@@ -42,6 +72,11 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
   }
 
   const filtered = cases.filter(c => {
+    // Assignment filter (client-side; backend has no liaId query yet).
+    if (searchParams.assignment === 'mine' && c.liaId !== myId) return false;
+    if (searchParams.assignment === 'unassigned' && c.liaId !== null) return false;
+
+    // Risk filter (unchanged from PR-LIA-1).
     switch (searchParams.risk) {
       case 'escalated': return isEscalatedRisk(c.riskLevel) || c.lead?.hardStopFlag;
       case 'high':      return c.riskLevel === 'HIGH';
@@ -61,6 +96,11 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
     const s = next.toString();
     return s ? `/lia/cases?${s}` : '/lia/cases';
   };
+
+  const assignmentValue: AssignmentFilter | '' =
+    searchParams.assignment === 'mine' || searchParams.assignment === 'unassigned'
+      ? (searchParams.assignment as AssignmentFilter)
+      : '';
 
   return (
     <div className="max-w-7xl">
@@ -89,6 +129,14 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
             { label: 'Visa',      href: buildHref({ stage: 'VISA' }),      active: searchParams.stage === 'VISA' },
           ]}
         />
+        <ChipRow
+          label="Assignment"
+          chips={[
+            { label: 'All',        href: buildHref({ assignment: '' }),           active: assignmentValue === '' },
+            { label: 'Mine',       href: buildHref({ assignment: 'mine' }),       active: assignmentValue === 'mine' },
+            { label: 'Unassigned', href: buildHref({ assignment: 'unassigned' }), active: assignmentValue === 'unassigned' },
+          ]}
+        />
       </div>
 
       {errorMsg && (
@@ -114,7 +162,7 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
                       <th className="px-4 py-3 text-left">Applicant</th>
                       <th className="px-4 py-3 text-left">Stage</th>
                       <th className="px-4 py-3 text-left">Risk</th>
-                      <th className="px-4 py-3 text-left">Owner</th>
+                      <th className="px-4 py-3 text-left">LIA</th>
                       <th className="px-4 py-3 text-left">Created</th>
                       <th className="px-4 py-3 text-right">Action</th>
                     </tr>
@@ -142,7 +190,9 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
                           )}
                         </td>
                         <td className="px-4 py-3 text-[#4A4A4A]">
-                          {c.owner?.name ?? <span className="text-[#4A4A4A]/50 italic">Unassigned</span>}
+                          {c.lia
+                            ? (c.lia.id === myId ? `${c.lia.name} (you)` : c.lia.name)
+                            : <span className="text-[#4A4A4A]/50 italic">Unassigned</span>}
                         </td>
                         <td className="px-4 py-3 text-[#4A4A4A]/80 text-xs">{formatRelative(c.createdAt)}</td>
                         <td className="px-4 py-3 text-right">
@@ -168,7 +218,9 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
                         {c.lead?.hardStopFlag && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-lg font-semibold bg-red-100 text-red-800 border border-red-200">Hard stop</span>
                         )}
-                        <span className="text-[#4A4A4A]/60 ml-auto">{formatRelative(c.createdAt)}</span>
+                        <span className="text-[#4A4A4A]/60 ml-auto">
+                          LIA: {c.lia?.name ?? 'Unassigned'}
+                        </span>
                       </div>
                     </Link>
                   </li>
@@ -185,7 +237,7 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
 function ChipRow({ label, chips }: { label: string; chips: { label: string; href: string; active: boolean }[] }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs font-semibold text-[#4A4A4A]/70 w-16 flex-shrink-0">{label}</span>
+      <span className="text-xs font-semibold text-[#4A4A4A]/70 w-24 flex-shrink-0">{label}</span>
       <div className="flex items-center gap-1.5 flex-wrap">
         {chips.map(c => (
           <Link

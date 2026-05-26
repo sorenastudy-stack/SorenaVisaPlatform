@@ -1,15 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocuSignService } from './docusign.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { LiaAssignmentService } from '../cases/lia-assignment.service';
 
 @Injectable()
 export class ContractsService {
+  private readonly logger = new Logger(ContractsService.name);
+
   constructor(
     private prisma: PrismaService,
     private docuSignService: DocuSignService,
     private notificationsService: NotificationsService,
+    // PR-LIA-2 — auto-assign an LIA the moment the client signs.
+    // The injection is one-directional (Contracts -> Cases-side
+    // LiaAssignmentService); no circular import risk.
+    private liaAssignments: LiaAssignmentService,
   ) {}
 
   async createContract(dto: CreateContractDto) {
@@ -99,10 +106,37 @@ export class ContractsService {
       updateData.expiredAt = new Date(statusData.expiredAt);
     }
 
-    return this.prisma.contract.update({
+    const updated = await this.prisma.contract.update({
       where: { id: contract.id },
       data: updateData,
     });
+
+    // PR-LIA-2 — fire LIA auto-assignment on successful sign. The
+    // contract update has already committed; this is a follow-up
+    // side effect that must never block the webhook response.
+    // Failures (no active LIAs, transient DB error) are logged and
+    // an audit row is written by the service. Idempotent: if the
+    // case already has an LIA, the service is a no-op.
+    if (statusData.status === 'completed') {
+      try {
+        const result = await this.liaAssignments.assignLiaToCase(contract.caseId);
+        if (result.status === 'assigned') {
+          this.logger.log(
+            `LIA ${result.liaName} (${result.liaId}) auto-assigned to case ${contract.caseId} on contract sign`,
+          );
+        } else if (result.status === 'no_candidates') {
+          this.logger.warn(
+            `Contract for case ${contract.caseId} signed but no active LIAs available — case left unassigned`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `LIA auto-assignment failed for case ${contract.caseId}: ${err?.message ?? err}`,
+        );
+      }
+    }
+
+    return updated;
   }
 
   async getSigningUrl(caseId: string, returnUrl: string) {
