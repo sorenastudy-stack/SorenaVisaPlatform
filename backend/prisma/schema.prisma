@@ -774,6 +774,13 @@ model Case {
   // until contract sign (or if no active LIA was available at sign
   // time — the case sits unassigned and an audit row records why).
   liaId       String?
+  // PR-LIA-3: timestamp the LIA was attached to this case (or
+  // reassigned to a different LIA). Set by both auto-assignment and
+  // manual reassignment paths inside the same transaction that
+  // touches `liaId`. NULL when no LIA is assigned. Used by the
+  // productivity report for time-to-action / time-to-resolution
+  // calculations and by the case-detail "Assigned N days ago" line.
+  liaAssignedAt DateTime?
   riskLevel   RiskLevel @default(LOW)
   notes       String?
   createdAt   DateTime  @default(now())

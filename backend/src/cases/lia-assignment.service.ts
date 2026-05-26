@@ -127,7 +127,10 @@ export class LiaAssignmentService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.case.update({
         where: { id: caseId },
-        data: { liaId: pick.id },
+        // PR-LIA-3: stamp the assignment time inside the same tx so
+        // the productivity report's time-to-action / time-to-resolution
+        // calculations have a reference point.
+        data: { liaId: pick.id, liaAssignedAt: new Date() },
         select: { id: true, leadId: true },
       });
       await tx.auditLog.create({
@@ -209,7 +212,13 @@ export class LiaAssignmentService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.case.update({
         where: { id: caseId },
-        data: { liaId: newLia?.id ?? null },
+        // PR-LIA-3: stamp the assignment time on a reassignment; clear
+        // it when the LIA is unassigned (liaId: null). The productivity
+        // metrics treat liaAssignedAt as the start-of-clock per case.
+        data: {
+          liaId: newLia?.id ?? null,
+          liaAssignedAt: newLia?.id ? new Date() : null,
+        },
         include: {
           lia: { select: { id: true, name: true, email: true } },
         },

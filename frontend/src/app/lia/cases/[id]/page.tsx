@@ -7,7 +7,7 @@ import { getSession } from '@/lib/auth';
 import {
   riskStyles, riskLabel, stageStyles, stageLabel,
   decisionStyles, decisionLabel, docStatusStyles,
-  formatDate, formatDateTime, formatRelative,
+  formatDate, formatDateTime, formatRelative, formatDaysSince,
 } from '../../_utils/format';
 import { ClearHardStopButton } from './ClearHardStopButton';
 import { OverrideRiskButton } from './OverrideRiskButton';
@@ -53,6 +53,8 @@ interface CaseDetail {
   owner: { id: string; name: string; email: string } | null;
   // PR-LIA-2: the assigned LIA (set on contract sign / manual reassign).
   lia: { id: string; name: string; email: string } | null;
+  // PR-LIA-3: timestamp the LIA was attached. Null when unassigned.
+  liaAssignedAt: string | null;
   applications: Array<{
     id: string;
     status: string;
@@ -265,14 +267,19 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
                 No LIA assigned yet. Auto-assignment fires on contract sign.
               </p>
             )}
-            <p className="text-xs text-[#4A4A4A]/60 mt-3 border-t border-gray-100 pt-3">
-              Case opened {formatDate(caseData.createdAt)} · updated {formatRelative(caseData.updatedAt)}
-              {caseData.owner && (
-                <>
-                  <br />CRM owner: {caseData.owner.name}
-                </>
+            <div className="text-xs text-[#4A4A4A]/60 mt-3 border-t border-gray-100 pt-3 space-y-0.5">
+              <div>
+                Case opened {formatDate(caseData.createdAt)} · updated {formatRelative(caseData.updatedAt)}
+              </div>
+              <div>Case age: {formatDaysSince(caseData.createdAt)}</div>
+              {caseData.liaAssignedAt
+                && formatDaysSince(caseData.liaAssignedAt) !== formatDaysSince(caseData.createdAt) && (
+                <div>Assigned {formatDaysSince(caseData.liaAssignedAt)} ago</div>
               )}
-            </p>
+              {caseData.owner && (
+                <div>CRM owner: {caseData.owner.name}</div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

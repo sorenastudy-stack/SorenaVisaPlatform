@@ -85,6 +85,10 @@ export class CasesService {
           include: { contact: true },
         },
         owner: true,
+        // PR-LIA-2/3: surface the assigned LIA on every list row so the
+        // queue's LIA column + Assignment filter chip work without an
+        // extra round-trip per row.
+        lia: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -98,6 +102,10 @@ export class CasesService {
           include: { contact: true },
         },
         owner: true,
+        // PR-LIA-2/3: same — case detail needs the LIA card to show
+        // a real assignee, and PR-LIA-3 reads `liaAssignedAt` for
+        // the "Assigned N days ago" line.
+        lia: { select: { id: true, name: true, email: true } },
         applications: {
           include: {
             provider: true,

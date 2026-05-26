@@ -110,3 +110,27 @@ export function formatRelative(date: string | Date | null | undefined): string {
 export function isEscalatedRisk(r: string | null | undefined): boolean {
   return r === 'HIGH' || r === 'BLOCKED';
 }
+
+// PR-LIA-3: "5 days" / "Less than a day" / "—" for explicit age
+// labels on the case-detail card. Distinct from formatRelative
+// (which collapses to "5d ago") because the audience here is reading
+// metrics, not narrative timestamps.
+export function formatDaysSince(date: string | Date | null | undefined): string {
+  if (!date) return '—';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (Number.isNaN(d.getTime())) return '—';
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) return 'Less than a day';
+  if (diffMs < 86_400_000) return 'Less than a day';
+  const days = Math.floor(diffMs / 86_400_000);
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
+// PR-LIA-3: shared thresholds for the productivity report's
+// open-cases color badge. Documented in the handover §3.
+export function openCasesStyles(count: number): string {
+  if (count === 0)     return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+  if (count <= 3)      return 'bg-blue-100 text-blue-800 border border-blue-200';
+  if (count <= 7)      return 'bg-amber-100 text-amber-800 border border-amber-200';
+  return                      'bg-red-100 text-red-800 border border-red-200';
+}

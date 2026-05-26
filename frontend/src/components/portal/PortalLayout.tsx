@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Briefcase, School, FileText, Settings,
   ArrowRightLeft, Shield, FileSearch, CheckSquare, BarChart2,
   Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
-  ClipboardList,
+  ClipboardList, LineChart,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -22,6 +22,10 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   requiresCase?: boolean;
+  // PR-LIA-3: only render this nav item if the viewer's session.role
+  // is in this set. Empty / undefined means "every viewer of this
+  // portal". Used to hide the LIA Productivity link from LIA users.
+  requiresRoleIn?: string[];
 }
 
 const NAV_CONFIG: Record<Portal, NavItem[]> = {
@@ -52,6 +56,11 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     { label: 'Cases',           href: '/lia/cases',        icon: <Briefcase size={18} /> },
     { label: 'Document Review', href: '/lia/documents',    icon: <FileSearch size={18} /> },
     { label: 'Decisions',       href: '/lia/decisions',    icon: <CheckSquare size={18} /> },
+    // PR-LIA-3: OWNER / ADMIN / SUPER_ADMIN only — LIA users never
+    // see peer-comparison metrics. Backend endpoint enforces the
+    // same gate; this is UX-only.
+    { label: 'LIA Productivity', href: '/lia/productivity', icon: <LineChart size={18} />,
+      requiresRoleIn: ['OWNER', 'ADMIN', 'SUPER_ADMIN'] },
   ],
   student: [
     { label: 'Dashboard', href: '/student',            icon: <LayoutDashboard size={18} /> },
@@ -90,9 +99,12 @@ export function PortalLayout({ children, portal, session, hasCase, studentUnread
   const { locale, toggleLocale } = useLocaleStore();
 
   // correction 1: filter items that require a case when student has none
-  const navItems = NAV_CONFIG[portal].filter(
-    item => !item.requiresCase || hasCase === true,
-  );
+  // PR-LIA-3: also filter items that require a specific role set.
+  const navItems = NAV_CONFIG[portal].filter((item) => {
+    if (item.requiresCase && hasCase !== true) return false;
+    if (item.requiresRoleIn && !item.requiresRoleIn.includes(session.role)) return false;
+    return true;
+  });
 
   const handleSignOut = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
