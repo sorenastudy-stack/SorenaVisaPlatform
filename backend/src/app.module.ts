@@ -31,6 +31,7 @@ import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
 import { InzDataModule } from './inz-data/inz-data.module';
 import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
+import { ImmigrationOfficersModule } from './immigration-officers/immigration-officers.module';
 
 @Module({
   imports: [
@@ -84,6 +85,9 @@ import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
     // PR-LIA-9: daily 09:00 NZ cron + dashboard endpoint for visa
     // expiry reminders. Registers ScheduleModule.forRoot() internally.
     VisaExpiryModule,
+    // PR-LIA-10: Immigration Officer module — shared profiles,
+    // attributed observations, and case ↔ officer linkages.
+    ImmigrationOfficersModule,
   ],
 })
 export class AppModule {}

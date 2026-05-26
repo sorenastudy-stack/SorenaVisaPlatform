@@ -287,6 +287,57 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
       }
       return 'Expiry reminder skipped — already sent';
     }
+    case 'OFFICER_PROFILE_CREATED': {
+      // PR-LIA-10: newValue carries { officerId, fullName, branch, duplicateHintId }.
+      const name = pickString(newV, 'fullName');
+      const branch = pickString(newV, 'branch');
+      if (name && branch) return `Officer profile created: ${name} (${branch})`;
+      if (name)           return `Officer profile created: ${name}`;
+      return 'Officer profile created';
+    }
+    case 'OFFICER_PROFILE_UPDATED': {
+      // PR-LIA-10: newValue carries { officerId, changedFields }.
+      if (typeof newV === 'object' && newV !== null) {
+        const fields = (newV as { changedFields?: unknown }).changedFields;
+        if (Array.isArray(fields) && fields.length > 0) {
+          return `Officer profile updated (${fields.join(', ')})`;
+        }
+      }
+      return 'Officer profile updated';
+    }
+    case 'OFFICER_DELETED': {
+      // PR-LIA-10: newValue carries { officerId, fullName }.
+      const name = pickString(newV, 'fullName');
+      return name ? `Officer deleted: ${name}` : 'Officer deleted';
+    }
+    case 'OFFICER_OBSERVATION_ADDED': {
+      // PR-LIA-10: newValue carries { officerId, observationId, tagsCount, bodyLength }.
+      if (typeof newV === 'object' && newV !== null) {
+        const tags = (newV as { tagsCount?: unknown }).tagsCount;
+        if (typeof tags === 'number' && tags > 0) {
+          return `Observation added on officer (${tags} tag${tags === 1 ? '' : 's'})`;
+        }
+      }
+      return 'Observation added on officer';
+    }
+    case 'OFFICER_OBSERVATION_DELETED':
+      return 'Observation deleted by its author';
+    case 'CASE_OFFICER_LINKED': {
+      // PR-LIA-10: newValue carries { officerId, officerName, linkedOutcome, reLink }.
+      const officerName = pickString(newV, 'officerName');
+      const outcome = pickString(newV, 'linkedOutcome');
+      const reLink = (typeof newV === 'object' && newV !== null && (newV as { reLink?: unknown }).reLink === true);
+      const prefix = reLink ? 'Reviewing officer re-linked' : 'Reviewing officer linked';
+      if (officerName && outcome) return `${prefix}: ${officerName} (outcome at link: ${outcome})`;
+      if (officerName) return `${prefix}: ${officerName}`;
+      return prefix;
+    }
+    case 'CASE_OFFICER_UNLINKED': {
+      const officerName = pickString(newV, 'officerName');
+      return officerName
+        ? `Reviewing officer unlinked (was ${officerName})`
+        : 'Reviewing officer unlinked';
+    }
     case 'VISA_EXPIRY_MANUAL_SWEEP_TRIGGERED': {
       const dispatched = (typeof newV === 'object' && newV !== null && typeof (newV as { dispatched?: unknown }).dispatched === 'number')
         ? (newV as { dispatched: number }).dispatched

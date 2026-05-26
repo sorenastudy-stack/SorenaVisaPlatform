@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Briefcase, School, FileText, Settings,
   ArrowRightLeft, Shield, FileSearch, CheckSquare, BarChart2,
   Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
-  ClipboardList, LineChart, Clock,
+  ClipboardList, LineChart, Clock, UserSquare2,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -58,6 +58,9 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     // portal viewer (LIA / OWNER / ADMIN / SUPER_ADMIN) — no role gate.
     { label: 'Expiring Soon',   href: '/lia/expiring-soon', icon: <Clock size={18} /> },
     { label: 'Document Review', href: '/lia/documents',    icon: <FileSearch size={18} /> },
+    // PR-LIA-10: Immigration Officer knowledge base. Visible to all
+    // LIA-portal roles; DELETE-officer is gated server-side to OWNER+.
+    { label: 'Officers',        href: '/lia/officers',     icon: <UserSquare2 size={18} /> },
     { label: 'Decisions',       href: '/lia/decisions',    icon: <CheckSquare size={18} /> },
     // PR-LIA-3: OWNER / ADMIN / SUPER_ADMIN only — LIA users never
     // see peer-comparison metrics. Backend endpoint enforces the

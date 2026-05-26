@@ -29,6 +29,8 @@ import { RecordVisaDeclineButton } from './RecordVisaDeclineButton';
 import { EditVisaRecordButton } from './EditVisaRecordButton';
 import { RevertVisaRecordButton } from './RevertVisaRecordButton';
 import { DownloadVisaButton } from './DownloadVisaButton';
+import { LinkOfficerButton } from './LinkOfficerButton';
+import { UnlinkOfficerButton } from './UnlinkOfficerButton';
 import { CopyButton } from './inz-data/CopyButton';
 
 // PR-LIA-1 — Case detail with action panel + legal-notes timeline.
@@ -139,6 +141,19 @@ interface CaseMessage {
   createdAt: string;
 }
 
+// PR-LIA-10: case ↔ reviewing officer linkage. NULL when no officer
+// is linked to this case. Note is decrypted server-side.
+interface OfficerLinkage {
+  id: string;
+  caseId: string;
+  officerId: string;
+  linkedOutcome: 'APPROVED' | 'DECLINED' | null;
+  note: string | null;
+  linkedById: string;
+  linkedByName: string | null;
+  linkedAt: string;
+}
+
 // PR-LIA-5: unified client-document row across all sources.
 interface CaseDocumentRow {
   id: string;
@@ -171,6 +186,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
   let legalNotes: LegalNote[] = [];
   let caseMessages: CaseMessage[] = [];
   let caseDocuments: CaseDocumentRow[] = [];
+  let officerLinkage: OfficerLinkage | null = null;
   let errorMsg: string | null = null;
 
   try {
@@ -195,6 +211,16 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
       caseDocuments = await apiServer.get<CaseDocumentRow[]>(`/cases/${params.id}/documents`);
     } catch {
       // Non-fatal; show the documents card empty if it fails.
+    }
+    try {
+      // PR-LIA-10: returns null when no officer is linked. apiServer.get
+      // treats null as a valid response shape; we cast through unknown
+      // because the typed generic doesn't model nullable bodies natively.
+      officerLinkage = (await apiServer.get<OfficerLinkage | null>(
+        `/cases/${params.id}/officer-linkage`,
+      )) ?? null;
+    } catch {
+      officerLinkage = null;
     }
   }
 
@@ -379,6 +405,10 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
           </CardContent>
         </Card>
       </div>
+
+      {/* PR-LIA-10: reviewing officer panel between the assignment row
+          and the applications list. */}
+      <ReviewingOfficerPanel caseId={caseData.id} linkage={officerLinkage} />
 
       <Card className="mb-6">
         <CardContent>
@@ -823,6 +853,89 @@ function InzSubmissionPanel({ caseData }: { caseData: CaseDetail }) {
   }
 
   return null;
+}
+
+// PR-LIA-10 — Reviewing Officer panel. Shows a "link officer" CTA when
+// the case has no linkage; shows the linked officer + outcome snapshot
+// + linked-by metadata + optional note when one is linked.
+function ReviewingOfficerPanel({
+  caseId,
+  linkage,
+}: {
+  caseId: string;
+  linkage: OfficerLinkage | null;
+}) {
+  if (!linkage) {
+    return (
+      <div className="mb-6 rounded-xl border-2 border-dashed border-gray-200 bg-white p-5 flex items-center gap-4 flex-wrap">
+        <div className="w-10 h-10 rounded-full bg-[#1E3A5F]/10 flex items-center justify-center flex-shrink-0">
+          <UserCheck size={18} className="text-[#1E3A5F]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-base font-bold text-[#1E3A5F]">Reviewing officer</h3>
+          <p className="text-sm text-[#4A4A4A]/70 mt-0.5">
+            No INZ officer has been recorded for this case yet. Linking one lets you build officer-level analytics over time.
+          </p>
+        </div>
+        <LinkOfficerButton caseId={caseId} />
+      </div>
+    );
+  }
+
+  return (
+    <section className="mb-6 rounded-xl border border-[#1E3A5F]/20 bg-white p-5">
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <UserCheck size={18} className="text-[#1E3A5F]" />
+        <h2 className="text-base font-bold text-[#1E3A5F]">Reviewing officer</h2>
+        {linkage.linkedOutcome === 'APPROVED' && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 ml-1">
+            Approved at link
+          </span>
+        )}
+        {linkage.linkedOutcome === 'DECLINED' && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-red-100 text-red-800 border border-red-200 ml-1">
+            Declined at link
+          </span>
+        )}
+        {linkage.linkedOutcome === null && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200 ml-1">
+            Pending at link
+          </span>
+        )}
+        <span className="text-xs text-[#4A4A4A]/60 ml-auto">{formatRelative(linkage.linkedAt)}</span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Officer</div>
+          <Link
+            href={`/lia/officers/${linkage.officerId}`}
+            className="text-sm font-bold text-[#1E3A5F] hover:text-[#E8B923] inline-flex items-center gap-1"
+          >
+            View officer profile →
+          </Link>
+        </div>
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Linked by</div>
+          <div className="text-sm text-[#1E3A5F]">
+            {linkage.linkedByName ?? '—'} · {formatDate(linkage.linkedAt)}
+          </div>
+        </div>
+      </div>
+
+      {linkage.note && (
+        <div className="mb-3 rounded-lg bg-[#FAF8F3] p-3">
+          <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Note</div>
+          <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap">{linkage.note}</p>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-gray-100">
+        <LinkOfficerButton caseId={caseId} />
+        <UnlinkOfficerButton caseId={caseId} officerName={linkage.linkedByName ?? 'this officer'} />
+      </div>
+    </section>
+  );
 }
 
 // PR-LIA-9 — Visa expiry banner. Renders above all other panels when

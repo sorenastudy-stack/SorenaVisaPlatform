@@ -440,6 +440,16 @@ model User {
   // surface — LIA / ADMIN / SUPER_ADMIN / OWNER.
   issuedVisas             Visa[]                  @relation("VisaIssuer")
 
+  // PR-LIA-10: Immigration Officer module relations.
+  // `createdOfficers`     — officer profiles this user originally created.
+  // `officerObservations` — observations this user authored (immutable
+  //                         post-creation; only the author can delete
+  //                         their own per Decision 2C).
+  // `caseOfficerLinkages` — case ↔ officer links this user recorded.
+  createdOfficers         ImmigrationOfficer[]               @relation("OfficerCreator")
+  officerObservations     ImmigrationOfficerObservation[]    @relation("OfficerObservationAuthor")
+  caseOfficerLinkages     CaseOfficerLinkage[]               @relation("CaseOfficerLinker")
+
   @@map("users")
 }
 
@@ -862,6 +872,11 @@ model Case {
   // (APPROVED) or POST /cases/:id/visa/decline (DECLINED). Reverting
   // un-issues, returning the case to INZ_SUBMITTED.
   visa                  Visa?
+  // PR-LIA-10: reviewing INZ officer for this case (1:0..1). At most
+  // one officer per case — the unique constraint on (caseId, officerId)
+  // means re-linking the same officer is an upsert. Re-linking a
+  // DIFFERENT officer would 409; LIA must unlink first.
+  officerLinkage        CaseOfficerLinkage?
 
   @@index([leadId])
   @@index([stage])
@@ -954,6 +969,106 @@ enum VisaExpiryReminderRecipient {
   LIA
   CLIENT
   OWNER
+}
+
+// ─── IMMIGRATION OFFICER MODULE (PR-LIA-10) ──────────────────────────
+//
+// Shared knowledge base of INZ officers. Three tables in one cluster:
+//
+//   * ImmigrationOfficer            — collaborative profile
+//                                     (any LIA can edit per Decision 2C)
+//   * ImmigrationOfficerObservation — append-only attributed notes
+//                                     (authored, immutable, only the
+//                                     author can delete their own)
+//   * CaseOfficerLinkage            — case ↔ officer link with
+//                                     snapshotted outcome at link time
+//                                     (Decision 3A: outcome at the
+//                                     moment of linkage, not auto-
+//                                     refreshed if visa state later
+//                                     changes — LIA re-links to refresh)
+//
+// Encryption (Decision 1A — non-negotiable):
+//   * profileDescriptionEncrypted   — Bytes, AES-256-GCM via CryptoService
+//   * bodyEncrypted (observations)  — Bytes, same envelope
+//   * noteEncrypted (linkages)      — Bytes, same envelope
+//
+// Aggregates (Decision 3A — non-negotiable):
+//   * No maintained counters on ImmigrationOfficer for totalCases /
+//     approvedCases / declinedCases — read-time aggregation only.
+//     The (officerId, linkedAt) index keeps these queries cheap.
+model ImmigrationOfficer {
+  id                          String                          @id @default(uuid())
+  // Identity (plaintext — needed for ILIKE search + ORDER BY).
+  fullName                    String                          @db.VarChar(200)
+  officerCode                 String?                         @db.VarChar(64)
+  branch                      String?                         @db.VarChar(200)
+  countryOfPosting            String?                         @db.VarChar(120)
+
+  // Encrypted profile description.
+  profileDescriptionEncrypted Bytes?
+
+  createdById                 String
+  createdAt                   DateTime                        @default(now())
+  updatedAt                   DateTime                        @updatedAt
+
+  createdBy                   User                            @relation("OfficerCreator", fields: [createdById], references: [id])
+  observations                ImmigrationOfficerObservation[]
+  caseLinkages                CaseOfficerLinkage[]
+
+  @@index([fullName])
+  @@index([branch])
+  @@index([countryOfPosting])
+  @@map("immigration_officers")
+}
+
+model ImmigrationOfficerObservation {
+  id            String              @id @default(uuid())
+  officerId     String
+  authorId      String
+  bodyEncrypted Bytes
+  // Free-form analyst tags (e.g. ["financial-scrutiny", "fast-decision"]).
+  // Plaintext on purpose — these are categorical labels for future
+  // analytics, not sensitive prose.
+  tags          String[]            @default([])
+  createdAt     DateTime            @default(now())
+  // No updatedAt — Decision 2C: observations are append-only. The
+  // author can delete their own row, but cannot edit (delete + repost).
+
+  officer       ImmigrationOfficer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
+  author        User                @relation("OfficerObservationAuthor", fields: [authorId], references: [id])
+
+  @@index([officerId, createdAt])
+  @@index([authorId, createdAt])
+  @@map("immigration_officer_observations")
+}
+
+model CaseOfficerLinkage {
+  id            String              @id @default(uuid())
+  caseId        String              @unique
+  officerId     String
+  // Snapshot of visa.outcome at the moment of linkage (null if the
+  // case hasn't reached a decision yet). NOT auto-updated if the
+  // visa outcome later changes — the LIA re-links to refresh.
+  linkedOutcome VisaIssueOutcome?
+  // Optional encrypted note about this specific officer-case interaction.
+  noteEncrypted Bytes?
+  linkedById    String
+  linkedAt      DateTime            @default(now())
+
+  case          Case                @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  // Restrict on officer delete — can't drop an officer that still
+  // has cases attached. LIA must unlink first (a deliberate friction
+  // step so institutional knowledge isn't lost by accident).
+  officer       ImmigrationOfficer  @relation(fields: [officerId], references: [id], onDelete: Restrict)
+  linkedBy      User                @relation("CaseOfficerLinker", fields: [linkedById], references: [id])
+
+  // caseId is already UNIQUE above (one officer per case max), but
+  // the spec asks for the composite too — kept for documentation
+  // purposes + a defensive guard if caseId UNIQUE is ever relaxed.
+  @@unique([caseId, officerId])
+  @@index([officerId, linkedAt])
+  @@index([linkedAt])
+  @@map("case_officer_linkages")
 }
 
 model VisaExpiryReminderSent {
