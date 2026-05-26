@@ -20,6 +20,10 @@ enum UserRole {
   OPERATIONS
   LIA
   SUPPORT
+  // PR-SCORECARD-1: leads who have submitted the Readiness
+  // Assessment but haven't paid for an account yet. Sits between
+  // "anonymous visitor" and "STUDENT" in the funnel.
+  LEAD
   STUDENT
   AGENT
   // PR-CONSULT-1 additions for the staff-roles foundation.
@@ -450,6 +454,11 @@ model User {
   officerObservations     ImmigrationOfficerObservation[]    @relation("OfficerObservationAuthor")
   caseOfficerLinkages     CaseOfficerLinkage[]               @relation("CaseOfficerLinker")
 
+  // PR-SCORECARD-1: every scorecard submission this user has made.
+  // Multiple rows per user are expected (re-assessment after English
+  // improvement, etc.). History is preserved.
+  scorecardSubmissions    ScorecardSubmission[]              @relation("ScorecardUser")
+
   @@map("users")
 }
 
@@ -681,6 +690,11 @@ model Lead {
   events                  CrmEvent[]
   managerNotesLogs        ManagerNotesLog[]
   statusHistory           LeadStatusHistory[]
+  // PR-SCORECARD-1: the scorecard submission this Lead was auto-
+  // created from. Optional (1:0..1) because legacy Leads pre-date
+  // the scorecard. The inverse on ScorecardSubmission.leadId is
+  // @unique so a Lead can only be the result of one submission.
+  scorecardSubmission     ScorecardSubmission? @relation("ScorecardLead")
 
   @@index([contactId])
   @@index([leadStatus])
@@ -3083,4 +3097,81 @@ model PlatformSetting {
   updatedById String
 
   @@map("platform_settings")
+}
+
+// ─── SCORECARD (PR-SCORECARD-1) ──────────────────────────────────────
+//
+// One row per submission of the 100-point Readiness Assessment. A
+// user can submit multiple times — every row is preserved so we can
+// see how they improved (e.g. retook after an IELTS upgrade).
+//
+// `answersEncrypted` carries the raw answers JSON via the
+// CryptoService AES-256-GCM envelope. Answers contain DOB, financial
+// info, refusal history — everything that lands on a row here is PII.
+//
+// Computed columns (totalScore, category*Score, band, hardStops,
+// riskFlags, gateResults, executionEligible, nextAction) are derived
+// from `answers` by the TypeScript port of sorena_scoring.py. Storing
+// them denormalised here is the deliberate choice — the engine is
+// the source of truth at submit time; re-running it later on a stored
+// answers payload should reproduce the same numbers, but we don't
+// want to re-decrypt + re-score on every staff view.
+//
+// `leadId` 1:0..1 — set after the auto-created Lead row lands in the
+// CRM in the same transaction as the submission. The unique constraint
+// enforces "one Lead per submission" so re-submissions don't pile
+// onto the same Lead row.
+enum ScorecardBand {
+  BAND_1
+  BAND_2
+  BAND_3
+  BAND_4
+  BAND_5
+  BAND_6
+}
+
+enum ScorecardNextAction {
+  NURTURE_ONLY
+  PAY_GAP_CLOSING_SESSION
+  BOOK_FREE_15MIN_SESSION
+  BLOCKED_HARD_STOP
+}
+
+model ScorecardSubmission {
+  id                   String              @id @default(uuid())
+  userId               String
+  answersEncrypted     Bytes
+  // Computed scores
+  totalScore           Int
+  category1Score       Int
+  category2Score       Int
+  category3Score       Int
+  category4Score       Int
+  band                 ScorecardBand
+  // Hard stops (structured JSON, plaintext — these are categorical,
+  // not PII). riskFlags is a string[] for the same reason.
+  hardStops            Json
+  riskFlags            String[]            @default([])
+  // 5-gate execution check
+  executionEligible    Boolean
+  gateResults          Json
+  // Routing
+  nextAction           ScorecardNextAction
+  nextActionTextEn     String              @db.Text
+  nextActionTextFa     String              @db.Text
+  // Lifecycle
+  submittedAt          DateTime            @default(now())
+  leadId               String?             @unique
+  consultationBookedAt DateTime?
+  // Audit (request-side context; the user-side audit row is in audit_logs)
+  ipAddress            String?             @db.VarChar(64)
+  userAgent            String?             @db.Text
+
+  user                 User                @relation("ScorecardUser", fields: [userId], references: [id], onDelete: Cascade)
+  lead                 Lead?               @relation("ScorecardLead", fields: [leadId], references: [id])
+
+  @@index([userId, submittedAt])
+  @@index([band, submittedAt])
+  @@index([executionEligible])
+  @@map("scorecard_submissions")
 }

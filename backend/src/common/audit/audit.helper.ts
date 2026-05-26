@@ -355,6 +355,24 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
         ? `Case file note exported (${fmt})`
         : 'Case file note exported';
     }
+    case 'SCORECARD_SUBMITTED': {
+      // PR-SCORECARD-1: newValue { submissionId, band, totalScore, executionEligible }.
+      const band = pickString(newV, 'band');
+      const total = (typeof newV === 'object' && newV !== null && typeof (newV as { totalScore?: unknown }).totalScore === 'number')
+        ? (newV as { totalScore: number }).totalScore
+        : null;
+      if (band && total !== null) return `Scorecard submitted: ${total}/100 (${band})`;
+      if (total !== null)         return `Scorecard submitted: ${total}/100`;
+      return 'Scorecard submitted';
+    }
+    case 'SCORECARD_LEAD_CREATED': {
+      // PR-SCORECARD-1: newValue { leadId, scorecardSubmissionId }.
+      return 'Lead auto-created from scorecard submission';
+    }
+    case 'SCORECARD_VIEWED_BY_STAFF':
+      return 'Scorecard viewed by staff';
+    case 'SCORECARD_BOOKING_LINK_OPENED':
+      return 'Scorecard booking link opened by lead';
     case 'VISA_EXPIRY_MANUAL_SWEEP_TRIGGERED': {
       const dispatched = (typeof newV === 'object' && newV !== null && typeof (newV as { dispatched?: unknown }).dispatched === 'number')
         ? (newV as { dispatched: number }).dispatched

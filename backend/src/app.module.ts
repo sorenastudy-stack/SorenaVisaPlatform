@@ -32,6 +32,7 @@ import { CaseDocumentsModule } from './case-documents/case-documents.module';
 import { InzDataModule } from './inz-data/inz-data.module';
 import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
 import { ImmigrationOfficersModule } from './immigration-officers/immigration-officers.module';
+import { ScorecardModule } from './scorecard/scorecard.module';
 
 @Module({
   imports: [
@@ -88,6 +89,9 @@ import { ImmigrationOfficersModule } from './immigration-officers/immigration-of
     // PR-LIA-10: Immigration Officer module — shared profiles,
     // attributed observations, and case ↔ officer linkages.
     ImmigrationOfficersModule,
+    // PR-SCORECARD-1: Readiness Assessment scoring engine +
+    // lead auto-creation pipeline.
+    ScorecardModule,
   ],
 })
 export class AppModule {}

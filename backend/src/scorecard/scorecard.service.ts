@@ -1,0 +1,545 @@
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  Prisma,
+  ScorecardBand,
+  ScorecardNextAction,
+  ScoreBand as LegacyScoreBand,
+} from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { CryptoService } from '../common/crypto/crypto.service';
+import { score, ScoreResult } from './scoring/engine';
+import { determineRouting } from './scoring/routing';
+
+// PR-SCORECARD-1 — Readiness Assessment service.
+//
+// Submit flow (single transaction):
+//   1. Score via the TypeScript engine port
+//   2. Encrypt answers JSON
+//   3. Create ScorecardSubmission row
+//   4. Find-or-create Contact (by email)
+//   5. Create Lead in the existing CRM (status=SCORING_DONE) and
+//      populate it with the score breakdown the rest of the platform
+//      already understands (readinessScore, academicScore, etc.)
+//   6. Link ScorecardSubmission.leadId → Lead
+//   7. Promote User.role to LEAD only when the current role is null
+//      / SALES / SUPPORT-default (i.e. they haven't been promoted
+//      higher yet). NEVER downgrade an existing STUDENT / OWNER /
+//      ADMIN / LIA etc.
+//   8. Audit rows: SCORECARD_SUBMITTED + SCORECARD_LEAD_CREATED
+//
+// Encryption: answers contain DOB, financial data, refusal history,
+// medical disclosures — all PII. AES-256-GCM via CryptoService, same
+// envelope as every other Bytes column in the project.
+
+interface Viewer {
+  userId: string;
+  name: string | null;
+  role: string;
+}
+
+interface SubmissionMetadata {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
+export interface ScorecardResultPayload {
+  submissionId: string;
+  totalScore: number;
+  band: ScorecardBand;
+  bandName: string;
+  bandRange: string;
+  categoryScores: Record<number, number>;
+  hardStops: ReturnType<typeof score>['hardStops'];
+  riskFlags: string[];
+  executionEligible: boolean;
+  gateResults: Record<string, boolean>;
+  nextAction: ScorecardNextAction;
+  nextActionTextEn: string;
+  nextActionTextFa: string;
+  // Convenience flags for the PR-SCORECARD-2 frontend
+  shouldShowMalaysiaCallout: boolean;
+  shouldShowBookingLink: boolean;
+  shouldShowPaymentLink: boolean;
+  shouldShowNurtureMessage: boolean;
+  // Decrypted answers (only included when the viewer is staff or the
+  // submission's owner; the wire shape always carries the field for
+  // simplicity)
+  answers?: Record<string, string>;
+  perFieldScores?: ScoreResult['perFieldScores'];
+  submittedAt: string;
+  leadId: string | null;
+  consultationBookedAt: string | null;
+}
+
+const STAFF_ROLES = new Set(['OWNER', 'ADMIN', 'SUPER_ADMIN', 'CONSULTANT']);
+
+@Injectable()
+export class ScorecardService {
+  private readonly logger = new Logger(ScorecardService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crypto: CryptoService,
+  ) {}
+
+  // ─── Submit ───────────────────────────────────────────────────────────
+
+  async submitScorecard(
+    userId: string,
+    answers: Record<string, string>,
+    meta: SubmissionMetadata,
+    actor: Viewer,
+  ): Promise<ScorecardResultPayload> {
+    const result = score(answers);
+    const routing = determineRouting(
+      result.band.enumValue,
+      result.hardStops,
+      result.execution.eligible,
+    );
+
+    const answersJson = JSON.stringify(answers);
+    const answersEncrypted = this.crypto.encrypt(answersJson);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, name: true, email: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    // Cat 3 max is 25. The legacy Lead.financialScore is also INT —
+    // we feed the capped sub-totals so the Lead surface stays
+    // numerically consistent with what the staff see.
+    const categoryScores = result.catScores;
+
+    // Map our 6-band to the legacy 3-band ScoreBand enum that pre-
+    // existing Lead consumers (CRM, scoring widgets) understand.
+    const legacyBand = this.toLegacyBand(result.band.enumValue);
+
+    const submission = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.scorecardSubmission.create({
+        data: {
+          userId,
+          answersEncrypted: answersEncrypted as never,
+          totalScore: result.total,
+          category1Score: categoryScores[1] ?? 0,
+          category2Score: categoryScores[2] ?? 0,
+          category3Score: categoryScores[3] ?? 0,
+          category4Score: categoryScores[4] ?? 0,
+          band: result.band.enumValue as ScorecardBand,
+          hardStops: result.hardStops as unknown as Prisma.InputJsonValue,
+          riskFlags: result.riskFlags,
+          executionEligible: result.execution.eligible,
+          gateResults: result.execution.gates as unknown as Prisma.InputJsonValue,
+          nextAction: routing.nextAction as ScorecardNextAction,
+          nextActionTextEn: routing.nextActionTextEn,
+          nextActionTextFa: routing.nextActionTextFa,
+          ipAddress: meta.ipAddress ?? null,
+          userAgent: meta.userAgent ?? null,
+        },
+      });
+
+      // ─── Lead auto-creation ─────────────────────────────────────────
+      const fullName = (answers.full_name ?? user.name ?? '').trim() || user.name || 'Lead';
+      const email = (answers.email ?? user.email ?? '').trim() || null;
+      const phone = (answers.phone ?? '').trim() || null;
+      const country = (answers.current_country ?? '').trim() || null;
+
+      // Find-or-create Contact by email (best-effort dedupe). If no
+      // email is provided we always create a new Contact rather than
+      // collide on the unique(email) constraint with NULLs.
+      let contactId: string | null = null;
+      if (email) {
+        const existing = await tx.contact.findFirst({ where: { email } });
+        if (existing) {
+          contactId = existing.id;
+        }
+      }
+      if (!contactId) {
+        const c = await tx.contact.create({
+          data: {
+            fullName,
+            email,
+            phone,
+            countryOfResidence: country,
+            preferredLanguage: 'en',
+          },
+        });
+        contactId = c.id;
+      }
+
+      const lead = await tx.lead.create({
+        data: {
+          contactId,
+          sourceChannel: 'SCORECARD',
+          leadStatus: 'SCORING_DONE',
+          readinessScore: result.total,
+          academicScore: categoryScores[2] ?? 0,
+          financialScore: categoryScores[3] ?? 0,
+          // englishScore + intentScore are derived signals — pull the
+          // raw point values for Q22 + Q27 so the existing CRM
+          // surfaces keep their per-axis numbers.
+          englishScore: result.perFieldScores.q22_english_score?.points ?? null,
+          intentScore: result.perFieldScores.q27_study_goal?.points ?? null,
+          scoreBand: legacyBand,
+          riskFlags: result.riskFlags,
+          hardStopFlag: result.hardStops.length > 0,
+          hardStopReason: result.hardStops[0]?.name ?? null,
+          liaEscalationRequired: result.hardStops.some((h) => h.code === 'HS4'),
+          executionAllowed: result.execution.eligible,
+        },
+      });
+
+      // Link submission → lead (1:0..1)
+      await tx.scorecardSubmission.update({
+        where: { id: created.id },
+        data: { leadId: lead.id },
+      });
+
+      // Promote User.role to LEAD ONLY when current role doesn't
+      // outrank LEAD. The spec is explicit: do NOT downgrade
+      // STUDENT / OWNER / ADMIN / LIA / etc.
+      if (this.shouldPromoteToLead(user.role)) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { role: 'LEAD' },
+        });
+      }
+
+      // Audit rows
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId,
+          action: 'CREATE',
+          eventType: 'SCORECARD_SUBMITTED',
+          entityType: 'SCORECARD_SUBMISSION',
+          entityId: created.id,
+          newValue: {
+            submissionId: created.id,
+            band: result.band.enumValue,
+            totalScore: result.total,
+            executionEligible: result.execution.eligible,
+            hardStopCount: result.hardStops.length,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId,
+          action: 'CREATE',
+          eventType: 'SCORECARD_LEAD_CREATED',
+          entityType: 'LEAD',
+          entityId: lead.id,
+          newValue: {
+            leadId: lead.id,
+            scorecardSubmissionId: created.id,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+
+      return { id: created.id, leadId: lead.id, submittedAt: created.submittedAt };
+    });
+
+    return this.toPayload({
+      submissionId: submission.id,
+      result,
+      routing,
+      submittedAt: submission.submittedAt,
+      leadId: submission.leadId,
+      consultationBookedAt: null,
+      includeAnswers: true,
+    });
+  }
+
+  // ─── Read endpoints ───────────────────────────────────────────────────
+
+  async getMyLatestResult(userId: string): Promise<ScorecardResultPayload> {
+    const row = await this.prisma.scorecardSubmission.findFirst({
+      where: { userId },
+      orderBy: { submittedAt: 'desc' },
+    });
+    if (!row) throw new NotFoundException('No scorecard submissions for this user yet.');
+    return this.hydrate(row);
+  }
+
+  async getMyHistory(userId: string): Promise<ScorecardResultPayload[]> {
+    const rows = await this.prisma.scorecardSubmission.findMany({
+      where: { userId },
+      orderBy: { submittedAt: 'desc' },
+    });
+    return rows.map((r) => this.hydrate(r));
+  }
+
+  async getSubmissionByIdForStaff(
+    submissionId: string,
+    staff: Viewer,
+  ): Promise<ScorecardResultPayload & { lead: { id: string; contactId: string } | null }> {
+    if (!STAFF_ROLES.has(staff.role)) {
+      throw new ForbiddenException('Staff-only endpoint.');
+    }
+    const row = await this.prisma.scorecardSubmission.findUnique({
+      where: { id: submissionId },
+      include: { lead: { select: { id: true, contactId: true } } },
+    });
+    if (!row) throw new NotFoundException('Submission not found');
+
+    // Audit the staff view.
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId: staff.userId,
+          action: 'READ',
+          eventType: 'SCORECARD_VIEWED_BY_STAFF',
+          entityType: 'SCORECARD_SUBMISSION',
+          entityId: submissionId,
+          newValue: { submissionId, viewerUserId: staff.userId } as Prisma.InputJsonValue,
+          actorNameSnapshot: staff.name ?? null,
+          actorRoleSnapshot: staff.role ?? null,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to audit scorecard view: ${err?.message ?? err}`);
+    }
+
+    const payload = this.hydrate(row);
+    return { ...payload, lead: row.lead ?? null };
+  }
+
+  async recordBookingLinkOpened(
+    submissionId: string,
+    userId: string,
+  ): Promise<{ consultationBookedAt: string }> {
+    const row = await this.prisma.scorecardSubmission.findUnique({
+      where: { id: submissionId },
+      select: { userId: true },
+    });
+    if (!row) throw new NotFoundException('Submission not found');
+    if (row.userId !== userId) {
+      throw new ForbiddenException('You can only mark your own submissions.');
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.scorecardSubmission.update({
+        where: { id: submissionId },
+        data: { consultationBookedAt: now },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'UPDATE',
+          eventType: 'SCORECARD_BOOKING_LINK_OPENED',
+          entityType: 'SCORECARD_SUBMISSION',
+          entityId: submissionId,
+          newValue: { submissionId } as Prisma.InputJsonValue,
+          actorNameSnapshot: null,
+          actorRoleSnapshot: null,
+        },
+      });
+    });
+
+    return { consultationBookedAt: now.toISOString() };
+  }
+
+  // ─── List for staff (used by /staff/scorecards index) ────────────────
+
+  async listForStaff(staff: Viewer): Promise<Array<{
+    id: string;
+    submittedAt: Date;
+    applicantName: string | null;
+    band: ScorecardBand;
+    totalScore: number;
+    executionEligible: boolean;
+    hardStopCount: number;
+    leadId: string | null;
+  }>> {
+    if (!STAFF_ROLES.has(staff.role)) {
+      throw new ForbiddenException('Staff-only endpoint.');
+    }
+    const rows = await this.prisma.scorecardSubmission.findMany({
+      orderBy: { submittedAt: 'desc' },
+      include: {
+        user: { select: { name: true } },
+        lead: {
+          select: {
+            id: true,
+            contact: { select: { fullName: true } },
+          },
+        },
+      },
+      take: 200,
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      submittedAt: r.submittedAt,
+      // Prefer the Lead's Contact fullName (auto-created from
+      // questionnaire answers.full_name), fall back to User.name.
+      applicantName: r.lead?.contact?.fullName ?? r.user?.name ?? null,
+      band: r.band,
+      totalScore: r.totalScore,
+      executionEligible: r.executionEligible,
+      hardStopCount: Array.isArray(r.hardStops) ? (r.hardStops as unknown[]).length : 0,
+      leadId: r.lead?.id ?? null,
+    }));
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────
+
+  private hydrate(row: {
+    id: string;
+    userId: string;
+    totalScore: number;
+    category1Score: number;
+    category2Score: number;
+    category3Score: number;
+    category4Score: number;
+    band: ScorecardBand;
+    hardStops: Prisma.JsonValue;
+    riskFlags: string[];
+    executionEligible: boolean;
+    gateResults: Prisma.JsonValue;
+    nextAction: ScorecardNextAction;
+    nextActionTextEn: string;
+    nextActionTextFa: string;
+    submittedAt: Date;
+    leadId: string | null;
+    consultationBookedAt: Date | null;
+    answersEncrypted: Buffer | Uint8Array;
+  }): ScorecardResultPayload {
+    let answers: Record<string, string> | undefined;
+    let perFieldScores: ScoreResult['perFieldScores'] | undefined;
+    try {
+      const buf = Buffer.isBuffer(row.answersEncrypted)
+        ? row.answersEncrypted
+        : Buffer.from(row.answersEncrypted);
+      const decrypted = this.crypto.decrypt(buf);
+      answers = JSON.parse(decrypted) as Record<string, string>;
+      // Re-run the engine so we can surface per-field scores in the
+      // staff view (the row stores totals, not per-question points).
+      perFieldScores = score(answers).perFieldScores;
+    } catch (err: any) {
+      this.logger.error(`Failed to decrypt scorecard answers: ${err?.message ?? err}`);
+    }
+
+    const bandName = this.bandDisplayName(row.band);
+    const bandRange = this.bandRange(row.band);
+    const cs = {
+      1: row.category1Score,
+      2: row.category2Score,
+      3: row.category3Score,
+      4: row.category4Score,
+    };
+
+    return {
+      submissionId: row.id,
+      totalScore: row.totalScore,
+      band: row.band,
+      bandName,
+      bandRange,
+      categoryScores: cs,
+      hardStops: (row.hardStops as unknown as ScoreResult['hardStops']) ?? [],
+      riskFlags: row.riskFlags,
+      executionEligible: row.executionEligible,
+      gateResults: (row.gateResults as unknown as Record<string, boolean>) ?? {},
+      nextAction: row.nextAction,
+      nextActionTextEn: row.nextActionTextEn,
+      nextActionTextFa: row.nextActionTextFa,
+      shouldShowMalaysiaCallout:
+        row.band === 'BAND_4' || row.band === 'BAND_5' || row.band === 'BAND_6',
+      shouldShowBookingLink: row.nextAction === 'BOOK_FREE_15MIN_SESSION',
+      shouldShowPaymentLink: row.nextAction === 'PAY_GAP_CLOSING_SESSION',
+      shouldShowNurtureMessage: row.nextAction === 'NURTURE_ONLY',
+      answers,
+      perFieldScores,
+      submittedAt: row.submittedAt.toISOString(),
+      leadId: row.leadId,
+      consultationBookedAt: row.consultationBookedAt?.toISOString() ?? null,
+    };
+  }
+
+  private toPayload(args: {
+    submissionId: string;
+    result: ScoreResult;
+    routing: ReturnType<typeof determineRouting>;
+    submittedAt: Date;
+    leadId: string | null;
+    consultationBookedAt: Date | null;
+    includeAnswers: boolean;
+  }): ScorecardResultPayload {
+    const { result, routing } = args;
+    return {
+      submissionId: args.submissionId,
+      totalScore: result.total,
+      band: result.band.enumValue as ScorecardBand,
+      bandName: result.band.name,
+      bandRange: result.band.range,
+      categoryScores: result.catScores,
+      hardStops: result.hardStops,
+      riskFlags: result.riskFlags,
+      executionEligible: result.execution.eligible,
+      gateResults: result.execution.gates,
+      nextAction: routing.nextAction as ScorecardNextAction,
+      nextActionTextEn: routing.nextActionTextEn,
+      nextActionTextFa: routing.nextActionTextFa,
+      shouldShowMalaysiaCallout:
+        result.band.enumValue === 'BAND_4'
+        || result.band.enumValue === 'BAND_5'
+        || result.band.enumValue === 'BAND_6',
+      shouldShowBookingLink: routing.nextAction === 'BOOK_FREE_15MIN_SESSION',
+      shouldShowPaymentLink: routing.nextAction === 'PAY_GAP_CLOSING_SESSION',
+      shouldShowNurtureMessage: routing.nextAction === 'NURTURE_ONLY',
+      answers: args.includeAnswers ? result.answers : undefined,
+      perFieldScores: args.includeAnswers ? result.perFieldScores : undefined,
+      submittedAt: args.submittedAt.toISOString(),
+      leadId: args.leadId,
+      consultationBookedAt: args.consultationBookedAt?.toISOString() ?? null,
+    };
+  }
+
+  private bandDisplayName(b: ScorecardBand): string {
+    switch (b) {
+      case 'BAND_1': return 'Cold / Unready';
+      case 'BAND_2': return 'Early Stage / Fragile';
+      case 'BAND_3': return 'Developing / Consultable';
+      case 'BAND_4': return 'Viable / Structured Opportunity';
+      case 'BAND_5': return 'Strong / Near Execution Ready';
+      case 'BAND_6': return 'Premium / Execution Ready';
+    }
+  }
+
+  private bandRange(b: ScorecardBand): string {
+    switch (b) {
+      case 'BAND_1': return '0-24';
+      case 'BAND_2': return '25-39';
+      case 'BAND_3': return '40-54';
+      case 'BAND_4': return '55-69';
+      case 'BAND_5': return '70-84';
+      case 'BAND_6': return '85-100';
+    }
+  }
+
+  private toLegacyBand(b: ScorecardBand): LegacyScoreBand {
+    if (b === 'BAND_1' || b === 'BAND_2') return 'LOW';
+    if (b === 'BAND_3' || b === 'BAND_4') return 'MID';
+    return 'HIGH';
+  }
+
+  private shouldPromoteToLead(role: string | null | undefined): boolean {
+    // Promote only when the user currently holds a role that's
+    // strictly below LEAD in the funnel. Anyone already at STUDENT
+    // or higher staff role keeps their privileges.
+    if (!role) return true;
+    // The default for new sign-ups in this codebase is SALES (see
+    // UserRole default in schema.prisma). Treat SALES + SUPPORT as
+    // "not yet promoted" for scorecard purposes.
+    return role === 'SALES' || role === 'SUPPORT';
+  }
+}
