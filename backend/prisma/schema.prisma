@@ -922,9 +922,60 @@ model Visa {
   case              Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
   issuedBy          User             @relation("VisaIssuer", fields: [issuedById], references: [id])
 
+  // PR-LIA-9: dispatched expiry-reminder ledger. One row per
+  // (visa, threshold, recipient) — the unique constraint keeps the
+  // sweep idempotent.
+  expiryReminders   VisaExpiryReminderSent[]
+
   @@index([issuedById, issuedAt])
   @@index([visaEndDate])
   @@map("visas")
+}
+
+// ─── VISA EXPIRY REMINDERS (PR-LIA-9) ─────────────────────────────────
+//
+// One row per dispatched (or attempted) expiry-reminder email. Created
+// by the daily 09:00 NZ cron in VisaExpiryService.runDailySweep. The
+// unique composite (visaId, thresholdDays, recipient) makes re-running
+// the sweep safe — a second pass through the same threshold for the
+// same visa skips reminders that have already been recorded.
+//
+// emailDeliveryStatus tracks the actual SMTP outcome (PENDING / SENT
+// / FAILED) so OWNER eyes-on can spot delivery problems without
+// having to crawl the audit log. emailErrorMessage carries the
+// nodemailer error string when status=FAILED. The audit row is
+// always written regardless of delivery — the audit captures intent,
+// this table captures outcome.
+//
+// Reminder rows are NOT deleted when a visa record is reverted (per
+// the PR-LIA-9 spec — keep the historical trail). They cascade with
+// the parent visa only if the visa itself is hard-deleted.
+enum VisaExpiryReminderRecipient {
+  LIA
+  CLIENT
+  OWNER
+}
+
+model VisaExpiryReminderSent {
+  id                  String                       @id @default(uuid())
+  visaId              String
+  thresholdDays       Int
+  recipient           VisaExpiryReminderRecipient
+  // FK target: User. NULL for OWNER reminders that fan out to every
+  // user with role=OWNER (the loop dispatches one email per OWNER but
+  // we record a single ledger row to keep the unique constraint
+  // useful — re-running the sweep skips the whole OWNER fan-out).
+  recipientUserId     String?
+  sentAt              DateTime                     @default(now())
+  emailDeliveryStatus String                       @default("PENDING")
+  emailErrorMessage   String?                      @db.Text
+
+  visa                Visa                         @relation(fields: [visaId], references: [id], onDelete: Cascade)
+
+  @@unique([visaId, thresholdDays, recipient], name: "uniq_visa_threshold_recipient")
+  @@index([visaId, sentAt])
+  @@index([sentAt])
+  @@map("visa_expiry_reminders_sent")
 }
 
 // ─── APPLICATIONS ────────────────────────────────────────────────────────────

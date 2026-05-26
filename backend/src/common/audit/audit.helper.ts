@@ -244,6 +244,61 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
         ? `LIA downloaded visa document: ${fileName}`
         : 'LIA downloaded the visa document';
     }
+    case 'VISA_EXPIRY_REMINDER_SENT_LIA': {
+      // PR-LIA-9: newValue carries { thresholdDays, emailDeliveryStatus, ... }.
+      const threshold = (typeof newV === 'object' && newV !== null && typeof (newV as { thresholdDays?: unknown }).thresholdDays === 'number')
+        ? (newV as { thresholdDays: number }).thresholdDays
+        : null;
+      const status = pickString(newV, 'emailDeliveryStatus');
+      const delivery = status === 'FAILED' ? ' (delivery failed)' : '';
+      return threshold !== null
+        ? `Expiry reminder sent to LIA — ${threshold} days${delivery}`
+        : `Expiry reminder sent to LIA${delivery}`;
+    }
+    case 'VISA_EXPIRY_REMINDER_SENT_CLIENT': {
+      const threshold = (typeof newV === 'object' && newV !== null && typeof (newV as { thresholdDays?: unknown }).thresholdDays === 'number')
+        ? (newV as { thresholdDays: number }).thresholdDays
+        : null;
+      const status = pickString(newV, 'emailDeliveryStatus');
+      const delivery = status === 'FAILED' ? ' (delivery failed)' : '';
+      return threshold !== null
+        ? `Expiry reminder sent to client — ${threshold} days${delivery}`
+        : `Expiry reminder sent to client${delivery}`;
+    }
+    case 'VISA_EXPIRY_REMINDER_SENT_OWNER': {
+      const threshold = (typeof newV === 'object' && newV !== null && typeof (newV as { thresholdDays?: unknown }).thresholdDays === 'number')
+        ? (newV as { thresholdDays: number }).thresholdDays
+        : null;
+      const count = (typeof newV === 'object' && newV !== null && typeof (newV as { recipientCount?: unknown }).recipientCount === 'number')
+        ? (newV as { recipientCount: number }).recipientCount
+        : null;
+      const tail = count !== null && count > 0 ? ` (${count} owner${count === 1 ? '' : 's'})` : '';
+      return threshold !== null
+        ? `Expiry reminder sent to OWNER — ${threshold} days${tail}`
+        : `Expiry reminder sent to OWNER${tail}`;
+    }
+    case 'VISA_EXPIRY_REMINDER_SKIPPED': {
+      const threshold = (typeof newV === 'object' && newV !== null && typeof (newV as { thresholdDays?: unknown }).thresholdDays === 'number')
+        ? (newV as { thresholdDays: number }).thresholdDays
+        : null;
+      const recipient = pickString(newV, 'recipient');
+      if (threshold !== null && recipient) {
+        return `Expiry reminder skipped (${recipient}, ${threshold} days) — already sent`;
+      }
+      return 'Expiry reminder skipped — already sent';
+    }
+    case 'VISA_EXPIRY_MANUAL_SWEEP_TRIGGERED': {
+      const dispatched = (typeof newV === 'object' && newV !== null && typeof (newV as { dispatched?: unknown }).dispatched === 'number')
+        ? (newV as { dispatched: number }).dispatched
+        : null;
+      const failed = (typeof newV === 'object' && newV !== null && typeof (newV as { failed?: unknown }).failed === 'number')
+        ? (newV as { failed: number }).failed
+        : null;
+      if (dispatched !== null && failed !== null) {
+        return `Manual expiry sweep triggered — dispatched ${dispatched}, failed ${failed}`;
+      }
+      return 'Manual expiry sweep triggered';
+    }
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';

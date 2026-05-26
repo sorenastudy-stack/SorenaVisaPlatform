@@ -30,6 +30,7 @@ import { LegalNotesModule } from './legal-notes/legal-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
 import { InzDataModule } from './inz-data/inz-data.module';
+import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
 
 @Module({
   imports: [
@@ -80,6 +81,9 @@ import { InzDataModule } from './inz-data/inz-data.module';
     CaseDocumentsModule,
     // PR-LIA-6: consolidated read-only INZ application data viewer.
     InzDataModule,
+    // PR-LIA-9: daily 09:00 NZ cron + dashboard endpoint for visa
+    // expiry reminders. Registers ScheduleModule.forRoot() internally.
+    VisaExpiryModule,
   ],
 })
 export class AppModule {}

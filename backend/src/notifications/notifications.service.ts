@@ -256,6 +256,123 @@ export class NotificationsService {
     await this.sendEmail(email, subject, html);
   }
 
+  // PR-LIA-9 — Visa expiry reminder emails.
+  //
+  // All three methods are best-effort: any SMTP failure throws out
+  // of nodemailer through sendEmail, which logs but doesn't re-throw.
+  // The caller (VisaExpiryService.dispatchOne) wraps in its own
+  // try/catch via safeSend so we can record SENT vs FAILED on the
+  // VisaExpiryReminderSent ledger row.
+  //
+  // English-only for this PR. Persian templates deferred to PR-LIA-9.4
+  // (per the spec).
+  async sendVisaExpiryReminderToLia(
+    email: string,
+    liaName: string,
+    clientName: string,
+    caseId: string,
+    visaEndDate: Date,
+    daysRemaining: number,
+    threshold: number,
+  ): Promise<void> {
+    const link = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/lia/cases/${caseId}`;
+    const endStr = visaEndDate.toISOString().slice(0, 10);
+    const subject = `Visa expiry approaching: ${clientName} — ${threshold} days`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Visa expiry approaching</h2>
+        <p>Hi ${liaName},</p>
+        <p>
+          <strong>${clientName}</strong>'s visa expires on
+          <strong>${endStr}</strong> — that's about
+          <strong>${daysRemaining} day${daysRemaining === 1 ? '' : 's'}</strong> away.
+        </p>
+        <p>
+          This is a good moment to start the renewal conversation with
+          the client if they're planning to stay. Open their case:
+        </p>
+        <p>
+          <a href="${link}" style="background-color: #1E3A5F; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Open case
+          </a>
+        </p>
+        <p>Best regards,<br>The Sorena Visa Team</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendVisaExpiryReminderToClient(
+    email: string,
+    clientName: string,
+    visaEndDate: Date,
+    daysRemaining: number,
+    threshold: number,
+  ): Promise<void> {
+    const link = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/student/case/messages`;
+    const endStr = visaEndDate.toISOString().slice(0, 10);
+    const subject = `Your visa expires in ${threshold} days — let's discuss next steps`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Your visa expiry is approaching</h2>
+        <p>Hi ${clientName},</p>
+        <p>
+          A friendly reminder that your visa is currently valid until
+          <strong>${endStr}</strong> — about
+          <strong>${daysRemaining} day${daysRemaining === 1 ? '' : 's'}</strong> from now.
+        </p>
+        <p>
+          If you'd like to talk through your options, your case advisor
+          is here to help. You can reach them through your portal:
+        </p>
+        <p>
+          <a href="${link}" style="background-color: #1E3A5F; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Open messages
+          </a>
+        </p>
+        <p>Best regards,<br>The Sorena Visa Team</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendVisaExpiryReminderToOwner(
+    email: string,
+    ownerName: string,
+    clientName: string,
+    liaName: string | null,
+    caseId: string,
+    visaEndDate: Date,
+    daysRemaining: number,
+    threshold: number,
+  ): Promise<void> {
+    const link = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/lia/cases/${caseId}`;
+    const endStr = visaEndDate.toISOString().slice(0, 10);
+    const subject = `Renewal opportunity: ${clientName} — visa expires in ${threshold} days`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Renewal opportunity</h2>
+        <p>Hi ${ownerName},</p>
+        <p>
+          <strong>${clientName}</strong>'s visa expires
+          <strong>${endStr}</strong> (${daysRemaining} day${daysRemaining === 1 ? '' : 's'}).
+          Their assigned LIA is <strong>${liaName ?? 'unassigned'}</strong>.
+        </p>
+        <p>
+          This is a potential renewal engagement. The LIA has also
+          been notified.
+        </p>
+        <p>
+          <a href="${link}" style="background-color: #1E3A5F; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Open case
+          </a>
+        </p>
+        <p>Best regards,<br>The Sorena Visa Team</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
   async sendLiaAssignmentReleased(
     email: string,
     name: string,

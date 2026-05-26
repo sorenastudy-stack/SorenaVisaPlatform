@@ -1,9 +1,16 @@
 import Link from 'next/link';
-import { AlertTriangle, ShieldAlert, FileSearch, Briefcase, ArrowRight, CheckCircle2, UserCheck } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, FileSearch, Briefcase, ArrowRight, CheckCircle2, UserCheck, Clock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { getSession } from '@/lib/auth';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { riskStyles, riskLabel, stageStyles, stageLabel, formatRelative, isEscalatedRisk } from './_utils/format';
+
+// PR-LIA-9: expiring-soon queue row shape used by the dashboard card.
+// Single field needed here is the visa id (for the count) — full
+// shape is consumed by the dedicated page.
+interface ExpiringSoonRow {
+  visaId: string;
+}
 
 // PR-LIA-1 — LIA dashboard. Live data from GET /cases.
 
@@ -32,12 +39,22 @@ export default async function LiaDashboardPage() {
   const session = await getSession();
 
   let cases: CaseRow[] = [];
+  let expiringSoon: ExpiringSoonRow[] = [];
   let errorMsg: string | null = null;
 
   try {
     cases = await apiServer.get<CaseRow[]>('/cases');
   } catch (e) {
     errorMsg = e instanceof ApiServerError ? e.message : 'Failed to load cases.';
+  }
+  // PR-LIA-9: count visas expiring in the next 30 days. Non-fatal — if
+  // the endpoint errors the card just renders zero.
+  try {
+    expiringSoon = await apiServer.get<ExpiringSoonRow[]>(
+      '/staff/visa-expiry/expiring-soon?thresholdDays=30',
+    );
+  } catch {
+    expiringSoon = [];
   }
 
   const total = cases.length;
@@ -70,12 +87,19 @@ export default async function LiaDashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
         <StatCard href="/lia/cases?risk=escalated" label="Needs Review" value={needsReview} icon={<FileSearch size={20} />} tone="amber" />
         <StatCard href="/lia/cases?risk=blocked" label="Blocked" value={blocked} icon={<ShieldAlert size={20} />} tone="red" />
         <StatCard href="/lia/cases?risk=high" label="High Risk" value={high} icon={<AlertTriangle size={20} />} tone="orange" />
         <StatCard href="/lia/cases" label="Active Cases" value={active} icon={<Briefcase size={20} />} tone="navy" />
         <StatCard href="/lia/cases?assignment=mine" label="Assigned to me" value={assignedToMe} icon={<UserCheck size={20} />} tone="gold" />
+        <StatCard
+          href="/lia/expiring-soon"
+          label="Expiring soon"
+          value={expiringSoon.length}
+          icon={<Clock size={20} />}
+          tone={expiringSoon.length > 0 ? 'amber' : 'navy'}
+        />
       </div>
 
       <Card className="mb-8">

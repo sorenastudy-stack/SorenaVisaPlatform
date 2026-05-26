@@ -250,6 +250,11 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
         </div>
       </div>
 
+      {/* PR-LIA-9 Visa expiry banner — amber/red strip above the
+          panels when an approved visa is within 30 days of expiry
+          or already expired. Renders nothing otherwise. */}
+      <VisaExpiryBanner caseData={caseData} />
+
       {/* PR-LIA-7 INZ Submission panel — three states by stage. */}
       <InzSubmissionPanel caseData={caseData} />
 
@@ -818,6 +823,45 @@ function InzSubmissionPanel({ caseData }: { caseData: CaseDetail }) {
   }
 
   return null;
+}
+
+// PR-LIA-9 — Visa expiry banner. Renders above all other panels when
+// the case has an APPROVED visa within 30 days of expiry (or past it).
+// Click → /lia/expiring-soon for the full queue + reminder ledger.
+function VisaExpiryBanner({ caseData }: { caseData: CaseDetail }) {
+  const v = caseData.visa;
+  if (!v || v.outcome !== 'APPROVED' || !v.visaEndDate) return null;
+  const endMs = new Date(v.visaEndDate).getTime();
+  const days = Math.floor((endMs - Date.now()) / 86_400_000);
+  if (days > 30) return null;
+
+  const expired = days < 0;
+  const styles = expired
+    ? 'border-red-300 bg-red-50 text-red-900'
+    : days <= 7
+      ? 'border-red-200 bg-red-50 text-red-900'
+      : days <= 14
+        ? 'border-orange-200 bg-orange-50 text-orange-900'
+        : 'border-amber-200 bg-amber-50 text-amber-900';
+  const icon = expired ? <XCircle size={18} /> : <AlertTriangle size={18} />;
+  const message = expired
+    ? `Visa expired ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago.`
+    : `Visa expires in ${days} day${days === 1 ? '' : 's'}.`;
+
+  return (
+    <div className={`mb-6 rounded-xl border-2 px-4 py-3 flex items-start gap-2 flex-wrap ${styles}`}>
+      <span className="flex-shrink-0 mt-0.5">{icon}</span>
+      <p className="text-sm flex-1 min-w-0">
+        <strong>{message}</strong> See the expiring-soon queue for the full reminder history.
+      </p>
+      <Link
+        href="/lia/expiring-soon"
+        className="text-xs font-semibold underline hover:no-underline whitespace-nowrap"
+      >
+        Open queue →
+      </Link>
+    </div>
+  );
 }
 
 // PR-LIA-8 — Visa outcome panel.

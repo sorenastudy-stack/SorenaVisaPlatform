@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Briefcase, School, FileText, Settings,
   ArrowRightLeft, Shield, FileSearch, CheckSquare, BarChart2,
   Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
-  ClipboardList, LineChart,
+  ClipboardList, LineChart, Clock,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -54,6 +54,9 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
   lia: [
     { label: 'Dashboard',       href: '/lia',              icon: <LayoutDashboard size={18} /> },
     { label: 'Cases',           href: '/lia/cases',        icon: <Briefcase size={18} /> },
+    // PR-LIA-9: dedicated expiring-soon queue. Visible to every LIA-
+    // portal viewer (LIA / OWNER / ADMIN / SUPER_ADMIN) — no role gate.
+    { label: 'Expiring Soon',   href: '/lia/expiring-soon', icon: <Clock size={18} /> },
     { label: 'Document Review', href: '/lia/documents',    icon: <FileSearch size={18} /> },
     { label: 'Decisions',       href: '/lia/decisions',    icon: <CheckSquare size={18} /> },
     // PR-LIA-3: OWNER / ADMIN / SUPER_ADMIN only — LIA users never
