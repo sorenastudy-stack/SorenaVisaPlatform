@@ -26,7 +26,7 @@ import {
 
 @Controller('cases')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('LIA', 'ADMIN', 'SUPER_ADMIN')
+@Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
 export class LegalNotesController {
   constructor(private readonly service: LegalNotesService) {}
 

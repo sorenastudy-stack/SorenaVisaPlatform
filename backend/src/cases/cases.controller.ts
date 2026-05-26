@@ -51,7 +51,7 @@ export class CasesController {
 
   @Patch(':id/risk')
   @UseGuards(RolesGuard)
-  @Roles('LIA', 'ADMIN', 'SUPER_ADMIN')
+  @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
   overrideRisk(
     @Param('id') id: string,
     @Body() dto: OverrideRiskDto,
@@ -66,7 +66,7 @@ export class CasesController {
 
   @Patch(':id/clear-hard-stop')
   @UseGuards(RolesGuard)
-  @Roles('LIA', 'ADMIN', 'SUPER_ADMIN')
+  @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
   clearHardStop(
     @Param('id') id: string,
     @Body() dto: ClearHardStopDto,
