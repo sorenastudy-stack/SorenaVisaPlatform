@@ -12,7 +12,14 @@ import { InzSection } from './InzSection';
 
 interface InzData {
   generatedAt: string;
-  case: { id: string; stage: string; createdAt: string } | null;
+  case: {
+    id: string;
+    stage: string;
+    createdAt: string;
+    // PR-LIA-7: surfaced for the "submitted to INZ" banner.
+    inzApplicationNumber: string | null;
+    inzSubmittedAt: string | null;
+  } | null;
   applicant: {
     fullName: string | null;
     dateOfBirth: string | null;
@@ -235,6 +242,18 @@ export default async function InzDataPage({ params }: { params: { id: string } }
           <CopyButton text={entirePayloadText} variant="section" label="Copy entire application" />
         </div>
       </div>
+
+      {data.case?.stage === 'INZ_SUBMITTED' && data.case.inzApplicationNumber && data.case.inzSubmittedAt && (
+        <div className="mb-6 rounded-xl border border-[#E8B923]/40 bg-[#E8B923]/10 px-4 py-3 flex items-start gap-2 flex-wrap">
+          <span className="text-emerald-700 font-bold text-lg leading-6">✓</span>
+          <p className="text-sm text-[#1E3A5F] flex-1 min-w-0">
+            This case was submitted to INZ on{' '}
+            <strong>{formatDate(data.case.inzSubmittedAt)}</strong> with reference{' '}
+            <code className="font-mono bg-white px-1.5 py-0.5 rounded text-[#1E3A5F]">{data.case.inzApplicationNumber}</code>.
+            The data below was already lodged.
+          </p>
+        </div>
+      )}
 
       <InzSection
         title="Applicant"

@@ -189,6 +189,24 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
     case 'LIA_INZ_DATA_VIEWED':
       // PR-LIA-6: read-only compliance trail. newValue is { caseId }.
       return 'LIA viewed consolidated INZ application data';
+    case 'INZ_SUBMITTED': {
+      // PR-LIA-7: newValue carries { caseId, inzApplicationNumber, … }.
+      const ref = pickString(newV, 'inzApplicationNumber');
+      return ref
+        ? `Submitted to Immigration NZ (${ref})`
+        : 'Submitted to Immigration NZ';
+    }
+    case 'INZ_SUBMISSION_EDITED':
+      // PR-LIA-7: newValue carries the changed fields (any of
+      // inzApplicationNumber, inzSubmittedAt, inzSubmissionNotes).
+      return 'LIA edited INZ submission details';
+    case 'INZ_SUBMISSION_REVERTED': {
+      // PR-LIA-7: oldValue carries the previous inzApplicationNumber.
+      const prev = pickString(entry.oldValue, 'inzApplicationNumber');
+      return prev
+        ? `INZ submission reverted (was ${prev})`
+        : 'INZ submission reverted';
+    }
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';

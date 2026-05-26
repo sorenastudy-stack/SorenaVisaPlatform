@@ -150,6 +150,43 @@ export class NotificationsService {
     await this.sendEmail(email, subject, html);
   }
 
+  // PR-LIA-7 — client-facing email on INZ submission.
+  // Best-effort: the underlying sendEmail catches send failures and
+  // logs them. We never throw — the caller is the InzSubmissionService
+  // transaction, which has already committed by the time this fires.
+  async sendInzSubmittedToClient(
+    email: string,
+    name: string,
+    caseId: string,
+    inzApplicationNumber: string,
+  ): Promise<void> {
+    const link = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/student/case`;
+    const subject = 'Your visa application has been submitted to Immigration NZ';
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Submitted to Immigration New Zealand</h2>
+        <p>Hi ${name},</p>
+        <p>
+          Good news — your visa application has been lodged with
+          Immigration New Zealand. Your INZ reference number is
+          <strong>${inzApplicationNumber}</strong>.
+        </p>
+        <p>
+          INZ will process your application from here. We'll let you
+          know the moment there's any news, or if they need anything
+          additional from you. In the meantime there's nothing you
+          need to do.
+        </p>
+        <p>
+          You can check your application status any time on your
+          dashboard: <a href="${link}">${link}</a>.
+        </p>
+        <p>Best regards,<br>The Sorena Visa Team</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
   async sendLiaAssignmentReleased(
     email: string,
     name: string,

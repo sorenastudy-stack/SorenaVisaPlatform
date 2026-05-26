@@ -53,7 +53,16 @@ interface FamilyCompleteness {
 
 export interface InzDataPayload {
   generatedAt: string;
-  case: { id: string; stage: string; createdAt: Date } | null;
+  // PR-LIA-7: surface the INZ submission timestamp + reference number
+  // so the inz-data viewer can show a "submitted" banner. Both null
+  // for cases that haven't reached the INZ_SUBMITTED stage.
+  case: {
+    id: string;
+    stage: string;
+    createdAt: Date;
+    inzApplicationNumber: string | null;
+    inzSubmittedAt: Date | null;
+  } | null;
   applicant: {
     fullName: string | null;
     dateOfBirth: string | null;
@@ -245,6 +254,10 @@ export class InzDataService {
         id: true,
         stage: true,
         createdAt: true,
+        // PR-LIA-7: project the INZ submission columns so the response
+        // can include them for the inz-data viewer's "submitted" banner.
+        inzApplicationNumber: true,
+        inzSubmittedAt: true,
         lead: {
           select: {
             contact: {
@@ -623,7 +636,13 @@ export class InzDataService {
 
     return {
       generatedAt: new Date().toISOString(),
-      case: { id: crmCase.id, stage: String(crmCase.stage), createdAt: crmCase.createdAt },
+      case: {
+        id: crmCase.id,
+        stage: String(crmCase.stage),
+        createdAt: crmCase.createdAt,
+        inzApplicationNumber: crmCase.inzApplicationNumber ?? null,
+        inzSubmittedAt: crmCase.inzSubmittedAt ?? null,
+      },
       applicant,
       citizenships,
       tbCountries,

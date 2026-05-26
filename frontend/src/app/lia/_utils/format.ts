@@ -1,7 +1,7 @@
 // PR-LIA-1 — Pure helpers shared across the LIA portal. No deps, no React.
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';
-export type CaseStage = 'ADMISSION' | 'VISA' | 'COMPLETED' | 'WITHDRAWN';
+export type CaseStage = 'ADMISSION' | 'VISA' | 'INZ_SUBMITTED' | 'COMPLETED' | 'WITHDRAWN';
 export type LegalDecision = 'APPROVED' | 'REJECTED' | 'NEEDS_MORE_INFO' | 'WITHDRAWN';
 export type DocumentStatus = 'MISSING' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
@@ -12,7 +12,14 @@ export function riskLabel(r: string | null | undefined): string {
 
 export function stageLabel(s: string | null | undefined): string {
   if (!s) return '—';
-  return s.charAt(0) + s.slice(1).toLowerCase();
+  switch (s) {
+    case 'ADMISSION':     return 'Admission';
+    case 'VISA':          return 'Visa';
+    case 'INZ_SUBMITTED': return 'Submitted to INZ';
+    case 'COMPLETED':     return 'Completed';
+    case 'WITHDRAWN':     return 'Withdrawn';
+    default:              return s.charAt(0) + s.slice(1).toLowerCase();
+  }
 }
 
 export function decisionLabel(d: string | null | undefined): string {
@@ -38,11 +45,13 @@ export function riskStyles(r: string | null | undefined): string {
 
 export function stageStyles(s: string | null | undefined): string {
   switch (s) {
-    case 'ADMISSION': return 'bg-blue-100 text-blue-800 border border-blue-200';
-    case 'VISA':      return 'bg-violet-100 text-violet-800 border border-violet-200';
-    case 'COMPLETED': return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-    case 'WITHDRAWN': return 'bg-gray-100 text-gray-700 border border-gray-200';
-    default:          return 'bg-gray-100 text-gray-700 border border-gray-200';
+    case 'ADMISSION':     return 'bg-blue-100 text-blue-800 border border-blue-200';
+    case 'VISA':          return 'bg-violet-100 text-violet-800 border border-violet-200';
+    // PR-LIA-7: gold tint to set INZ_SUBMITTED apart from VISA/COMPLETED.
+    case 'INZ_SUBMITTED': return 'bg-[#E8B923]/20 text-[#1E3A5F] border border-[#E8B923]/40';
+    case 'COMPLETED':     return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+    case 'WITHDRAWN':     return 'bg-gray-100 text-gray-700 border border-gray-200';
+    default:              return 'bg-gray-100 text-gray-700 border border-gray-200';
   }
 }
 

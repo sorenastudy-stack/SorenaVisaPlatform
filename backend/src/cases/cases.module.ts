@@ -5,6 +5,8 @@ import { LiaAssignmentService } from './lia-assignment.service';
 import { LiaRosterController } from './lia-roster.controller';
 import { LiaProductivityService } from './lia-productivity.service';
 import { LiaProductivityController } from './lia-productivity.controller';
+import { InzSubmissionService } from './inz-submission/inz-submission.service';
+import { InzSubmissionController } from './inz-submission/inz-submission.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
 import { CryptoModule } from '../common/crypto/crypto.module';
@@ -12,8 +14,24 @@ import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [PrismaModule, CryptoModule, NotificationsModule],
-  controllers: [CasesController, LiaRosterController, LiaProductivityController],
-  providers: [CasesService, EventsService, LiaAssignmentService, LiaProductivityService],
-  exports: [CasesService, LiaAssignmentService, LiaProductivityService],
+  controllers: [
+    CasesController,
+    LiaRosterController,
+    LiaProductivityController,
+    InzSubmissionController,
+  ],
+  providers: [
+    CasesService,
+    EventsService,
+    LiaAssignmentService,
+    LiaProductivityService,
+    InzSubmissionService,
+  ],
+  exports: [
+    CasesService,
+    LiaAssignmentService,
+    LiaProductivityService,
+    InzSubmissionService,
+  ],
 })
 export class CasesModule {}

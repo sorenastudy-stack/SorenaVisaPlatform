@@ -126,9 +126,10 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
         <ChipRow
           label="Stage"
           chips={[
-            { label: 'All',       href: buildHref({ stage: '' }),          active: !searchParams.stage },
-            { label: 'Admission', href: buildHref({ stage: 'ADMISSION' }), active: searchParams.stage === 'ADMISSION' },
-            { label: 'Visa',      href: buildHref({ stage: 'VISA' }),      active: searchParams.stage === 'VISA' },
+            { label: 'All',           href: buildHref({ stage: '' }),              active: !searchParams.stage },
+            { label: 'Admission',     href: buildHref({ stage: 'ADMISSION' }),     active: searchParams.stage === 'ADMISSION' },
+            { label: 'Visa',          href: buildHref({ stage: 'VISA' }),          active: searchParams.stage === 'VISA' },
+            { label: 'INZ Submitted', href: buildHref({ stage: 'INZ_SUBMITTED' }), active: searchParams.stage === 'INZ_SUBMITTED' },
           ]}
         />
         <ChipRow

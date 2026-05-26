@@ -18,6 +18,11 @@ import { RequestDocumentButton } from './RequestDocumentButton';
 import { ReassignLiaButton } from './ReassignLiaButton';
 import { DownloadDocumentButton } from './DownloadDocumentButton';
 import { ReviewDocumentButton } from './ReviewDocumentButton';
+import { SubmitToInzButton } from './SubmitToInzButton';
+import { EditInzSubmissionButton } from './EditInzSubmissionButton';
+import { RevertInzSubmissionButton } from './RevertInzSubmissionButton';
+import { DownloadInzReceiptButton } from './DownloadInzReceiptButton';
+import { CopyButton } from './inz-data/CopyButton';
 
 // PR-LIA-1 — Case detail with action panel + legal-notes timeline.
 
@@ -57,6 +62,14 @@ interface CaseDetail {
   lia: { id: string; name: string; email: string } | null;
   // PR-LIA-3: timestamp the LIA was attached. Null when unassigned.
   liaAssignedAt: string | null;
+  // PR-LIA-7: INZ submission lifecycle fields. All NULL until the
+  // LIA hits "Submit to INZ".
+  inzApplicationNumber: string | null;
+  inzSubmittedAt: string | null;
+  inzSubmissionNotes: string | null;
+  inzReceiptFileName: string | null;
+  inzReceiptMimeType: string | null;
+  inzReceiptSizeBytes: number | null;
   applications: Array<{
     id: string;
     status: string;
@@ -205,6 +218,9 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
           </Link>
         </div>
       </div>
+
+      {/* PR-LIA-7 INZ Submission panel — three states by stage. */}
+      <InzSubmissionPanel caseData={caseData} />
 
       {(caseData.lead.hardStopFlag || caseData.lead.riskFlags.length > 0) && (
         <div className="mb-6 rounded-xl border-2 border-red-300 bg-red-50 p-4">
@@ -666,6 +682,107 @@ function ReviewStatusBadge({ status }: { status: 'UNREVIEWED' | 'APPROVED' | 'RE
       <HelpCircle size={12} /> Unreviewed
     </span>
   );
+}
+
+// PR-LIA-7 — three-state INZ submission panel on the case-detail page.
+// VISA + no submission yet  → prominent CTA card
+// INZ_SUBMITTED              → full details + Edit / Revert / Download
+// COMPLETED + had submission → read-only history block
+// Anything else              → render nothing
+function InzSubmissionPanel({ caseData }: { caseData: CaseDetail }) {
+  const submitted = !!caseData.inzSubmittedAt && !!caseData.inzApplicationNumber;
+  if (caseData.stage === 'VISA' && !submitted) {
+    return (
+      <div className="mb-6 rounded-xl border-2 border-[#E8B923]/40 bg-[#E8B923]/5 p-5 flex items-center gap-4 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base font-bold text-[#1E3A5F]">Ready to submit to Immigration NZ?</h2>
+          <p className="text-sm text-[#4A4A4A] mt-1">
+            Capture the INZ reference number, the payment receipt, and any notes. The case moves to INZ_SUBMITTED and the client gets an email confirmation.
+          </p>
+        </div>
+        <SubmitToInzButton caseId={caseData.id} />
+      </div>
+    );
+  }
+
+  if (caseData.stage === 'INZ_SUBMITTED' && submitted) {
+    const daysAtInz = Math.max(
+      0,
+      Math.floor(
+        (Date.now() - new Date(caseData.inzSubmittedAt!).getTime()) / 86_400_000,
+      ),
+    );
+    return (
+      <section className="mb-6 rounded-xl border border-[#E8B923]/40 bg-white p-5">
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <CheckCircle2 size={18} className="text-emerald-600" />
+          <h2 className="text-base font-bold text-[#1E3A5F]">INZ Submission</h2>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-[#E8B923]/20 text-[#1E3A5F] border border-[#E8B923]/40 ml-1">
+            SUBMITTED
+          </span>
+          <span className="ml-auto text-xs text-[#4A4A4A]/60">{daysAtInz} day{daysAtInz === 1 ? '' : 's'} at INZ</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">INZ reference</div>
+            <div className="flex items-center gap-2">
+              <code className="text-sm font-mono font-bold text-[#1E3A5F] bg-[#FAF8F3] px-2 py-1 rounded">{caseData.inzApplicationNumber}</code>
+              <CopyButton text={caseData.inzApplicationNumber!} variant="field" ariaLabel="Copy INZ reference" />
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Submitted on</div>
+            <div className="text-sm text-[#1E3A5F] font-semibold">{formatDate(caseData.inzSubmittedAt!)}</div>
+            <div className="text-xs text-[#4A4A4A]/60">{formatRelative(caseData.inzSubmittedAt!)}</div>
+          </div>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Days at INZ</div>
+            <div className="text-3xl font-bold text-[#1E3A5F] tabular-nums">{daysAtInz}</div>
+          </div>
+        </div>
+
+        {caseData.inzSubmissionNotes && (
+          <div className="mb-4 rounded-lg bg-[#FAF8F3] p-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Notes</div>
+            <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap">{caseData.inzSubmissionNotes}</p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-gray-100">
+          {caseData.inzReceiptFileName && (
+            <DownloadInzReceiptButton caseId={caseData.id} fileName={caseData.inzReceiptFileName} />
+          )}
+          <EditInzSubmissionButton
+            caseId={caseData.id}
+            currentReference={caseData.inzApplicationNumber!}
+            currentSubmittedAt={caseData.inzSubmittedAt!}
+            currentNotes={caseData.inzSubmissionNotes}
+          />
+          <RevertInzSubmissionButton
+            caseId={caseData.id}
+            currentReference={caseData.inzApplicationNumber!}
+          />
+        </div>
+      </section>
+    );
+  }
+
+  if (caseData.stage === 'COMPLETED' && submitted) {
+    return (
+      <section className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 text-sm">
+        <div className="flex items-center gap-2 flex-wrap">
+          <CheckCircle2 size={16} className="text-emerald-700" />
+          <span className="font-semibold text-emerald-900">Case completed.</span>
+          <span className="text-[#4A4A4A]/80">
+            INZ submission was lodged on {formatDate(caseData.inzSubmittedAt!)} as <code className="font-mono">{caseData.inzApplicationNumber}</code>.
+          </span>
+        </div>
+      </section>
+    );
+  }
+
+  return null;
 }
 
 function Row({ icon, value, label }: { icon: React.ReactNode; value: string; label?: string }) {

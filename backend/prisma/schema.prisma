@@ -201,6 +201,12 @@ enum InvoicePaymentStatus {
 enum CaseStage {
   ADMISSION
   VISA
+  // PR-LIA-7: LIA has submitted the application to Immigration NZ.
+  // Captured along with INZ reference number, submitted-at timestamp,
+  // payment-receipt file, and optional LIA notes. Set by
+  // POST /cases/:id/inz-submission; can be reverted while the visa
+  // hasn't been issued (next workflow PR).
+  INZ_SUBMITTED
   COMPLETED
   WITHDRAWN
 }
@@ -806,6 +812,22 @@ model Case {
   // productivity report for time-to-action / time-to-resolution
   // calculations and by the case-detail "Assigned N days ago" line.
   liaAssignedAt DateTime?
+  // PR-LIA-7: INZ submission lifecycle. All five fields are co-managed
+  // by the InzSubmissionService — they populate together when the LIA
+  // submits, clear together on revert. The receipt file metadata is
+  // denormalised onto Case (rather than a separate InzSubmissionReceipt
+  // model) because there's only ever one receipt per case and its
+  // lifecycle is tightly bound to the submission. The actual file lives
+  // at `inzReceiptFileUrl` (a filesystem path under ./uploads/inz-receipts/);
+  // we use the existing /files/signed/:token route to serve it.
+  // The handover (§3 / §file-storage) explains the rationale.
+  inzApplicationNumber String?    @db.VarChar(128)
+  inzSubmittedAt       DateTime?
+  inzSubmissionNotes   String?    @db.Text
+  inzReceiptFileUrl    String?
+  inzReceiptFileName   String?
+  inzReceiptMimeType   String?
+  inzReceiptSizeBytes  Int?
   riskLevel   RiskLevel @default(LOW)
   notes       String?
   createdAt   DateTime  @default(now())
@@ -833,6 +855,12 @@ model Case {
   @@index([leadId])
   @@index([stage])
   @@index([liaId])
+  // PR-LIA-7: fast lookup by INZ reference number (e.g. "find the case
+  // that owns VRC-2026-NZL-12345"). Unique constraint deliberately
+  // NOT enforced — duplicate references are LIA-error territory but
+  // not data-corrupting, and we don't want a UNIQUE clash to crash a
+  // submit transaction.
+  @@index([inzApplicationNumber])
   @@map("cases")
 }
 
