@@ -114,11 +114,32 @@ export class CasesService {
           },
         },
         contract: true,
+        // PR-LIA-8: visa outcome (1:0..1). The frontend renders a
+        // "Visa Record" panel from this — `declineReasonEncrypted`
+        // is stripped + decrypted below before responding.
+        visa: true,
       },
     });
 
     if (!caseRecord) {
       throw new NotFoundException('Case not found');
+    }
+
+    // PR-LIA-8: decrypt the decline reason at the boundary so the
+    // frontend never sees ciphertext. Stripped on APPROVED rows.
+    if (caseRecord.visa) {
+      let declineReason: string | null = null;
+      if (caseRecord.visa.outcome === 'DECLINED' && caseRecord.visa.declineReasonEncrypted) {
+        try {
+          declineReason = this.crypto.decrypt(
+            caseRecord.visa.declineReasonEncrypted as unknown as Buffer,
+          );
+        } catch {
+          declineReason = null;
+        }
+      }
+      const { declineReasonEncrypted: _strip, ...visaSafe } = caseRecord.visa as any;
+      (caseRecord as any).visa = { ...visaSafe, declineReason };
     }
 
     return caseRecord;

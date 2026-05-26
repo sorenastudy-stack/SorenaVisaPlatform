@@ -187,6 +187,75 @@ export class NotificationsService {
     await this.sendEmail(email, subject, html);
   }
 
+  // PR-LIA-8 — Client emails for the visa outcome.
+  // Both are best-effort: sendEmail catches and logs SMTP failures, so
+  // the caller (VisaService transaction) never blocks on email.
+  //
+  // The DECLINED email NEVER includes the LIA's internal decline
+  // reason — that's confidential operator commentary. The client only
+  // learns the application was not approved and is directed to their
+  // case advisor.
+  async sendVisaIssuedToClient(
+    email: string,
+    name: string,
+    caseId: string,
+    visaStartDate: Date,
+    visaEndDate: Date,
+  ): Promise<void> {
+    const link = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/student/case`;
+    const startStr = visaStartDate.toISOString().slice(0, 10);
+    const endStr = visaEndDate.toISOString().slice(0, 10);
+    const subject = 'Your visa has been issued';
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Congratulations — your visa has been issued</h2>
+        <p>Hi ${name},</p>
+        <p>
+          Immigration New Zealand has approved your visa application.
+          Here are the key dates:
+        </p>
+        <ul>
+          <li><strong>Valid from:</strong> ${startStr}</li>
+          <li><strong>Valid until:</strong> ${endStr}</li>
+        </ul>
+        <p>
+          Your case advisor will share the visa document with you separately.
+          You can also review your case status on your dashboard:
+          <a href="${link}">${link}</a>.
+        </p>
+        <p>Best regards,<br>The Sorena Visa Team</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendVisaDeclinedToClient(
+    email: string,
+    name: string,
+    caseId: string,
+  ): Promise<void> {
+    const link = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/student/case`;
+    const subject = 'Update on your visa application';
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Update on your visa application</h2>
+        <p>Hi ${name},</p>
+        <p>
+          We're sorry to share that your visa application was not approved
+          by Immigration New Zealand.
+        </p>
+        <p>
+          Your case advisor will be in touch shortly to discuss next steps
+          and walk you through your options. You can also check your case
+          status on your dashboard:
+          <a href="${link}">${link}</a>.
+        </p>
+        <p>Best regards,<br>The Sorena Visa Team</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
   async sendLiaAssignmentReleased(
     email: string,
     name: string,

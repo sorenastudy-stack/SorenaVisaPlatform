@@ -19,6 +19,11 @@ interface InzData {
     // PR-LIA-7: surfaced for the "submitted to INZ" banner.
     inzApplicationNumber: string | null;
     inzSubmittedAt: string | null;
+    // PR-LIA-8: visa outcome banner (issued / declined). Both null on
+    // cases that haven't reached COMPLETED with a visa record.
+    visaOutcome: 'APPROVED' | 'DECLINED' | null;
+    visaEndDate: string | null;
+    visaIssuedAt: string | null;
   } | null;
   applicant: {
     fullName: string | null;
@@ -251,6 +256,25 @@ export default async function InzDataPage({ params }: { params: { id: string } }
             <strong>{formatDate(data.case.inzSubmittedAt)}</strong> with reference{' '}
             <code className="font-mono bg-white px-1.5 py-0.5 rounded text-[#1E3A5F]">{data.case.inzApplicationNumber}</code>.
             The data below was already lodged.
+          </p>
+        </div>
+      )}
+
+      {data.case?.visaOutcome === 'APPROVED' && data.case.visaIssuedAt && (
+        <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-start gap-2 flex-wrap">
+          <span className="text-emerald-700 font-bold text-lg leading-6">✓</span>
+          <p className="text-sm text-emerald-900 flex-1 min-w-0">
+            Visa issued <strong>{formatDate(data.case.visaIssuedAt)}</strong>
+            {data.case.visaEndDate && (<> — valid until <strong>{formatDate(data.case.visaEndDate)}</strong></>)}.
+          </p>
+        </div>
+      )}
+
+      {data.case?.visaOutcome === 'DECLINED' && data.case.visaIssuedAt && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 flex items-start gap-2 flex-wrap">
+          <span className="text-red-700 font-bold text-lg leading-6">✗</span>
+          <p className="text-sm text-red-900 flex-1 min-w-0">
+            Visa application declined <strong>{formatDate(data.case.visaIssuedAt)}</strong>. The data below was lodged with INZ.
           </p>
         </div>
       )}

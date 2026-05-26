@@ -130,6 +130,7 @@ export default async function LiaCasesPage({ searchParams }: { searchParams: Sea
             { label: 'Admission',     href: buildHref({ stage: 'ADMISSION' }),     active: searchParams.stage === 'ADMISSION' },
             { label: 'Visa',          href: buildHref({ stage: 'VISA' }),          active: searchParams.stage === 'VISA' },
             { label: 'INZ Submitted', href: buildHref({ stage: 'INZ_SUBMITTED' }), active: searchParams.stage === 'INZ_SUBMITTED' },
+            { label: 'Completed',     href: buildHref({ stage: 'COMPLETED' }),     active: searchParams.stage === 'COMPLETED' },
           ]}
         />
         <ChipRow

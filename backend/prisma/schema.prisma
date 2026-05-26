@@ -435,6 +435,11 @@ model User {
   // /  ADMIN / SUPER_ADMIN — the gate is enforced at the controller).
   documentReviews         CaseDocumentReview[]    @relation("CaseDocumentReviewer")
 
+  // PR-LIA-8: Visa rows this user issued (recorded the approval or
+  // decline outcome for). Same role gate as the rest of the LIA
+  // surface — LIA / ADMIN / SUPER_ADMIN / OWNER.
+  issuedVisas             Visa[]                  @relation("VisaIssuer")
+
   @@map("users")
 }
 
@@ -851,6 +856,12 @@ model Case {
   // PR-LIA-5: LIA's internal-only review verdicts on this case's
   // client-uploaded documents.
   documentReviews       CaseDocumentReview[]
+  // PR-LIA-8: visa outcome (1:0..1). One row per case ever — issued
+  // by the LIA after INZ decides on the submitted application. NULL
+  // until the LIA records the outcome via POST /cases/:id/visa/issue
+  // (APPROVED) or POST /cases/:id/visa/decline (DECLINED). Reverting
+  // un-issues, returning the case to INZ_SUBMITTED.
+  visa                  Visa?
 
   @@index([leadId])
   @@index([stage])
@@ -862,6 +873,58 @@ model Case {
   // submit transaction.
   @@index([inzApplicationNumber])
   @@map("cases")
+}
+
+// ─── VISA OUTCOME (PR-LIA-8) ──────────────────────────────────────────
+//
+// One row per Case ever — set by the LIA when INZ decides on the
+// submitted application. Two outcomes:
+//
+//   * APPROVED — visaStartDate / visaEndDate populated; visa document
+//                file metadata (URL, name, mime, size) populated.
+//                declineReasonEncrypted is NULL.
+//   * DECLINED — declineReasonEncrypted populated (AES-256-GCM via
+//                CryptoService, same envelope as LegalNote.bodyEncrypted).
+//                Date and file fields are NULL.
+//
+// Either outcome moves the parent Case to COMPLETED. Revert un-issues:
+// deletes the Visa row, sets Case.stage back to INZ_SUBMITTED, leaves
+// the visa file on disk (recoverable; orphan cleanup is a future
+// concern — same pattern as PR-LIA-7's revert).
+//
+// The visaEndDate index is a forward hook for PR-LIA-9's expiry-reminder
+// query (find approved visas whose end date is within N days of now).
+enum VisaIssueOutcome {
+  APPROVED
+  DECLINED
+}
+
+model Visa {
+  id                String           @id @default(uuid())
+  caseId            String           @unique
+  outcome           VisaIssueOutcome
+  // Approval fields (populated when outcome=APPROVED)
+  visaStartDate     DateTime?
+  visaEndDate       DateTime?
+  visaDocumentUrl   String?          @db.Text
+  visaDocumentName  String?          @db.Text
+  visaDocumentMime  String?          @db.Text
+  visaDocumentSize  Int?
+  // Decline fields (populated when outcome=DECLINED)
+  declineReasonEncrypted Bytes?
+  // Common metadata
+  issuedById        String
+  issuedAt          DateTime         @default(now())
+  notes             String?          @db.Text
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  case              Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  issuedBy          User             @relation("VisaIssuer", fields: [issuedById], references: [id])
+
+  @@index([issuedById, issuedAt])
+  @@index([visaEndDate])
+  @@map("visas")
 }
 
 // ─── APPLICATIONS ────────────────────────────────────────────────────────────

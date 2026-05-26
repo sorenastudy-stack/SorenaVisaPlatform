@@ -7,6 +7,8 @@ import { LiaProductivityService } from './lia-productivity.service';
 import { LiaProductivityController } from './lia-productivity.controller';
 import { InzSubmissionService } from './inz-submission/inz-submission.service';
 import { InzSubmissionController } from './inz-submission/inz-submission.controller';
+import { VisaService } from './visa/visa.service';
+import { VisaController } from './visa/visa.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
 import { CryptoModule } from '../common/crypto/crypto.module';
@@ -19,6 +21,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     LiaRosterController,
     LiaProductivityController,
     InzSubmissionController,
+    VisaController,
   ],
   providers: [
     CasesService,
@@ -26,12 +29,14 @@ import { NotificationsModule } from '../notifications/notifications.module';
     LiaAssignmentService,
     LiaProductivityService,
     InzSubmissionService,
+    VisaService,
   ],
   exports: [
     CasesService,
     LiaAssignmentService,
     LiaProductivityService,
     InzSubmissionService,
+    VisaService,
   ],
 })
 export class CasesModule {}

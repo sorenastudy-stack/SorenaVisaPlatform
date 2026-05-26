@@ -207,6 +207,43 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
         ? `INZ submission reverted (was ${prev})`
         : 'INZ submission reverted';
     }
+    case 'VISA_ISSUED': {
+      // PR-LIA-8: newValue carries visaStartDate / visaEndDate / fileName.
+      const start = pickString(newV, 'visaStartDate');
+      const end = pickString(newV, 'visaEndDate');
+      if (start && end) {
+        return `Visa issued (valid ${start.slice(0, 10)} → ${end.slice(0, 10)})`;
+      }
+      return 'Visa issued';
+    }
+    case 'VISA_DECLINED':
+      // PR-LIA-8: newValue carries declineReasonHash + length only.
+      // The reason itself stays encrypted on the Visa row.
+      return 'Visa application declined';
+    case 'VISA_RECORD_EDITED': {
+      // PR-LIA-8: newValue carries the changed field names.
+      if (typeof newV === 'object' && newV !== null) {
+        const keys = Object.keys(newV as Record<string, unknown>);
+        if (keys.length > 0) {
+          return `Visa record edited (${keys.join(', ')})`;
+        }
+      }
+      return 'Visa record edited';
+    }
+    case 'VISA_RECORD_REVERTED': {
+      // PR-LIA-8: oldValue carries the previous outcome.
+      const prev = pickString(entry.oldValue, 'outcome');
+      return prev
+        ? `Visa record reverted (was ${prev})`
+        : 'Visa record reverted';
+    }
+    case 'VISA_DOCUMENT_DOWNLOADED': {
+      // PR-LIA-8: newValue carries fileName.
+      const fileName = pickString(newV, 'fileName');
+      return fileName
+        ? `LIA downloaded visa document: ${fileName}`
+        : 'LIA downloaded the visa document';
+    }
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';

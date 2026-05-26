@@ -8,6 +8,8 @@ import {
   riskStyles, riskLabel, stageStyles, stageLabel,
   decisionStyles, decisionLabel, docStatusStyles,
   formatDate, formatDateTime, formatRelative, formatDaysSince,
+  completedOutcomeLabel, completedOutcomeStyles,
+  visaExpiryStyles, visaExpiryLabel,
 } from '../../_utils/format';
 import { ClearHardStopButton } from './ClearHardStopButton';
 import { OverrideRiskButton } from './OverrideRiskButton';
@@ -22,6 +24,11 @@ import { SubmitToInzButton } from './SubmitToInzButton';
 import { EditInzSubmissionButton } from './EditInzSubmissionButton';
 import { RevertInzSubmissionButton } from './RevertInzSubmissionButton';
 import { DownloadInzReceiptButton } from './DownloadInzReceiptButton';
+import { RecordVisaApprovalButton } from './RecordVisaApprovalButton';
+import { RecordVisaDeclineButton } from './RecordVisaDeclineButton';
+import { EditVisaRecordButton } from './EditVisaRecordButton';
+import { RevertVisaRecordButton } from './RevertVisaRecordButton';
+import { DownloadVisaButton } from './DownloadVisaButton';
 import { CopyButton } from './inz-data/CopyButton';
 
 // PR-LIA-1 — Case detail with action panel + legal-notes timeline.
@@ -70,6 +77,24 @@ interface CaseDetail {
   inzReceiptFileName: string | null;
   inzReceiptMimeType: string | null;
   inzReceiptSizeBytes: number | null;
+  // PR-LIA-8: visa outcome row (1:0..1). NULL until the LIA records
+  // the INZ outcome via /visa/issue or /visa/decline. declineReason
+  // is decrypted at the boundary by cases.service.ts.
+  visa: {
+    id: string;
+    outcome: 'APPROVED' | 'DECLINED';
+    visaStartDate: string | null;
+    visaEndDate: string | null;
+    visaDocumentName: string | null;
+    visaDocumentMime: string | null;
+    visaDocumentSize: number | null;
+    declineReason: string | null;
+    issuedById: string;
+    issuedAt: string;
+    notes: string | null;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
   applications: Array<{
     id: string;
     status: string;
@@ -201,9 +226,15 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
             <h1 className="text-2xl font-bold text-[#1E3A5F]">{contact?.fullName ?? 'Unknown applicant'}</h1>
             <div className="flex items-center gap-2 flex-wrap mt-2">
               <span className="text-xs text-[#4A4A4A]/70">Case {caseData.id.slice(0, 8)}</span>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${stageStyles(caseData.stage)}`}>
-                {stageLabel(caseData.stage)}
-              </span>
+              {caseData.stage === 'COMPLETED' ? (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${completedOutcomeStyles(caseData.visa?.outcome ?? null)}`}>
+                  {completedOutcomeLabel(caseData.visa?.outcome ?? null)}
+                </span>
+              ) : (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${stageStyles(caseData.stage)}`}>
+                  {stageLabel(caseData.stage)}
+                </span>
+              )}
               <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${riskStyles(caseData.riskLevel)}`}>
                 {riskLabel(caseData.riskLevel)} risk
               </span>
@@ -221,6 +252,10 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
 
       {/* PR-LIA-7 INZ Submission panel — three states by stage. */}
       <InzSubmissionPanel caseData={caseData} />
+
+      {/* PR-LIA-8 Visa Outcome panel — CTAs while INZ_SUBMITTED with no
+          visa row; full record once issued or declined. */}
+      <VisaOutcomePanel caseData={caseData} />
 
       {(caseData.lead.hardStopFlag || caseData.lead.riskFlags.length > 0) && (
         <div className="mb-6 rounded-xl border-2 border-red-300 bg-red-50 p-4">
@@ -777,6 +812,138 @@ function InzSubmissionPanel({ caseData }: { caseData: CaseDetail }) {
           <span className="text-[#4A4A4A]/80">
             INZ submission was lodged on {formatDate(caseData.inzSubmittedAt!)} as <code className="font-mono">{caseData.inzApplicationNumber}</code>.
           </span>
+        </div>
+      </section>
+    );
+  }
+
+  return null;
+}
+
+// PR-LIA-8 — Visa outcome panel.
+// INZ_SUBMITTED + no visa row → two CTAs (Approve / Decline)
+// COMPLETED + visa.APPROVED   → full approval record + Edit/Revert/Download
+// COMPLETED + visa.DECLINED   → decline record + Edit/Revert
+function VisaOutcomePanel({ caseData }: { caseData: CaseDetail }) {
+  const v = caseData.visa;
+
+  if (caseData.stage === 'INZ_SUBMITTED' && !v) {
+    return (
+      <div className="mb-6 rounded-xl border-2 border-[#1E3A5F]/20 bg-white p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Scale size={18} className="text-[#1E3A5F]" />
+          <h2 className="text-base font-bold text-[#1E3A5F]">Record INZ outcome</h2>
+        </div>
+        <p className="text-sm text-[#4A4A4A] mb-4 leading-relaxed">
+          INZ has decided on this submission — record the outcome below. Approval requires the visa document + start/end dates; decline requires an internal reason (not shared with the client).
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <RecordVisaApprovalButton caseId={caseData.id} />
+          <RecordVisaDeclineButton caseId={caseData.id} />
+        </div>
+      </div>
+    );
+  }
+
+  if (caseData.stage === 'COMPLETED' && v && v.outcome === 'APPROVED' && v.visaStartDate && v.visaEndDate) {
+    const endMs = new Date(v.visaEndDate).getTime();
+    const daysRemaining = Math.floor((endMs - Date.now()) / 86_400_000);
+    return (
+      <section className="mb-6 rounded-xl border border-emerald-200 bg-white p-5">
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <CheckCircle2 size={18} className="text-emerald-700" />
+          <h2 className="text-base font-bold text-[#1E3A5F]">Visa Record</h2>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 ml-1">
+            APPROVED
+          </span>
+          <span className={`ml-auto inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${visaExpiryStyles(daysRemaining)}`}>
+            {visaExpiryLabel(daysRemaining)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Valid from</div>
+            <div className="text-sm text-[#1E3A5F] font-semibold">{formatDate(v.visaStartDate)}</div>
+          </div>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Valid until</div>
+            <div className="text-sm text-[#1E3A5F] font-semibold">{formatDate(v.visaEndDate)}</div>
+          </div>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Days remaining</div>
+            <div className="text-3xl font-bold text-[#1E3A5F] tabular-nums">{daysRemaining}</div>
+          </div>
+        </div>
+
+        {v.notes && (
+          <div className="mb-4 rounded-lg bg-[#FAF8F3] p-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Notes</div>
+            <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap">{v.notes}</p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-gray-100">
+          {v.visaDocumentName && (
+            <DownloadVisaButton caseId={caseData.id} fileName={v.visaDocumentName} />
+          )}
+          <EditVisaRecordButton
+            caseId={caseData.id}
+            outcome="APPROVED"
+            currentStart={v.visaStartDate}
+            currentEnd={v.visaEndDate}
+            currentDeclineReason={null}
+            currentNotes={v.notes}
+          />
+          <RevertVisaRecordButton caseId={caseData.id} outcome="APPROVED" />
+        </div>
+      </section>
+    );
+  }
+
+  if (caseData.stage === 'COMPLETED' && v && v.outcome === 'DECLINED') {
+    return (
+      <section className="mb-6 rounded-xl border border-red-200 bg-white p-5">
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <XCircle size={18} className="text-red-700" />
+          <h2 className="text-base font-bold text-[#1E3A5F]">Visa Record</h2>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-red-100 text-red-800 border border-red-200 ml-1">
+            DECLINED
+          </span>
+          <span className="ml-auto text-xs text-[#4A4A4A]/60">
+            Recorded {formatRelative(v.issuedAt)}
+          </span>
+        </div>
+
+        <div className="mb-4 rounded-lg bg-red-50/60 border border-red-200 p-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Lock size={12} className="text-red-700/70" />
+            <div className="text-xs font-semibold uppercase tracking-wider text-red-800">
+              Decline reason (confidential — staff only)
+            </div>
+          </div>
+          {v.declineReason
+            ? <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap leading-relaxed">{v.declineReason}</p>
+            : <p className="text-sm italic text-[#4A4A4A]/60">— reason unavailable —</p>}
+        </div>
+
+        {v.notes && (
+          <div className="mb-4 rounded-lg bg-[#FAF8F3] p-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Notes</div>
+            <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap">{v.notes}</p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-gray-100">
+          <EditVisaRecordButton
+            caseId={caseData.id}
+            outcome="DECLINED"
+            currentStart={null}
+            currentEnd={null}
+            currentDeclineReason={v.declineReason}
+            currentNotes={v.notes}
+          />
+          <RevertVisaRecordButton caseId={caseData.id} outcome="DECLINED" />
         </div>
       </section>
     );

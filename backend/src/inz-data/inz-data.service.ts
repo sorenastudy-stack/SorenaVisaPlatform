@@ -62,6 +62,12 @@ export interface InzDataPayload {
     createdAt: Date;
     inzApplicationNumber: string | null;
     inzSubmittedAt: Date | null;
+    // PR-LIA-8: visa outcome banner on the inz-data viewer.
+    // Both null on cases that haven't reached COMPLETED with a visa
+    // record (or that haven't been issued / declined at all).
+    visaOutcome: 'APPROVED' | 'DECLINED' | null;
+    visaEndDate: Date | null;
+    visaIssuedAt: Date | null;
   } | null;
   applicant: {
     fullName: string | null;
@@ -258,6 +264,14 @@ export class InzDataService {
         // can include them for the inz-data viewer's "submitted" banner.
         inzApplicationNumber: true,
         inzSubmittedAt: true,
+        // PR-LIA-8: visa outcome row for the "issued / declined" banner.
+        visa: {
+          select: {
+            outcome: true,
+            visaEndDate: true,
+            issuedAt: true,
+          },
+        },
         lead: {
           select: {
             contact: {
@@ -642,6 +656,9 @@ export class InzDataService {
         createdAt: crmCase.createdAt,
         inzApplicationNumber: crmCase.inzApplicationNumber ?? null,
         inzSubmittedAt: crmCase.inzSubmittedAt ?? null,
+        visaOutcome: crmCase.visa?.outcome ?? null,
+        visaEndDate: crmCase.visa?.visaEndDate ?? null,
+        visaIssuedAt: crmCase.visa?.issuedAt ?? null,
       },
       applicant,
       citizenships,

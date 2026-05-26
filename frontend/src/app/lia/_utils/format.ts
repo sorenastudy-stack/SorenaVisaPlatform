@@ -143,3 +143,38 @@ export function openCasesStyles(count: number): string {
   if (count <= 7)      return 'bg-amber-100 text-amber-800 border border-amber-200';
   return                      'bg-red-100 text-red-800 border border-red-200';
 }
+
+// PR-LIA-8: outcome-aware label for COMPLETED cases. Used on the
+// case-detail header so the LIA sees "Visa Issued" / "Application
+// Declined" instead of a flat "Completed" badge. Cases with no visa
+// record (legacy / withdrawn) keep the neutral "Completed" label.
+export type VisaOutcome = 'APPROVED' | 'DECLINED';
+
+export function completedOutcomeLabel(outcome: VisaOutcome | null | undefined): string {
+  if (outcome === 'APPROVED') return 'Visa Issued';
+  if (outcome === 'DECLINED') return 'Application Declined';
+  return 'Completed';
+}
+
+export function completedOutcomeStyles(outcome: VisaOutcome | null | undefined): string {
+  if (outcome === 'APPROVED') return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+  if (outcome === 'DECLINED') return 'bg-red-100 text-red-800 border border-red-200';
+  return 'bg-gray-100 text-gray-700 border border-gray-200';
+}
+
+// PR-LIA-8: visa expiry color cues for the "Days remaining" cell on
+// the Visa Record panel.
+//   < 0    → expired (red)
+//   ≤ 30   → expiring soon (gold)
+//   else   → neutral (slate)
+export function visaExpiryStyles(daysRemaining: number): string {
+  if (daysRemaining < 0)  return 'bg-red-100 text-red-800 border border-red-200';
+  if (daysRemaining <= 30) return 'bg-[#E8B923]/20 text-[#1E3A5F] border border-[#E8B923]/40';
+  return 'bg-blue-50 text-blue-800 border border-blue-200';
+}
+
+export function visaExpiryLabel(daysRemaining: number): string {
+  if (daysRemaining < 0)  return `Expired ${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? '' : 's'} ago`;
+  if (daysRemaining === 0) return 'Expires today';
+  return `${daysRemaining} day${daysRemaining === 1 ? '' : 's'} remaining`;
+}
