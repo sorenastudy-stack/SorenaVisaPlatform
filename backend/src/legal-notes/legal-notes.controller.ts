@@ -42,7 +42,7 @@ export class LegalNotesController {
     @Req() req: any,
   ) {
     return this.service.createNote(caseId, dto, {
-      id: req.user?.id,
+      id: req.user?.userId ?? req.user?.id,
       name: req.user?.name ?? null,
       role: req.user?.role ?? null,
     });
@@ -55,7 +55,7 @@ export class LegalNotesController {
     @Req() req: any,
   ) {
     return this.service.recordDecision(caseId, dto, {
-      id: req.user?.id,
+      id: req.user?.userId ?? req.user?.id,
       name: req.user?.name ?? null,
       role: req.user?.role ?? null,
     });

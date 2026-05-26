@@ -33,6 +33,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const msg = (exceptionResponse as any).message;
         message = Array.isArray(msg) ? msg[0] : String(msg);
       }
+      // Log 5xx HttpExceptions too — a controller can throw a
+      // generic InternalServerErrorException and silence the real
+      // cause without this. 4xx is intentional client-error and
+      // already structured, so we skip those.
+      if (status >= 500) {
+        this.logger.error(
+          `HttpException (${status})`,
+          exception.stack,
+        );
+      }
     } else {
       this.logger.error(
         'Unhandled exception',

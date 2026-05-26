@@ -63,7 +63,14 @@ export class CasesController {
     @Req() req: any,
   ) {
     return this.casesService.overrideRisk(id, dto, {
-      id: req.user?.id,
+      // PR-LIA-1 latency bug: JwtStrategy.validate returns
+      // { userId, email, role } — `req.user.id` is undefined. The
+      // service writes `LegalNote.authorId` (required FK) from
+      // actor.id, so the original `req.user?.id` crashed every
+      // write with PrismaClientValidationError as soon as the role
+      // gate let OWNER through (commit 8e20cb0). Match the pattern
+      // used elsewhere in this file.
+      id: req.user?.userId ?? req.user?.id,
       name: req.user?.name ?? null,
       role: req.user?.role ?? null,
     });
@@ -78,7 +85,7 @@ export class CasesController {
     @Req() req: any,
   ) {
     return this.casesService.clearHardStop(id, dto, {
-      id: req.user?.id,
+      id: req.user?.userId ?? req.user?.id,
       name: req.user?.name ?? null,
       role: req.user?.role ?? null,
     });
