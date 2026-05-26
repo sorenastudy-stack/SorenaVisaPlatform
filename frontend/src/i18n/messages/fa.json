@@ -1,7 +1,99 @@
 {
   "signIn": "ورود",
   "signOut": "خروج",
-  "dashboard": "داشبورد",
+  "dashboard": {
+    "welcome": {
+      "title": "خوش آمدید، {firstName}",
+      "subtitle": {
+        "DRAFT": "بیایید درخواست شما را پیش ببریم",
+        "SUBMITTED_FOR_REVIEW": "در حال بررسی درخواست شما هستیم",
+        "REVIEWED": "مشاور شما درخواست‌تان را بررسی کرده است",
+        "READY_FOR_INZ": "درخواست شما برای ارائه به ادارهٔ مهاجرت نیوزیلند آماده است",
+        "INZ_SUBMITTED": "به ادارهٔ مهاجرت نیوزیلند ارسال شد",
+        "APPROVED": "ویزای شما تأیید شد 🎉",
+        "DECLINED": "درخواست شما نیاز به رسیدگی دارد — مشاور شما با شما تماس خواهد گرفت"
+      }
+    },
+    "assessmentReport": {
+      "title": "نتیجهٔ ارزیابی شما",
+      "placeholder": "ارزیابی شما در حال پردازش است — نتایج پس از آماده شدن اینجا نمایش داده می‌شود.",
+      "score": "امتیاز",
+      "band": "بَند",
+      "route": "مسیر پیشنهادی",
+      "summary": "خلاصه",
+      "viewFull": "مشاهدهٔ گزارش کامل",
+      "comingSoon": "به‌زودی"
+    },
+    "progress": {
+      "title": "درخواست شما",
+      "stepLabel": "مرحلهٔ {current} از {total}",
+      "continue": "ادامهٔ درخواست",
+      "review": "مرور درخواست",
+      "complete": "تمام مراحل تکمیل شد"
+    },
+    "case": {
+      "title": "وضعیت پرونده",
+      "lastUpdated": "آخرین به‌روزرسانی {when}"
+    },
+    "caseStatus": {
+      "DRAFT": {
+        "label": "پیش‌نویس"
+      },
+      "SUBMITTED_FOR_REVIEW": {
+        "label": "ارسال‌شده برای بررسی"
+      },
+      "REVIEWED": {
+        "label": "بررسی‌شده توسط مشاور"
+      },
+      "READY_FOR_INZ": {
+        "label": "آمادهٔ ارسال به INZ"
+      },
+      "INZ_SUBMITTED": {
+        "label": "ارسال‌شده به INZ"
+      },
+      "APPROVED": {
+        "label": "تأییدشده"
+      },
+      "DECLINED": {
+        "label": "نیازمند رسیدگی"
+      }
+    },
+    "documents": {
+      "title": "مدارک شما",
+      "provided": "ارائه‌شده",
+      "needed": "موردنیاز",
+      "empty": "هنوز هیچ مدرکی موردنیاز نیست."
+    },
+    "activity": {
+      "title": "فعالیت‌های اخیر",
+      "empty": "هنوز چیزی نیست — با کار روی درخواست، فعالیت‌های شما اینجا نمایش داده می‌شود.",
+      "event": {
+        "STEP_STARTED": "شما {step} را شروع کردید",
+        "STEP_SAVED": "شما {step} را ذخیره کردید",
+        "DOCUMENT_RECORDED": "شما {documentType} را ثبت کردید",
+        "DOCUMENT_REMOVED": "شما {documentType} را حذف کردید",
+        "STATUS_CHANGED": "وضعیت پرونده به {status} تغییر کرد"
+      }
+    },
+    "tickets": {
+      "placeholder": {
+        "title": "تیکت‌های پشتیبانی",
+        "body": "به‌زودی — باز کردن تیکت و گفتگو با تیم ما."
+      }
+    },
+    "meetings": {
+      "placeholder": {
+        "title": "جلسات",
+        "body": "به‌زودی — رزرو جلسات زوم و مشاهدهٔ یادداشت‌های جلسات قبلی."
+      }
+    },
+    "chatbot": {
+      "placeholder": {
+        "title": "از سورنا بپرس",
+        "body": "به‌زودی — پاسخ سریع به پرسش‌های رایج."
+      }
+    }
+  },
   "welcome": "خوش آمدید",
   "cases": "پرونده‌ها",
   "documents": "اسناد",
@@ -346,22 +438,18 @@
   "admissionEducationHistoryDocsMissingCertificate": "بارگذاری گواهی نوتاری‌شده الزامی است.",
   "admissionEducationHistoryDocsMissingTranscript": "بارگذاری ریز نمرات نوتاری‌شده الزامی است.",
   "commonBackToTop": "بازگشت به بالا",
-
   "visaShellTitle": "بخش ویزا",
   "visaShellHelper": "درخواست ویزای دانشجویی INZ 1200. هر بخش را به ترتیب تکمیل کنید؛ هر زمان می‌توانید ذخیره کرده و بعداً بازگردید.",
   "visaShellLoading": "در حال آماده‌سازی درخواست ویزای شما…",
   "visaShellStartError": "نتوانستیم درخواست ویزا را آغاز کنیم. لطفاً صفحه را تازه‌سازی کنید.",
-
   "visaCommonYes": "بله",
   "visaCommonNo": "خیر",
   "visaCommonSaving": "در حال ذخیره…",
   "visaCommonNotProvided": "هنوز وارد نشده",
   "visaCommonCountryPlaceholder": "برای جست‌وجوی کشورها بنویسید",
-
   "visaIdentitySectionTitle": "مشخصات هویتی",
   "visaIdentityApplicantSurname": "نام خانوادگی متقاضی",
   "visaIdentityApplicantFirstName": "نام متقاضی",
-
   "visaIdentitySubsectionIdentityInfo": "اطلاعات هویتی",
   "visaIdentityMononymLabel": "آیا تک‌نامی هستید؟",
   "visaIdentityMononymHelper": "زمانی که نام رسمی شما تنها یک کلمه است. اگر کل نام شما در پاسپورت فقط در یک فیلد آمده، «بله» را انتخاب کنید. اگر نام و نام خانوادگی شما در فیلدهای جداگانه آمده، «خیر» را انتخاب کنید.",
@@ -376,14 +464,12 @@
   "visaIdentityUsedOtherNamesHelper": "شامل نام بدو تولد، نام پس از ازدواج یا فرزندخواندگی، نام انگلیسی، یا هر نام دیگری که با آن شناخته می‌شوید.",
   "visaIdentityOtherNamesLabel": "نام‌های دیگر",
   "visaIdentityOtherNamesPlaceholder": "تمام نام‌های دیگری که استفاده کرده‌اید را فهرست کنید",
-
   "visaIdentitySubsectionImmigration": "سابقهٔ مهاجرت به نیوزیلند",
   "visaIdentityCountryWhenSubmittingLabel": "هنگام ارسال این درخواست در چه کشور یا قلمرویی خواهید بود؟",
   "visaIdentityPrevAppliedNzVisaLabel": "آیا پیش‌تر برای ویزای نیوزیلند درخواست داده‌اید؟",
   "visaIdentityPrevRequestedNzetaLabel": "آیا پیش‌تر درخواست NZeTA داده‌اید؟",
   "visaIdentityEverTravelledNzLabel": "آیا تاکنون به نیوزیلند سفر کرده‌اید؟",
   "visaIdentityTotalNzTime24PlusLabel": "آیا مجموع زمان حضور شما در نیوزیلند — با احتساب این سفر پیشنهادی — ۲۴ ماه یا بیشتر می‌شود؟",
-
   "visaIdentitySubsectionPassport": "مشخصات پاسپورت و تولد",
   "visaIdentityPassportIntro": "مشخصات پاسپورت یا سند سفری که با آن به نیوزیلند سفر خواهید کرد را وارد کنید.",
   "visaIdentityPassportNumberLabel": "شمارهٔ پاسپورت",
@@ -404,19 +490,16 @@
   "visaIdentityStateOfBirthPlaceholder": "مثلاً استان تهران",
   "visaIdentityCityOfBirthLabel": "شهر محل تولد",
   "visaIdentityCityOfBirthPlaceholder": "مثلاً تهران",
-
   "visaIdentitySubsectionNationalId": "مشخصات کارت ملی",
   "visaIdentityHasNationalIdLabel": "آیا کد ملی دارید؟",
   "visaIdentityNationalIdNumberLabel": "کد ملی",
   "visaIdentityNationalIdNumberPlaceholder": "شماره همان‌طور که روی کارت آمده",
   "visaIdentityNationalIdCountryLabel": "کشور یا قلمرو صادرکننده",
-
   "visaIdentitySaveButton": "ذخیره و ادامه",
   "visaIdentitySaveSuccess": "مشخصات هویتی ذخیره شد.",
   "visaIdentitySaveError": "ذخیرهٔ مشخصات هویتی ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaIdentityValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
   "visaIdentitySavedBanner": "مشخصات هویتی ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
-
   "visaCommonBack": "بازگشت",
   "visaCommonAlertLabel": "هشدار",
   "visaCommonWarningLabel": "اخطار",
@@ -441,7 +524,6 @@
   "visaCommonTitleMs": "خانم",
   "visaCommonTitleDr": "دکتر",
   "visaCommonTitleProf": "پروفسور",
-
   "visaPhotoSubsectionTitle": "بارگذاری عکس",
   "visaPhotoExplanation": "عکس ویزای شما باید کمتر از ۶ ماه عمر داشته باشد و شرایط ما برای عکس را داشته باشد. از صفحهٔ عکس پاسپورت خود استفاده نکنید.",
   "visaPhotoRequirementsIntro": "هنگام بارگذاری عکس، باید:",
@@ -461,8 +543,6 @@
   "visaPhotoErrorSize": "حجم فایل عکس باید بین ۵۰۰ کیلوبایت و ۳ مگابایت باشد.",
   "visaPhotoErrorDimensions": "ابعاد عکس باید بین ۹۰۰×۱۲۰۰ و ۲۲۵۰×۳۰۰۰ پیکسل باشد.",
   "visaPhotoErrorUnreadable": "نتوانستیم این تصویر را بخوانیم. لطفاً فایل دیگری را امتحان کنید.",
-
-
   "visaAddressSectionTitle": "اطلاعات نشانی و تماس",
   "visaAddressIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای تماس با شما دربارهٔ درخواست‌تان در صورت لزوم استفاده می‌کنیم.",
   "visaAddressSubsectionAddress": "مشخصات نشانی",
@@ -479,7 +559,6 @@
   "visaAddressPostalSameHelper": "اگر می‌خواهید نامه‌ها در نشانی متفاوتی از محل زندگی فعلی‌تان به دست شما برسد، «خیر» را انتخاب کنید.",
   "visaAddressPostalBlockHeading": "نشانی پستی",
   "visaAddressPostalCountryLabel": "کشور یا قلمرو",
-
   "visaAddressSubsectionContact": "مشخصات تماس",
   "visaAddressContactAlertEmail": "نامه‌ها، اسناد و دیگر مکاتبات مربوط به این درخواست را مستقیماً در حساب Immigration Online شما بارگذاری می‌کنیم. هنگامی که این مکاتبات بارگذاری شوند، یک پیام اطلاع‌رسانی به نشانی ایمیلی که در اینجا وارد می‌کنید ارسال خواهیم کرد — مگر این‌که شخص دیگری این درخواست را از سوی شما ارسال کند و نقطهٔ تماس درخواست باشد. لطفاً نشانی ایمیلی را وارد کنید که مرتباً بررسی می‌کنید و ایمیل‌ها در آن بدون مشکل دریافت می‌شوند.",
   "visaAddressGuardianHelper": "اگر ۱۷ سال یا کمتر دارید، مشخصات والد یا قیم قانونی خود را وارد کنید.",
@@ -494,20 +573,16 @@
   "visaAddressPhoneCodePlaceholder": "+۶۴",
   "visaAddressPhoneNumberLabel": "شمارهٔ تلفن",
   "visaAddressPhoneNumberPlaceholder": "۱۲۳۹۸۷۶۵۴۴",
-
   "visaAddressSaveButton": "ذخیره و ادامه",
   "visaAddressSaveSuccess": "اطلاعات نشانی و تماس ذخیره شد.",
   "visaAddressSaveError": "ذخیرهٔ اطلاعات نشانی و تماس ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaAddressValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
   "visaAddressSavedBanner": "اطلاعات نشانی و تماس ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
-
   "visaEligibilitySectionTitle": "واجد شرایط بودن",
   "visaEligibilityIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای بررسی واجد شرایط بودن شما برای ویزای درخواستی استفاده می‌کنیم.",
-
   "visaEligibilitySubsectionStudyHistory": "سابقهٔ تحصیلی",
   "visaEligibilityHoldsNzStudentVisaLabel": "آیا در حال حاضر ویزای دانشجویی نیوزیلند دارید؟",
   "visaEligibilityHoldsNzStudentVisaHelper": "تفاوتی ندارد در نیوزیلند هستید یا خارج از آن.",
-
   "visaEligibilitySubsectionOfferAssistance": "کمک در دریافت پیشنهاد پذیرش",
   "visaEligibilityUsedAgentLabel": "آیا برای دریافت پیشنهاد پذیرش یا تأییدیهٔ ثبت‌نام از کارگزار آموزشی کمک گرفته‌اید؟",
   "visaEligibilityAgentDetailsHeading": "مشخصات کارگزار آموزشی",
@@ -518,7 +593,6 @@
   "visaEligibilityAgentGivenNameLabel": "نام یا نام کوچک",
   "visaEligibilityAgentSurnameLabel": "نام خانوادگی",
   "visaEligibilityAgentEmailLabel": "نشانی ایمیل",
-
   "visaEligibilitySubsectionStudyDetails": "مشخصات تحصیلی",
   "visaEligibilityStudyingSchoolLevelLabel": "آیا در سطح ابتدایی، راهنمایی یا دبیرستان تحصیل خواهید کرد؟",
   "visaEligibilityMastersOrPhdLabel": "آیا در مقطع کارشناسی ارشد یا دکتری (PhD) تحصیل خواهید کرد؟",
@@ -538,7 +612,6 @@
   "visaEligibilityCourseStartDateLabel": "تاریخ شروع",
   "visaEligibilityCourseEndDateLabel": "تاریخ پایان",
   "visaEligibilityIntendedArrivalDateLabel": "تاریخ ورود به نیوزیلند چه روزی است؟",
-
   "visaEligibilitySubsectionPhd": "مشخصات دکتری (PhD)",
   "visaEligibilityPhdDisciplineLabel": "حوزهٔ دکتری شما کدام است؟",
   "visaEligibilityPhdSubjectLabel": "موضوع دکتری شما چیست؟",
@@ -561,13 +634,11 @@
   "visaEligibilityPhdSupervisorOrgLabel": "سازمان یا مؤسسهٔ آموزشی استاد راهنما",
   "visaEligibilityPhdPublishedLabel": "آیا تاکنون مقاله یا پژوهشی منتشر کرده‌اید؟",
   "visaEligibilityPhdSupervisorOutsideNzLabel": "آیا برای دکتری استاد راهنمای دیگری از خارج از نیوزیلند نیز خواهید داشت؟",
-
   "visaEligibilitySubsectionStudentId": "شمارهٔ شناسایی دانشجویی",
   "visaEligibilityStudentIdExplanation1": "ممکن است لازم باشد برخی اطلاعات را با مؤسسهٔ آموزشی شما در نیوزیلند بررسی کنیم. اگر شمارهٔ دانشجویی صادرشده از سوی مؤسسه را می‌دانید، ارائهٔ آن می‌تواند بررسی‌های ما را سریع‌تر کند.",
   "visaEligibilityStudentIdExplanation2": "اگر شمارهٔ شناسایی دانشجویی خود را ارائه ندهید، باز هم می‌توانیم درخواست ویزای دانشجویی شما را ارزیابی و تصمیم‌گیری کنیم؛ فقط زمان بیشتری می‌برد.",
   "visaEligibilityProviderIssuedStudentIdLabel": "آیا مؤسسهٔ آموزشی نیوزیلندی شما به شما شمارهٔ شناسایی دانشجویی داده است؟",
   "visaEligibilityStudentIdNumberLabel": "شمارهٔ شناسایی دانشجویی صادرشده توسط مؤسسهٔ آموزشی نیوزیلندی شما چیست؟",
-
   "visaEligibilitySubsectionSituationPlans": "وضعیت و برنامه‌های شما",
   "visaEligibilitySituationIntro": "از این اطلاعات برای تصمیم‌گیری در این موارد استفاده می‌کنیم:",
   "visaEligibilitySituationBullet1": "متقاضی واقعی هستید",
@@ -586,13 +657,11 @@
   "visaEligibilityPlansAfterStudyHelper": "این می‌تواند شامل درخواست ویزای دانشجویی دیگر برای تحصیل بیشتر، درخواست ویزای کار پس از تحصیل یا اقامت، یا بازگشت به کشور خودتان باشد.",
   "visaEligibilityMultiYearLabel": "آیا برنامه‌ای چندساله می‌خوانید؟",
   "visaEligibilityMultiYearHelper": "برای مثال، مدرک کارشناسی که سه تا چهار سال تحصیل تمام‌وقت طول می‌کشد.",
-
   "visaEligibilitySaveButton": "ذخیره و ادامه",
   "visaEligibilitySaveSuccess": "بخش واجد شرایط بودن ذخیره شد.",
   "visaEligibilitySaveError": "ذخیرهٔ بخش واجد شرایط بودن ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaEligibilityValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
   "visaEligibilitySavedBanner": "بخش واجد شرایط بودن ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
-
   "visaDocumentDropzone": "برای بارگذاری فایل کلیک کنید (PDF، JPEG یا PNG)",
   "visaDocumentLoading": "در حال بررسی بارگذاری‌های قبلی…",
   "visaDocumentUploading": "در حال بارگذاری…",
@@ -605,7 +674,6 @@
   "visaDocumentDeleteError": "حذف سند ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaDocumentErrorType": "فایل باید PDF، JPEG یا PNG باشد.",
   "visaDocumentErrorSize": "حجم فایل بیش از حد است.",
-
   "visaCharacterSectionTitle": "شخصیت",
   "visaCharacterIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای بررسی این‌که الزامات شخصیتی را دارید استفاده می‌کنیم.",
   "visaCharacterSubsectionDetails": "مشخصات شخصیت",
@@ -614,7 +682,6 @@
   "visaCharacterUnderInvestigationLabel": "آیا در حال حاضر در هر کشوری از جمله نیوزیلند تحت تحقیق، تحت تعقیب برای بازجویی یا متهم به ارتکاب جرم هستید؟",
   "visaCharacterEverDeportedLabel": "آیا تاکنون از هر کشوری اخراج، deport، محروم، حذف یا منع ورود شده‌اید؟",
   "visaCharacterEverRefusedVisaLabel": "آیا تاکنون از سوی هر کشوری به جز نیوزیلند درخواست ویزا یا مجوز شما رد شده است؟",
-
   "visaCharacterSubsectionPoliceCerts": "گواهی‌های عدم سوء پیشینه",
   "visaCharacterPoliceCertCitizenshipHeading": "گواهی عدم سوء پیشینه از کشور شهروندی شما",
   "visaCharacterPoliceCertIntro": "گواهی کامل عدم سوء پیشینه را از کشور پاسپورت خود در زیر بارگذاری کنید. باید این گواهی را پیش از ارسال درخواست بارگذاری کنید.",
@@ -630,7 +697,6 @@
   "visaCharacterPoliceCertCountryOfIssueLabel": "کشور صادرکننده",
   "visaCharacterPoliceCertInEnglishLabel": "آیا این سند به زبان انگلیسی است؟",
   "visaCharacterUploadBeforeSubmitAlert": "حتماً پیش از ارسال درخواست، گواهی کامل عدم سوء پیشینه را بارگذاری کنید. در غیر این صورت ممکن است بر نتیجهٔ درخواست شما تأثیر منفی بگذارد.",
-
   "visaCharacterSubsectionOtherCitizenships": "تابعیت‌های دیگر",
   "visaCharacterHoldsOtherCitizenshipsLabel": "آیا تابعیت‌های دیگری دارید؟",
   "visaCharacterCitizenshipsAtLeastOne": "لطفاً حداقل یک تابعیت دیگر اضافه کنید.",
@@ -643,36 +709,28 @@
   "visaCharacterCitizenshipAddError": "افزودن تابعیت ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaCharacterCitizenshipUpdateError": "به‌روزرسانی تابعیت ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaCharacterCitizenshipRemoveError": "حذف تابعیت ممکن نشد. لطفاً دوباره تلاش کنید.",
-
   "visaCharacterSubsectionOtherCountries": "گواهی عدم سوء پیشینه از دیگر کشورهایی که در آن‌ها زندگی کرده‌اید",
   "visaCharacterLivedOtherCountry5YearsLabel": "آیا از سن ۱۷ سالگی به بعد، در هر کشوری ۵ سال یا بیشتر زندگی کرده‌اید؟",
   "visaCharacterLivedOtherCountry5YearsHelper": "این شامل مدت‌های ترکیبی است که در مجموع به ۵ سال یا بیشتر در یک کشور می‌رسد. لازم نیست کشورهای تابعیت خود را وارد کنید.",
-
   "visaCharacterSaveButton": "ذخیره و ادامه",
   "visaCharacterSaveSuccess": "بخش شخصیت ذخیره شد.",
   "visaCharacterSaveError": "ذخیرهٔ بخش شخصیت ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaCharacterValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
   "visaCharacterSavedBanner": "بخش شخصیت ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
-
   "visaHealthSectionTitle": "سلامت",
   "visaHealthIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای بررسی این‌که از سطح قابل قبول سلامت برخوردار هستید استفاده می‌کنیم.",
-
   "visaHealthSubsectionGuidance": "راهنما",
   "visaHealthGuidanceNote": "همهٔ متقاضیان ویزا باید از سطح قابل قبول سلامت برخوردار باشند. پس از ارسال درخواست ویزا، سوابق پزشکی قبلی که برای ما فرستاده‌اید را بررسی می‌کنیم. اگر نیاز به معاینهٔ پزشکی داشته باشید، با اطلاعات بیشتر با شما تماس می‌گیریم.",
-
   "visaHealthSubsectionTuberculosis": "بیماری سل",
   "visaHealthHasTbLabel": "آیا به بیماری سل (TB) مبتلا هستید؟",
-
   "visaHealthSubsectionMedicalCare": "مراقبت پزشکی در مدت اقامت در نیوزیلند",
   "visaHealthRenalDialysisLabel": "آیا در مدت اقامت در نیوزیلند به دیالیز کلیه نیاز خواهید داشت؟",
   "visaHealthMedicalConditionLabel": "آیا بیماری دارید که در مدت اقامت در نیوزیلند نیاز به مراقبت بیمارستانی یا تخصصی دارد یا ممکن است داشته باشد؟",
   "visaHealthMedicalConditionHelper": "اگر نگران احتمال تصادف یا بیماری غیرمنتظره هستید، نیازی به پاسخ «بله» نیست.",
   "visaHealthResidentialCareLabel": "آیا در مدت اقامت در نیوزیلند به مراقبت اقامتی نیاز خواهید داشت یا ممکن است نیاز پیدا کنید؟",
   "visaHealthResidentialCareHelper": "مراقبت اقامتی، مراقبت طولانی‌مدتی است که در مراکز مسکونی برای سالمندان یا افراد دارای معلولیت‌های جسمی، حسی، ذهنی یا روانی ارائه می‌شود.",
-
   "visaHealthSubsectionPregnancy": "بارداری",
   "visaHealthIsPregnantLabel": "آیا باردار هستید؟",
-
   "visaHealthSubsectionLengthOfStay": "مدت اقامت",
   "visaHealthLengthHelperIntro": "مدت اقامت در نظر گرفته‌شدهٔ شما به ما کمک می‌کند تشخیص دهیم آیا نیاز به معاینهٔ پزشکی دارید.",
   "visaHealthLengthLabel": "چه مدت قصد اقامت در نیوزیلند را دارید؟",
@@ -680,12 +738,10 @@
   "visaHealthLengthSixOrLess": "۶ ماه یا کمتر",
   "visaHealthLengthSixToTwelve": "بیشتر از ۶ ماه تا ۱۲ ماه",
   "visaHealthLengthMoreThanTwelve": "بیشتر از ۱۲ ماه",
-
   "visaHealthSubsectionMedicalExams": "معاینات پزشکی",
   "visaHealthHadMedicalExamLabel": "آیا برای این درخواست ویزا قبلاً معاینهٔ پزشکی انجام داده‌اید؟",
   "visaHealthMedicalRefLabel": "شمارهٔ مرجع eMedical (NZER) یا شمارهٔ مرجع پروندهٔ سلامت INZ (NZHR) مربوط به آخرین معاینهٔ پزشکی خود را وارد کنید.",
   "visaHealthMedicalRefHelper": "ارائهٔ شمارهٔ مرجع eMedical (NZER) یا شمارهٔ مرجع پروندهٔ سلامت INZ (NZHR) از تأخیر در پردازش درخواست شما جلوگیری می‌کند. NZER با حرف «N» و ۹ رقم آغاز می‌شود. NZHR با «HR» و ۷ رقم آغاز می‌شود.",
-
   "visaHealthSubsectionTbRisk": "ریسک سل (TB)",
   "visaHealthTbRiskNote": "اگر از آخرین رادیولوژی قفسهٔ سینهٔ شما تاکنون مدتی را در مناطقی با ریسک سل گذرانده‌اید، ممکن است از شما گواهی رادیولوژی جدید بخواهیم.",
   "visaHealthTbRiskHeading": "کشورهایی را که در ۵ سال گذشته بازدید کرده‌اید یا در آن‌ها زندگی کرده‌اید فهرست کنید.",
@@ -702,23 +758,19 @@
   "visaHealthTbRemoveError": "حذف کشور ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaHealthTbDurationInvalid": "مجموع مدت زمان باید یک عدد صحیح غیر منفی به روز باشد.",
   "visaHealthTbNoMoreLabel": "کشور یا قلمرو دیگری برای افزودن ندارم.",
-
   "visaHealthSubsectionInsurance": "اعلامیهٔ مربوط به الزامات بیمه",
   "visaHealthInsuranceIntro": "این اعلامیه از شما می‌خواهد که با الزام داشتن بیمهٔ قابل قبول به عنوان شرط ویزای دانشجویی خود و پیامدهای نداشتن بیمهٔ قابل قبول موافقت کرده و درک خود را تأیید کنید.",
   "visaHealthInsuranceP1": "موافقت می‌کنم که از زمان شروع ثبت‌نام تا انقضای ویزای دانشجویی خود — مگر اینکه زودتر از نیوزیلند خارج شوم — بیمه‌ای را که مؤسسهٔ آموزشی من قابل قبول می‌داند تهیه کرده و حفظ کنم.",
   "visaHealthInsuranceP2": "می‌دانم که داشتن بیمه شرط ویزای من خواهد بود و اگر در مدت ثبت‌نام تا انقضای ویزای خود — مگر اینکه زودتر از نیوزیلند خارج شوم — بیمه نداشته باشم، ممکن است مشمول اخراج (deportation) شوم.",
   "visaHealthInsuranceP3": "می‌دانم که اگر برای ویزای دیگری درخواست دهم، ممکن است از من خواسته شود مدرکی ارائه کنم که در مدت اقامت در نیوزیلند به عنوان دارندهٔ ویزای دانشجویی بین‌المللی، بیمهٔ قابل قبولی داشته‌ام.",
   "visaHealthInsuranceAgreeLabel": "با این اعلامیه موافقت می‌کنم.",
-
   "visaHealthSubsectionPublicHealth": "تأییدیهٔ سلامت عمومی",
   "visaHealthPublicHealthAckLabel": "می‌دانم که دولت نیوزیلند توصیه کرده است اگر مواد مخدر تزریقی مصرف کرده‌ام یا در فعالیت‌هایی شرکت داشته‌ام که ممکن است مرا در معرض هپاتیت یا HIV قرار داده باشد، پیش از ورود به نیوزیلند برای آزمایش‌های مناسب و شروع درمان به یک متخصص سلامت مراجعه کنم.",
-
   "visaHealthSaveButton": "ذخیره و ادامه",
   "visaHealthSaveSuccess": "بخش سلامت ذخیره شد.",
   "visaHealthSaveError": "ذخیرهٔ بخش سلامت ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaHealthValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
   "visaHealthSavedBanner": "بخش سلامت ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
-
   "visaEducationHistorySectionTitle": "سابقهٔ تحصیلی",
   "visaEducationHistoryIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای بررسی این‌که واقعاً قصد اقامت موقت و قانونی دارید استفاده می‌کنیم.",
   "visaEducationHistorySubsectionDetails": "مشخصات تحصیلی",
@@ -739,23 +791,19 @@
   "visaEducationHistorySaveError": "ذخیرهٔ سابقهٔ تحصیلی ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaEducationHistoryValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی هر مدرک را تکمیل کنید.",
   "visaEducationHistorySavedBanner": "سابقهٔ تحصیلی ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
-
   "visaEmploymentHistorySectionTitle": "سابقهٔ شغلی",
   "visaEmploymentHistoryIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای بررسی این‌که واقعاً قصد اقامت موقت و قانونی دارید استفاده می‌کنیم.",
   "visaEmploymentContinuousHistoryAlert": "اگر سابقهٔ کامل و پیوسته‌ای ارائه ندهید، درخواست شما تا زمان دریافت توضیحات بیشتر به تأخیر خواهد افتاد.",
-
   "visaEmploymentSubsectionHistory": "سابقهٔ شغلی",
   "visaEmploymentEverGovernmentLabel": "آیا تاکنون در هر سمتی برای دولت هر کشوری کار کرده‌اید، از جمله به‌عنوان مقام دولتی؟",
   "visaEmploymentEverGovernmentHelper": "برای مثال: شهردار، قاضی، مسئول انتخابات، مدیر بیمارستان و غیره.",
   "visaEmploymentEverPrisonGuardLabel": "آیا تاکنون نگهبان یا کارمند زندان، بازداشتگاه یا اردوگاه گذر بوده‌اید؟",
-
   "visaEmploymentSubsectionCurrent": "شغل فعلی",
   "visaEmploymentCurrentlyWorkingLabel": "آیا در حال حاضر کار می‌کنید؟",
   "visaEmploymentCurrentlyWorkingHelper": "شامل اشتغال و خوداشتغالی در کشور خودتان نیز می‌شود.",
   "visaEmploymentProvideCurrentDetails": "مشخصات شغل فعلی خود را وارد کنید",
   "visaEmploymentCurrentLoading": "در حال آماده‌سازی فرم…",
   "visaEmploymentCurrentHeading": "شغل فعلی",
-
   "visaEmploymentSubsectionPrevious": "اشتغال قبلی",
   "visaEmploymentHadPreviousLabel": "آیا اشتغال یا خوداشتغالی قبلی داشته‌اید؟",
   "visaEmploymentProvidePreviousDetails": "مشخصات تمام دوره‌های سابقهٔ کاری خود را وارد کنید. این شامل خوداشتغالی و اشتغال در داخل و خارج از نیوزیلند می‌شود.",
@@ -767,7 +815,6 @@
   "visaEmploymentRemoveError": "حذف شغل ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaEmploymentAddError": "افزودن شغل ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaEmploymentUpdateError": "ذخیرهٔ تغییر ممکن نشد. لطفاً دوباره تلاش کنید.",
-
   "visaEmploymentStartDateLabel": "تاریخ شروع",
   "visaEmploymentEndDateLabel": "تاریخ پایان",
   "visaEmploymentRoleTitleLabel": "عنوان شغلی",
@@ -791,11 +838,9 @@
   "visaEmploymentEmployerPhoneLabel": "شمارهٔ تلفن کارفرما",
   "visaEmploymentEmployerPhoneHelper": "کد کشور، کد منطقه و شمارهٔ تلفن را با فاصله وارد کنید، مثلاً +۶۴ ۱۲۳ ۹۸۷۶۵۴۴",
   "visaEmploymentEmployerEmailLabel": "نشانی ایمیل کارفرما",
-
   "visaEmploymentSubsectionUnemployed": "بیکاری یا خدمات بدون مزد",
   "visaEmploymentEverUnemployedLabel": "آیا تاکنون دوره‌هایی از بیکاری یا عدم تحصیل داشته‌اید؟",
   "visaEmploymentEverUnemployedHelper": "اگر دوره‌هایی از بیکاری داشته‌اید، یا در دوره‌هایی که شاغل نبودید کار داوطلبانه، بدون مزد یا کارهای خانگی انجام داده‌اید، «بله» را پاسخ دهید.",
-
   "visaUnempProvideDetails": "مشخصات تمام دوره‌هایی که در اشتغال یا تحصیل پولی نبودید را وارد کنید. این شامل دوره‌هایی است که در آن کار داوطلبانه یا بدون مزد یا کارهای خانگی انجام می‌دادید.",
   "visaUnempRowHeading": "دوره {n}",
   "visaUnempAtLeastOne": "لطفاً حداقل یک دوره اضافه کنید.",
@@ -810,28 +855,24 @@
   "visaUnempActivityHelper": "شرح فعالیت‌های خود در آن دوره را وارد کنید.",
   "visaUnempFinSupportLabel": "در این مدت چگونه از نظر مالی تأمین می‌شدید؟",
   "visaUnempFinSupportHelper": "شرح حمایت مالی دریافتی یا نحوهٔ تأمین خودتان را وارد کنید.",
-
   "visaEmploymentSaveButton": "ذخیره و ادامه",
   "visaEmploymentSaveSuccess": "سابقهٔ شغلی ذخیره شد.",
   "visaEmploymentSaveError": "ذخیرهٔ سابقهٔ شغلی ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaEmploymentValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
   "visaEmploymentSavedBanner": "سابقهٔ شغلی ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
-
   "visaRelationshipsSectionTitle": "روابط",
   "visaRelationshipsIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای بررسی این‌که واقعاً قصد اقامت موقت و قانونی دارید استفاده می‌کنیم.",
-
   "visaRelSubsectionStatus": "وضعیت رابطه",
   "visaRelStatusHelper": "گزینه‌ای را انتخاب کنید که بهترین توصیف از وضعیت فعلی رابطهٔ شما باشد.",
   "visaRelPartnershipStatusLabel": "وضعیت شراکت زندگی شما چیست؟",
   "visaRelEditOnAdmissionHelper": "از مرحلهٔ ۲ فرم پذیرش شما گرفته شده است. برای تغییر، اطلاعات فرم پذیرش خود را ویرایش کنید.",
   "visaRelMaritalStatusMissingOnAdmission": "وضعیت شراکت در فرم پذیرش شما ثبت نشده است. لطفاً پیش از ادامه آن را آنجا تکمیل کنید.",
-  "visaRelMaritalStatusSingle":    "مجرد",
-  "visaRelMaritalStatusMarried":   "متأهل / در پیوند مدنی",
-  "visaRelMaritalStatusDeFacto":   "شریک (de facto)",
+  "visaRelMaritalStatusSingle": "مجرد",
+  "visaRelMaritalStatusMarried": "متأهل / در پیوند مدنی",
+  "visaRelMaritalStatusDeFacto": "شریک (de facto)",
   "visaRelMaritalStatusSeparated": "جدا زندگی می‌کنم",
-  "visaRelMaritalStatusDivorced":  "طلاق گرفته",
-  "visaRelMaritalStatusWidowed":   "بیوه",
-
+  "visaRelMaritalStatusDivorced": "طلاق گرفته",
+  "visaRelMaritalStatusWidowed": "بیوه",
   "visaRelSubsectionPartner": "شریک فعلی",
   "visaRelPartnerHeading": "شریک فعلی",
   "visaRelPartnerIntro": "مشخصات شریک خود را وارد کنید — همان‌گونه که در پاسپورت او (در صورت داشتن) آمده است.",
@@ -862,13 +903,11 @@
   "visaRelPartnerPassportIssueDateLabel": "تاریخ صدور پاسپورت",
   "visaRelPartnerPassportExpiryDateLabel": "تاریخ انقضای پاسپورت",
   "visaRelPartnerUpdateError": "ذخیرهٔ مشخصات شریک ممکن نشد. لطفاً دوباره تلاش کنید.",
-
   "visaRelSubsectionFormer": "شرکای سابق",
   "visaRelHasFormerPartnersLabel": "آیا شرکای سابقی دارید — از جمله افراد فوت‌شده، طلاق‌گرفته یا جداشده از شما؟",
   "visaRelFormerPartnerHeading": "شریک سابق {n}",
   "visaRelFormerPartnersAtLeastOne": "لطفاً حداقل یک شریک سابق اضافه کنید.",
   "visaRelAddFormerPartnerButton": "افزودن شریک سابق",
-
   "visaRelSubsectionChildren": "فرزندان",
   "visaRelChildrenHelper": "شامل فرزندان زنده، اعم از زیستی، فرزندخوانده، فرزندان همسر، و فرزندان از رابطه‌های قبلی.",
   "visaRelHasChildrenLabel": "آیا فرزند دارید؟",
@@ -883,7 +922,6 @@
   "visaRelChildRelAdoptedSon": "پسرخوانده",
   "visaRelChildRelAdoptedDaughter": "دخترخوانده",
   "visaRelChildLivesWithLabel": "آیا این فرزند با شما زندگی می‌کند؟",
-
   "visaRelSubsectionParents": "والدین و قیم‌های قانونی",
   "visaRelParentsHelper": "مشخصات والدین و قیم‌های قانونی زنده و فوت‌شده را وارد کنید (از جمله ناپدری، نامادری، یا والدین پذیرنده).",
   "visaRelParentsAtLeastOne": "لطفاً حداقل یک والد یا قیم قانونی اضافه کنید.",
@@ -894,7 +932,6 @@
   "visaRelParentRelMother": "مادر",
   "visaRelParentRelGuardian": "قیم",
   "visaRelParentIsDeceasedLabel": "آیا فوت کرده‌اند؟",
-
   "visaRelSubsectionSiblings": "خواهر و برادر",
   "visaRelHasSiblingsLabel": "آیا خواهر یا برادر دارید؟",
   "visaRelHasSiblingsHelper": "شامل خواهر و برادر تنی، ناتنی، نیمه‌خواهر/برادر و پذیرفته‌شدگان زنده.",
@@ -904,7 +941,6 @@
   "visaRelSiblingRelLabel": "نسبت با شما",
   "visaRelSiblingRelBrother": "برادر",
   "visaRelSiblingRelSister": "خواهر",
-
   "visaRelSubsectionNzContacts": "افراد تماس در نیوزیلند",
   "visaRelHasNzContactsLabel": "آیا در نیوزیلند با کسی در ارتباط هستید؟",
   "visaRelNzContactsAtLeastOne": "لطفاً حداقل یک فرد تماس در نیوزیلند اضافه کنید.",
@@ -918,19 +954,16 @@
   "visaRelNzContactTownCityLabel": "شهر یا روستا",
   "visaRelNzContactRegionLabel": "منطقه (اختیاری)",
   "visaRelNzContactPostcodeLabel": "کد پستی (اختیاری)",
-
   "visaRelRemoveTooltip": "حذف این مورد",
   "visaRelRemoveConfirm": "این مورد حذف شود؟",
   "visaRelGenericAddError": "افزودن مورد ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaRelGenericRemoveError": "حذف مورد ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaRelGenericUpdateError": "ذخیرهٔ تغییر ممکن نشد. لطفاً دوباره تلاش کنید.",
-
   "visaRelSaveButton": "ذخیره و ادامه",
   "visaRelSaveSuccess": "روابط ذخیره شد.",
   "visaRelSaveError": "ذخیرهٔ روابط ممکن نشد. لطفاً دوباره تلاش کنید.",
   "visaRelValidationMissing": "لطفاً پیش از ذخیره، تمام فیلدهای الزامی را تکمیل کنید.",
   "visaRelSavedBanner": "روابط ذخیره شد — بخش‌های بعدی به‌زودی اضافه می‌شوند.",
-
   "visaBackgroundSectionTitle": "اطلاعات سوابق",
   "visaBackgroundIntro": "از اطلاعاتی که در این بخش وارد می‌کنید برای بررسی این‌که الزامات شخصیتی را دارید و واقعاً قصد اقامت موقت و قانونی دارید استفاده می‌کنیم.",
   "visaBackgroundSubsectionCultural": "مناصب فرهنگی",
@@ -1216,164 +1249,174 @@
   "visaDocs2CustomLabelLabel": "عنوان این مدرک",
   "visaDocs2SectionDeclaration": "اعلامیه",
   "visaDocs2DeclarationCheckedLabel": "بررسی کرده‌ام که مدارک بارگذاری‌شده به‌درستی نمایانگر اظهارات این فرم هستند.",
-  "dashboard.welcome.title": "خوش آمدید، {firstName}",
-  "dashboard.welcome.subtitle.DRAFT": "بیایید درخواست شما را پیش ببریم",
-  "dashboard.welcome.subtitle.SUBMITTED_FOR_REVIEW": "در حال بررسی درخواست شما هستیم",
-  "dashboard.welcome.subtitle.REVIEWED": "مشاور شما درخواست‌تان را بررسی کرده است",
-  "dashboard.welcome.subtitle.READY_FOR_INZ": "درخواست شما برای ارائه به ادارهٔ مهاجرت نیوزیلند آماده است",
-  "dashboard.welcome.subtitle.INZ_SUBMITTED": "به ادارهٔ مهاجرت نیوزیلند ارسال شد",
-  "dashboard.welcome.subtitle.APPROVED": "ویزای شما تأیید شد 🎉",
-  "dashboard.welcome.subtitle.DECLINED": "درخواست شما نیاز به رسیدگی دارد — مشاور شما با شما تماس خواهد گرفت",
-  "dashboard.assessmentReport.title": "نتیجهٔ ارزیابی شما",
-  "dashboard.assessmentReport.placeholder": "ارزیابی شما در حال پردازش است — نتایج پس از آماده شدن اینجا نمایش داده می‌شود.",
-  "dashboard.assessmentReport.score": "امتیاز",
-  "dashboard.assessmentReport.band": "بَند",
-  "dashboard.assessmentReport.route": "مسیر پیشنهادی",
-  "dashboard.assessmentReport.summary": "خلاصه",
-  "dashboard.assessmentReport.viewFull": "مشاهدهٔ گزارش کامل",
-  "dashboard.assessmentReport.comingSoon": "به‌زودی",
-  "dashboard.progress.title": "درخواست شما",
-  "dashboard.progress.stepLabel": "مرحلهٔ {current} از {total}",
-  "dashboard.progress.continue": "ادامهٔ درخواست",
-  "dashboard.progress.review": "مرور درخواست",
-  "dashboard.progress.complete": "تمام مراحل تکمیل شد",
-  "dashboard.case.title": "وضعیت پرونده",
-  "dashboard.caseStatus.DRAFT.label": "پیش‌نویس",
-  "dashboard.caseStatus.SUBMITTED_FOR_REVIEW.label": "ارسال‌شده برای بررسی",
-  "dashboard.caseStatus.REVIEWED.label": "بررسی‌شده توسط مشاور",
-  "dashboard.caseStatus.READY_FOR_INZ.label": "آمادهٔ ارسال به INZ",
-  "dashboard.caseStatus.INZ_SUBMITTED.label": "ارسال‌شده به INZ",
-  "dashboard.caseStatus.APPROVED.label": "تأییدشده",
-  "dashboard.caseStatus.DECLINED.label": "نیازمند رسیدگی",
-  "dashboard.case.lastUpdated": "آخرین به‌روزرسانی {when}",
-  "dashboard.documents.title": "مدارک شما",
-  "dashboard.documents.provided": "ارائه‌شده",
-  "dashboard.documents.needed": "موردنیاز",
-  "dashboard.documents.empty": "هنوز هیچ مدرکی موردنیاز نیست.",
-  "dashboard.activity.title": "فعالیت‌های اخیر",
-  "dashboard.activity.empty": "هنوز چیزی نیست — با کار روی درخواست، فعالیت‌های شما اینجا نمایش داده می‌شود.",
-  "dashboard.activity.event.STEP_STARTED": "شما {step} را شروع کردید",
-  "dashboard.activity.event.STEP_SAVED": "شما {step} را ذخیره کردید",
-  "dashboard.activity.event.DOCUMENT_RECORDED": "شما {documentType} را ثبت کردید",
-  "dashboard.activity.event.DOCUMENT_REMOVED": "شما {documentType} را حذف کردید",
-  "dashboard.activity.event.STATUS_CHANGED": "وضعیت پرونده به {status} تغییر کرد",
-  "dashboard.tickets.placeholder.title": "تیکت‌های پشتیبانی",
-  "dashboard.tickets.placeholder.body": "به‌زودی — باز کردن تیکت و گفتگو با تیم ما.",
-  "dashboard.meetings.placeholder.title": "جلسات",
-  "dashboard.meetings.placeholder.body": "به‌زودی — رزرو جلسات زوم و مشاهدهٔ یادداشت‌های جلسات قبلی.",
-  "dashboard.chatbot.placeholder.title": "از سورنا بپرس",
-  "dashboard.chatbot.placeholder.body": "به‌زودی — پاسخ سریع به پرسش‌های رایج.",
-  "tickets.title": "تیکت‌های پشتیبانی",
-  "tickets.list.header": "تیکت‌های شما",
-  "tickets.list.empty": "هنوز هیچ تیکتی ندارید.",
-  "tickets.list.emptyFiltered": "هیچ تیکتی با فیلترهای شما مطابقت ندارد.",
-  "tickets.list.searchPlaceholder": "جست‌وجو بر اساس موضوع",
-  "tickets.list.filterStatus": "وضعیت",
-  "tickets.list.filterDepartment": "دپارتمان",
-  "tickets.list.openNew": "ایجاد تیکت جدید",
-  "tickets.list.viewAll": "مشاهدهٔ همهٔ تیکت‌ها",
-  "tickets.dashboard.title": "تیکت‌های پشتیبانی",
-  "tickets.dashboard.openCount": "{count} باز",
-  "tickets.dashboard.noOpen": "تیکت بازی وجود ندارد",
-  "tickets.status.OPEN": "باز",
-  "tickets.status.IN_PROGRESS": "در حال بررسی",
-  "tickets.status.RESOLVED": "حل‌شده",
-  "tickets.status.CLOSED": "بسته‌شده",
-  "tickets.priority.LOW": "پایین",
-  "tickets.priority.NORMAL": "عادی",
-  "tickets.priority.HIGH": "بالا",
-  "tickets.department.ADMISSIONS": "پذیرش",
-  "tickets.department.VISA_APPLICATION": "درخواست ویزا",
-  "tickets.department.DOCUMENTS": "مدارک",
-  "tickets.department.PAYMENTS_FINANCE": "پرداخت‌ها و امور مالی",
-  "tickets.department.TECHNICAL_SUPPORT": "پشتیبانی فنی",
-  "tickets.department.GENERAL_INQUIRY": "سؤال عمومی",
-  "tickets.department.description.ADMISSIONS": "سؤالات دربارهٔ انتخاب دانشگاه، درخواست‌ها و پیشنهادها.",
-  "tickets.department.description.VISA_APPLICATION": "سؤالات دربارهٔ فرم ویزا یا الزامات ادارهٔ مهاجرت نیوزیلند.",
-  "tickets.department.description.DOCUMENTS": "سؤالات دربارهٔ مدارک موردنیاز یا ترجمه‌ها.",
-  "tickets.department.description.PAYMENTS_FINANCE": "سؤالات دربارهٔ صورت‌حساب، فاکتورها یا بازپرداخت.",
-  "tickets.department.description.TECHNICAL_SUPPORT": "مشکلات ورود به سیستم یا اشکالات نرم‌افزاری.",
-  "tickets.department.description.GENERAL_INQUIRY": "هر چیز دیگری.",
-  "tickets.new.title": "ایجاد تیکت جدید",
-  "tickets.new.department.label": "کدام دپارتمان؟",
-  "tickets.new.department.placeholder": "یک دپارتمان انتخاب کنید",
-  "tickets.new.subject.label": "موضوع",
-  "tickets.new.subject.placeholder": "خلاصه‌ای کوتاه از سؤال شما",
-  "tickets.new.message.label": "پیام شما",
-  "tickets.new.message.placeholder": "سؤال خود را با جزئیات شرح دهید. هرچه اطلاعات بیشتری بدهید، سریع‌تر می‌توانیم کمک کنیم.",
-  "tickets.new.submit": "ایجاد تیکت",
-  "tickets.new.submitting": "در حال ایجاد تیکت…",
-  "tickets.detail.replyLabel": "پاسخ",
-  "tickets.detail.replyPlaceholder": "پاسخ خود را بنویسید…",
-  "tickets.detail.sendReply": "ارسال پاسخ",
-  "tickets.detail.closedNotice": "این تیکت بسته شده است. {link}",
-  "tickets.detail.closedNoticeLink": "ایجاد تیکت جدید",
-  "tickets.detail.closeButton": "بستن تیکت",
-  "tickets.detail.closeConfirm.title": "این تیکت بسته شود؟",
-  "tickets.detail.closeConfirm.body": "پس از بسته شدن نمی‌توانید آن را دوباره باز کنید. باید یک تیکت جدید ایجاد کنید.",
-  "tickets.detail.closeConfirm.confirm": "بله، بسته شود",
-  "tickets.detail.closeConfirm.cancel": "انصراف",
-  "tickets.detail.authorYou": "شما",
-  "tickets.detail.authorSystem": "سیستم",
-  "tickets.systemEvent.statusChanged": "وضعیت از {old} به {new} تغییر کرد",
-  "tickets.systemEvent.opened": "تیکت ایجاد شد",
-  "tickets.systemEvent.closed": "تیکت بسته شد",
-  "tickets.validation.subjectRequired": "موضوع الزامی است.",
-  "tickets.validation.subjectMin": "موضوع باید حداقل ۵ کاراکتر باشد.",
-  "tickets.validation.subjectMax": "موضوع نمی‌تواند بیش از ۲۰۰ کاراکتر باشد.",
-  "tickets.validation.messageRequired": "پیام الزامی است.",
-  "tickets.validation.messageMin": "پیام باید حداقل ۱۰ کاراکتر باشد.",
-  "tickets.validation.messageMax": "پیام نمی‌تواند بیش از ۵۰۰۰ کاراکتر باشد.",
-  "tickets.validation.departmentRequired": "لطفاً یک دپارتمان انتخاب کنید.",
-  "tickets.errors.rateLimitExceeded": "اخیراً تعداد زیادی تیکت ایجاد کرده‌اید. لطفاً پیش از ایجاد تیکت جدید کمی صبر کنید.",
-  "tickets.errors.messageRateLimit": "شما خیلی سریع پیام می‌فرستید. لطفاً کمی آرام‌تر.",
-  "tickets.errors.closedTicket": "این تیکت بسته شده است. به‌جای آن یک تیکت جدید ایجاد کنید.",
-  "tickets.errors.notFound": "تیکت یافت نشد.",
-  "meetings.title": "جلسات",
-  "meetings.empty": "هنوز جلسه‌ای ندارید",
-  "meetings.bookNew": "رزرو جلسه",
-  "meetings.status.scheduled": "برنامه‌ریزی‌شده",
-  "meetings.status.completed": "برگزارشده",
-  "meetings.status.cancelled": "لغوشده",
-  "meetings.status.noShow": "عدم حضور",
-  "meetings.type.consultation": "مشاوره",
-  "meetings.type.followUp": "پیگیری",
-  "meetings.type.documentReview": "بررسی مدارک",
-  "meetings.type.assessment": "ارزیابی",
-  "meetings.transcript.title": "متن جلسه",
-  "meetings.transcript.notes": "یادداشت‌ها",
-  "meetings.transcript.noFile": "فایل متنی پیوست نشده",
-  "meetings.transcript.noNotes": "یادداشتی ثبت نشده",
-  "meetings.consultant.create": "ایجاد جلسه",
-  "meetings.consultant.edit": "ویرایش جلسه",
-  "meetings.consultant.cancel": "لغو جلسه",
-  "meetings.consultant.complete": "علامت‌گذاری به‌عنوان برگزارشده",
-  "meetings.consultant.attachTranscript": "پیوست متن جلسه",
-  "meetings.consultant.removeTranscript": "حذف",
-  "meetings.consultant.cancelReason": "دلیل (اختیاری)",
-  "meetings.errors.notFound": "جلسه یافت نشد.",
-  "meetings.errors.staffRateLimit": "تعداد تغییرات شما بیش از حد است. لطفاً لحظه‌ای صبر کنید.",
-  "chat.title": "دستیار",
-  "chat.empty.title": "هر سوالی دارید بپرسید",
-  "chat.empty.subtitle": "می‌توانم درباره پرونده، جلسات و سوالات پلتفرم کمک کنم.",
-  "chat.input.placeholder": "پیام خود را بنویسید...",
-  "chat.input.send": "ارسال",
-  "chat.input.thinking": "در حال فکر کردن...",
-  "chat.conversations.new": "گفت‌وگوی جدید",
-  "chat.conversations.empty": "هنوز گفت‌وگویی ندارید",
-  "chat.escalation.title": "می‌خواهید این را به یک مشاور ارجاع دهم؟",
-  "chat.escalation.body": "یک تیکت پشتیبانی ایجاد می‌کنم و یک مشاور پاسخ خواهد داد.",
-  "chat.escalation.extraContextLabel": "نکته دیگری هست که مشاور باید بداند؟ (اختیاری)",
-  "chat.escalation.accept": "ایجاد تیکت پشتیبانی",
-  "chat.escalation.decline": "نه ممنون",
-  "chat.escalation.created": "تیکت ایجاد شد — یک مشاور به‌زودی پاسخ می‌دهد",
-  "chat.escalation.linkedBadge": "متصل به تیکت",
-  "chat.errors.unavailable": "دستیار موقتاً در دسترس نیست. لطفاً کمی بعد تلاش کنید.",
-  "chat.errors.rateLimited": "پیام‌ها را خیلی سریع ارسال می‌کنید. لطفاً کمی صبر کنید.",
-  "case.assignedLia": "وکیل مهاجرت شما",
-  "case.assignedConsultant": "مشاور شما",
-  "case.unassigned": "هنوز تعیین نشده",
-
+  "tickets": {
+    "title": "تیکت‌های پشتیبانی",
+    "list": {
+      "header": "تیکت‌های شما",
+      "empty": "هنوز هیچ تیکتی ندارید.",
+      "emptyFiltered": "هیچ تیکتی با فیلترهای شما مطابقت ندارد.",
+      "searchPlaceholder": "جست‌وجو بر اساس موضوع",
+      "filterStatus": "وضعیت",
+      "filterDepartment": "دپارتمان",
+      "openNew": "ایجاد تیکت جدید",
+      "viewAll": "مشاهدهٔ همهٔ تیکت‌ها"
+    },
+    "dashboard": {
+      "title": "تیکت‌های پشتیبانی",
+      "openCount": "{count} باز",
+      "noOpen": "تیکت بازی وجود ندارد"
+    },
+    "status": {
+      "OPEN": "باز",
+      "IN_PROGRESS": "در حال بررسی",
+      "RESOLVED": "حل‌شده",
+      "CLOSED": "بسته‌شده"
+    },
+    "priority": {
+      "LOW": "پایین",
+      "NORMAL": "عادی",
+      "HIGH": "بالا"
+    },
+    "department": {
+      "ADMISSIONS": "پذیرش",
+      "VISA_APPLICATION": "درخواست ویزا",
+      "DOCUMENTS": "مدارک",
+      "PAYMENTS_FINANCE": "پرداخت‌ها و امور مالی",
+      "TECHNICAL_SUPPORT": "پشتیبانی فنی",
+      "GENERAL_INQUIRY": "سؤال عمومی",
+      "description": {
+        "ADMISSIONS": "سؤالات دربارهٔ انتخاب دانشگاه، درخواست‌ها و پیشنهادها.",
+        "VISA_APPLICATION": "سؤالات دربارهٔ فرم ویزا یا الزامات ادارهٔ مهاجرت نیوزیلند.",
+        "DOCUMENTS": "سؤالات دربارهٔ مدارک موردنیاز یا ترجمه‌ها.",
+        "PAYMENTS_FINANCE": "سؤالات دربارهٔ صورت‌حساب، فاکتورها یا بازپرداخت.",
+        "TECHNICAL_SUPPORT": "مشکلات ورود به سیستم یا اشکالات نرم‌افزاری.",
+        "GENERAL_INQUIRY": "هر چیز دیگری."
+      }
+    },
+    "new": {
+      "title": "ایجاد تیکت جدید",
+      "department": {
+        "label": "کدام دپارتمان؟",
+        "placeholder": "یک دپارتمان انتخاب کنید"
+      },
+      "subject": {
+        "label": "موضوع",
+        "placeholder": "خلاصه‌ای کوتاه از سؤال شما"
+      },
+      "message": {
+        "label": "پیام شما",
+        "placeholder": "سؤال خود را با جزئیات شرح دهید. هرچه اطلاعات بیشتری بدهید، سریع‌تر می‌توانیم کمک کنیم."
+      },
+      "submit": "ایجاد تیکت",
+      "submitting": "در حال ایجاد تیکت…"
+    },
+    "detail": {
+      "replyLabel": "پاسخ",
+      "replyPlaceholder": "پاسخ خود را بنویسید…",
+      "sendReply": "ارسال پاسخ",
+      "closedNotice": "این تیکت بسته شده است. {link}",
+      "closedNoticeLink": "ایجاد تیکت جدید",
+      "closeButton": "بستن تیکت",
+      "closeConfirm": {
+        "title": "این تیکت بسته شود؟",
+        "body": "پس از بسته شدن نمی‌توانید آن را دوباره باز کنید. باید یک تیکت جدید ایجاد کنید.",
+        "confirm": "بله، بسته شود",
+        "cancel": "انصراف"
+      },
+      "authorYou": "شما",
+      "authorSystem": "سیستم"
+    },
+    "systemEvent": {
+      "statusChanged": "وضعیت از {old} به {new} تغییر کرد",
+      "opened": "تیکت ایجاد شد",
+      "closed": "تیکت بسته شد"
+    },
+    "validation": {
+      "subjectRequired": "موضوع الزامی است.",
+      "subjectMin": "موضوع باید حداقل ۵ کاراکتر باشد.",
+      "subjectMax": "موضوع نمی‌تواند بیش از ۲۰۰ کاراکتر باشد.",
+      "messageRequired": "پیام الزامی است.",
+      "messageMin": "پیام باید حداقل ۱۰ کاراکتر باشد.",
+      "messageMax": "پیام نمی‌تواند بیش از ۵۰۰۰ کاراکتر باشد.",
+      "departmentRequired": "لطفاً یک دپارتمان انتخاب کنید."
+    },
+    "errors": {
+      "rateLimitExceeded": "اخیراً تعداد زیادی تیکت ایجاد کرده‌اید. لطفاً پیش از ایجاد تیکت جدید کمی صبر کنید.",
+      "messageRateLimit": "شما خیلی سریع پیام می‌فرستید. لطفاً کمی آرام‌تر.",
+      "closedTicket": "این تیکت بسته شده است. به‌جای آن یک تیکت جدید ایجاد کنید.",
+      "notFound": "تیکت یافت نشد."
+    }
+  },
+  "meetings": {
+    "title": "جلسات",
+    "empty": "هنوز جلسه‌ای ندارید",
+    "bookNew": "رزرو جلسه",
+    "status": {
+      "scheduled": "برنامه‌ریزی‌شده",
+      "completed": "برگزارشده",
+      "cancelled": "لغوشده",
+      "noShow": "عدم حضور"
+    },
+    "type": {
+      "consultation": "مشاوره",
+      "followUp": "پیگیری",
+      "documentReview": "بررسی مدارک",
+      "assessment": "ارزیابی"
+    },
+    "transcript": {
+      "title": "متن جلسه",
+      "notes": "یادداشت‌ها",
+      "noFile": "فایل متنی پیوست نشده",
+      "noNotes": "یادداشتی ثبت نشده"
+    },
+    "consultant": {
+      "create": "ایجاد جلسه",
+      "edit": "ویرایش جلسه",
+      "cancel": "لغو جلسه",
+      "complete": "علامت‌گذاری به‌عنوان برگزارشده",
+      "attachTranscript": "پیوست متن جلسه",
+      "removeTranscript": "حذف",
+      "cancelReason": "دلیل (اختیاری)"
+    },
+    "errors": {
+      "notFound": "جلسه یافت نشد.",
+      "staffRateLimit": "تعداد تغییرات شما بیش از حد است. لطفاً لحظه‌ای صبر کنید."
+    }
+  },
+  "chat": {
+    "title": "دستیار",
+    "empty": {
+      "title": "هر سوالی دارید بپرسید",
+      "subtitle": "می‌توانم درباره پرونده، جلسات و سوالات پلتفرم کمک کنم."
+    },
+    "input": {
+      "placeholder": "پیام خود را بنویسید...",
+      "send": "ارسال",
+      "thinking": "در حال فکر کردن..."
+    },
+    "conversations": {
+      "new": "گفت‌وگوی جدید",
+      "empty": "هنوز گفت‌وگویی ندارید"
+    },
+    "escalation": {
+      "title": "می‌خواهید این را به یک مشاور ارجاع دهم؟",
+      "body": "یک تیکت پشتیبانی ایجاد می‌کنم و یک مشاور پاسخ خواهد داد.",
+      "extraContextLabel": "نکته دیگری هست که مشاور باید بداند؟ (اختیاری)",
+      "accept": "ایجاد تیکت پشتیبانی",
+      "decline": "نه ممنون",
+      "created": "تیکت ایجاد شد — یک مشاور به‌زودی پاسخ می‌دهد",
+      "linkedBadge": "متصل به تیکت"
+    },
+    "errors": {
+      "unavailable": "دستیار موقتاً در دسترس نیست. لطفاً کمی بعد تلاش کنید.",
+      "rateLimited": "پیام‌ها را خیلی سریع ارسال می‌کنید. لطفاً کمی صبر کنید."
+    }
+  },
+  "case": {
+    "assignedLia": "وکیل مهاجرت شما",
+    "assignedConsultant": "مشاور شما",
+    "unassigned": "هنوز تعیین نشده"
+  },
   "staff": {
     "nav": {
       "overview": "خلاصه",

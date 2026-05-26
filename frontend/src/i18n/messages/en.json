@@ -1,7 +1,99 @@
 {
   "signIn": "Sign in",
   "signOut": "Sign out",
-  "dashboard": "Dashboard",
+  "dashboard": {
+    "welcome": {
+      "title": "Welcome back, {firstName}",
+      "subtitle": {
+        "DRAFT": "Let's keep building your application",
+        "SUBMITTED_FOR_REVIEW": "We're reviewing your application",
+        "REVIEWED": "Your consultant has reviewed your application",
+        "READY_FOR_INZ": "Your application is ready for Immigration New Zealand",
+        "INZ_SUBMITTED": "Submitted to Immigration New Zealand",
+        "APPROVED": "Your visa has been approved 🎉",
+        "DECLINED": "Your application needs attention — your consultant will be in touch"
+      }
+    },
+    "assessmentReport": {
+      "title": "Your assessment result",
+      "placeholder": "Your assessment is being processed — results will appear here once ready.",
+      "score": "Score",
+      "band": "Band",
+      "route": "Recommended route",
+      "summary": "Summary",
+      "viewFull": "View full report",
+      "comingSoon": "Coming soon"
+    },
+    "progress": {
+      "title": "Your application",
+      "stepLabel": "Step {current} of {total}",
+      "continue": "Continue your application",
+      "review": "Review your application",
+      "complete": "All steps complete"
+    },
+    "case": {
+      "title": "Case status",
+      "lastUpdated": "Last updated {when}"
+    },
+    "caseStatus": {
+      "DRAFT": {
+        "label": "Draft"
+      },
+      "SUBMITTED_FOR_REVIEW": {
+        "label": "Submitted for review"
+      },
+      "REVIEWED": {
+        "label": "Reviewed by consultant"
+      },
+      "READY_FOR_INZ": {
+        "label": "Ready for INZ"
+      },
+      "INZ_SUBMITTED": {
+        "label": "Submitted to INZ"
+      },
+      "APPROVED": {
+        "label": "Approved"
+      },
+      "DECLINED": {
+        "label": "Needs attention"
+      }
+    },
+    "documents": {
+      "title": "Your documents",
+      "provided": "Provided",
+      "needed": "Needed",
+      "empty": "No documents required yet."
+    },
+    "activity": {
+      "title": "Recent activity",
+      "empty": "Nothing yet — your activity will appear here as you work on your application.",
+      "event": {
+        "STEP_STARTED": "You started {step}",
+        "STEP_SAVED": "You saved {step}",
+        "DOCUMENT_RECORDED": "You recorded {documentType}",
+        "DOCUMENT_REMOVED": "You removed {documentType}",
+        "STATUS_CHANGED": "Case status changed to {status}"
+      }
+    },
+    "tickets": {
+      "placeholder": {
+        "title": "Support tickets",
+        "body": "Coming soon — open tickets and chat with our team."
+      }
+    },
+    "meetings": {
+      "placeholder": {
+        "title": "Meetings",
+        "body": "Coming soon — book Zoom sessions and view past meeting notes."
+      }
+    },
+    "chatbot": {
+      "placeholder": {
+        "title": "Ask Sorena",
+        "body": "Coming soon — quick answers to common questions."
+      }
+    }
+  },
   "welcome": "Welcome",
   "cases": "Cases",
   "documents": "Documents",
@@ -346,22 +438,18 @@
   "admissionEducationHistoryDocsMissingCertificate": "Notarized certificate is required.",
   "admissionEducationHistoryDocsMissingTranscript": "Notarized transcript is required.",
   "commonBackToTop": "Back to top",
-
   "visaShellTitle": "Visa Section",
   "visaShellHelper": "INZ 1200 student visa application. Complete each section in order; you can save and return at any time.",
   "visaShellLoading": "Starting your visa application…",
   "visaShellStartError": "Could not start your visa application. Please refresh.",
-
   "visaCommonYes": "Yes",
   "visaCommonNo": "No",
   "visaCommonSaving": "Saving…",
   "visaCommonNotProvided": "Not provided yet",
   "visaCommonCountryPlaceholder": "Type to search countries",
-
   "visaIdentitySectionTitle": "Identity Details",
   "visaIdentityApplicantSurname": "Applicant surname",
   "visaIdentityApplicantFirstName": "Applicant first name",
-
   "visaIdentitySubsectionIdentityInfo": "Identity information",
   "visaIdentityMononymLabel": "Do you have a mononym?",
   "visaIdentityMononymHelper": "This is when your official name is one name. Select Yes if your entire name appears in only one field in your passport. Select No if your first name and surname appear in different fields.",
@@ -376,14 +464,12 @@
   "visaIdentityUsedOtherNamesHelper": "This includes your birth name, your name from marriage or from adoption, your English name, or other names you are known by.",
   "visaIdentityOtherNamesLabel": "Other names",
   "visaIdentityOtherNamesPlaceholder": "List all other names you have used",
-
   "visaIdentitySubsectionImmigration": "New Zealand immigration history",
   "visaIdentityCountryWhenSubmittingLabel": "What country or territory will you be in when this application is submitted?",
   "visaIdentityPrevAppliedNzVisaLabel": "Have you previously applied for a New Zealand visa?",
   "visaIdentityPrevRequestedNzetaLabel": "Have you previously requested an NZeTA?",
   "visaIdentityEverTravelledNzLabel": "Have you ever travelled to New Zealand?",
   "visaIdentityTotalNzTime24PlusLabel": "Will your total time in New Zealand for all visits including this proposed visit equal 24 months or more?",
-
   "visaIdentitySubsectionPassport": "Passport and birth details",
   "visaIdentityPassportIntro": "Enter the passport details as shown in the passport or travel document you will use to travel to and from New Zealand.",
   "visaIdentityPassportNumberLabel": "Passport number",
@@ -404,19 +490,16 @@
   "visaIdentityStateOfBirthPlaceholder": "e.g. Tehran Province",
   "visaIdentityCityOfBirthLabel": "Town or city of birth",
   "visaIdentityCityOfBirthPlaceholder": "e.g. Tehran",
-
   "visaIdentitySubsectionNationalId": "National identity details",
   "visaIdentityHasNationalIdLabel": "Do you have a national identity number?",
   "visaIdentityNationalIdNumberLabel": "National identity number",
   "visaIdentityNationalIdNumberPlaceholder": "Number as it appears on the card",
   "visaIdentityNationalIdCountryLabel": "Country or territory of issue",
-
   "visaIdentitySaveButton": "Save and continue",
   "visaIdentitySaveSuccess": "Identity Details saved.",
   "visaIdentitySaveError": "Could not save Identity Details. Please try again.",
   "visaIdentityValidationMissing": "Please complete every required field before saving.",
   "visaIdentitySavedBanner": "Identity Details saved — more sections coming soon.",
-
   "visaCommonBack": "Back",
   "visaCommonAlertLabel": "ALERT",
   "visaCommonWarningLabel": "WARNING",
@@ -441,7 +524,6 @@
   "visaCommonTitleMs": "Ms",
   "visaCommonTitleDr": "Dr",
   "visaCommonTitleProf": "Prof",
-
   "visaPhotoSubsectionTitle": "Upload photo",
   "visaPhotoExplanation": "Your visa photo must be less than 6 months old and must meet our photo requirements. Do not use the photo page of your passport.",
   "visaPhotoRequirementsIntro": "When you upload your photo, it must be:",
@@ -461,8 +543,6 @@
   "visaPhotoErrorSize": "Photo file size must be between 500 KB and 3 MB.",
   "visaPhotoErrorDimensions": "Photo must be between 900 x 1200 and 2250 x 3000 pixels.",
   "visaPhotoErrorUnreadable": "We could not read that image. Please try a different file.",
-
-
   "visaAddressSectionTitle": "Address and contact information",
   "visaAddressIntro": "We use the information you enter in this section to contact you about your application if necessary.",
   "visaAddressSubsectionAddress": "Address details",
@@ -479,7 +559,6 @@
   "visaAddressPostalSameHelper": "Select No if you want to receive mail at a different address from your current physical address.",
   "visaAddressPostalBlockHeading": "Postal address",
   "visaAddressPostalCountryLabel": "Country or territory",
-
   "visaAddressSubsectionContact": "Contact details",
   "visaAddressContactAlertEmail": "We upload letters, documents, and other correspondence about this application directly to your Immigration Online account. When we upload this correspondence, we will send a notification to the email address you provide here, unless another person is submitting this application on your behalf and is the point of contact for this application. Please provide us with an email address you check regularly and where emails will be received without issue.",
   "visaAddressGuardianHelper": "If you are 17 years or younger, provide the details of your parent or legal guardian.",
@@ -494,20 +573,16 @@
   "visaAddressPhoneCodePlaceholder": "+64",
   "visaAddressPhoneNumberLabel": "Phone number",
   "visaAddressPhoneNumberPlaceholder": "1239876544",
-
   "visaAddressSaveButton": "Save and continue",
   "visaAddressSaveSuccess": "Address and contact information saved.",
   "visaAddressSaveError": "Could not save Address and contact information. Please try again.",
   "visaAddressValidationMissing": "Please complete every required field before saving.",
   "visaAddressSavedBanner": "Address and contact information saved — more sections coming soon.",
-
   "visaEligibilitySectionTitle": "Eligibility",
   "visaEligibilityIntro": "We use the information you enter in this section to check you are eligible for the visa you are applying for.",
-
   "visaEligibilitySubsectionStudyHistory": "Study history",
   "visaEligibilityHoldsNzStudentVisaLabel": "Do you currently hold a New Zealand student visa?",
   "visaEligibilityHoldsNzStudentVisaHelper": "It does not matter whether you are in New Zealand or outside of New Zealand.",
-
   "visaEligibilitySubsectionOfferAssistance": "Offer of Place assistance",
   "visaEligibilityUsedAgentLabel": "Did you use an education agent to help get your Offer of Place or Confirmation of Enrolment to study?",
   "visaEligibilityAgentDetailsHeading": "Education agent details",
@@ -518,7 +593,6 @@
   "visaEligibilityAgentGivenNameLabel": "Given or first name",
   "visaEligibilityAgentSurnameLabel": "Surname or family name",
   "visaEligibilityAgentEmailLabel": "Email address",
-
   "visaEligibilitySubsectionStudyDetails": "Study details",
   "visaEligibilityStudyingSchoolLevelLabel": "Will you be studying at a primary, intermediate or secondary school?",
   "visaEligibilityMastersOrPhdLabel": "Will you be studying at Masters or Doctor of Philosophy (PhD) level?",
@@ -538,7 +612,6 @@
   "visaEligibilityCourseStartDateLabel": "Start date",
   "visaEligibilityCourseEndDateLabel": "End date",
   "visaEligibilityIntendedArrivalDateLabel": "What date do you intend to arrive in New Zealand?",
-
   "visaEligibilitySubsectionPhd": "PhD details",
   "visaEligibilityPhdDisciplineLabel": "What discipline is your PhD in?",
   "visaEligibilityPhdSubjectLabel": "What subject is your PhD in?",
@@ -561,13 +634,11 @@
   "visaEligibilityPhdSupervisorOrgLabel": "Supervisor's organisation or education provider name",
   "visaEligibilityPhdPublishedLabel": "Have you published any papers or research studies?",
   "visaEligibilityPhdSupervisorOutsideNzLabel": "Will you also have a supervisor from outside of New Zealand for your PhD study?",
-
   "visaEligibilitySubsectionStudentId": "Student identification number",
   "visaEligibilityStudentIdExplanation1": "We may need to check some details with your New Zealand education provider. If you know the student number issued by your education provider, providing this number can help us carry out any checks with your education provider faster.",
   "visaEligibilityStudentIdExplanation2": "If you do not provide your student identification number, we will still be able to assess and make a decision on your student visa application, it may just take more time.",
   "visaEligibilityProviderIssuedStudentIdLabel": "Has your New Zealand education provider issued you a student ID number?",
   "visaEligibilityStudentIdNumberLabel": "What is your New Zealand education provider issued student identification number?",
-
   "visaEligibilitySubsectionSituationPlans": "Your situation and plans",
   "visaEligibilitySituationIntro": "We will use this information to help us decide if you:",
   "visaEligibilitySituationBullet1": "are a genuine applicant",
@@ -586,13 +657,11 @@
   "visaEligibilityPlansAfterStudyHelper": "This may include applying for another student visa to complete more study, applying for a Post Study Work Visa or a resident visa, or returning to your home country.",
   "visaEligibilityMultiYearLabel": "Are you studying a multi-year programme?",
   "visaEligibilityMultiYearHelper": "For example, a Bachelor's degree that takes three to four years of full-time study to complete.",
-
   "visaEligibilitySaveButton": "Save and continue",
   "visaEligibilitySaveSuccess": "Eligibility saved.",
   "visaEligibilitySaveError": "Could not save Eligibility. Please try again.",
   "visaEligibilityValidationMissing": "Please complete every required field before saving.",
   "visaEligibilitySavedBanner": "Eligibility saved — more sections coming soon.",
-
   "visaDocumentDropzone": "Click to upload a file (PDF, JPEG or PNG)",
   "visaDocumentLoading": "Checking for existing uploads…",
   "visaDocumentUploading": "Uploading…",
@@ -605,7 +674,6 @@
   "visaDocumentDeleteError": "Could not remove document. Please try again.",
   "visaDocumentErrorType": "File must be a PDF, JPEG or PNG.",
   "visaDocumentErrorSize": "File is too large.",
-
   "visaCharacterSectionTitle": "Character",
   "visaCharacterIntro": "We use the information you enter in this section to check you meet character requirements.",
   "visaCharacterSubsectionDetails": "Character details",
@@ -614,7 +682,6 @@
   "visaCharacterUnderInvestigationLabel": "Are you currently under investigation, wanted for questioning, or facing charges for any offence in any country including New Zealand?",
   "visaCharacterEverDeportedLabel": "Have you ever been expelled, deported, excluded, removed from or refused entry to any country?",
   "visaCharacterEverRefusedVisaLabel": "Have you ever been refused a visa or permit by any country excluding New Zealand?",
-
   "visaCharacterSubsectionPoliceCerts": "Police certificates",
   "visaCharacterPoliceCertCitizenshipHeading": "Police certificate from your country of citizenship",
   "visaCharacterPoliceCertIntro": "Upload your completed police certificate from your passport country below. You must upload this certificate before you submit your application.",
@@ -630,7 +697,6 @@
   "visaCharacterPoliceCertCountryOfIssueLabel": "Country of issue",
   "visaCharacterPoliceCertInEnglishLabel": "Is this document in English?",
   "visaCharacterUploadBeforeSubmitAlert": "Make sure you upload the completed police certificate before you submit your application. If you do not, this could have a negative effect on the outcome of your application.",
-
   "visaCharacterSubsectionOtherCitizenships": "Other citizenships",
   "visaCharacterHoldsOtherCitizenshipsLabel": "Do you hold any other citizenships?",
   "visaCharacterCitizenshipsAtLeastOne": "Please add at least one other citizenship.",
@@ -643,36 +709,28 @@
   "visaCharacterCitizenshipAddError": "Could not add citizenship. Please try again.",
   "visaCharacterCitizenshipUpdateError": "Could not update citizenship. Please try again.",
   "visaCharacterCitizenshipRemoveError": "Could not remove citizenship. Please try again.",
-
   "visaCharacterSubsectionOtherCountries": "Police certificates from other countries you have lived in",
   "visaCharacterLivedOtherCountry5YearsLabel": "Have you lived in any country for 5 years or more since the age of 17?",
   "visaCharacterLivedOtherCountry5YearsHelper": "This includes combined periods spent in a country which together add up to 5 years or more. You do not need to include your citizenship countries.",
-
   "visaCharacterSaveButton": "Save and continue",
   "visaCharacterSaveSuccess": "Character saved.",
   "visaCharacterSaveError": "Could not save Character. Please try again.",
   "visaCharacterValidationMissing": "Please complete every required field before saving.",
   "visaCharacterSavedBanner": "Character saved — more sections coming soon.",
-
   "visaHealthSectionTitle": "Health",
   "visaHealthIntro": "We use the information you enter in this section to check you have an acceptable standard of health.",
-
   "visaHealthSubsectionGuidance": "Guidance",
   "visaHealthGuidanceNote": "All visa applicants must have an acceptable standard of health. After you submit your visa application, we will check any previous medical records that you have submitted to us. If you need to have a medical examination, we will contact you with more information.",
-
   "visaHealthSubsectionTuberculosis": "Tuberculosis",
   "visaHealthHasTbLabel": "Do you have tuberculosis (TB)?",
-
   "visaHealthSubsectionMedicalCare": "Medical care during your stay in New Zealand",
   "visaHealthRenalDialysisLabel": "Will you require renal dialysis during your stay in New Zealand?",
   "visaHealthMedicalConditionLabel": "Do you have a medical condition that requires or may require hospital or specialist care during your stay in New Zealand?",
   "visaHealthMedicalConditionHelper": "You do not need to answer 'yes' if you are concerned that you may have an accident or unexpected illness.",
   "visaHealthResidentialCareLabel": "Do you or are you likely to require residential care during your stay in New Zealand?",
   "visaHealthResidentialCareHelper": "Residential care is long-term care provided in live-in facilities for the aged or for people with physical, sensory, intellectual or psychiatric disabilities.",
-
   "visaHealthSubsectionPregnancy": "Pregnancy",
   "visaHealthIsPregnantLabel": "Are you pregnant?",
-
   "visaHealthSubsectionLengthOfStay": "Length of stay",
   "visaHealthLengthHelperIntro": "Your intended length of stay helps us determine if you need a medical examination.",
   "visaHealthLengthLabel": "How long do you plan to stay in New Zealand?",
@@ -680,12 +738,10 @@
   "visaHealthLengthSixOrLess": "6 months or less",
   "visaHealthLengthSixToTwelve": "More than 6 months up to 12 months",
   "visaHealthLengthMoreThanTwelve": "More than 12 months",
-
   "visaHealthSubsectionMedicalExams": "Medical examinations",
   "visaHealthHadMedicalExamLabel": "Have you already had a medical examination for this visa application?",
   "visaHealthMedicalRefLabel": "Enter the eMedical reference number (NZER) or INZ health case reference number (NZHR) for your most recent medical examination.",
   "visaHealthMedicalRefHelper": "Providing your eMedical reference number (NZER) or INZ health case reference number (NZHR) will prevent delays in processing your application. An NZER begins with 'N' and has 9 digits. An NZHR begins with 'HR' and has 7 digits.",
-
   "visaHealthSubsectionTbRisk": "Tuberculosis (TB) risk",
   "visaHealthTbRiskNote": "If you have spent time in places that have a risk of TB since your most recent chest x-ray, we may ask you for a new chest x-ray certificate.",
   "visaHealthTbRiskHeading": "List the countries you have visited or lived in over the last 5 years.",
@@ -702,23 +758,19 @@
   "visaHealthTbRemoveError": "Could not remove country. Please try again.",
   "visaHealthTbDurationInvalid": "Total duration must be a non-negative whole number of days.",
   "visaHealthTbNoMoreLabel": "I have no more countries or territories to add.",
-
   "visaHealthSubsectionInsurance": "Declaration regarding insurance requirements",
   "visaHealthInsuranceIntro": "This declaration requires you to agree to, and confirm your understanding of, the requirement to hold acceptable insurance as a condition of your student visa and the implications of not holding acceptable insurance.",
   "visaHealthInsuranceP1": "I agree to arrange and hold insurance which my education provider considers acceptable, from the period of my enrolment until the expiry of my student visa, unless I depart New Zealand earlier.",
   "visaHealthInsuranceP2": "I understand that holding insurance will be a condition of my visa and that I may become liable for deportation if I do not hold insurance, for the period of my enrolment until my visa expires, unless I depart New Zealand earlier.",
   "visaHealthInsuranceP3": "I understand that if I apply for a further visa, I may be required to provide evidence that I held acceptable insurance while in New Zealand, as an international student visa holder.",
   "visaHealthInsuranceAgreeLabel": "I agree with the declaration.",
-
   "visaHealthSubsectionPublicHealth": "Public health acknowledgement",
   "visaHealthPublicHealthAckLabel": "I understand it is recommended by the New Zealand Government that I see a health professional prior to arrival in New Zealand for appropriate testing and commencement of treatment, if I have taken intravenous drugs or participated in activities that may have exposed me to Hepatitis or HIV.",
-
   "visaHealthSaveButton": "Save and continue",
   "visaHealthSaveSuccess": "Health saved.",
   "visaHealthSaveError": "Could not save Health. Please try again.",
   "visaHealthValidationMissing": "Please complete every required field before saving.",
   "visaHealthSavedBanner": "Health saved — more sections coming soon.",
-
   "visaEducationHistorySectionTitle": "Education history",
   "visaEducationHistoryIntro": "We use the information you enter in this section to check that you genuinely intend to stay temporarily and for a lawful purpose.",
   "visaEducationHistorySubsectionDetails": "Education details",
@@ -739,23 +791,19 @@
   "visaEducationHistorySaveError": "Could not save Education history. Please try again.",
   "visaEducationHistoryValidationMissing": "Please complete every required field for each qualification before saving.",
   "visaEducationHistorySavedBanner": "Education history saved — more sections coming soon.",
-
   "visaEmploymentHistorySectionTitle": "Employment history",
   "visaEmploymentHistoryIntro": "We use the information you enter in this section to check that you genuinely intend to stay temporarily for a lawful purpose.",
   "visaEmploymentContinuousHistoryAlert": "If you do not provide a full and complete continuous history, your application will be delayed while we seek clarification from you.",
-
   "visaEmploymentSubsectionHistory": "Employment history",
   "visaEmploymentEverGovernmentLabel": "Have you ever been employed by the government of any country in any capacity, including as a government official?",
   "visaEmploymentEverGovernmentHelper": "For example: mayor, judge, election official, hospital administrator, etc.",
   "visaEmploymentEverPrisonGuardLabel": "Have you ever been a guard or prison official at any prison, detention centre or transit camp?",
-
   "visaEmploymentSubsectionCurrent": "Current employment",
   "visaEmploymentCurrentlyWorkingLabel": "Are you currently working?",
   "visaEmploymentCurrentlyWorkingHelper": "This includes employment and self-employment in your home country.",
   "visaEmploymentProvideCurrentDetails": "Provide details of your current work",
   "visaEmploymentCurrentLoading": "Preparing the form…",
   "visaEmploymentCurrentHeading": "Current job",
-
   "visaEmploymentSubsectionPrevious": "Previous employment",
   "visaEmploymentHadPreviousLabel": "Have you had any previous employment or self-employment?",
   "visaEmploymentProvidePreviousDetails": "Provide details of all periods of your work history. This includes self-employment and employment both inside and outside New Zealand.",
@@ -767,7 +815,6 @@
   "visaEmploymentRemoveError": "Could not remove employment. Please try again.",
   "visaEmploymentAddError": "Could not add employment. Please try again.",
   "visaEmploymentUpdateError": "Could not save the change. Please try again.",
-
   "visaEmploymentStartDateLabel": "Start date",
   "visaEmploymentEndDateLabel": "End date",
   "visaEmploymentRoleTitleLabel": "Role or job title",
@@ -791,11 +838,9 @@
   "visaEmploymentEmployerPhoneLabel": "Employer phone number",
   "visaEmploymentEmployerPhoneHelper": "Enter country code, area code and phone number separated by spaces e.g. +64 123 9876544",
   "visaEmploymentEmployerEmailLabel": "Employer email address",
-
   "visaEmploymentSubsectionUnemployed": "Unemployment or unpaid service",
   "visaEmploymentEverUnemployedLabel": "Have you ever spent time unemployed or not in education?",
   "visaEmploymentEverUnemployedHelper": "Answer Yes if you have had periods of unemployment, or during periods you were not in paid employment you undertook voluntary or unpaid work, or household or domestic duties.",
-
   "visaUnempProvideDetails": "Provide details of all periods you were not in paid employment or education. This includes periods where you undertook voluntary or unpaid work, or household or domestic duties while unemployed.",
   "visaUnempRowHeading": "Period {n}",
   "visaUnempAtLeastOne": "Please add at least one period.",
@@ -810,28 +855,24 @@
   "visaUnempActivityHelper": "Provide details of what you were doing.",
   "visaUnempFinSupportLabel": "How were you financially supported during this time?",
   "visaUnempFinSupportHelper": "Provide details of financial support you received, or how you supported yourself.",
-
   "visaEmploymentSaveButton": "Save and continue",
   "visaEmploymentSaveSuccess": "Employment history saved.",
   "visaEmploymentSaveError": "Could not save Employment history. Please try again.",
   "visaEmploymentValidationMissing": "Please complete every required field before saving.",
   "visaEmploymentSavedBanner": "Employment history saved — more sections coming soon.",
-
   "visaRelationshipsSectionTitle": "Relationships",
   "visaRelationshipsIntro": "We use the information you enter in this section to check that you genuinely intend to stay temporarily for a lawful purpose.",
-
   "visaRelSubsectionStatus": "Relationship status",
   "visaRelStatusHelper": "You must choose the option that best describes your current partnership status.",
   "visaRelPartnershipStatusLabel": "What is your partnership status?",
   "visaRelEditOnAdmissionHelper": "Pulled from your admission Step 2 record. To change this, edit your admission Additional info.",
   "visaRelMaritalStatusMissingOnAdmission": "Your partnership status is missing on the admission form. Please fill it in there before continuing.",
-  "visaRelMaritalStatusSingle":    "Single",
-  "visaRelMaritalStatusMarried":   "Married / in civil union",
-  "visaRelMaritalStatusDeFacto":   "Partner (de facto)",
+  "visaRelMaritalStatusSingle": "Single",
+  "visaRelMaritalStatusMarried": "Married / in civil union",
+  "visaRelMaritalStatusDeFacto": "Partner (de facto)",
   "visaRelMaritalStatusSeparated": "Separated",
-  "visaRelMaritalStatusDivorced":  "Divorced",
-  "visaRelMaritalStatusWidowed":   "Widowed",
-
+  "visaRelMaritalStatusDivorced": "Divorced",
+  "visaRelMaritalStatusWidowed": "Widowed",
   "visaRelSubsectionPartner": "Current partner",
   "visaRelPartnerHeading": "Current partner",
   "visaRelPartnerIntro": "Provide your partner's details. As detailed in their passport (if they have one).",
@@ -862,13 +903,11 @@
   "visaRelPartnerPassportIssueDateLabel": "Passport issue date",
   "visaRelPartnerPassportExpiryDateLabel": "Passport expiry date",
   "visaRelPartnerUpdateError": "Could not save partner details. Please try again.",
-
   "visaRelSubsectionFormer": "Former partners",
   "visaRelHasFormerPartnersLabel": "Do you have any former partners, including any that are deceased, or you have divorced or are separated from?",
   "visaRelFormerPartnerHeading": "Former partner {n}",
   "visaRelFormerPartnersAtLeastOne": "Please add at least one former partner.",
   "visaRelAddFormerPartnerButton": "Add former partner",
-
   "visaRelSubsectionChildren": "Children",
   "visaRelChildrenHelper": "Including living biological, adoptive, and step children, and those from previous relationships.",
   "visaRelHasChildrenLabel": "Do you have any children?",
@@ -883,7 +922,6 @@
   "visaRelChildRelAdoptedSon": "Adopted son",
   "visaRelChildRelAdoptedDaughter": "Adopted daughter",
   "visaRelChildLivesWithLabel": "Does this child live with you?",
-
   "visaRelSubsectionParents": "Parents and legal guardians",
   "visaRelParentsHelper": "Detail living and deceased parents and legal guardians (including any step or adoptive parents).",
   "visaRelParentsAtLeastOne": "Please add at least one parent or legal guardian.",
@@ -894,7 +932,6 @@
   "visaRelParentRelMother": "Mother",
   "visaRelParentRelGuardian": "Guardian",
   "visaRelParentIsDeceasedLabel": "Are they deceased?",
-
   "visaRelSubsectionSiblings": "Siblings",
   "visaRelHasSiblingsLabel": "Do you have any siblings?",
   "visaRelHasSiblingsHelper": "Including living half, step and adoptive brothers and sisters.",
@@ -904,7 +941,6 @@
   "visaRelSiblingRelLabel": "Relationship to you",
   "visaRelSiblingRelBrother": "Brother",
   "visaRelSiblingRelSister": "Sister",
-
   "visaRelSubsectionNzContacts": "New Zealand contacts",
   "visaRelHasNzContactsLabel": "Do you have any contacts in New Zealand?",
   "visaRelNzContactsAtLeastOne": "Please add at least one New Zealand contact.",
@@ -918,19 +954,16 @@
   "visaRelNzContactTownCityLabel": "Town or city",
   "visaRelNzContactRegionLabel": "Region (optional)",
   "visaRelNzContactPostcodeLabel": "Postcode (optional)",
-
   "visaRelRemoveTooltip": "Remove this entry",
   "visaRelRemoveConfirm": "Remove this entry?",
   "visaRelGenericAddError": "Could not add entry. Please try again.",
   "visaRelGenericRemoveError": "Could not remove entry. Please try again.",
   "visaRelGenericUpdateError": "Could not save the change. Please try again.",
-
   "visaRelSaveButton": "Save and continue",
   "visaRelSaveSuccess": "Relationships saved.",
   "visaRelSaveError": "Could not save Relationships. Please try again.",
   "visaRelValidationMissing": "Please complete every required field before saving.",
   "visaRelSavedBanner": "Relationships saved — more sections coming soon.",
-
   "visaBackgroundSectionTitle": "Background details",
   "visaBackgroundIntro": "We use the information you enter in this section to check that you meet the character requirements and genuinely intend to stay temporarily for a lawful purpose.",
   "visaBackgroundSubsectionCultural": "Cultural positions",
@@ -1216,164 +1249,174 @@
   "visaDocs2CustomLabelLabel": "Label for this evidence",
   "visaDocs2SectionDeclaration": "Declaration",
   "visaDocs2DeclarationCheckedLabel": "I have checked that the documents I have uploaded accurately represent the statements made in this form.",
-  "dashboard.welcome.title": "Welcome back, {firstName}",
-  "dashboard.welcome.subtitle.DRAFT": "Let's keep building your application",
-  "dashboard.welcome.subtitle.SUBMITTED_FOR_REVIEW": "We're reviewing your application",
-  "dashboard.welcome.subtitle.REVIEWED": "Your consultant has reviewed your application",
-  "dashboard.welcome.subtitle.READY_FOR_INZ": "Your application is ready for Immigration New Zealand",
-  "dashboard.welcome.subtitle.INZ_SUBMITTED": "Submitted to Immigration New Zealand",
-  "dashboard.welcome.subtitle.APPROVED": "Your visa has been approved 🎉",
-  "dashboard.welcome.subtitle.DECLINED": "Your application needs attention — your consultant will be in touch",
-  "dashboard.assessmentReport.title": "Your assessment result",
-  "dashboard.assessmentReport.placeholder": "Your assessment is being processed — results will appear here once ready.",
-  "dashboard.assessmentReport.score": "Score",
-  "dashboard.assessmentReport.band": "Band",
-  "dashboard.assessmentReport.route": "Recommended route",
-  "dashboard.assessmentReport.summary": "Summary",
-  "dashboard.assessmentReport.viewFull": "View full report",
-  "dashboard.assessmentReport.comingSoon": "Coming soon",
-  "dashboard.progress.title": "Your application",
-  "dashboard.progress.stepLabel": "Step {current} of {total}",
-  "dashboard.progress.continue": "Continue your application",
-  "dashboard.progress.review": "Review your application",
-  "dashboard.progress.complete": "All steps complete",
-  "dashboard.case.title": "Case status",
-  "dashboard.caseStatus.DRAFT.label": "Draft",
-  "dashboard.caseStatus.SUBMITTED_FOR_REVIEW.label": "Submitted for review",
-  "dashboard.caseStatus.REVIEWED.label": "Reviewed by consultant",
-  "dashboard.caseStatus.READY_FOR_INZ.label": "Ready for INZ",
-  "dashboard.caseStatus.INZ_SUBMITTED.label": "Submitted to INZ",
-  "dashboard.caseStatus.APPROVED.label": "Approved",
-  "dashboard.caseStatus.DECLINED.label": "Needs attention",
-  "dashboard.case.lastUpdated": "Last updated {when}",
-  "dashboard.documents.title": "Your documents",
-  "dashboard.documents.provided": "Provided",
-  "dashboard.documents.needed": "Needed",
-  "dashboard.documents.empty": "No documents required yet.",
-  "dashboard.activity.title": "Recent activity",
-  "dashboard.activity.empty": "Nothing yet — your activity will appear here as you work on your application.",
-  "dashboard.activity.event.STEP_STARTED": "You started {step}",
-  "dashboard.activity.event.STEP_SAVED": "You saved {step}",
-  "dashboard.activity.event.DOCUMENT_RECORDED": "You recorded {documentType}",
-  "dashboard.activity.event.DOCUMENT_REMOVED": "You removed {documentType}",
-  "dashboard.activity.event.STATUS_CHANGED": "Case status changed to {status}",
-  "dashboard.tickets.placeholder.title": "Support tickets",
-  "dashboard.tickets.placeholder.body": "Coming soon — open tickets and chat with our team.",
-  "dashboard.meetings.placeholder.title": "Meetings",
-  "dashboard.meetings.placeholder.body": "Coming soon — book Zoom sessions and view past meeting notes.",
-  "dashboard.chatbot.placeholder.title": "Ask Sorena",
-  "dashboard.chatbot.placeholder.body": "Coming soon — quick answers to common questions.",
-  "tickets.title": "Support tickets",
-  "tickets.list.header": "Your tickets",
-  "tickets.list.empty": "You don't have any tickets yet.",
-  "tickets.list.emptyFiltered": "No tickets match your filters.",
-  "tickets.list.searchPlaceholder": "Search by subject",
-  "tickets.list.filterStatus": "Status",
-  "tickets.list.filterDepartment": "Department",
-  "tickets.list.openNew": "Open a new ticket",
-  "tickets.list.viewAll": "View all tickets",
-  "tickets.dashboard.title": "Support tickets",
-  "tickets.dashboard.openCount": "{count} open",
-  "tickets.dashboard.noOpen": "No open tickets",
-  "tickets.status.OPEN": "Open",
-  "tickets.status.IN_PROGRESS": "In progress",
-  "tickets.status.RESOLVED": "Resolved",
-  "tickets.status.CLOSED": "Closed",
-  "tickets.priority.LOW": "Low",
-  "tickets.priority.NORMAL": "Normal",
-  "tickets.priority.HIGH": "High",
-  "tickets.department.ADMISSIONS": "Admissions",
-  "tickets.department.VISA_APPLICATION": "Visa application",
-  "tickets.department.DOCUMENTS": "Documents",
-  "tickets.department.PAYMENTS_FINANCE": "Payments & finance",
-  "tickets.department.TECHNICAL_SUPPORT": "Technical support",
-  "tickets.department.GENERAL_INQUIRY": "General inquiry",
-  "tickets.department.description.ADMISSIONS": "Questions about university selection, applications, and offers.",
-  "tickets.department.description.VISA_APPLICATION": "Questions about the visa form or Immigration New Zealand requirements.",
-  "tickets.department.description.DOCUMENTS": "Questions about which documents to provide or translations.",
-  "tickets.department.description.PAYMENTS_FINANCE": "Billing, invoices, or refund questions.",
-  "tickets.department.description.TECHNICAL_SUPPORT": "Login problems or platform bugs.",
-  "tickets.department.description.GENERAL_INQUIRY": "Anything else.",
-  "tickets.new.title": "Open a new ticket",
-  "tickets.new.department.label": "Which department?",
-  "tickets.new.department.placeholder": "Select a department",
-  "tickets.new.subject.label": "Subject",
-  "tickets.new.subject.placeholder": "Brief summary of your question",
-  "tickets.new.message.label": "Your message",
-  "tickets.new.message.placeholder": "Describe your question in detail. The more context you give, the faster we can help.",
-  "tickets.new.submit": "Open ticket",
-  "tickets.new.submitting": "Opening ticket…",
-  "tickets.detail.replyLabel": "Reply",
-  "tickets.detail.replyPlaceholder": "Type your reply…",
-  "tickets.detail.sendReply": "Send reply",
-  "tickets.detail.closedNotice": "This ticket is closed. {link}",
-  "tickets.detail.closedNoticeLink": "Open a new ticket",
-  "tickets.detail.closeButton": "Close ticket",
-  "tickets.detail.closeConfirm.title": "Close this ticket?",
-  "tickets.detail.closeConfirm.body": "Once closed, you can't reopen it. You'd need to open a new ticket.",
-  "tickets.detail.closeConfirm.confirm": "Yes, close it",
-  "tickets.detail.closeConfirm.cancel": "Cancel",
-  "tickets.detail.authorYou": "You",
-  "tickets.detail.authorSystem": "System",
-  "tickets.systemEvent.statusChanged": "Status changed from {old} to {new}",
-  "tickets.systemEvent.opened": "Ticket opened",
-  "tickets.systemEvent.closed": "Ticket closed",
-  "tickets.validation.subjectRequired": "Subject is required.",
-  "tickets.validation.subjectMin": "Subject must be at least 5 characters.",
-  "tickets.validation.subjectMax": "Subject can't be more than 200 characters.",
-  "tickets.validation.messageRequired": "Message is required.",
-  "tickets.validation.messageMin": "Message must be at least 10 characters.",
-  "tickets.validation.messageMax": "Message can't be more than 5000 characters.",
-  "tickets.validation.departmentRequired": "Please select a department.",
-  "tickets.errors.rateLimitExceeded": "You've opened too many tickets recently. Please wait before opening another.",
-  "tickets.errors.messageRateLimit": "You're sending messages too quickly. Please slow down.",
-  "tickets.errors.closedTicket": "This ticket is closed. Open a new ticket instead.",
-  "tickets.errors.notFound": "Ticket not found.",
-  "meetings.title": "Meetings",
-  "meetings.empty": "No meetings yet",
-  "meetings.bookNew": "Book a meeting",
-  "meetings.status.scheduled": "Scheduled",
-  "meetings.status.completed": "Completed",
-  "meetings.status.cancelled": "Cancelled",
-  "meetings.status.noShow": "No-show",
-  "meetings.type.consultation": "Consultation",
-  "meetings.type.followUp": "Follow-up",
-  "meetings.type.documentReview": "Document review",
-  "meetings.type.assessment": "Assessment",
-  "meetings.transcript.title": "Transcript",
-  "meetings.transcript.notes": "Notes",
-  "meetings.transcript.noFile": "No transcript file attached",
-  "meetings.transcript.noNotes": "No notes yet",
-  "meetings.consultant.create": "Create meeting",
-  "meetings.consultant.edit": "Edit meeting",
-  "meetings.consultant.cancel": "Cancel meeting",
-  "meetings.consultant.complete": "Mark as completed",
-  "meetings.consultant.attachTranscript": "Attach transcript",
-  "meetings.consultant.removeTranscript": "Remove",
-  "meetings.consultant.cancelReason": "Reason (optional)",
-  "meetings.errors.notFound": "Meeting not found.",
-  "meetings.errors.staffRateLimit": "You're making too many changes. Please wait a moment.",
-  "chat.title": "Assistant",
-  "chat.empty.title": "Ask me anything",
-  "chat.empty.subtitle": "I can help with your case, meetings, and platform questions.",
-  "chat.input.placeholder": "Type your message...",
-  "chat.input.send": "Send",
-  "chat.input.thinking": "Thinking...",
-  "chat.conversations.new": "New conversation",
-  "chat.conversations.empty": "No conversations yet",
-  "chat.escalation.title": "Want me to escalate this to a consultant?",
-  "chat.escalation.body": "I'll create a support ticket and a consultant will reply.",
-  "chat.escalation.extraContextLabel": "Anything else the consultant should know? (optional)",
-  "chat.escalation.accept": "Create support ticket",
-  "chat.escalation.decline": "No thanks",
-  "chat.escalation.created": "Ticket created — a consultant will reply soon",
-  "chat.escalation.linkedBadge": "Linked to ticket",
-  "chat.errors.unavailable": "Assistant is temporarily unavailable. Please try again in a moment.",
-  "chat.errors.rateLimited": "You're sending messages too quickly. Please wait a moment.",
-  "case.assignedLia": "Your immigration adviser",
-  "case.assignedConsultant": "Your consultant",
-  "case.unassigned": "Not yet assigned",
-
+  "tickets": {
+    "title": "Support tickets",
+    "list": {
+      "header": "Your tickets",
+      "empty": "You don't have any tickets yet.",
+      "emptyFiltered": "No tickets match your filters.",
+      "searchPlaceholder": "Search by subject",
+      "filterStatus": "Status",
+      "filterDepartment": "Department",
+      "openNew": "Open a new ticket",
+      "viewAll": "View all tickets"
+    },
+    "dashboard": {
+      "title": "Support tickets",
+      "openCount": "{count} open",
+      "noOpen": "No open tickets"
+    },
+    "status": {
+      "OPEN": "Open",
+      "IN_PROGRESS": "In progress",
+      "RESOLVED": "Resolved",
+      "CLOSED": "Closed"
+    },
+    "priority": {
+      "LOW": "Low",
+      "NORMAL": "Normal",
+      "HIGH": "High"
+    },
+    "department": {
+      "ADMISSIONS": "Admissions",
+      "VISA_APPLICATION": "Visa application",
+      "DOCUMENTS": "Documents",
+      "PAYMENTS_FINANCE": "Payments & finance",
+      "TECHNICAL_SUPPORT": "Technical support",
+      "GENERAL_INQUIRY": "General inquiry",
+      "description": {
+        "ADMISSIONS": "Questions about university selection, applications, and offers.",
+        "VISA_APPLICATION": "Questions about the visa form or Immigration New Zealand requirements.",
+        "DOCUMENTS": "Questions about which documents to provide or translations.",
+        "PAYMENTS_FINANCE": "Billing, invoices, or refund questions.",
+        "TECHNICAL_SUPPORT": "Login problems or platform bugs.",
+        "GENERAL_INQUIRY": "Anything else."
+      }
+    },
+    "new": {
+      "title": "Open a new ticket",
+      "department": {
+        "label": "Which department?",
+        "placeholder": "Select a department"
+      },
+      "subject": {
+        "label": "Subject",
+        "placeholder": "Brief summary of your question"
+      },
+      "message": {
+        "label": "Your message",
+        "placeholder": "Describe your question in detail. The more context you give, the faster we can help."
+      },
+      "submit": "Open ticket",
+      "submitting": "Opening ticket…"
+    },
+    "detail": {
+      "replyLabel": "Reply",
+      "replyPlaceholder": "Type your reply…",
+      "sendReply": "Send reply",
+      "closedNotice": "This ticket is closed. {link}",
+      "closedNoticeLink": "Open a new ticket",
+      "closeButton": "Close ticket",
+      "closeConfirm": {
+        "title": "Close this ticket?",
+        "body": "Once closed, you can't reopen it. You'd need to open a new ticket.",
+        "confirm": "Yes, close it",
+        "cancel": "Cancel"
+      },
+      "authorYou": "You",
+      "authorSystem": "System"
+    },
+    "systemEvent": {
+      "statusChanged": "Status changed from {old} to {new}",
+      "opened": "Ticket opened",
+      "closed": "Ticket closed"
+    },
+    "validation": {
+      "subjectRequired": "Subject is required.",
+      "subjectMin": "Subject must be at least 5 characters.",
+      "subjectMax": "Subject can't be more than 200 characters.",
+      "messageRequired": "Message is required.",
+      "messageMin": "Message must be at least 10 characters.",
+      "messageMax": "Message can't be more than 5000 characters.",
+      "departmentRequired": "Please select a department."
+    },
+    "errors": {
+      "rateLimitExceeded": "You've opened too many tickets recently. Please wait before opening another.",
+      "messageRateLimit": "You're sending messages too quickly. Please slow down.",
+      "closedTicket": "This ticket is closed. Open a new ticket instead.",
+      "notFound": "Ticket not found."
+    }
+  },
+  "meetings": {
+    "title": "Meetings",
+    "empty": "No meetings yet",
+    "bookNew": "Book a meeting",
+    "status": {
+      "scheduled": "Scheduled",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "noShow": "No-show"
+    },
+    "type": {
+      "consultation": "Consultation",
+      "followUp": "Follow-up",
+      "documentReview": "Document review",
+      "assessment": "Assessment"
+    },
+    "transcript": {
+      "title": "Transcript",
+      "notes": "Notes",
+      "noFile": "No transcript file attached",
+      "noNotes": "No notes yet"
+    },
+    "consultant": {
+      "create": "Create meeting",
+      "edit": "Edit meeting",
+      "cancel": "Cancel meeting",
+      "complete": "Mark as completed",
+      "attachTranscript": "Attach transcript",
+      "removeTranscript": "Remove",
+      "cancelReason": "Reason (optional)"
+    },
+    "errors": {
+      "notFound": "Meeting not found.",
+      "staffRateLimit": "You're making too many changes. Please wait a moment."
+    }
+  },
+  "chat": {
+    "title": "Assistant",
+    "empty": {
+      "title": "Ask me anything",
+      "subtitle": "I can help with your case, meetings, and platform questions."
+    },
+    "input": {
+      "placeholder": "Type your message...",
+      "send": "Send",
+      "thinking": "Thinking..."
+    },
+    "conversations": {
+      "new": "New conversation",
+      "empty": "No conversations yet"
+    },
+    "escalation": {
+      "title": "Want me to escalate this to a consultant?",
+      "body": "I'll create a support ticket and a consultant will reply.",
+      "extraContextLabel": "Anything else the consultant should know? (optional)",
+      "accept": "Create support ticket",
+      "decline": "No thanks",
+      "created": "Ticket created — a consultant will reply soon",
+      "linkedBadge": "Linked to ticket"
+    },
+    "errors": {
+      "unavailable": "Assistant is temporarily unavailable. Please try again in a moment.",
+      "rateLimited": "You're sending messages too quickly. Please wait a moment."
+    }
+  },
+  "case": {
+    "assignedLia": "Your immigration adviser",
+    "assignedConsultant": "Your consultant",
+    "unassigned": "Not yet assigned"
+  },
   "staff": {
     "nav": {
       "overview": "Overview",
