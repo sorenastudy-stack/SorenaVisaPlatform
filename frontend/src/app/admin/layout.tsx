@@ -5,7 +5,7 @@ import { PortalLayout } from '@/components/portal/PortalLayout';
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect('/login?next=/admin');
-  if (!['ADMIN', 'SUPER_ADMIN'].includes(session.role)) redirect('/unauthorized');
+  if (!['ADMIN', 'SUPER_ADMIN', 'OWNER'].includes(session.role)) redirect('/unauthorized');
 
   return (
     <PortalLayout portal="admin" session={session}>

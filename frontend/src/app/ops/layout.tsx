@@ -5,7 +5,7 @@ import { PortalLayout } from '@/components/portal/PortalLayout';
 export default async function OpsLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect('/login?next=/ops');
-  if (!['OPERATIONS', 'SUPER_ADMIN', 'ADMIN'].includes(session.role)) redirect('/unauthorized');
+  if (!['OPERATIONS', 'ADMIN', 'SUPER_ADMIN', 'OWNER'].includes(session.role)) redirect('/unauthorized');
 
   return (
     <PortalLayout portal="ops" session={session}>
