@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, AlertTriangle, Lock, FileText, UserCheck, Mail, Phone, Gavel, Scale, MessageSquare, FilePlus2, CheckCircle2, Files, XCircle, HelpCircle } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Lock, FileText, UserCheck, Mail, Phone, Gavel, Scale, MessageSquare, FilePlus2, CheckCircle2, Files, XCircle, HelpCircle, ScrollText } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { getSession } from '@/lib/auth';
@@ -266,13 +266,22 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
               </span>
             </div>
           </div>
-          {/* PR-LIA-6: consolidated INZ data viewer entry point. */}
-          <Link
-            href={`/lia/cases/${caseData.id}/inz-data`}
-            className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#E8B923] hover:text-[#1E3A5F] transition-colors flex-shrink-0"
-          >
-            <FileText size={16} /> View INZ application data →
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+            {/* PR-LIA-12: chronological master log for this case. */}
+            <Link
+              href={`/lia/cases/${caseData.id}/file-note`}
+              className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-[#E8B923]/40 text-[#1E3A5F] text-sm font-semibold hover:border-[#E8B923] hover:text-[#E8B923] transition-colors"
+            >
+              <ScrollText size={16} /> View Case File Note
+            </Link>
+            {/* PR-LIA-6: consolidated INZ data viewer entry point. */}
+            <Link
+              href={`/lia/cases/${caseData.id}/inz-data`}
+              className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#E8B923] hover:text-[#1E3A5F] transition-colors"
+            >
+              <FileText size={16} /> View INZ application data →
+            </Link>
+          </div>
         </div>
       </div>
 

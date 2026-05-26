@@ -344,6 +344,17 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
       // row. Registered here so a follow-up "scan now + notify" path
       // can write rows that this helper already humanises.
       return 'Officer outlier scan triggered';
+    case 'CASE_FILE_NOTE_VIEWED':
+      // PR-LIA-12: read-only compliance trail. Fires once per view of
+      // the per-case timeline page. newValue: { caseId }.
+      return 'Case file note viewed';
+    case 'CASE_FILE_NOTE_EXPORTED': {
+      // PR-LIA-12: OWNER-only export. newValue: { caseId, format }.
+      const fmt = pickString(newV, 'format');
+      return fmt
+        ? `Case file note exported (${fmt})`
+        : 'Case file note exported';
+    }
     case 'VISA_EXPIRY_MANUAL_SWEEP_TRIGGERED': {
       const dispatched = (typeof newV === 'object' && newV !== null && typeof (newV as { dispatched?: unknown }).dispatched === 'number')
         ? (newV as { dispatched: number }).dispatched

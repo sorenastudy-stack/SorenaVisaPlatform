@@ -9,6 +9,8 @@ import { InzSubmissionService } from './inz-submission/inz-submission.service';
 import { InzSubmissionController } from './inz-submission/inz-submission.controller';
 import { VisaService } from './visa/visa.service';
 import { VisaController } from './visa/visa.controller';
+import { CaseFileNoteService } from './case-file-note/case-file-note.service';
+import { CaseFileNoteController } from './case-file-note/case-file-note.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
 import { CryptoModule } from '../common/crypto/crypto.module';
@@ -22,6 +24,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
     LiaProductivityController,
     InzSubmissionController,
     VisaController,
+    // PR-LIA-12: case-file-note timeline + Markdown/Text export.
+    CaseFileNoteController,
   ],
   providers: [
     CasesService,
@@ -30,6 +34,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     LiaProductivityService,
     InzSubmissionService,
     VisaService,
+    CaseFileNoteService,
   ],
   exports: [
     CasesService,
@@ -37,6 +42,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     LiaProductivityService,
     InzSubmissionService,
     VisaService,
+    CaseFileNoteService,
   ],
 })
 export class CasesModule {}
