@@ -183,15 +183,26 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
       </Link>
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1E3A5F]">{contact?.fullName ?? 'Unknown applicant'}</h1>
-        <div className="flex items-center gap-2 flex-wrap mt-2">
-          <span className="text-xs text-[#4A4A4A]/70">Case {caseData.id.slice(0, 8)}</span>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${stageStyles(caseData.stage)}`}>
-            {stageLabel(caseData.stage)}
-          </span>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${riskStyles(caseData.riskLevel)}`}>
-            {riskLabel(caseData.riskLevel)} risk
-          </span>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-[#1E3A5F]">{contact?.fullName ?? 'Unknown applicant'}</h1>
+            <div className="flex items-center gap-2 flex-wrap mt-2">
+              <span className="text-xs text-[#4A4A4A]/70">Case {caseData.id.slice(0, 8)}</span>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${stageStyles(caseData.stage)}`}>
+                {stageLabel(caseData.stage)}
+              </span>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${riskStyles(caseData.riskLevel)}`}>
+                {riskLabel(caseData.riskLevel)} risk
+              </span>
+            </div>
+          </div>
+          {/* PR-LIA-6: consolidated INZ data viewer entry point. */}
+          <Link
+            href={`/lia/cases/${caseData.id}/inz-data`}
+            className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#E8B923] hover:text-[#1E3A5F] transition-colors flex-shrink-0"
+          >
+            <FileText size={16} /> View INZ application data →
+          </Link>
         </div>
       </div>
 

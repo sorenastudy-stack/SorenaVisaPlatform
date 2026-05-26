@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "node ../backend/scripts/kill-port.js 3000",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "kill-frontend": "node ../backend/scripts/kill-port.js 3000"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",

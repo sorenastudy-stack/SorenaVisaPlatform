@@ -29,6 +29,7 @@ import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
 import { LegalNotesModule } from './legal-notes/legal-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
+import { InzDataModule } from './inz-data/inz-data.module';
 
 @Module({
   imports: [
@@ -77,6 +78,8 @@ import { CaseDocumentsModule } from './case-documents/case-documents.module';
     // PR-LIA-5: unified LIA view of client-uploaded documents on a
     // CRM Case, with download + internal-only review verdicts.
     CaseDocumentsModule,
+    // PR-LIA-6: consolidated read-only INZ application data viewer.
+    InzDataModule,
   ],
 })
 export class AppModule {}

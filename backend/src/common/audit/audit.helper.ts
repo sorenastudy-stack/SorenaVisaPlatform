@@ -186,6 +186,9 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
       if (status === 'REJECTED') return 'LIA rejected a client document';
       return 'LIA recorded a document review';
     }
+    case 'LIA_INZ_DATA_VIEWED':
+      // PR-LIA-6: read-only compliance trail. newValue is { caseId }.
+      return 'LIA viewed consolidated INZ application data';
     case 'STATUS_CHANGED': {
       const status = pickString(newV, 'status');
       return status ? `Case status changed to ${status}` : 'Case status changed';
