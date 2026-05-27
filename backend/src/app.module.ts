@@ -34,6 +34,8 @@ import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
 import { ImmigrationOfficersModule } from './immigration-officers/immigration-officers.module';
 import { ScorecardModule } from './scorecard/scorecard.module';
 import { MarketingModule } from './marketing/marketing.module';
+import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
+import { WixIntegrationModule } from './wix-integration/wix-integration.module';
 
 @Module({
   imports: [
@@ -97,6 +99,14 @@ import { MarketingModule } from './marketing/marketing.module';
     // (staff CRUD under /staff/marketing/*) and public short-link
     // redirector (/s/:shortCode).
     MarketingModule,
+    // PR-SCORECARD-4: OWNER-editable platform settings (booking URLs,
+    // webhook secrets). Mounted under /staff/platform-settings/*.
+    PlatformSettingsModule,
+    // PR-SCORECARD-4: Wix Automation payment webhook listener +
+    // staff-side payments browser. Public webhook at
+    // POST /webhooks/wix/payment (shared-secret authenticated),
+    // staff CRUD at /staff/wix-payments/*.
+    WixIntegrationModule,
   ],
 })
 export class AppModule {}

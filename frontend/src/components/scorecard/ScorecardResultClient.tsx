@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Award, AlertTriangle, CheckCircle2, XCircle, Calendar, CreditCard,
@@ -8,7 +8,11 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { BAND_META, CATEGORY_META, RESULT_STRINGS } from '@/lib/scorecard/labels';
-import { BOOKING_URLS } from '@/lib/scorecard/booking-urls';
+import {
+  FALLBACK_BOOKING_URLS,
+  getBookingUrls,
+  type BookingUrls,
+} from '@/lib/scorecard/booking-urls';
 import type { ScorecardResultPayload } from '@/app/scorecard/result/page';
 
 // CTA matrix — band/hard-stop → button(s) + "why this matters" copy.
@@ -65,6 +69,24 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
   const [openAnswerLog, setOpenAnswerLog] = useState(false);
   const [bookingClicked, setBookingClicked] = useState(!!data.consultationBookedAt);
   const [bookingError, setBookingError] = useState<string | null>(null);
+
+  // PR-SCORECARD-4: booking URLs are OWNER-editable. Start with the
+  // hard-coded fallback (matches the migration seed) so the buttons
+  // are always usable, then upgrade to the OWNER's edited values
+  // once the GET /scorecard/booking-urls fetch resolves. getBookingUrls()
+  // already swallows network errors and resolves to the fallback,
+  // so there's no error branch to render.
+  const [bookingUrls, setBookingUrls] = useState<BookingUrls>(FALLBACK_BOOKING_URLS);
+
+  useEffect(() => {
+    let cancelled = false;
+    getBookingUrls().then((urls) => {
+      if (!cancelled) setBookingUrls(urls);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const bandMeta = BAND_META[data.band];
   const colorClasses = BAND_COLOR_CLASSES[bandMeta?.color ?? 'gray'];
@@ -227,7 +249,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               <PrimaryBookingButton
                 icon={<CreditCard size={18} />}
                 label="Pay NZD 30 and book your Gap-Closing Session"
-                onClick={() => handleBookingNavigate(BOOKING_URLS.GAP_CLOSING_PAYMENT)}
+                onClick={() => handleBookingNavigate(bookingUrls.GAP_CLOSING_PAYMENT)}
               />
               <BookingFooter
                 clicked={bookingClicked}
@@ -242,7 +264,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
               <WhyThisMatters text={WHY_LIA_BAND_3} />
               <LiaConsultationButton
-                onClick={() => handleBookingNavigate(BOOKING_URLS.LIA_CONSULTATION)}
+                onClick={() => handleBookingNavigate(bookingUrls.LIA_CONSULTATION)}
               />
               <BookingFooter
                 clicked={bookingClicked}
@@ -259,7 +281,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               <PrimaryBookingButton
                 icon={<Calendar size={18} />}
                 label="Book your free 15-minute consultation"
-                onClick={() => handleBookingNavigate(BOOKING_URLS.FREE_15MIN)}
+                onClick={() => handleBookingNavigate(bookingUrls.FREE_15MIN)}
               />
               <BookingFooter
                 clicked={bookingClicked}
@@ -274,7 +296,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
               <WhyThisMatters text={WHY_LIA_LOW_BAND} />
               <LiaConsultationButton
-                onClick={() => handleBookingNavigate(BOOKING_URLS.LIA_CONSULTATION)}
+                onClick={() => handleBookingNavigate(bookingUrls.LIA_CONSULTATION)}
               />
               <BookingFooter
                 clicked={bookingClicked}
@@ -290,14 +312,14 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               <div>
                 <WhyThisMatters text={WHY_LIA_HIGH_BAND} />
                 <LiaConsultationButton
-                  onClick={() => handleBookingNavigate(BOOKING_URLS.LIA_CONSULTATION)}
+                  onClick={() => handleBookingNavigate(bookingUrls.LIA_CONSULTATION)}
                 />
               </div>
 
               <div className="pt-4 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => handleBookingNavigate(BOOKING_URLS.FREE_15MIN)}
+                  onClick={() => handleBookingNavigate(bookingUrls.FREE_15MIN)}
                   className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-3 rounded-xl bg-gray-100 text-[#1E3A5F]/70 font-semibold text-sm hover:bg-gray-200 transition-colors"
                 >
                   <Calendar size={14} />

@@ -1425,7 +1425,9 @@
       "tickets": "تیکت‌ها",
       "staff": "کارکنان",
       "approvals": "تأییدها",
-      "marketing": "بازاریابی"
+      "marketing": "بازاریابی",
+      "wixPayments": "پرداخت‌های ویکس",
+      "platformSettings": "تنظیمات پلتفرم"
     },
     "signOut": "خروج",
     "comingSoon": {

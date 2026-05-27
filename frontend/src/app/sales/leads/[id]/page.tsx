@@ -7,6 +7,7 @@ import { LeadStatusActions } from './LeadStatusActions';
 import { LeadProgressTimeline } from './LeadProgressTimeline';
 import { LeadStatusHistory } from './LeadStatusHistory';
 import { AdminOverridePanel } from './AdminOverridePanel';
+import { LeadWixPayments } from './LeadWixPayments';
 import { getSession } from '@/lib/auth';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { LEAD_STATUS_GLOSSARY } from '@/lib/glossary';
@@ -296,6 +297,10 @@ export default async function LeadDetailPage({
           <AdminOverridePanel leadId={lead.id} currentStatus={lead.leadStatus} />
         </div>
       )}
+
+      <div className="mt-4">
+        <LeadWixPayments leadId={lead.id} />
+      </div>
 
       <div className="mt-4">
         <LeadStatusHistory history={history} />

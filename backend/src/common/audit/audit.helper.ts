@@ -413,6 +413,30 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
       const code = pickString(newV, 'shortCode');
       return code ? `Tracking link archived: ${code}` : 'Tracking link archived';
     }
+    case 'PLATFORM_SETTING_UPDATED': {
+      // PR-SCORECARD-4: newValue { key, value (masked for secrets), category }.
+      const key = pickString(newV, 'key');
+      return key ? `Platform setting updated: ${key}` : 'Platform setting updated';
+    }
+    case 'WIX_WEBHOOK_SECRET_REGENERATED':
+      // PR-SCORECARD-4: newValue { key, value: '●●●●●●●●', category }.
+      return 'Wix webhook secret regenerated';
+    case 'WIX_PAYMENT_RECORDED': {
+      // PR-SCORECARD-4: newValue { wixPaymentId, paymentType, amount, currency, matchedLeadId, matchedUserId }.
+      const type = pickString(newV, 'paymentType');
+      const amount = pickString(newV, 'amount');
+      const currency = pickString(newV, 'currency');
+      if (type && amount && currency) return `Wix payment recorded: ${type} ${amount} ${currency}`;
+      if (type)                       return `Wix payment recorded: ${type}`;
+      return 'Wix payment recorded';
+    }
+    case 'WIX_PAYMENT_WEBHOOK_REJECTED': {
+      // PR-SCORECARD-4: newValue { ip, providedSecretPreview }.
+      const ip = pickString(newV, 'ip');
+      return ip ? `Wix payment webhook rejected (from ${ip})` : 'Wix payment webhook rejected';
+    }
+    case 'WIX_PAYMENT_VIEWED':
+      return 'Wix payment detail viewed by staff';
     case 'VISA_EXPIRY_MANUAL_SWEEP_TRIGGERED': {
       const dispatched = (typeof newV === 'object' && newV !== null && typeof (newV as { dispatched?: unknown }).dispatched === 'number')
         ? (newV as { dispatched: number }).dispatched

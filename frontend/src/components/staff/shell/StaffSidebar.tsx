@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
+  Settings, CreditCard,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -32,15 +33,23 @@ interface NavItem {
 }
 
 const MARKETING_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'] as const;
+// PR-SCORECARD-4: platform settings is tighter (OWNER/SUPER_ADMIN only),
+// Wix payments is broader (adds FINANCE for reconciliation).
+const SETTINGS_ROLES   = ['OWNER', 'SUPER_ADMIN'] as const;
+const WIX_PAYMENT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'FINANCE'] as const;
 
 const NAV: NavItem[] = [
-  { label: 'staff.nav.overview',   href: '/staff',            icon: <LayoutDashboard size={18} /> },
-  { label: 'staff.nav.cases',      href: '/staff/cases',      icon: <Briefcase size={18} /> },
-  { label: 'staff.nav.meetings',   href: '/staff/meetings',   icon: <Calendar size={18} /> },
-  { label: 'staff.nav.tickets',    href: '/staff/tickets',    icon: <Inbox size={18} /> },
-  { label: 'staff.nav.staff',      href: '/staff/users',      icon: <Users size={18} />,       gate: 'canManageStaff' },
-  { label: 'staff.nav.approvals',  href: '/staff/approvals',  icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
-  { label: 'staff.nav.marketing',  href: '/staff/marketing',  icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },
+  { label: 'staff.nav.overview',          href: '/staff',                    icon: <LayoutDashboard size={18} /> },
+  { label: 'staff.nav.cases',             href: '/staff/cases',              icon: <Briefcase size={18} /> },
+  { label: 'staff.nav.meetings',          href: '/staff/meetings',           icon: <Calendar size={18} /> },
+  { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} /> },
+  { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },
+  { label: 'staff.nav.approvals',         href: '/staff/approvals',          icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
+  { label: 'staff.nav.marketing',         href: '/staff/marketing',          icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },
+  // PR-SCORECARD-4: Wix payments visible to OWNER/SUPER_ADMIN/ADMIN/FINANCE.
+  { label: 'staff.nav.wixPayments',       href: '/staff/wix-payments',       icon: <CreditCard size={18} />,  roleGate: WIX_PAYMENT_ROLES },
+  // PR-SCORECARD-4: OWNER-editable booking URLs + Wix webhook secret.
+  { label: 'staff.nav.platformSettings',  href: '/staff/platform-settings',  icon: <Settings size={18} />,    roleGate: SETTINGS_ROLES },
 ];
 
 export function StaffSidebar() {

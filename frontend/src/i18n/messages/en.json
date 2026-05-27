@@ -1425,7 +1425,9 @@
       "tickets": "Tickets",
       "staff": "Staff",
       "approvals": "Approvals",
-    "marketing": "Marketing"
+      "marketing": "Marketing",
+      "wixPayments": "Wix payments",
+      "platformSettings": "Platform settings"
     },
     "signOut": "Sign out",
     "comingSoon": {

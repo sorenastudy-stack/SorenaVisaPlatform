@@ -465,6 +465,12 @@ model User {
   createdAffiliateAgents  AffiliateAgent[]                  @relation("AffiliateAgentCreator")
   createdTrackingLinks    TrackingLink[]                    @relation("TrackingLinkCreator")
 
+  // PR-SCORECARD-4: OWNER-editable platform settings (booking URLs +
+  // Wix webhook secret) and the Wix payments matched to this user by
+  // email at webhook-receive time.
+  platformSettingUpdates  PlatformSetting[]                 @relation("PlatformSettingUpdater")
+  wixPayments             WixPayment[]                      @relation("WixPaymentUser")
+
   @@map("users")
 }
 
@@ -714,6 +720,11 @@ model Lead {
   // PR-SCORECARD-2: attribution relations.
   trackingLink            TrackingLink?     @relation("LeadAttributedLink", fields: [trackingLinkId], references: [id])
   attributedAgent         AffiliateAgent?   @relation("LeadAttributedAgent", fields: [attributedAgentId], references: [id])
+
+  // PR-SCORECARD-4: Wix payments matched to this lead by email at
+  // webhook-receive time. Match is best-effort and informational only —
+  // we never auto-update lead status from a payment.
+  wixPayments             WixPayment[]      @relation("WixPaymentLead")
 
   @@index([contactId])
   @@index([leadStatus])
@@ -3109,14 +3120,36 @@ model Refund {
   @@map("refunds")
 }
 
-// Generic key-value store for platform-wide settings the OWNER
-// updates via the approval queue. value is encrypted (CryptoService).
+// PR-SCORECARD-4 — Generic key-value store for platform-wide settings.
+//
+// Two coexisting conventions live in this table:
+//
+//   * Legacy (owner-approval queue): `value` is AES-256-GCM ciphertext
+//     via CryptoService.enc(). Reads must decrypt. Keys are arbitrary
+//     OWNER-approved settings (CHANGE_PLATFORM_SETTING executor).
+//   * PR-SCORECARD-4 (booking_urls + wix_integration categories):
+//     `value` is plaintext. `category` is `booking_urls` |
+//     `wix_integration` | `general`. PlatformSettingsService writes
+//     these. The WIX_WEBHOOK_SECRET value is never returned plaintext
+//     by the API except at regeneration time (masked as ●●●●●●●● in
+//     every other response and in audit rows).
+//
+// `id` is the PK so each setting has a stable identifier; `key` is
+// the unique business identifier used by callers (BOOKING_URL_FREE_15MIN,
+// WIX_WEBHOOK_SECRET, etc.).
 model PlatformSetting {
-  key         String   @id
-  value       String
-  updatedAt   DateTime @updatedAt
+  id          String   @id @default(uuid())
+  key         String   @unique @db.VarChar(100)
+  value       String   @db.Text
+  description String?  @db.Text
+  category    String   @default("general") @db.VarChar(50)
   updatedById String
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
 
+  updatedBy   User     @relation("PlatformSettingUpdater", fields: [updatedById], references: [id])
+
+  @@index([category])
   @@map("platform_settings")
 }
 
@@ -3334,4 +3367,55 @@ model TrackingLinkClick {
 
   @@index([linkId, clickedAt])
   @@map("tracking_link_clicks")
+}
+
+// ─── PR-SCORECARD-4 ─ Wix payment integration ────────────────────────────────
+
+enum WixPaymentType {
+  FREE_15MIN
+  GAP_CLOSING
+  LIA_CONSULTATION
+  OTHER
+}
+
+enum WixPaymentStatus {
+  RECEIVED
+  REFUNDED
+  DISPUTED
+}
+
+// One Wix payment / booking event. Created by the public webhook
+// `POST /webhooks/wix/payment` (shared-secret authenticated).
+// `wixPaymentId` is unique so retries from the Wix Automation are
+// idempotent. `matchedLeadId` / `matchedUserId` are best-effort
+// email matches captured at write time; the link is informational
+// only — we do NOT auto-update lead status from this row (per
+// strategic decision: payments are recorded, never actioned).
+model WixPayment {
+  id                String              @id @default(uuid())
+  wixPaymentId      String              @unique @db.VarChar(200)
+  wixBookingId      String?             @db.VarChar(200)
+  paymentType       WixPaymentType
+  amount            Decimal             @db.Decimal(10, 2)
+  currency          String              @db.VarChar(3)
+  status            WixPaymentStatus    @default(RECEIVED)
+  customerEmail     String              @db.VarChar(200)
+  customerName      String?             @db.VarChar(200)
+  customerPhone     String?             @db.VarChar(64)
+  bookingStart      DateTime?
+  bookingEnd        DateTime?
+  bookingLocation   String?             @db.VarChar(200)
+  matchedLeadId     String?
+  matchedUserId     String?
+  rawPayload        Json
+  receivedAt        DateTime            @default(now())
+
+  matchedLead       Lead?               @relation("WixPaymentLead", fields: [matchedLeadId], references: [id])
+  matchedUser       User?               @relation("WixPaymentUser", fields: [matchedUserId], references: [id])
+
+  @@index([customerEmail, receivedAt])
+  @@index([matchedLeadId])
+  @@index([paymentType, receivedAt])
+  @@index([status])
+  @@map("wix_payments")
 }
