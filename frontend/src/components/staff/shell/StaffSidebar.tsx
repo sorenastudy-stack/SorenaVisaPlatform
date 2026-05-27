@@ -37,10 +37,18 @@ const MARKETING_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'] as const;
 // Wix payments is broader (adds FINANCE for reconciliation).
 const SETTINGS_ROLES   = ['OWNER', 'SUPER_ADMIN'] as const;
 const WIX_PAYMENT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'FINANCE'] as const;
+// PR-CRM-LEADS: same role set as Wix payments + CONSULTANT.
+// LIA is excluded — they work from the case-side portal, not the
+// lead funnel.
+const LEADS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'FINANCE'] as const;
 
 const NAV: NavItem[] = [
   { label: 'staff.nav.overview',          href: '/staff',                    icon: <LayoutDashboard size={18} /> },
   { label: 'staff.nav.cases',             href: '/staff/cases',              icon: <Briefcase size={18} /> },
+  // PR-CRM-LEADS: unified lead funnel. Positioned between Cases and
+  // Marketing because the day-to-day staff workflow is "see cases →
+  // see leads → tweak attribution".
+  { label: 'staff.nav.leads',             href: '/staff/leads',              icon: <Users size={18} />,       roleGate: LEADS_ROLES },
   { label: 'staff.nav.meetings',          href: '/staff/meetings',           icon: <Calendar size={18} /> },
   { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} /> },
   { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },

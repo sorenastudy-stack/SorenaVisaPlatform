@@ -437,6 +437,31 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
     }
     case 'WIX_PAYMENT_VIEWED':
       return 'Wix payment detail viewed by staff';
+    case 'LEAD_VIEWED_BY_STAFF':
+      // PR-CRM-LEADS: read-only audit fired when a staff user opens
+      // a lead detail page.
+      return 'Lead detail viewed by staff';
+    case 'LEAD_STATUS_CHANGED': {
+      // PR-CRM-LEADS: oldValue { status }, newValue { status, note }.
+      const from = pickString(entry.oldValue, 'status');
+      const to   = pickString(newV, 'status');
+      if (from && to) return `Lead status changed: ${from} → ${to}`;
+      if (to)         return `Lead status changed to ${to}`;
+      return 'Lead status changed';
+    }
+    case 'LEAD_ASSIGNED': {
+      // PR-CRM-LEADS: oldValue { assignedToId }, newValue { assignedToId }.
+      const next = pickString(newV, 'assignedToId');
+      const prev = pickString(entry.oldValue, 'assignedToId');
+      if (next && prev) return 'Lead reassigned';
+      if (next)         return 'Lead assigned';
+      return 'Lead unassigned';
+    }
+    case 'LEAD_CONVERTED':
+      // PR-CRM-LEADS: fires alongside LEAD_STATUS_CHANGED when the
+      // new status is CLOSED_WON (the closest enum equivalent of
+      // "converted" — the LeadStatus enum has no literal CONVERTED).
+      return 'Lead converted (status → CLOSED_WON)';
     case 'VISA_EXPIRY_MANUAL_SWEEP_TRIGGERED': {
       const dispatched = (typeof newV === 'object' && newV !== null && typeof (newV as { dispatched?: unknown }).dispatched === 'number')
         ? (newV as { dispatched: number }).dispatched
