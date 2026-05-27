@@ -56,6 +56,15 @@ export interface AttributionInput {
   channel?: string | null;
 }
 
+// Fix 5: gateResults is now a SORTED ARRAY (server-side numerical
+// order) rather than a Record<string, boolean>. Object key iteration
+// for string keys isn't guaranteed and was producing 1, 4, 2, 5, 3.
+export interface GateResultRow {
+  gateNumber: 1 | 2 | 3 | 4 | 5;
+  label: string;
+  passed: boolean;
+}
+
 export interface ScorecardResultPayload {
   submissionId: string;
   totalScore: number;
@@ -66,7 +75,7 @@ export interface ScorecardResultPayload {
   hardStops: ReturnType<typeof score>['hardStops'];
   riskFlags: string[];
   executionEligible: boolean;
-  gateResults: Record<string, boolean>;
+  gateResults: GateResultRow[];
   nextAction: ScorecardNextAction;
   nextActionTextEn: string;
   nextActionTextFa: string;
@@ -146,6 +155,12 @@ export class ScorecardService {
       select: { id: true },
     });
 
+    // Fix 5: store the gateResults JSON column in the new sorted-array
+    // shape so SQL queries / staff views read the same shape that
+    // the API returns. Legacy rows (stored as objects pre-Fix 5)
+    // are tolerated on read by `gatesToArray`.
+    const gateRowsForStorage = ScorecardService.gatesToArray(result.execution.gates);
+
     const submission = await this.prisma.$transaction(async (tx) => {
       const submissionData = {
         userId,
@@ -159,7 +174,7 @@ export class ScorecardService {
         hardStops: result.hardStops as unknown as Prisma.InputJsonValue,
         riskFlags: result.riskFlags,
         executionEligible: result.execution.eligible,
-        gateResults: result.execution.gates as unknown as Prisma.InputJsonValue,
+        gateResults: gateRowsForStorage as unknown as Prisma.InputJsonValue,
         nextAction: routing.nextAction as ScorecardNextAction,
         nextActionTextEn: routing.nextActionTextEn,
         nextActionTextFa: routing.nextActionTextFa,
@@ -488,7 +503,8 @@ export class ScorecardService {
       hardStops: (row.hardStops as unknown as ScoreResult['hardStops']) ?? [],
       riskFlags: row.riskFlags,
       executionEligible: row.executionEligible,
-      gateResults: (row.gateResults as unknown as Record<string, boolean>) ?? {},
+      // Fix 5: normalise both legacy (object) and new (array) DB shapes.
+      gateResults: ScorecardService.gatesToArray(row.gateResults),
       nextAction: row.nextAction,
       nextActionTextEn: row.nextActionTextEn,
       nextActionTextFa: row.nextActionTextFa,
@@ -525,7 +541,9 @@ export class ScorecardService {
       hardStops: result.hardStops,
       riskFlags: result.riskFlags,
       executionEligible: result.execution.eligible,
-      gateResults: result.execution.gates,
+      // Fix 5: engine still returns Record<string, boolean>; convert
+      // to sorted array for the API response.
+      gateResults: ScorecardService.gatesToArray(result.execution.gates),
       nextAction: routing.nextAction as ScorecardNextAction,
       nextActionTextEn: routing.nextActionTextEn,
       nextActionTextFa: routing.nextActionTextFa,
@@ -570,6 +588,46 @@ export class ScorecardService {
     if (b === 'BAND_1' || b === 'BAND_2') return 'LOW';
     if (b === 'BAND_3' || b === 'BAND_4') return 'MID';
     return 'HIGH';
+  }
+
+  // Fix 5: convert the engine's `Record<string, boolean>` gates output
+  // into a sorted array (Gate 1 → Gate 5). The engine still returns an
+  // object keyed by the human label; this helper normalises BOTH:
+  //   * fresh gates from the engine (object), AND
+  //   * legacy gates loaded from the DB (object stored before Fix 5)
+  //   * already-converted gates loaded from the DB (array stored after Fix 5)
+  // so re-reading historical submissions doesn't break.
+  static gatesToArray(input: unknown): GateResultRow[] {
+    // Already-converted array shape (Fix 5 forward).
+    if (Array.isArray(input)) {
+      const arr = input
+        .filter(
+          (row): row is GateResultRow =>
+            typeof row === 'object' && row !== null
+            && typeof (row as GateResultRow).gateNumber === 'number'
+            && typeof (row as GateResultRow).label === 'string'
+            && typeof (row as GateResultRow).passed === 'boolean',
+        )
+        .slice()
+        .sort((a, b) => a.gateNumber - b.gateNumber);
+      return arr;
+    }
+    // Object shape (legacy / engine fresh output). Parse the "Gate N:"
+    // prefix to recover the gate number; pass through label intact.
+    if (typeof input === 'object' && input !== null) {
+      const obj = input as Record<string, boolean>;
+      const rows: GateResultRow[] = [];
+      for (const [label, passed] of Object.entries(obj)) {
+        const m = /^Gate\s+(\d)\b/i.exec(label);
+        if (!m) continue;
+        const n = parseInt(m[1]!, 10) as 1 | 2 | 3 | 4 | 5;
+        if (n < 1 || n > 5) continue;
+        rows.push({ gateNumber: n, label, passed: !!passed });
+      }
+      rows.sort((a, b) => a.gateNumber - b.gateNumber);
+      return rows;
+    }
+    return [];
   }
 
   private shouldPromoteToLead(role: string | null | undefined): boolean {

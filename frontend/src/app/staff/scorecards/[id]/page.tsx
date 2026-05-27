@@ -31,7 +31,9 @@ interface ScorecardDetail {
   hardStops: HardStopOut[];
   riskFlags: string[];
   executionEligible: boolean;
-  gateResults: Record<string, boolean>;
+  // Fix 5 (PR-SCORECARD-2 follow-up): gateResults is now a server-
+  // sorted array (Gate 1 → Gate 5) rather than an object.
+  gateResults: Array<{ gateNumber: 1 | 2 | 3 | 4 | 5; label: string; passed: boolean }>;
   nextAction: string;
   nextActionTextEn: string;
   nextActionTextFa: string;
@@ -204,12 +206,12 @@ export default async function ScorecardDetailPage({ params }: { params: { id: st
             <ListChecks size={14} /> Execution eligibility — 5-gate check
           </h2>
           <ul className="space-y-1">
-            {Object.entries(data.gateResults).map(([label, passed]) => (
-              <li key={label} className="flex items-center gap-2 text-sm">
-                {passed
+            {data.gateResults.map((g) => (
+              <li key={g.gateNumber} className="flex items-center gap-2 text-sm">
+                {g.passed
                   ? <CheckCircle2 size={14} className="text-emerald-600" />
                   : <XCircle size={14} className="text-red-600" />}
-                <span className="text-[#1E3A5F]">{label}</span>
+                <span className="text-[#1E3A5F]">{g.label}</span>
               </li>
             ))}
           </ul>

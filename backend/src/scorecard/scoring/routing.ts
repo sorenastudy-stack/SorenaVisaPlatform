@@ -1,9 +1,17 @@
 // PR-SCORECARD-1 — Routing logic (NEW — not in the Python engine).
 //
 // Maps band + hard-stop state to the structured ScorecardNextAction
-// enum and the English / Persian copy that goes back to the user. The
+// enum and the English copy that goes back to the user. The
 // engine's legacy `nextAction` string is preserved for the report
 // renderer; this module produces the data the modern API consumes.
+//
+// Fix 9 (PR-SCORECARD-2 follow-up): Persian was removed from the
+// SCORECARD FLOW. `nextActionTextFa` is kept in the response shape
+// for API compatibility (consumers may still read it) but is now
+// populated with the same English string as `nextActionTextEn`. If
+// the scorecard market expands to bilingual users again, restore the
+// Persian copy here — no schema change is needed (the column already
+// exists in the database).
 //
 // Rules per the original PR spec:
 //   * Any hard stop active → BLOCKED_HARD_STOP, message names the
@@ -27,6 +35,14 @@ export interface RoutingDecision {
   nextActionTextFa: string;
 }
 
+// Helper: build a RoutingDecision where Fa mirrors En (Fix 9 default).
+function decision(
+  nextAction: ScorecardNextActionValue,
+  textEn: string,
+): RoutingDecision {
+  return { nextAction, nextActionTextEn: textEn, nextActionTextFa: textEn };
+}
+
 export function determineRouting(
   band: BandEnum,
   hardStops: HardStop[],
@@ -38,41 +54,29 @@ export function determineRouting(
   // message instead and keep the structured code on the row.
   if (hardStops.length > 0) {
     const first = hardStops[0];
-    return {
-      nextAction: 'BLOCKED_HARD_STOP',
-      nextActionTextEn:
-        `Before we can proceed, we need to resolve: ${first.name}. ${first.resolution}`,
-      nextActionTextFa:
-        `پیش از ادامه مسیر، ابتدا باید این مورد بررسی شود: ${first.name}. ${first.resolution}`,
-    };
+    return decision(
+      'BLOCKED_HARD_STOP',
+      `Before we can proceed, we need to resolve: ${first.name}. ${first.resolution}`,
+    );
   }
 
   if (band === 'BAND_1' || band === 'BAND_2') {
-    return {
-      nextAction: 'NURTURE_ONLY',
-      nextActionTextEn:
-        'We have free educational resources tailored to your profile. We will email you a personalised learning plan.',
-      nextActionTextFa:
-        'منابع آموزشی رایگان متناسب با پروفایل شما در نظر گرفته شده است. به‌زودی یک برنامه یادگیری شخصی‌سازی‌شده برایتان ایمیل می‌شود.',
-    };
+    return decision(
+      'NURTURE_ONLY',
+      'We have free educational resources tailored to your profile. We will email you a personalised learning plan.',
+    );
   }
 
   if (band === 'BAND_3') {
-    return {
-      nextAction: 'PAY_GAP_CLOSING_SESSION',
-      nextActionTextEn:
-        'Your next step is a 30 NZD Gap-Closing Roadmap Session. On payment, an AI-generated improvement plan and a booking link with a language-matched Admission Specialist will be sent to you.',
-      nextActionTextFa:
-        'گام بعدی شما یک جلسه ۳۰ دلار نیوزیلندی Gap-Closing Roadmap است. پس از پرداخت، یک برنامه بهبود تولیدشده با هوش مصنوعی و لینک رزرو جلسه با یک Admission Specialist هم‌زبان برایتان ارسال خواهد شد.',
-    };
+    return decision(
+      'PAY_GAP_CLOSING_SESSION',
+      'Your next step is a 30 NZD Gap-Closing Roadmap Session. On payment, an AI-generated improvement plan and a booking link with a language-matched Admission Specialist will be sent to you.',
+    );
   }
 
   // Bands 4, 5, 6 — mandatory free 15-min session
-  return {
-    nextAction: 'BOOK_FREE_15MIN_SESSION',
-    nextActionTextEn:
-      'You qualify for a free 15-minute consultation with our team. After this mandatory session, you may proceed with the 200 NZD account opening.',
-    nextActionTextFa:
-      'شما واجد شرایط یک جلسه مشاوره ۱۵ دقیقه‌ای رایگان با تیم ما هستید. پس از این جلسه که برای همه واجدین شرایط الزامی است، می‌توانید با پرداخت ۲۰۰ دلار نیوزیلندی، حساب کاربری خود را فعال کنید.',
-  };
+  return decision(
+    'BOOK_FREE_15MIN_SESSION',
+    'You qualify for a free 15-minute consultation with our team. After this mandatory session, you may proceed with the 200 NZD account opening.',
+  );
 }

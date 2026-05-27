@@ -1,16 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, ArrowLeft, ArrowRight, Loader2, AlertCircle, Save } from 'lucide-react';
-import { useLocaleStore } from '@/lib/stores/localeStore';
+import { ArrowLeft, ArrowRight, Loader2, AlertCircle, Save } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { FORM_SECTIONS, FORM_UI } from '@/lib/scorecard/labels';
 import {
-  FORM_SECTIONS, FORM_UI, T,
-} from '@/lib/scorecard/labels';
-import {
-  ALL_QUESTIONS, FORM_SCHEMA, isQuestionVisible, QuestionDef,
+  ALL_QUESTIONS, FORM_SCHEMA, getQuestionLabel, isQuestionVisible, QuestionDef,
 } from '@/lib/scorecard/questions';
+import { fillHiddenAnswers } from '@/lib/scorecard/submit-helpers';
 
 // PR-SCORECARD-2 — Multi-step scorecard form.
 //
@@ -18,6 +16,15 @@ import {
 // step. Autosave fires on "Save & next" (POST /scorecard/draft).
 // Conditional questions are hidden when their predicate fails and
 // don't block section progression.
+//
+// Fix 9 (PR-SCORECARD-2 follow-up): scorecard pages render in English
+// only. The platform-wide locale toggle still works elsewhere; the
+// scorecard surface ignores it. `dir` is always 'ltr' here.
+//
+// Fix 6: `fillHiddenAnswers` runs immediately before submit so the
+// scoring engine receives canonical fallbacks for skipped fields.
+// Without this, the engine would lose +2 pts each on Q5/Q7/Q9/Q10/Q11
+// and +3 pts on Q8 for users who skip them.
 //
 // Attribution is read from:
 //   1. sessionStorage (set by the landing page from URL params)
@@ -70,8 +77,6 @@ function readAttribution(): Attribution {
 
 export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | null }) {
   const router = useRouter();
-  const locale = useLocaleStore((s) => s.locale);
-  const isRtl = locale === 'fa';
 
   const [answers, setAnswers] = useState<Record<string, string>>(initialDraft?.answers ?? {});
   const [currentStep, setCurrentStep] = useState(0);
@@ -99,15 +104,15 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
       if (!isQuestionVisible(q, answers)) continue;
       const v = (answers[q.id] ?? '').trim();
       if (q.required && !v) {
-        errs[q.id] = T(FORM_UI.fieldRequired, locale);
+        errs[q.id] = FORM_UI.fieldRequired;
         continue;
       }
       if (q.type === 'email' && v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) {
-        errs[q.id] = T(FORM_UI.invalidEmail, locale);
+        errs[q.id] = FORM_UI.invalidEmail;
         continue;
       }
       if (q.type === 'phone' && v && !v.startsWith('+')) {
-        errs[q.id] = T(FORM_UI.invalidPhone, locale);
+        errs[q.id] = FORM_UI.invalidPhone;
         continue;
       }
     }
@@ -119,8 +124,8 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
     setSaving(true);
     setSaveError(null);
     try {
-      // Strip any answers for currently-hidden conditional questions
-      // so they don't accidentally affect scoring later.
+      // Drafts only carry currently-visible answers. Hidden conditional
+      // fallbacks land at submit time (see fillHiddenAnswers below).
       const cleaned: Record<string, string> = {};
       for (const q of ALL_QUESTIONS) {
         const v = answers[q.id];
@@ -132,7 +137,7 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
       setSaving(false);
       return true;
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : T(FORM_UI.saveErrorBanner, locale);
+      const msg = err instanceof ApiError ? err.message : FORM_UI.saveErrorBanner;
       setSaveError(msg);
       setSaving(false);
       return false;
@@ -145,7 +150,6 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    // Persist on transition between scoring sections.
     if (currentSection) {
       const ok = await persistDraft();
       if (!ok) return;
@@ -165,13 +169,20 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
     if (!declarationChecked) return;
     setSubmitting(true);
     setSubmitError(null);
-    const cleaned: Record<string, string> = {};
+
+    // 1. Strip hidden visible answers (form-validation-clean snapshot).
+    const visibleOnly: Record<string, string> = {};
     for (const q of ALL_QUESTIONS) {
       const v = answers[q.id];
       if (v !== undefined && v !== '' && isQuestionVisible(q, answers)) {
-        cleaned[q.id] = v;
+        visibleOnly[q.id] = v;
       }
     }
+    // 2. Fix 6: backfill canonical "Not applicable" / "0" / "No test
+    //    taken" values for the hidden conditional fields so the
+    //    scoring engine sees a complete answer set.
+    const cleaned = fillHiddenAnswers(visibleOnly);
+
     const attribution = readAttribution();
     try {
       await api.post('/scorecard/submit', { answers: cleaned, attribution });
@@ -207,18 +218,18 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
   }, [currentSection, answers]);
 
   return (
-    <div className="max-w-3xl mx-auto" dir={isRtl ? 'rtl' : 'ltr'}>
+    <div className="max-w-3xl mx-auto">
       {/* Progress bar */}
       <div className="mb-8">
         <div className="flex items-center justify-between text-sm font-semibold text-[#1E3A5F] mb-2">
           <span>
-            {T(FORM_UI.progressLabel, locale)
+            {FORM_UI.progressLabel
               .replace('{current}', String(currentStep + 1))
               .replace('{total}',   String(TOTAL_SECTIONS))}
           </span>
           {saving && (
             <span className="inline-flex items-center gap-1 text-xs text-[#4A4A4A]/70 font-medium">
-              <Loader2 size={12} className="animate-spin" /> {T(FORM_UI.saving, locale)}
+              <Loader2 size={12} className="animate-spin" /> {FORM_UI.saving}
             </span>
           )}
         </div>
@@ -232,7 +243,7 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
 
       {showResumeBanner && (
         <div className="mb-6 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2">
-          <Save size={16} /> {T(FORM_UI.resumeBanner, locale)}
+          <Save size={16} /> {FORM_UI.resumeBanner}
         </div>
       )}
 
@@ -254,7 +265,7 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
           <div className="mb-6">
             <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
               <h2 className="text-xl font-bold text-[#1E3A5F]">
-                {T(sectionMeta.title, locale)}
+                {sectionMeta.title}
               </h2>
               {sectionMeta.maxPoints > 0 && (
                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-[#1E3A5F] text-white">
@@ -262,7 +273,7 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
                 </span>
               )}
             </div>
-            <p className="text-sm text-[#4A4A4A]/70">{T(sectionMeta.description, locale)}</p>
+            <p className="text-sm text-[#4A4A4A]/70">{sectionMeta.description}</p>
           </div>
 
           {currentSection && (
@@ -273,9 +284,9 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
                   <FieldRow
                     key={q.id}
                     q={q}
+                    label={getQuestionLabel(q, answers)}
                     value={answers[q.id] ?? ''}
                     error={errors[q.id]}
-                    locale={locale}
                     onChange={(v) => updateAnswer(q.id, v)}
                   />
                 );
@@ -283,7 +294,7 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
 
               {skippedNotice !== null && (
                 <div className="text-xs text-[#4A4A4A]/60 italic pt-2 border-t border-gray-100">
-                  {T(FORM_UI.conditionalSkip, locale)}
+                  {FORM_UI.conditionalSkip}
                 </div>
               )}
             </div>
@@ -295,10 +306,10 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
       {isDeclarationStep && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 mb-6">
           <h2 className="text-xl font-bold text-[#1E3A5F] mb-4">
-            {T(FORM_UI.declarationTitle, locale)}
+            {FORM_UI.declarationTitle}
           </h2>
           <p className="text-sm text-[#4A4A4A] leading-relaxed mb-5">
-            {T(FORM_UI.declarationBody, locale)}
+            {FORM_UI.declarationBody}
           </p>
           <label className="inline-flex items-center gap-2 cursor-pointer">
             <input
@@ -308,7 +319,7 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
               className="w-5 h-5 rounded border-gray-300 accent-[#1E3A5F]"
             />
             <span className="text-sm font-semibold text-[#1E3A5F]">
-              {T(FORM_UI.declarationAgree, locale)}
+              {FORM_UI.declarationAgree}
             </span>
           </label>
         </div>
@@ -323,8 +334,8 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
             disabled={saving || submitting}
             className="inline-flex items-center gap-1 px-5 py-2.5 rounded-xl border border-gray-200 text-[#1E3A5F] hover:bg-gray-50 text-sm font-medium disabled:opacity-50"
           >
-            {isRtl ? <ArrowRight size={14} /> : <ArrowLeft size={14} />}
-            {T(FORM_UI.previous, locale)}
+            <ArrowLeft size={14} />
+            {FORM_UI.previous}
           </button>
         ) : <span />}
 
@@ -336,7 +347,7 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
             className="inline-flex items-center gap-1.5 px-6 py-3 rounded-xl bg-[#E8B923] text-[#1E3A5F] font-bold text-sm hover:bg-[#d4a91f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {submitting && <Loader2 size={14} className="animate-spin" />}
-            {submitting ? T(FORM_UI.submitting, locale) : T(FORM_UI.submit, locale)}
+            {submitting ? FORM_UI.submitting : FORM_UI.submit}
           </button>
         ) : (
           <button
@@ -345,8 +356,8 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
             disabled={saving}
             className="inline-flex items-center gap-1 px-6 py-3 rounded-xl bg-[#1E3A5F] text-white font-semibold text-sm hover:bg-[#162d49] disabled:opacity-50 transition-colors"
           >
-            {T(FORM_UI.next, locale)}
-            {isRtl ? <ArrowLeft size={14} /> : <ArrowRight size={14} />}
+            {FORM_UI.next}
+            <ArrowRight size={14} />
           </button>
         )}
       </div>
@@ -355,12 +366,12 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
 }
 
 function FieldRow({
-  q, value, error, locale, onChange,
+  q, label, value, error, onChange,
 }: {
   q: QuestionDef;
+  label: string;
   value: string;
   error: string | undefined;
-  locale: 'en' | 'fa';
   onChange: (v: string) => void;
 }) {
   const inputClasses = [
@@ -374,7 +385,7 @@ function FieldRow({
   return (
     <div>
       <label className="block text-sm font-semibold text-[#1E3A5F] mb-1.5">
-        {T(q.label, locale)}
+        {label}
         {q.required && <span className="text-red-500 ml-1">*</span>}
       </label>
 
@@ -384,7 +395,7 @@ function FieldRow({
           onChange={(e) => onChange(e.target.value)}
           className={inputClasses}
         >
-          <option value="">{locale === 'fa' ? '— انتخاب کنید —' : '— select —'}</option>
+          <option value="">— select —</option>
           {(q.options ?? []).map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
@@ -413,6 +424,3 @@ function FieldRow({
     </div>
   );
 }
-
-// Lightweight unused-import guard so the test/typecheck stays happy.
-void CheckCircle2;
