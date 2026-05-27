@@ -12,7 +12,7 @@ export function AboutSorenaBrief() {
           About Sorena Visa
         </h2>
         <p className="text-[#4A4A4A] text-base leading-relaxed">
-          An AI-powered platform that honestly evaluates your readiness, matches you with the right institutions, and coordinates licensed immigration support — all in one trusted system serving students from around the world to New Zealand and Malaysia.
+          Sorena Visa is a New Zealand&ndash;based education and immigration consultancy. We&rsquo;re authorised agents for universities in New Zealand and Malaysia, helping students secure offers of place, visa approval, and successful settlement abroad.
         </p>
       </div>
     </div>

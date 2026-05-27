@@ -7,6 +7,7 @@ import {
   Compass, Target, Globe, ShieldCheck, Banknote, Clock,
 } from 'lucide-react';
 import { LANDING_STRINGS } from '@/lib/scorecard/labels';
+import { SorenaWordmark } from '@/components/brand/SorenaWordmark';
 
 // PR-SCORECARD-2 — Public scorecard landing page (Fix 8 overhaul).
 //
@@ -65,16 +66,15 @@ export default function ScorecardLandingPage() {
         }}
       >
         <div className="max-w-5xl mx-auto px-6 py-16 sm:py-24 text-center">
-          {/* Logo — bigger, dominant, no divider below */}
+          {/* Logo — inline SVG, transparent background, no colour box */}
           <Link
             href="/scorecard/landing"
             aria-label="Sorena Visa"
             className="inline-block"
           >
-            <img
-              src="/brand/SorenaVisaLogoTypeWhite.jpg"
-              alt="Sorena Visa"
-              className="w-full h-auto mx-auto max-w-[220px] sm:max-w-[300px] md:max-w-[380px]"
+            <SorenaWordmark
+              variant="white"
+              className="w-72 sm:w-80 lg:w-96 mx-auto"
             />
           </Link>
 
@@ -198,12 +198,7 @@ export default function ScorecardLandingPage() {
       <footer className="bg-[#1E3A5F] text-white py-10 px-6">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-center sm:text-left">
           <div className="flex items-center gap-3">
-            <img
-              src="/brand/SorenaVisaLogoTypeWhite.jpg"
-              alt="Sorena Visa"
-              className="h-8 w-auto"
-              style={{ maxWidth: 160 }}
-            />
+            <SorenaWordmark variant="white" className="w-32" />
           </div>
           <div className="text-xs text-white/70">
             © 2026 Sorena Visa · Education &amp; Immigration · New Zealand

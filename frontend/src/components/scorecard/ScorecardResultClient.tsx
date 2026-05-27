@@ -4,12 +4,31 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   Award, AlertTriangle, CheckCircle2, XCircle, Calendar, CreditCard,
-  Sparkles, BookOpen, Lock, ArrowRight, Download, ExternalLink,
+  Sparkles, BookOpen, Lock, ArrowRight, Download, ExternalLink, Scale,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { BAND_META, CATEGORY_META, RESULT_STRINGS } from '@/lib/scorecard/labels';
 import { BOOKING_URLS } from '@/lib/scorecard/booking-urls';
 import type { ScorecardResultPayload } from '@/app/scorecard/result/page';
+
+// Strategic Session v4.0 Table 12 — band/hard-stop → CTA matrix:
+//   1-2  (any)        Nurture message only — no buttons
+//   3    no HS        Gap-Closing Session (NZD 30)
+//   3    HS           LIA Consultation (NZD 150) — overrides Gap-Closing
+//   4-6  no HS        Free 15-min Session
+//   4-6  HS           LIA (NZD 150) primary + Free 15-min secondary
+
+const WHY_GAP_CLOSING =
+  'Your assessment shows real potential, but specific areas need closing before you’re ready for application. This 30-minute session with our Admission Specialist gives you a structured improvement plan tailored to your profile and answers your immediate questions.';
+
+const WHY_LIA_BAND_3 =
+  'Your profile shows legal complexity that must be reviewed by our Licensed Immigration Adviser before we can proceed. This 30-minute session resolves the blocking issue so the rest of your plan can move forward.';
+
+const WHY_FREE_15MIN =
+  'You qualify to start your application journey. This free 15-minute session with our team confirms your pathway, walks you through next steps, and is required before opening your case file.';
+
+const WHY_LIA_HIGH_BAND =
+  'Your assessment shows you’re ready overall — but a specific legal issue must be cleared first by our Licensed Immigration Adviser. This 30-minute session resolves the blocking item so you can move forward to the free 15-minute session below.';
 
 // PR-SCORECARD-2 — Public scorecard result rendering.
 //
@@ -43,22 +62,34 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
     year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  // Fix 7: shared handler — logs the intent server-side, then opens
-  // the placeholder URL in a new tab. We open the tab BEFORE the
-  // network call so popup blockers don't block it (browsers reject
-  // window.open() that wasn't called synchronously in a click handler).
+  // Strategic doc Table 12 — derive routing from band + hard-stop state
+  // rather than relying on data.shouldShow* (the backend's flags don't
+  // distinguish a clean Band 6 from a Band 6-with-hard-stop, which
+  // gets a different CTA combo).
+  const hasHardStop = data.hardStops.length > 0;
+  const isLowBand   = data.band === 'BAND_1' || data.band === 'BAND_2';
+  const isBand3     = data.band === 'BAND_3';
+  const isHighBand  = data.band === 'BAND_4' || data.band === 'BAND_5' || data.band === 'BAND_6';
+
+  const scenario: 'A' | 'B' | 'C' | 'D' | 'E' =
+    isLowBand                            ? 'A'           // nurture only
+    : isBand3 && !hasHardStop            ? 'B'           // gap-closing
+    : isBand3 && hasHardStop             ? 'C'           // LIA replaces gap-closing
+    : isHighBand && !hasHardStop         ? 'D'           // free 15-min
+    : /* isHighBand && hasHardStop */      'E';          // LIA primary + free 15-min secondary
+
+  // Shared booking handler: opens the target URL synchronously (popup
+  // blockers reject window.open() called after an await) and then
+  // POSTs the audit log. Network failure surfaces inline but does not
+  // close the user's new tab.
   async function handleBookingNavigate(targetUrl: string) {
     setBookingError(null);
-    // Open synchronously to dodge popup blockers.
     const w = window.open(targetUrl, '_blank', 'noopener,noreferrer');
     try {
       await api.post(`/scorecard/${data.submissionId}/booking-opened`, {});
       setBookingClicked(true);
     } catch {
       setBookingError(RESULT_STRINGS.bookingError);
-      // Even if logging fails, the user gets the booking page — don't
-      // close their tab. We'll surface the error inline so they can
-      // retry, but the booking flow is unimpeded.
       void w;
     }
   }
@@ -139,65 +170,8 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             {data.nextActionTextEn}
           </p>
 
-          {/* Bands 4-6 free 15-min CTA (Fix 7) */}
-          {data.shouldShowBookingLink && (
-            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
-              <button
-                type="button"
-                onClick={() => handleBookingNavigate(BOOKING_URLS.FREE_15MIN)}
-                style={{ minHeight: 56 }}
-                className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#E8B923] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md"
-              >
-                <Calendar size={18} />
-                {RESULT_STRINGS.bookFreeCta}
-                <ExternalLink size={14} />
-              </button>
-              <p className="mt-3 text-sm text-[#4A4A4A]/70 leading-relaxed">
-                {RESULT_STRINGS.bookFreeSubtitle}
-              </p>
-              {bookingClicked && (
-                <p className="mt-2 text-sm text-emerald-700 inline-flex items-center gap-1">
-                  <CheckCircle2 size={14} /> {RESULT_STRINGS.bookFreeRecorded}
-                </p>
-              )}
-              {bookingError && (
-                <p className="mt-2 text-sm text-red-600">{bookingError}</p>
-              )}
-            </div>
-          )}
-
-          {/* Band 3 paid Gap-Closing CTA (Fix 7) */}
-          {data.shouldShowPaymentLink && (
-            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
-              <p className="text-sm text-[#4A4A4A] mb-3 leading-relaxed">
-                {RESULT_STRINGS.payGapBody}
-              </p>
-              <button
-                type="button"
-                onClick={() => handleBookingNavigate(BOOKING_URLS.GAP_CLOSING_PAYMENT)}
-                style={{ minHeight: 56 }}
-                className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#E8B923] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md"
-              >
-                <CreditCard size={18} />
-                {RESULT_STRINGS.payGapCta}
-                <ExternalLink size={14} />
-              </button>
-              <p className="mt-3 text-sm text-[#4A4A4A]/70 leading-relaxed">
-                {RESULT_STRINGS.payGapSubtitle}
-              </p>
-              {bookingClicked && (
-                <p className="mt-2 text-sm text-emerald-700 inline-flex items-center gap-1">
-                  <CheckCircle2 size={14} /> {RESULT_STRINGS.payGapRecorded}
-                </p>
-              )}
-              {bookingError && (
-                <p className="mt-2 text-sm text-red-600">{bookingError}</p>
-              )}
-            </div>
-          )}
-
-          {/* Bands 1-2 nurture (no CTA per Fix 7) */}
-          {data.shouldShowNurtureMessage && (
+          {/* Scenario A — Bands 1-2 (any HS state): nurture only, no buttons */}
+          {scenario === 'A' && (
             <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
               <div className="inline-flex items-center gap-2 mb-2">
                 <BookOpen size={16} className="text-[#1E3A5F]" />
@@ -211,18 +185,85 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             </div>
           )}
 
-          {/* Blocked (any hard stop, no CTA per Fix 7) */}
-          {data.nextAction === 'BLOCKED_HARD_STOP' && (
+          {/* Scenario B — Band 3, no hard stop: Gap-Closing Session */}
+          {scenario === 'B' && (
             <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
-              <div className="inline-flex items-center gap-2 mb-2">
-                <Lock size={16} className="text-red-600" />
-                <span className="text-sm font-semibold text-red-700">
-                  {RESULT_STRINGS.blockedTitle}
-                </span>
+              <WhyThisMatters text={WHY_GAP_CLOSING} />
+              <PrimaryBookingButton
+                icon={<CreditCard size={18} />}
+                label="Pay NZD 30 and book your Gap-Closing Session"
+                onClick={() => handleBookingNavigate(BOOKING_URLS.GAP_CLOSING_PAYMENT)}
+              />
+              <BookingFooter
+                clicked={bookingClicked}
+                error={bookingError}
+                clickedText={RESULT_STRINGS.payGapRecorded}
+              />
+            </div>
+          )}
+
+          {/* Scenario C — Band 3 WITH hard stop: LIA replaces Gap-Closing */}
+          {scenario === 'C' && (
+            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
+              <WhyThisMatters text={WHY_LIA_BAND_3} />
+              <LiaConsultationButton
+                onClick={() => handleBookingNavigate(BOOKING_URLS.LIA_CONSULTATION)}
+              />
+              <BookingFooter
+                clicked={bookingClicked}
+                error={bookingError}
+                clickedText={RESULT_STRINGS.bookFreeRecorded}
+              />
+            </div>
+          )}
+
+          {/* Scenario D — Bands 4-6, no hard stop: Free 15-min */}
+          {scenario === 'D' && (
+            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
+              <WhyThisMatters text={WHY_FREE_15MIN} />
+              <PrimaryBookingButton
+                icon={<Calendar size={18} />}
+                label="Book your free 15-minute consultation"
+                onClick={() => handleBookingNavigate(BOOKING_URLS.FREE_15MIN)}
+              />
+              <BookingFooter
+                clicked={bookingClicked}
+                error={bookingError}
+                clickedText={RESULT_STRINGS.bookFreeRecorded}
+              />
+            </div>
+          )}
+
+          {/* Scenario E — Bands 4-6 WITH hard stop: LIA primary + Free 15-min secondary */}
+          {scenario === 'E' && (
+            <div className="mt-4 pt-4 border-t border-[#E8B923]/30 space-y-6">
+              <div>
+                <WhyThisMatters text={WHY_LIA_HIGH_BAND} />
+                <LiaConsultationButton
+                  onClick={() => handleBookingNavigate(BOOKING_URLS.LIA_CONSULTATION)}
+                />
               </div>
-              <p className="text-sm text-[#4A4A4A] leading-relaxed">
-                {RESULT_STRINGS.blockedBody}
-              </p>
+
+              <div className="pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => handleBookingNavigate(BOOKING_URLS.FREE_15MIN)}
+                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-3 rounded-xl bg-gray-100 text-[#1E3A5F]/70 font-semibold text-sm hover:bg-gray-200 transition-colors"
+                >
+                  <Calendar size={14} />
+                  Book your free 15-minute consultation
+                  <ExternalLink size={12} />
+                </button>
+                <p className="mt-2 text-xs text-[#4A4A4A]/60 italic leading-relaxed">
+                  Available after your LIA consultation clears the blocking item.
+                </p>
+              </div>
+
+              <BookingFooter
+                clicked={bookingClicked}
+                error={bookingError}
+                clickedText={RESULT_STRINGS.bookFreeRecorded}
+              />
             </div>
           )}
         </div>
@@ -369,5 +410,64 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Booking-CTA sub-components ──────────────────────────────────────
+
+function WhyThisMatters({ text }: { text: string }) {
+  return (
+    <p className="text-sm italic text-gray-600 leading-relaxed mb-3 max-w-[600px]">
+      {text}
+    </p>
+  );
+}
+
+function PrimaryBookingButton({
+  icon, label, onClick,
+}: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ minHeight: 56 }}
+      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#E8B923] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md"
+    >
+      {icon}
+      {label} →
+      <ExternalLink size={14} />
+    </button>
+  );
+}
+
+function LiaConsultationButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ minHeight: 56 }}
+      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold text-base hover:bg-amber-100 transition-colors shadow-md"
+    >
+      <Scale size={18} />
+      Book your LIA Consultation (NZD 150) →
+      <ExternalLink size={14} />
+    </button>
+  );
+}
+
+function BookingFooter({
+  clicked, error, clickedText,
+}: { clicked: boolean; error: string | null; clickedText: string }) {
+  return (
+    <>
+      {clicked && (
+        <p className="mt-3 text-sm text-emerald-700 inline-flex items-center gap-1">
+          <CheckCircle2 size={14} /> {clickedText}
+        </p>
+      )}
+      {error && (
+        <p className="mt-3 text-sm text-red-600">{error}</p>
+      )}
+    </>
   );
 }
