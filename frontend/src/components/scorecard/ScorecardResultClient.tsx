@@ -11,12 +11,20 @@ import { BAND_META, CATEGORY_META, RESULT_STRINGS } from '@/lib/scorecard/labels
 import { BOOKING_URLS } from '@/lib/scorecard/booking-urls';
 import type { ScorecardResultPayload } from '@/app/scorecard/result/page';
 
-// Strategic Session v4.0 Table 12 — band/hard-stop → CTA matrix:
-//   1-2  (any)        Nurture message only — no buttons
-//   3    no HS        Gap-Closing Session (NZD 30)
-//   3    HS           LIA Consultation (NZD 150) — overrides Gap-Closing
-//   4-6  no HS        Free 15-min Session
-//   4-6  HS           LIA (NZD 150) primary + Free 15-min secondary
+// CTA matrix — band/hard-stop → button(s) + "why this matters" copy.
+// Hard-stop override (this polish PR): any hard stop, ANY band, gets
+// the LIA button. This goes beyond Strategic Session v4.0 Table 12
+// (which baselined Bands 1-2 as nurture-only) because legal
+// complexity must be reviewed by the LIA before nurture content
+// makes sense.
+//
+//   Scenario   Band     Hard stop?   Button(s)
+//   A          1-2      no           — (nurture only, no buttons)
+//   B          3        no           Gap-Closing (NZD 30)
+//   C          3        yes          LIA Consultation (NZD 150)
+//   D          4-6      no           Free 15-min
+//   E          4-6      yes          LIA primary + Free 15-min secondary
+//   F          1-2      yes          LIA Consultation (NZD 150)  ← override
 
 const WHY_GAP_CLOSING =
   'Your assessment shows real potential, but specific areas need closing before you’re ready for application. This 30-minute session with our Admission Specialist gives you a structured improvement plan tailored to your profile and answers your immediate questions.';
@@ -29,6 +37,9 @@ const WHY_FREE_15MIN =
 
 const WHY_LIA_HIGH_BAND =
   'Your assessment shows you’re ready overall — but a specific legal issue must be cleared first by our Licensed Immigration Adviser. This 30-minute session resolves the blocking item so you can move forward to the free 15-minute session below.';
+
+const WHY_LIA_LOW_BAND =
+  'Your assessment shows specific issues that must be reviewed by our Licensed Immigration Adviser before we can recommend any next step. This 30-minute legal session resolves the blocking item — without it, no further pathway can be planned.';
 
 // PR-SCORECARD-2 — Public scorecard result rendering.
 //
@@ -62,21 +73,22 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
     year: 'numeric', month: 'long', day: 'numeric',
   });
 
-  // Strategic doc Table 12 — derive routing from band + hard-stop state
-  // rather than relying on data.shouldShow* (the backend's flags don't
-  // distinguish a clean Band 6 from a Band 6-with-hard-stop, which
-  // gets a different CTA combo).
+  // Derive routing from band + hard-stop state. Hard-stop override
+  // applies regardless of band — even Bands 1 and 2 — because legal
+  // complexity must be reviewed by the LIA before any nurture or
+  // session content makes sense.
   const hasHardStop = data.hardStops.length > 0;
   const isLowBand   = data.band === 'BAND_1' || data.band === 'BAND_2';
   const isBand3     = data.band === 'BAND_3';
   const isHighBand  = data.band === 'BAND_4' || data.band === 'BAND_5' || data.band === 'BAND_6';
 
-  const scenario: 'A' | 'B' | 'C' | 'D' | 'E' =
-    isLowBand                            ? 'A'           // nurture only
-    : isBand3 && !hasHardStop            ? 'B'           // gap-closing
-    : isBand3 && hasHardStop             ? 'C'           // LIA replaces gap-closing
-    : isHighBand && !hasHardStop         ? 'D'           // free 15-min
-    : /* isHighBand && hasHardStop */      'E';          // LIA primary + free 15-min secondary
+  let scenario: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+  if (hasHardStop && isLowBand)        scenario = 'F'; // override: LIA only
+  else if (hasHardStop && isBand3)     scenario = 'C'; // LIA replaces gap-closing
+  else if (hasHardStop && isHighBand)  scenario = 'E'; // LIA + free 15-min
+  else if (isLowBand)                  scenario = 'A'; // nurture only
+  else if (isBand3)                    scenario = 'B'; // gap-closing
+  else                                 scenario = 'D'; // free 15-min
 
   // Shared booking handler: opens the target URL synchronously (popup
   // blockers reject window.open() called after an await) and then
@@ -166,9 +178,32 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               {RESULT_STRINGS.nextActionTitle}
             </h2>
           </div>
-          <p className="text-base text-[#1E3A5F] font-semibold leading-relaxed mb-4">
-            {data.nextActionTextEn}
-          </p>
+          {/* Polish PR: render structured content as a proper bulleted
+              list when available; fall back to the flat string on
+              legacy submissions. */}
+          {data.nextActionContent ? (
+            <div className="mb-4 max-w-[640px]">
+              {data.nextActionContent.leadIn && (
+                <p className="text-base text-[#4A4A4A] leading-relaxed mb-2">
+                  {data.nextActionContent.leadIn}
+                </p>
+              )}
+              <p className="text-base text-[#1E3A5F] font-semibold leading-relaxed mb-3">
+                {data.nextActionContent.heading}
+              </p>
+              {data.nextActionContent.bullets.length > 0 && (
+                <ul className="list-disc list-outside ml-6 space-y-1.5 text-[#4A4A4A] text-base leading-[1.6] marker:text-[#1E3A5F]">
+                  {data.nextActionContent.bullets.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <p className="text-base text-[#1E3A5F] font-semibold leading-relaxed mb-4">
+              {data.nextActionTextEn}
+            </p>
+          )}
 
           {/* Scenario A — Bands 1-2 (any HS state): nurture only, no buttons */}
           {scenario === 'A' && (
@@ -225,6 +260,21 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                 icon={<Calendar size={18} />}
                 label="Book your free 15-minute consultation"
                 onClick={() => handleBookingNavigate(BOOKING_URLS.FREE_15MIN)}
+              />
+              <BookingFooter
+                clicked={bookingClicked}
+                error={bookingError}
+                clickedText={RESULT_STRINGS.bookFreeRecorded}
+              />
+            </div>
+          )}
+
+          {/* Scenario F — Bands 1-2 WITH hard stop: LIA only (override Table 12) */}
+          {scenario === 'F' && (
+            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
+              <WhyThisMatters text={WHY_LIA_LOW_BAND} />
+              <LiaConsultationButton
+                onClick={() => handleBookingNavigate(BOOKING_URLS.LIA_CONSULTATION)}
               />
               <BookingFooter
                 clicked={bookingClicked}

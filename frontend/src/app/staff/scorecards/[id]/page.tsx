@@ -37,6 +37,10 @@ interface ScorecardDetail {
   nextAction: string;
   nextActionTextEn: string;
   nextActionTextFa: string;
+  // Polish PR (post-e57a769): structured next-action payload.
+  // Nullable for legacy submissions; staff view falls back to the
+  // flat string when this is null.
+  nextActionContent: { heading: string; bullets: string[]; leadIn?: string } | null;
   answers?: Record<string, string>;
   perFieldScores?: Record<string, PerFieldScore>;
   submittedAt: string;
@@ -227,8 +231,27 @@ export default async function ScorecardDetailPage({ params }: { params: { id: st
       <Card className="mb-6 border-[#E8B923]/40 bg-[#E8B923]/5">
         <CardContent>
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#1E3A5F]/70 mb-2">Next best action</h2>
-          <p className="text-base text-[#1E3A5F] font-semibold leading-relaxed">{data.nextActionTextEn}</p>
-          <p className="text-sm text-[#4A4A4A]/70 mt-2 leading-relaxed" dir="rtl">{data.nextActionTextFa}</p>
+          {data.nextActionContent ? (
+            <div className="max-w-[640px]">
+              {data.nextActionContent.leadIn && (
+                <p className="text-base text-[#4A4A4A] leading-relaxed mb-2">
+                  {data.nextActionContent.leadIn}
+                </p>
+              )}
+              <p className="text-base text-[#1E3A5F] font-semibold leading-relaxed mb-3">
+                {data.nextActionContent.heading}
+              </p>
+              {data.nextActionContent.bullets.length > 0 && (
+                <ul className="list-disc list-outside ml-6 space-y-1.5 text-[#4A4A4A] text-base leading-[1.6] marker:text-[#1E3A5F]">
+                  {data.nextActionContent.bullets.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <p className="text-base text-[#1E3A5F] font-semibold leading-relaxed">{data.nextActionTextEn}</p>
+          )}
           <div className="mt-3 text-xs text-[#4A4A4A]/60">
             Code: <code className="font-mono">{data.nextAction}</code>
           </div>

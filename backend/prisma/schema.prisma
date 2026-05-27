@@ -3186,6 +3186,11 @@ model ScorecardSubmission {
   nextAction           ScorecardNextAction
   nextActionTextEn     String              @db.Text
   nextActionTextFa     String              @db.Text
+  // Polish PR (post-e57a769): structured next-action payload
+  // (heading + bullets + optional leadIn). Nullable so legacy rows
+  // submitted before this column existed still load; the frontend
+  // falls back to nextActionTextEn when this is null.
+  nextActionContent    Json?
   // PR-SCORECARD-2: autosave / draft state.
   //   * `isDraft=true`  — row is the user's in-progress questionnaire.
   //                       Scoring columns hold sentinel zeros / BAND_1

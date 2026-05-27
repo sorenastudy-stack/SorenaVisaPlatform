@@ -7,7 +7,7 @@ import {
   Compass, Target, Globe, ShieldCheck, Banknote, Clock,
 } from 'lucide-react';
 import { LANDING_STRINGS } from '@/lib/scorecard/labels';
-import { SorenaWordmark } from '@/components/brand/SorenaWordmark';
+import { SorenaLogo } from '@/components/brand/SorenaLogo';
 
 // PR-SCORECARD-2 — Public scorecard landing page (Fix 8 overhaul).
 //
@@ -66,15 +66,16 @@ export default function ScorecardLandingPage() {
         }}
       >
         <div className="max-w-5xl mx-auto px-6 py-16 sm:py-24 text-center">
-          {/* Logo — inline SVG, transparent background, no colour box */}
+          {/* Logo — PNG with baked-in navy background (matches the hero
+              gradient so it reads cleanly without a visible box). */}
           <Link
             href="/scorecard/landing"
             aria-label="Sorena Visa"
             className="inline-block"
           >
-            <SorenaWordmark
-              variant="white"
-              className="w-72 sm:w-80 lg:w-96 mx-auto"
+            <SorenaLogo
+              className="w-72 sm:w-80 lg:w-[420px] h-auto mx-auto"
+              priority
             />
           </Link>
 
@@ -198,7 +199,7 @@ export default function ScorecardLandingPage() {
       <footer className="bg-[#1E3A5F] text-white py-10 px-6">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-center sm:text-left">
           <div className="flex items-center gap-3">
-            <SorenaWordmark variant="white" className="w-32" />
+            <SorenaLogo className="w-32 sm:w-40 h-auto" />
           </div>
           <div className="text-xs text-white/70">
             © 2026 Sorena Visa · Education &amp; Immigration · New Zealand

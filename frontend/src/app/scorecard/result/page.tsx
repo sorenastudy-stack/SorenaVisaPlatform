@@ -29,6 +29,14 @@ export interface ScorecardResultPayload {
   // only). The staff scorecard detail page still reads it; the backend
   // populates it with the English text as a no-op fallback.
   nextActionTextFa: string;
+  // Polish PR (post-e57a769): structured next-action payload. Nullable
+  // for legacy submissions that pre-date the migration; the result
+  // page renders the flat string as a fallback when this is null.
+  nextActionContent: {
+    heading: string;
+    bullets: string[];
+    leadIn?: string;
+  } | null;
   shouldShowMalaysiaCallout: boolean;
   shouldShowBookingLink: boolean;
   shouldShowPaymentLink: boolean;

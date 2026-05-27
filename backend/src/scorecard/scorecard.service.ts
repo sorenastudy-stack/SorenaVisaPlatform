@@ -13,7 +13,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { score, ScoreResult } from './scoring/engine';
-import { determineRouting } from './scoring/routing';
+import { determineRouting, NextActionContent } from './scoring/routing';
 
 // PR-SCORECARD-1 — Readiness Assessment service.
 //
@@ -79,6 +79,10 @@ export interface ScorecardResultPayload {
   nextAction: ScorecardNextAction;
   nextActionTextEn: string;
   nextActionTextFa: string;
+  // Polish PR (post-e57a769): structured payload for the results
+  // page's bulleted list. Nullable on legacy rows; the frontend
+  // falls back to splitting nextActionTextEn when absent.
+  nextActionContent: NextActionContent | null;
   // Convenience flags for the PR-SCORECARD-2 frontend
   shouldShowMalaysiaCallout: boolean;
   shouldShowBookingLink: boolean;
@@ -178,6 +182,7 @@ export class ScorecardService {
         nextAction: routing.nextAction as ScorecardNextAction,
         nextActionTextEn: routing.nextActionTextEn,
         nextActionTextFa: routing.nextActionTextFa,
+        nextActionContent: routing.nextActionContent as unknown as Prisma.InputJsonValue,
         ipAddress: meta.ipAddress ?? null,
         userAgent: meta.userAgent ?? null,
         isDraft: false,
@@ -464,6 +469,7 @@ export class ScorecardService {
     nextAction: ScorecardNextAction;
     nextActionTextEn: string;
     nextActionTextFa: string;
+    nextActionContent: Prisma.JsonValue;
     submittedAt: Date;
     leadId: string | null;
     consultationBookedAt: Date | null;
@@ -508,6 +514,9 @@ export class ScorecardService {
       nextAction: row.nextAction,
       nextActionTextEn: row.nextActionTextEn,
       nextActionTextFa: row.nextActionTextFa,
+      // Legacy rows (pre-this-migration) have NULL → frontend uses
+      // the flat string fallback.
+      nextActionContent: (row.nextActionContent as unknown as NextActionContent) ?? null,
       shouldShowMalaysiaCallout:
         row.band === 'BAND_4' || row.band === 'BAND_5' || row.band === 'BAND_6',
       shouldShowBookingLink: row.nextAction === 'BOOK_FREE_15MIN_SESSION',
@@ -547,6 +556,7 @@ export class ScorecardService {
       nextAction: routing.nextAction as ScorecardNextAction,
       nextActionTextEn: routing.nextActionTextEn,
       nextActionTextFa: routing.nextActionTextFa,
+      nextActionContent: routing.nextActionContent,
       shouldShowMalaysiaCallout:
         result.band.enumValue === 'BAND_4'
         || result.band.enumValue === 'BAND_5'
