@@ -459,6 +459,12 @@ model User {
   // improvement, etc.). History is preserved.
   scorecardSubmissions    ScorecardSubmission[]              @relation("ScorecardUser")
 
+  // PR-SCORECARD-2: marketing/affiliate link tracking.
+  // `createdAffiliateAgents`  — agent profiles this OWNER/ADMIN created.
+  // `createdTrackingLinks`    — tracking links this OWNER/ADMIN issued.
+  createdAffiliateAgents  AffiliateAgent[]                  @relation("AffiliateAgentCreator")
+  createdTrackingLinks    TrackingLink[]                    @relation("TrackingLinkCreator")
+
   @@map("users")
 }
 
@@ -681,6 +687,15 @@ model Lead {
   countryRaw              String?
   webhookMetadata         Json?
 
+  // PR-SCORECARD-2: marketing attribution. Captured at scorecard
+  // submission time from the sv_attribution cookie or query-string
+  // fallback (ch/agent/campaign). FIRST attribution wins — once set
+  // we never overwrite, so the channel that originally brought the
+  // lead in keeps the credit. Both columns nullable so legacy /
+  // direct-traffic leads remain valid.
+  trackingLinkId          String?
+  attributedAgentId       String?
+
   contact                 Contact           @relation(fields: [contactId], references: [id])
   owner                   User?             @relation("LeadOwner", fields: [ownerId], references: [id])
   intakeForm              IntakeForm?
@@ -696,10 +711,16 @@ model Lead {
   // @unique so a Lead can only be the result of one submission.
   scorecardSubmission     ScorecardSubmission? @relation("ScorecardLead")
 
+  // PR-SCORECARD-2: attribution relations.
+  trackingLink            TrackingLink?     @relation("LeadAttributedLink", fields: [trackingLinkId], references: [id])
+  attributedAgent         AffiliateAgent?   @relation("LeadAttributedAgent", fields: [attributedAgentId], references: [id])
+
   @@index([contactId])
   @@index([leadStatus])
   @@index([scoreBand])
   @@index([ownerId])
+  @@index([attributedAgentId])
+  @@index([trackingLinkId])
   @@map("leads")
 }
 
@@ -3141,7 +3162,13 @@ model ScorecardSubmission {
   id                   String              @id @default(uuid())
   userId               String
   answersEncrypted     Bytes
-  // Computed scores
+  // Computed scores. All Int-typed scoring columns become nullable
+  // in PR-SCORECARD-2 because draft rows exist before scoring runs
+  // — but at the Prisma level we keep them NOT NULL with sentinel
+  // 0 defaults for drafts (set in saveDraft). Reasoning: changing
+  // their nullability now would force a backfill on every legacy
+  // submitted row, and the engine output is always populated when
+  // isDraft=false. The frontend never reads scores while isDraft=true.
   totalScore           Int
   category1Score       Int
   category2Score       Int
@@ -3159,6 +3186,20 @@ model ScorecardSubmission {
   nextAction           ScorecardNextAction
   nextActionTextEn     String              @db.Text
   nextActionTextFa     String              @db.Text
+  // PR-SCORECARD-2: autosave / draft state.
+  //   * `isDraft=true`  — row is the user's in-progress questionnaire.
+  //                       Scoring columns hold sentinel zeros / BAND_1
+  //                       / NURTURE_ONLY; never trust them. submittedAt
+  //                       is also unreliable in draft state (re-used as
+  //                       a "created at" timestamp).
+  //   * `isDraft=false` — row is a real submission. Scoring columns
+  //                       are populated, leadId is set, audit rows
+  //                       fired. Legacy rows from PR-SCORECARD-1 are
+  //                       backfilled `isDraft=false` by the migration.
+  // `draftLastSavedAt` tracks the last autosave so the form can
+  // render "Last saved 2 minutes ago" if we choose to surface it.
+  isDraft              Boolean             @default(false)
+  draftLastSavedAt     DateTime?
   // Lifecycle
   submittedAt          DateTime            @default(now())
   leadId               String?             @unique
@@ -3173,5 +3214,119 @@ model ScorecardSubmission {
   @@index([userId, submittedAt])
   @@index([band, submittedAt])
   @@index([executionEligible])
+  // PR-SCORECARD-2: fast "get my open draft" lookup. Composite
+  // (userId, isDraft) keeps the index narrow — most rows are
+  // submitted (false), only the in-flight draft per user is true.
+  @@index([userId, isDraft])
   @@map("scorecard_submissions")
+}
+
+// ─── MARKETING / AFFILIATE LINK TRACKING (PR-SCORECARD-2) ────────────
+//
+// Three-table cluster for attribution of leads to marketing channels
+// and (optionally) named affiliate agents. Commission percentages and
+// payout workflow are deliberately deferred to PR-AFFILIATE-1 — this
+// PR's job is to capture WHO brought the lead in, not how much they
+// get paid.
+//
+// `AffiliateAgent`        — a named human/partner who refers leads.
+//                           Email/phone optional (some referrers are
+//                           influencer accounts, not contactable people).
+// `TrackingLink`          — one short URL per (channel, agent?, campaign?)
+//                           combo. Each click increments `clickCount`
+//                           AND writes a `TrackingLinkClick` row for
+//                           per-click forensics. `agentId` is NULL for
+//                           pure marketing-channel links (no affiliate).
+// `TrackingLinkClick`     — one row per click. Captures ip / ua / referer
+//                           so we can spot bot floods or audit
+//                           inflated conversion counts.
+//
+// First-attribution-wins is enforced in code (Lead row's tracking columns
+// are set only when null), not at the DB level — the spec is explicit
+// that the channel that brought a lead in keeps the credit.
+enum MarketingChannelType {
+  INSTAGRAM
+  LINKEDIN
+  YOUTUBE
+  TWITTER
+  WHATSAPP
+  EMAIL
+  WIX_HOMEPAGE
+  TELEGRAM
+  TIKTOK
+  FACEBOOK
+  DIRECT
+  OTHER
+}
+
+enum AffiliateAgentStatus {
+  ACTIVE
+  PAUSED
+  TERMINATED
+}
+
+enum TrackingLinkStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model AffiliateAgent {
+  id              String                @id @default(uuid())
+  fullName        String                @db.VarChar(200)
+  email           String?               @db.VarChar(200)
+  phone           String?               @db.VarChar(64)
+  status          AffiliateAgentStatus  @default(ACTIVE)
+  notes           String?               @db.Text
+  createdById     String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  createdBy       User                  @relation("AffiliateAgentCreator", fields: [createdById], references: [id])
+  trackingLinks   TrackingLink[]
+  attributedLeads Lead[]                @relation("LeadAttributedAgent")
+
+  @@index([status, fullName])
+  @@map("affiliate_agents")
+}
+
+model TrackingLink {
+  id              String                @id @default(uuid())
+  shortCode       String                @unique @db.VarChar(16)
+  channel         MarketingChannelType
+  agentId         String?
+  campaignLabel   String?               @db.VarChar(200)
+  destination     String                @db.Text
+  status          TrackingLinkStatus    @default(ACTIVE)
+  // Aggregated counter — incremented on /s/:shortCode redirect.
+  // We keep this denormalised so the index page can show click totals
+  // without scanning the click table; `TrackingLinkClick` is the
+  // source of truth for forensics.
+  clickCount      Int                   @default(0)
+  createdById     String
+  createdAt       DateTime              @default(now())
+  archivedAt      DateTime?
+
+  createdBy       User                  @relation("TrackingLinkCreator", fields: [createdById], references: [id])
+  agent           AffiliateAgent?       @relation(fields: [agentId], references: [id])
+  clicks          TrackingLinkClick[]
+  attributedLeads Lead[]                @relation("LeadAttributedLink")
+
+  @@index([channel, createdAt])
+  @@index([agentId, createdAt])
+  @@index([status, createdAt])
+  @@map("tracking_links")
+}
+
+model TrackingLinkClick {
+  id              String                @id @default(uuid())
+  linkId          String
+  clickedAt       DateTime              @default(now())
+  ipAddress       String?               @db.VarChar(64)
+  userAgent       String?               @db.Text
+  referer         String?               @db.Text
+
+  link            TrackingLink          @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId, clickedAt])
+  @@map("tracking_link_clicks")
 }

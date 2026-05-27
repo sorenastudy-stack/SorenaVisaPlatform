@@ -47,6 +47,15 @@ interface SubmissionMetadata {
   userAgent?: string | null;
 }
 
+// PR-SCORECARD-2 — attribution carried in the submit body (client-side
+// reads sv_attribution cookie + URL ?ch/agent/campaign and forwards it).
+export interface AttributionInput {
+  trackingLinkId?: string | null;
+  agentId?: string | null;
+  campaignLabel?: string | null;
+  channel?: string | null;
+}
+
 export interface ScorecardResultPayload {
   submissionId: string;
   totalScore: number;
@@ -94,6 +103,7 @@ export class ScorecardService {
     answers: Record<string, string>,
     meta: SubmissionMetadata,
     actor: Viewer,
+    attribution: AttributionInput = {},
   ): Promise<ScorecardResultPayload> {
     const result = score(answers);
     const routing = determineRouting(
@@ -120,28 +130,52 @@ export class ScorecardService {
     // existing Lead consumers (CRM, scoring widgets) understand.
     const legacyBand = this.toLegacyBand(result.band.enumValue);
 
+    // PR-SCORECARD-2: resolve attribution BEFORE the transaction so a
+    // bad/missing trackingLink doesn't abort the whole submit. We try
+    // trackingLinkId → agentId (from URL/cookie) — first attribution
+    // wins. The Lead row receives whichever pair we end up with.
+    const resolvedAttribution = await this.resolveAttribution(attribution);
+
+    // PR-SCORECARD-2: if the user has an open draft, promote it
+    // (update in place) instead of creating a new row. This keeps
+    // (userId, isDraft=true) at most one row per user — the draft
+    // "graduates" into a submission.
+    const existingDraft = await this.prisma.scorecardSubmission.findFirst({
+      where: { userId, isDraft: true },
+      orderBy: { submittedAt: 'desc' },
+      select: { id: true },
+    });
+
     const submission = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.scorecardSubmission.create({
-        data: {
-          userId,
-          answersEncrypted: answersEncrypted as never,
-          totalScore: result.total,
-          category1Score: categoryScores[1] ?? 0,
-          category2Score: categoryScores[2] ?? 0,
-          category3Score: categoryScores[3] ?? 0,
-          category4Score: categoryScores[4] ?? 0,
-          band: result.band.enumValue as ScorecardBand,
-          hardStops: result.hardStops as unknown as Prisma.InputJsonValue,
-          riskFlags: result.riskFlags,
-          executionEligible: result.execution.eligible,
-          gateResults: result.execution.gates as unknown as Prisma.InputJsonValue,
-          nextAction: routing.nextAction as ScorecardNextAction,
-          nextActionTextEn: routing.nextActionTextEn,
-          nextActionTextFa: routing.nextActionTextFa,
-          ipAddress: meta.ipAddress ?? null,
-          userAgent: meta.userAgent ?? null,
-        },
-      });
+      const submissionData = {
+        userId,
+        answersEncrypted: answersEncrypted as never,
+        totalScore: result.total,
+        category1Score: categoryScores[1] ?? 0,
+        category2Score: categoryScores[2] ?? 0,
+        category3Score: categoryScores[3] ?? 0,
+        category4Score: categoryScores[4] ?? 0,
+        band: result.band.enumValue as ScorecardBand,
+        hardStops: result.hardStops as unknown as Prisma.InputJsonValue,
+        riskFlags: result.riskFlags,
+        executionEligible: result.execution.eligible,
+        gateResults: result.execution.gates as unknown as Prisma.InputJsonValue,
+        nextAction: routing.nextAction as ScorecardNextAction,
+        nextActionTextEn: routing.nextActionTextEn,
+        nextActionTextFa: routing.nextActionTextFa,
+        ipAddress: meta.ipAddress ?? null,
+        userAgent: meta.userAgent ?? null,
+        isDraft: false,
+        draftLastSavedAt: null,
+        submittedAt: new Date(),
+      };
+
+      const created = existingDraft
+        ? await tx.scorecardSubmission.update({
+            where: { id: existingDraft.id },
+            data: submissionData,
+          })
+        : await tx.scorecardSubmission.create({ data: submissionData });
 
       // ─── Lead auto-creation ─────────────────────────────────────────
       const fullName = (answers.full_name ?? user.name ?? '').trim() || user.name || 'Lead';
@@ -175,7 +209,7 @@ export class ScorecardService {
       const lead = await tx.lead.create({
         data: {
           contactId,
-          sourceChannel: 'SCORECARD',
+          sourceChannel: resolvedAttribution.sourceChannel,
           leadStatus: 'SCORING_DONE',
           readinessScore: result.total,
           academicScore: categoryScores[2] ?? 0,
@@ -191,6 +225,12 @@ export class ScorecardService {
           hardStopReason: result.hardStops[0]?.name ?? null,
           liaEscalationRequired: result.hardStops.some((h) => h.code === 'HS4'),
           executionAllowed: result.execution.eligible,
+          // PR-SCORECARD-2: marketing attribution. New rows always
+          // accept the resolved attribution (since the Lead is fresh,
+          // first-attribution-wins is implicit — nothing to overwrite).
+          trackingLinkId:    resolvedAttribution.trackingLinkId,
+          attributedAgentId: resolvedAttribution.agentId,
+          campaignId:        resolvedAttribution.campaignLabel,
         },
       });
 
@@ -541,5 +581,151 @@ export class ScorecardService {
     // UserRole default in schema.prisma). Treat SALES + SUPPORT as
     // "not yet promoted" for scorecard purposes.
     return role === 'SALES' || role === 'SUPPORT';
+  }
+
+  // ─── PR-SCORECARD-2: drafts ───────────────────────────────────────
+
+  async getDraft(userId: string): Promise<{
+    id: string;
+    answers: Record<string, string>;
+    draftLastSavedAt: string | null;
+  } | null> {
+    const row = await this.prisma.scorecardSubmission.findFirst({
+      where: { userId, isDraft: true },
+      orderBy: { submittedAt: 'desc' },
+    });
+    if (!row) return null;
+    let answers: Record<string, string> = {};
+    try {
+      const buf = Buffer.isBuffer(row.answersEncrypted)
+        ? row.answersEncrypted
+        : Buffer.from(row.answersEncrypted);
+      answers = JSON.parse(this.crypto.decrypt(buf)) as Record<string, string>;
+    } catch (err: any) {
+      this.logger.error(`Failed to decrypt draft answers: ${err?.message ?? err}`);
+    }
+    return {
+      id: row.id,
+      answers,
+      draftLastSavedAt: row.draftLastSavedAt?.toISOString() ?? null,
+    };
+  }
+
+  async saveDraft(
+    userId: string,
+    answers: Record<string, string>,
+  ): Promise<{ id: string; draftLastSavedAt: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const encrypted = this.crypto.encrypt(JSON.stringify(answers));
+    const now = new Date();
+
+    const existing = await this.prisma.scorecardSubmission.findFirst({
+      where: { userId, isDraft: true },
+      select: { id: true },
+    });
+
+    if (existing) {
+      const updated = await this.prisma.scorecardSubmission.update({
+        where: { id: existing.id },
+        data: {
+          answersEncrypted: encrypted as never,
+          draftLastSavedAt: now,
+        },
+      });
+      return { id: updated.id, draftLastSavedAt: now.toISOString() };
+    }
+
+    // New draft. Populate sentinel zeros for the NOT NULL scoring
+    // columns — they're never read while isDraft=true.
+    const created = await this.prisma.scorecardSubmission.create({
+      data: {
+        userId,
+        answersEncrypted: encrypted as never,
+        totalScore: 0,
+        category1Score: 0,
+        category2Score: 0,
+        category3Score: 0,
+        category4Score: 0,
+        band: 'BAND_1' as ScorecardBand,
+        hardStops: [] as unknown as Prisma.InputJsonValue,
+        riskFlags: [],
+        executionEligible: false,
+        gateResults: {} as unknown as Prisma.InputJsonValue,
+        nextAction: 'NURTURE_ONLY' as ScorecardNextAction,
+        nextActionTextEn: '',
+        nextActionTextFa: '',
+        isDraft: true,
+        draftLastSavedAt: now,
+      },
+    });
+    return { id: created.id, draftLastSavedAt: now.toISOString() };
+  }
+
+  // ─── PR-SCORECARD-2: attribution resolution ───────────────────────
+
+  private async resolveAttribution(input: AttributionInput): Promise<{
+    trackingLinkId: string | null;
+    agentId: string | null;
+    campaignLabel: string | null;
+    sourceChannel: string;
+  }> {
+    let trackingLinkId: string | null = null;
+    let agentId: string | null = null;
+    let campaignLabel: string | null = input.campaignLabel?.trim() || null;
+    let sourceChannel = 'SCORECARD';
+
+    if (input.trackingLinkId) {
+      try {
+        const link = await this.prisma.trackingLink.findUnique({
+          where: { id: input.trackingLinkId },
+          select: {
+            id: true,
+            status: true,
+            agentId: true,
+            campaignLabel: true,
+            channel: true,
+          },
+        });
+        // Even an archived link still attributes — archiving stops
+        // NEW clicks counting, but if someone bookmarked and
+        // converted later, the attribution credit still applies.
+        if (link) {
+          trackingLinkId = link.id;
+          agentId = link.agentId ?? agentId;
+          campaignLabel = campaignLabel ?? link.campaignLabel ?? null;
+          sourceChannel = `SCORECARD_${link.channel}`;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to resolve tracking link ${input.trackingLinkId}: ${err?.message ?? err}`);
+      }
+    }
+
+    // Direct agent attribution (no tracking link, just ?agent=).
+    if (!agentId && input.agentId) {
+      try {
+        const agent = await this.prisma.affiliateAgent.findUnique({
+          where: { id: input.agentId },
+          select: { id: true, status: true },
+        });
+        if (agent && agent.status !== 'TERMINATED') {
+          agentId = agent.id;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to resolve agent ${input.agentId}: ${err?.message ?? err}`);
+      }
+    }
+
+    // Channel hint when no tracking link existed (someone manually
+    // typed a URL with ?ch=instagram).
+    if (!trackingLinkId && input.channel) {
+      sourceChannel = `SCORECARD_${input.channel.toUpperCase()}`;
+    }
+
+    return { trackingLinkId, agentId, campaignLabel, sourceChannel };
   }
 }

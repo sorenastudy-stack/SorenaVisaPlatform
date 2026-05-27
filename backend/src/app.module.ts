@@ -33,6 +33,7 @@ import { InzDataModule } from './inz-data/inz-data.module';
 import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
 import { ImmigrationOfficersModule } from './immigration-officers/immigration-officers.module';
 import { ScorecardModule } from './scorecard/scorecard.module';
+import { MarketingModule } from './marketing/marketing.module';
 
 @Module({
   imports: [
@@ -92,6 +93,10 @@ import { ScorecardModule } from './scorecard/scorecard.module';
     // PR-SCORECARD-1: Readiness Assessment scoring engine +
     // lead auto-creation pipeline.
     ScorecardModule,
+    // PR-SCORECARD-2: marketing channel + affiliate-agent attribution
+    // (staff CRUD under /staff/marketing/*) and public short-link
+    // redirector (/s/:shortCode).
+    MarketingModule,
   ],
 })
 export class AppModule {}

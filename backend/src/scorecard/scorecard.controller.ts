@@ -11,7 +11,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ScorecardService } from './scorecard.service';
-import { SubmitScorecardDto } from './dto/scorecard.dto';
+import {
+  SaveScorecardDraftDto,
+  SubmitScorecardDto,
+} from './dto/scorecard.dto';
 
 // PR-SCORECARD-1 — Readiness Assessment endpoints.
 //
@@ -40,7 +43,28 @@ export class ScorecardController {
         userAgent: this.extractUserAgent(req),
       },
       actor,
+      // PR-SCORECARD-2: forward attribution from the body. The client
+      // populates this from the sv_attribution cookie + URL params.
+      dto.attribution ?? {},
     );
+  }
+
+  // POST /scorecard/draft — PR-SCORECARD-2 autosave.
+  @Post('scorecard/draft')
+  @Roles('LEAD', 'STUDENT', 'OWNER', 'ADMIN', 'SUPER_ADMIN')
+  saveDraft(@Body() dto: SaveScorecardDraftDto, @Req() req: any) {
+    const actor = this.viewer(req);
+    return this.service.saveDraft(actor.userId, dto.answers);
+  }
+
+  // GET /scorecard/me/draft — PR-SCORECARD-2 draft retrieval. Returns
+  // 200 with `null` body when no draft exists, so the form's loader
+  // can render an empty state without a 404 round-trip.
+  @Get('scorecard/me/draft')
+  @Roles('LEAD', 'STUDENT', 'OWNER', 'ADMIN', 'SUPER_ADMIN')
+  myDraft(@Req() req: any) {
+    const actor = this.viewer(req);
+    return this.service.getDraft(actor.userId);
   }
 
   // GET /scorecard/me/latest

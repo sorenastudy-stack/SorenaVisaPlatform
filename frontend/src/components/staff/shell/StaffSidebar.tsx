@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck,
+  LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -24,24 +24,35 @@ interface NavItem {
   // PR-CONSULT-3: Approvals uses `canViewApprovals` (OWNER + SUPER_ADMIN)
   // rather than `canApprove` (OWNER-only) so SUPER_ADMIN can reach
   // their own "Mine" tab.
+  // PR-SCORECARD-2: Marketing uses an inline role check (OWNER /
+  // ADMIN / SUPER_ADMIN) because no canManageMarketing permission
+  // exists on StaffContext yet.
   gate?:  'canManageStaff' | 'canApprove' | 'canViewApprovals';
+  roleGate?: ReadonlyArray<string>;
 }
 
+const MARKETING_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'] as const;
+
 const NAV: NavItem[] = [
-  { label: 'staff.nav.overview',   href: '/staff',           icon: <LayoutDashboard size={18} /> },
-  { label: 'staff.nav.cases',      href: '/staff/cases',     icon: <Briefcase size={18} /> },
-  { label: 'staff.nav.meetings',   href: '/staff/meetings',  icon: <Calendar size={18} /> },
-  { label: 'staff.nav.tickets',    href: '/staff/tickets',   icon: <Inbox size={18} /> },
-  { label: 'staff.nav.staff',      href: '/staff/users',     icon: <Users size={18} />,       gate: 'canManageStaff' },
-  { label: 'staff.nav.approvals',  href: '/staff/approvals', icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
+  { label: 'staff.nav.overview',   href: '/staff',            icon: <LayoutDashboard size={18} /> },
+  { label: 'staff.nav.cases',      href: '/staff/cases',      icon: <Briefcase size={18} /> },
+  { label: 'staff.nav.meetings',   href: '/staff/meetings',   icon: <Calendar size={18} /> },
+  { label: 'staff.nav.tickets',    href: '/staff/tickets',    icon: <Inbox size={18} /> },
+  { label: 'staff.nav.staff',      href: '/staff/users',      icon: <Users size={18} />,       gate: 'canManageStaff' },
+  { label: 'staff.nav.approvals',  href: '/staff/approvals',  icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
+  { label: 'staff.nav.marketing',  href: '/staff/marketing',  icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },
 ];
 
 export function StaffSidebar() {
   const pathname = usePathname();
   const t = useTranslations();
-  const { permissions } = useStaff();
+  const { permissions, me } = useStaff();
 
-  const items = NAV.filter((n) => !n.gate || permissions[n.gate]);
+  const items = NAV.filter((n) => {
+    if (n.gate && !permissions[n.gate]) return false;
+    if (n.roleGate && !n.roleGate.includes(me?.role ?? '')) return false;
+    return true;
+  });
 
   return (
     <aside className="hidden lg:flex w-60 flex-col bg-[#1e3a5f] text-white">

@@ -373,6 +373,46 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
       return 'Scorecard viewed by staff';
     case 'SCORECARD_BOOKING_LINK_OPENED':
       return 'Scorecard booking link opened by lead';
+    case 'AFFILIATE_AGENT_CREATED': {
+      // PR-SCORECARD-2: newValue { agentId, fullName, hasEmail, hasPhone }.
+      const name = pickString(newV, 'fullName');
+      return name ? `Affiliate agent created: ${name}` : 'Affiliate agent created';
+    }
+    case 'AFFILIATE_AGENT_UPDATED': {
+      if (typeof newV === 'object' && newV !== null) {
+        const fields = (newV as { changedFields?: unknown }).changedFields;
+        if (Array.isArray(fields) && fields.length > 0) {
+          return `Affiliate agent updated (${fields.join(', ')})`;
+        }
+      }
+      return 'Affiliate agent updated';
+    }
+    case 'AFFILIATE_AGENT_STATUS_CHANGED': {
+      // PR-SCORECARD-2: newValue { agentId, status, fullName }.
+      const status = pickString(newV, 'status');
+      const name = pickString(newV, 'fullName');
+      if (name && status) return `Affiliate agent ${name}: status → ${status}`;
+      if (status)         return `Affiliate agent status → ${status}`;
+      return 'Affiliate agent status changed';
+    }
+    case 'AFFILIATE_AGENT_DELETED': {
+      // PR-SCORECARD-2: oldValue { fullName, archivedLinkCount }.
+      const name = pickString(entry.oldValue, 'fullName');
+      return name ? `Affiliate agent deleted: ${name}` : 'Affiliate agent deleted';
+    }
+    case 'TRACKING_LINK_CREATED': {
+      // PR-SCORECARD-2: newValue { linkId, shortCode, channel, agentId, campaignLabel }.
+      const code = pickString(newV, 'shortCode');
+      const channel = pickString(newV, 'channel');
+      if (code && channel) return `Tracking link created: ${code} (${channel})`;
+      if (code)            return `Tracking link created: ${code}`;
+      return 'Tracking link created';
+    }
+    case 'TRACKING_LINK_ARCHIVED': {
+      // PR-SCORECARD-2: newValue { linkId, shortCode, channel }.
+      const code = pickString(newV, 'shortCode');
+      return code ? `Tracking link archived: ${code}` : 'Tracking link archived';
+    }
     case 'VISA_EXPIRY_MANUAL_SWEEP_TRIGGERED': {
       const dispatched = (typeof newV === 'object' && newV !== null && typeof (newV as { dispatched?: unknown }).dispatched === 'number')
         ? (newV as { dispatched: number }).dispatched
