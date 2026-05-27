@@ -1,23 +1,40 @@
 import Image from 'next/image';
 
-// PR-SCORECARD-2 polish — branded logo using the supplied PNG.
+// PR-SCORECARD-2 polish — branded logomark for the public scorecard
+// surface. Two artwork variants, both genuinely transparent (real
+// alpha channel — verified against navy + white composites):
 //
-// The PNG at /brand/SorenaVisa_FullBrand_Navy.png has a baked-in
-// navy (#1D395E) background. This is the user's chosen artwork
-// (Option C from the design conversation). It looks correct against
-// the navy gradient landing-page hero; on the white form/result
-// header it presents as a small navy rectangle — accepted tradeoff
-// per the brief.
+//   variant='white-bg'  → /brand/SorenaMark_Circle_Transparent.png
+//                          (navy circle enclosing the white S+plane —
+//                           suits LIGHT backgrounds such as the form +
+//                           result page headers)
 //
-// Future swap path: drop a properly-transparent PNG at the same
-// public/brand/SorenaVisa_FullBrand_Navy.png filename and no code
-// changes are needed — every consumer reads from that single path.
+//   variant='navy-bg'   → /brand/SorenaMark_White_Transparent.png
+//                          (white S+plane only, no enclosing circle —
+//                           suits DARK backgrounds such as the
+//                           landing-page hero gradient + footer band)
 //
-// We use next/image (not a raw <img>) so the framework picks up
-// width/height for layout-shift prevention and applies its own
-// optimisation pipeline.
+//   variant='auto'      → alias for 'white-bg' (default for backwards
+//                          compatibility with any caller that doesn't
+//                          pass a variant)
+//
+// These two PNGs are the canonical scorecard logomarks going forward.
+// Reference them via this component — never the file paths directly —
+// so the next artwork swap is a single-file change here.
+//
+// The earlier full-brand PNG (SorenaVisa_FullBrand_Navy.png) and the
+// inline-SVG components (SorenaWordmark, SorenaMark) are kept on disk
+// for future use but no longer referenced by any scorecard page.
+
+const SRC_BY_VARIANT = {
+  'white-bg': '/brand/SorenaMark_Circle_Transparent.png',
+  'navy-bg':  '/brand/SorenaMark_White_Transparent.png',
+} as const;
+
+type Variant = 'auto' | 'white-bg' | 'navy-bg';
 
 type Props = {
+  variant?: Variant;
   className?: string;
   width?: number;
   height?: number;
@@ -25,14 +42,16 @@ type Props = {
 };
 
 export function SorenaLogo({
+  variant = 'auto',
   className = '',
-  width = 320,
-  height = 128,
+  width = 256,
+  height = 256,
   priority = false,
 }: Props) {
+  const resolved: Exclude<Variant, 'auto'> = variant === 'auto' ? 'white-bg' : variant;
   return (
     <Image
-      src="/brand/SorenaVisa_FullBrand_Navy.png"
+      src={SRC_BY_VARIANT[resolved]}
       alt="Sorena Visa — Education & Immigration · New Zealand"
       width={width}
       height={height}

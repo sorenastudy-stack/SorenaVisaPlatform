@@ -74,7 +74,8 @@ export default function ScorecardLandingPage() {
             className="inline-block"
           >
             <SorenaLogo
-              className="w-72 sm:w-80 lg:w-[420px] h-auto mx-auto"
+              variant="navy-bg"
+              className="w-48 sm:w-56 lg:w-64 h-auto mx-auto"
               priority
             />
           </Link>
@@ -199,7 +200,7 @@ export default function ScorecardLandingPage() {
       <footer className="bg-[#1E3A5F] text-white py-10 px-6">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-center sm:text-left">
           <div className="flex items-center gap-3">
-            <SorenaLogo className="w-32 sm:w-40 h-auto" />
+            <SorenaLogo variant="navy-bg" className="w-16 sm:w-20 h-auto" />
           </div>
           <div className="text-xs text-white/70">
             © 2026 Sorena Visa · Education &amp; Immigration · New Zealand

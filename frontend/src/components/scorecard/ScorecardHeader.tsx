@@ -29,7 +29,7 @@ export function ScorecardHeader({ className = '' }: Props) {
           aria-label="Sorena Visa — Home"
           className="inline-flex flex-col items-center sm:items-start"
         >
-          <SorenaLogo className="w-40 sm:w-52 h-auto" />
+          <SorenaLogo variant="white-bg" className="w-20 sm:w-24 h-auto" />
           <div className="text-[#1E3A5F] italic text-sm tracking-wide mt-1">
             From assessment to arrival.
           </div>
