@@ -1,51 +1,45 @@
 import Link from 'next/link';
 
 // PR-SCORECARD-2 — Sorena Visa branded header for the public
-// scorecard surface (Fix 8).
+// scorecard surface.
 //
-// Used at the top of /scorecard/landing, /scorecard (form), and
-// /scorecard/result. Logo links back to /scorecard/landing.
+// Used at the top of /scorecard (form) and /scorecard/result.
+// (The /scorecard/landing page renders its own hero with a much
+// larger white logotype — it does NOT use this header.)
 //
-// `variant`:
-//   - 'light' (default) — dark logotype on cream/white background
-//                         (used on form + result pages)
-//   - 'dark'            — white logotype on navy background (used on
-//                         the landing hero which has its own dark
-//                         gradient; the header sits transparently
-//                         over the gradient)
+// Fix 2 (refinement batch following 7a458fe): bigger logotype +
+// "From assessment to arrival." slogan underneath. Generous vertical
+// padding so the brand mark has presence on every scorecard surface.
 
 interface Props {
-  variant?: 'light' | 'dark';
   className?: string;
 }
 
-export function ScorecardHeader({ variant = 'light', className = '' }: Props) {
-  const isDark = variant === 'dark';
-  const logoSrc = isDark
-    ? '/brand/SorenaVisaLogoTypeWhite.jpg'
-    : '/brand/SorenaVisaLogoTypePNG.png';
+export function ScorecardHeader({ className = '' }: Props) {
   return (
     <header
       className={[
-        'w-full',
-        isDark
-          ? 'border-b border-white/10'
-          : 'bg-white border-b border-[#1E3A5F]/10',
+        'w-full bg-white',
+        // Very faint gold underline for warmth.
+        'border-b',
         className,
       ].join(' ')}
+      style={{ borderBottomColor: '#E8B92322' }}
     >
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-center sm:justify-start">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col items-center sm:items-start">
         <Link
           href="/scorecard/landing"
           aria-label="Sorena Visa — Home"
-          className="inline-flex items-center"
+          className="inline-flex flex-col items-center sm:items-start"
         >
           <img
-            src={logoSrc}
+            src="/brand/SorenaVisaLogoTypePNG.png"
             alt="Sorena Visa"
-            className="h-9 sm:h-11 w-auto"
-            style={{ maxWidth: 220 }}
+            className="w-full h-auto max-w-[160px] sm:max-w-[240px]"
           />
+          <div className="text-[#1E3A5F] italic text-sm tracking-wide mt-1">
+            From assessment to arrival.
+          </div>
         </Link>
       </div>
     </header>

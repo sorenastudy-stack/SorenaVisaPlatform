@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { ScorecardForm } from '@/components/scorecard/ScorecardForm';
 import { ScorecardHeader } from '@/components/scorecard/ScorecardHeader';
+import { AboutSorenaBrief } from '@/components/scorecard/AboutSorenaBrief';
 
 // PR-SCORECARD-2 — Public scorecard form page.
 //
@@ -32,7 +33,8 @@ export default async function ScorecardFormPage() {
   return (
     <div className="min-h-screen bg-[#FAF8F3]">
       <ScorecardHeader />
-      <div className="py-10 px-4">
+      <AboutSorenaBrief />
+      <div className="py-6 px-4">
         <div className="max-w-3xl mx-auto mb-6">
           <Link
             href="/scorecard/landing"

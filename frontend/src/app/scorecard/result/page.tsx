@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { ScorecardResultClient } from '@/components/scorecard/ScorecardResultClient';
 import { ScorecardHeader } from '@/components/scorecard/ScorecardHeader';
+import { AboutSorenaBrief } from '@/components/scorecard/AboutSorenaBrief';
 
 // PR-SCORECARD-2 — Public scorecard result page (server shell).
 //
@@ -59,6 +60,7 @@ export default async function ScorecardResultPage() {
   return (
     <>
       <ScorecardHeader />
+      <AboutSorenaBrief />
       <ScorecardResultClient data={data!} />
     </>
   );

@@ -65,24 +65,25 @@ export default function ScorecardLandingPage() {
         }}
       >
         <div className="max-w-5xl mx-auto px-6 py-16 sm:py-24 text-center">
-          {/* Logo */}
+          {/* Logo — bigger, dominant, no divider below */}
           <Link
             href="/scorecard/landing"
             aria-label="Sorena Visa"
-            className="inline-block mb-8"
+            className="inline-block"
           >
             <img
               src="/brand/SorenaVisaLogoTypeWhite.jpg"
               alt="Sorena Visa"
-              className="h-12 sm:h-16 md:h-20 w-auto mx-auto"
-              style={{ maxWidth: 280 }}
+              className="w-full h-auto mx-auto max-w-[220px] sm:max-w-[300px] md:max-w-[380px]"
             />
           </Link>
 
-          {/* Gold divider */}
-          <div className="w-10 h-0.5 bg-[#E8B923] mx-auto mb-8" />
+          {/* Slogan — gold italic, tracking-wide, generous breathing room */}
+          <div className="text-[#E8B923] text-sm sm:text-base italic font-medium tracking-wide my-3">
+            From assessment to arrival.
+          </div>
 
-          <div className="text-[#E8B923] text-xs font-bold uppercase tracking-[0.18em] mb-4">
+          <div className="text-[#E8B923] text-xs font-bold uppercase tracking-[0.18em] mb-4 mt-8">
             {LANDING_STRINGS.heroTagline}
           </div>
 

@@ -107,6 +107,12 @@ export const SECTION_1_QUESTIONS: QuestionDef[] = [
   },
   {
     // Fix 2: dynamic label — wording adapts to Q6.
+    // Fix 4 (refinement batch following 7a458fe): dropdown no longer
+    // shows "Not applicable" because Q7 is now only rendered when
+    // Q6 ∈ {Married, Divorced, Widowed}. Singles never see Q7. The
+    // submit-helpers.ts fallback STILL injects "Not applicable" for
+    // Singles before POST, and the backend SCORES table still maps
+    // that value to +2 pts — keeps the engine's invariant intact.
     id: 'q07_marriage_years',
     type: 'select',
     label: 'How many years has it been since your marriage / divorce / widowhood?',
@@ -118,9 +124,8 @@ export const SECTION_1_QUESTIONS: QuestionDef[] = [
         default:         return 'Years since marriage / divorce / widowhood';
       }
     },
-    options: ['Less than 1 year', '1 - 3 years', '3+ years', 'Not applicable'],
+    options: ['Less than 1 year', '1 - 3 years', '3+ years'],
     required: true,
-    // Fix 1 (extends PR-SCORECARD-2): Widowed also asked.
     visibleWhen: (a) => ['Married', 'Divorced', 'Widowed'].includes(a.q06_marital),
   },
   {
