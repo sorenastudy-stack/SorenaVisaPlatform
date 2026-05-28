@@ -244,7 +244,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
           <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#FAF8F3] text-[#4A4A4A] border border-gray-200">
             Generated {formatRelative(data.generatedAt)}
           </span>
-          <CopyButton text={entirePayloadText} variant="section" label="Copy entire application" />
+          {/* PR-INZ-VIEWER-POLISH: page-level "Copy entire application" button removed — only per-field copy remains. */}
         </div>
       </div>
 
@@ -704,26 +704,51 @@ export default async function InzDataPage({ params }: { params: { id: string } }
 
 // ─── Field / entry rendering helpers ─────────────────────────────────────
 
+// PR-INZ-VIEWER-POLISH: ISO-date detection + dd/mm/yyyy display.
+//
+// Matches strings that BEGIN with `YYYY-MM-DD` (optionally followed
+// by `T<time>` for full timestamps). Everything else — passport
+// numbers like `Z1234567`, emails, two-letter country codes, free
+// text — fails the regex and renders unchanged.
+//
+// We use the UTC getters so a value like `"2029-05-12"` (interpreted
+// by JS as UTC midnight) never shifts day across NZ/Iran timezones
+// just because of where the browser happens to be.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(?:T|\s|$)/;
+
+function displayValue(raw: string): string {
+  if (!ISO_DATE_RE.test(raw)) return raw;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function FieldRow({ label, value, long }: { label: string; value: string | null; long?: boolean }) {
+  const hasValue = value !== null && value.length > 0;
+  const shown = hasValue ? displayValue(value) : '';
   return (
     <div className={`flex ${long ? 'flex-col gap-0.5 sm:col-span-2' : 'items-center gap-2'} py-1 border-b border-gray-50 last:border-b-0`}>
       <dt className={`text-xs font-semibold text-[#4A4A4A]/70 ${long ? '' : 'min-w-[8rem]'}`}>{label}</dt>
       <dd className="text-sm text-[#1E3A5F] whitespace-pre-wrap break-words flex-1 min-w-0">
-        {value && value.length > 0 ? value : <span className="text-[#4A4A4A]/40">—</span>}
+        {hasValue ? shown : <span className="text-[#4A4A4A]/40">—</span>}
       </dd>
-      {value && value.length > 0 && (
-        <CopyButton text={value} variant="field" ariaLabel={`Copy ${label}`} />
-      )}
+      {/* PR-INZ-VIEWER-POLISH: copy button ALWAYS rendered, even for
+          empty fields. Empty fields copy an empty string, which the
+          clipboard API accepts without error. */}
+      <CopyButton text={shown} variant="field" ariaLabel={`Copy ${label}`} />
     </div>
   );
 }
 
-function EntryCard({ children, copyText }: { children: React.ReactNode; copyText: string }) {
+function EntryCard({ children }: { children: React.ReactNode; copyText?: string }) {
+  // PR-INZ-VIEWER-POLISH: per-entry "Copy entry" button removed.
+  // `copyText` prop is still accepted (page.tsx call sites pass it)
+  // but no longer rendered.
   return (
     <li className="rounded-xl border border-gray-100 bg-[#FAF8F3]/40 p-3">
-      <div className="flex justify-end mb-2">
-        <CopyButton text={copyText} variant="entry" />
-      </div>
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
         {children}
       </dl>

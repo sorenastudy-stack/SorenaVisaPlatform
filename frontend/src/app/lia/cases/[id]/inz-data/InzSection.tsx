@@ -2,14 +2,19 @@
 
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { CopyButton } from './CopyButton';
 
 // PR-LIA-6 — Collapsible section card. Header carries the title,
-// a count/completeness badge, the section-level Copy button, and
-// the expand/collapse toggle. Body renders children only when open.
+// a count/completeness badge, and the expand/collapse toggle.
+// Body renders children only when open.
 //
 // Default-open is decided per-section by the page (sections with
 // data open; empty sections collapsed, per Option C in the spec).
+//
+// PR-INZ-VIEWER-POLISH: the section-level "Copy section" button has
+// been removed — only the per-field copy icon survives on FieldRow.
+// The `copyText` / `copyLabel` props are still accepted (call sites
+// pass them) but no longer rendered; that keeps page.tsx unchanged
+// at every section call site.
 
 type BadgeTone = 'gray' | 'blue' | 'emerald';
 
@@ -17,15 +22,14 @@ export function InzSection({
   title,
   badge,
   badgeTone = 'gray',
-  copyText,
-  copyLabel,
   defaultOpen = true,
   children,
 }: {
   title: string;
   badge: string;
   badgeTone?: BadgeTone;
-  copyText: string;
+  // Accepted but unused — see PR-INZ-VIEWER-POLISH note above.
+  copyText?: string;
   copyLabel?: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
@@ -54,7 +58,6 @@ export function InzSection({
         <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${toneClasses[badgeTone]}`}>
           {badge}
         </span>
-        <CopyButton text={copyText} variant="section" label={copyLabel} />
       </header>
       {open && (
         <div className="p-4 transition-[max-height,opacity] duration-150">
