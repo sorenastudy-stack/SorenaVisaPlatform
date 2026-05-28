@@ -41,6 +41,10 @@ const WIX_PAYMENT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'FINANCE'] as const;
 // LIA is excluded — they work from the case-side portal, not the
 // lead funnel.
 const LEADS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'FINANCE'] as const;
+// PR-SUPPORT-1: ticket-reader role set. Mirrors the staff tickets
+// controller's @Roles(...) for list/detail (FINANCE excluded — they
+// don't action client support threads).
+const TICKETS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'CONSULTANT', 'LIA'] as const;
 
 const NAV: NavItem[] = [
   { label: 'staff.nav.overview',          href: '/staff',                    icon: <LayoutDashboard size={18} /> },
@@ -50,7 +54,7 @@ const NAV: NavItem[] = [
   // see leads → tweak attribution".
   { label: 'staff.nav.leads',             href: '/staff/leads',              icon: <Users size={18} />,       roleGate: LEADS_ROLES },
   { label: 'staff.nav.meetings',          href: '/staff/meetings',           icon: <Calendar size={18} /> },
-  { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} /> },
+  { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} />,       roleGate: TICKETS_ROLES },
   { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },
   { label: 'staff.nav.approvals',         href: '/staff/approvals',          icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
   { label: 'staff.nav.marketing',         href: '/staff/marketing',          icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },

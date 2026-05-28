@@ -5,6 +5,7 @@ import { OwnerApprovalModule } from './owner-approval/owner-approval.module';
 import { StaffUsersModule } from './users/staff-users.module';
 import { StaffMeModule } from './me/staff-me.module';
 import { StaffCasesModule } from './cases/staff-cases.module';
+import { StaffTicketsModule } from './tickets/staff-tickets.module';
 
 // PR-CONSULT-1 — Staff root module.
 //
@@ -14,6 +15,8 @@ import { StaffCasesModule } from './cases/staff-cases.module';
 //
 // PR-CONSULT-2 added the `me` + `cases` sub-modules backing the
 // staff dashboard shell and cases list / detail UI.
+// PR-SUPPORT-1 added the `tickets` sub-module exposing /staff/tickets/*
+// on top of the existing VisaSupportTicket schema.
 @Module({
   imports: [
     StaffRolesModule,
@@ -22,6 +25,7 @@ import { StaffCasesModule } from './cases/staff-cases.module';
     StaffUsersModule,
     StaffMeModule,
     StaffCasesModule,
+    StaffTicketsModule,
   ],
   exports: [
     AssignmentsModule,
