@@ -5,8 +5,10 @@ import {
   Param,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -15,6 +17,7 @@ import {
   SaveScorecardDraftDto,
   SubmitScorecardDto,
 } from './dto/scorecard.dto';
+import { shortFilenameSlug } from './pdf';
 
 // PR-SCORECARD-1 — Readiness Assessment endpoints.
 //
@@ -105,6 +108,52 @@ export class ScorecardController {
     return this.service.recordBookingLinkOpened(submissionId, actor.userId);
   }
 
+  // PR-SCORECARD-3: GET /scorecard/:submissionId/pdf — client-facing
+  // PDF report. The applicant downloads their own; staff can download
+  // any submission's client report (so they can preview / forward it).
+  @Get('scorecard/:submissionId/pdf')
+  @Roles('LEAD', 'STUDENT', 'OWNER', 'ADMIN', 'SUPER_ADMIN', 'CONSULTANT')
+  async clientPdf(
+    @Param('submissionId') submissionId: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    const actor = this.viewer(req);
+    const { buffer, applicantName, submittedAt } = await this.service.generateClientPdf(
+      submissionId, actor,
+    );
+    const filename = pdfFilename('sorena-assessment', applicantName, submittedAt);
+    res
+      .status(200)
+      .setHeader('Content-Type', 'application/pdf')
+      .setHeader('Content-Length', buffer.length)
+      .setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(buffer);
+  }
+
+  // PR-SCORECARD-3: GET /staff/scorecard/:submissionId/pdf — internal
+  // staff PDF (the long one with hard-stop codes, gate logic, full
+  // answer log). Audit row written on every download.
+  @Get('staff/scorecard/:submissionId/pdf')
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT')
+  async staffPdf(
+    @Param('submissionId') submissionId: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    const actor = this.viewer(req);
+    const { buffer, applicantName, submittedAt } = await this.service.generateInternalPdf(
+      submissionId, actor,
+    );
+    const filename = pdfFilename('sorena-internal', applicantName, submittedAt);
+    res
+      .status(200)
+      .setHeader('Content-Type', 'application/pdf')
+      .setHeader('Content-Length', buffer.length)
+      .setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(buffer);
+  }
+
   private viewer(req: any) {
     return {
       // PR-LIA-d95640d: JwtStrategy.validate returns { userId, ... }.
@@ -124,4 +173,15 @@ export class ScorecardController {
     const ua = req.headers?.['user-agent'];
     return typeof ua === 'string' ? ua : null;
   }
+}
+
+// PR-SCORECARD-3 — Compose a download filename like
+// `sorena-assessment-yashua-a-20260528.pdf`. The slug-builder
+// handles unicode + non-ASCII names (falling back to "applicant"
+// when nothing convertible remains), so the result is always safe
+// on Windows, macOS, and Linux filesystems.
+function pdfFilename(prefix: string, applicantName: string, submittedAt: Date): string {
+  const slug = shortFilenameSlug(applicantName);
+  const yyyymmdd = submittedAt.toISOString().slice(0, 10).replace(/-/g, '');
+  return `${prefix}-${slug}-${yyyymmdd}.pdf`;
 }

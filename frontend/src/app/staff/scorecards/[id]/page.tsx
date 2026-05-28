@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { StaffScorecardPdfButtons } from './StaffScorecardPdfButtons';
 
 // PR-SCORECARD-1 — Staff scorecard detail view.
 
@@ -127,6 +128,14 @@ export default async function ScorecardDetailPage({ params }: { params: { id: st
             </span>
           )}
         </div>
+      </div>
+
+      {/* PR-SCORECARD-3: download internal + client PDFs */}
+      <div className="mb-6">
+        <StaffScorecardPdfButtons
+          submissionId={data.submissionId}
+          applicantName={applicantName}
+        />
       </div>
 
       {/* Category breakdown */}

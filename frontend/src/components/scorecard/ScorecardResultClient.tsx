@@ -13,6 +13,7 @@ import {
   getBookingUrls,
   type BookingUrls,
 } from '@/lib/scorecard/booking-urls';
+import { downloadPdf } from '@/lib/scorecard/pdf-download';
 import type { ScorecardResultPayload } from '@/app/scorecard/result/page';
 
 // CTA matrix — band/hard-stop → button(s) + "why this matters" copy.
@@ -465,14 +466,10 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
 
         {/* PDF + back actions */}
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <button
-            type="button"
-            disabled
-            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl border border-gray-200 text-[#4A4A4A] text-sm font-medium opacity-60 cursor-not-allowed"
-            title={RESULT_STRINGS.pdfComingSoon}
-          >
-            <Download size={14} /> {RESULT_STRINGS.downloadPdfCta}
-          </button>
+          <PdfDownloadButton
+            submissionId={data.submissionId}
+            applicantName={applicantName}
+          />
           <Link
             href="/student/dashboard"
             className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]"
@@ -541,5 +538,46 @@ function BookingFooter({
         <p className="mt-3 text-sm text-red-600">{error}</p>
       )}
     </>
+  );
+}
+
+// PR-SCORECARD-3: real client-facing PDF download. PDFKit generates
+// the file server-side (typically 5-15 KB, 4-5 pages). The button
+// flips to a spinner during fetch and surfaces an inline error
+// banner if generation fails.
+function PdfDownloadButton({
+  submissionId, applicantName,
+}: { submissionId: string; applicantName: string }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const fallback = `sorena-assessment-${(applicantName || 'applicant')
+    .split(/\s+/)[0]?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'applicant'}-${yyyymmdd}.pdf`;
+  async function onClick() {
+    setErr(null);
+    setBusy(true);
+    try {
+      await downloadPdf(`/scorecard/${submissionId}/pdf`, fallback);
+    } catch (e: any) {
+      setErr('Could not generate PDF. Please try again or contact your case advisor.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl border-2 border-[#1E3A5F] text-[#1E3A5F] text-sm font-bold hover:bg-[#1E3A5F]/5 transition-colors disabled:opacity-50"
+      >
+        <Download size={14} />
+        {busy ? 'Preparing PDF…' : 'Download your report (PDF) →'}
+      </button>
+      {err && (
+        <span className="text-xs text-red-700">{err}</span>
+      )}
+    </div>
   );
 }

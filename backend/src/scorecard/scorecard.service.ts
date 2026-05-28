@@ -14,6 +14,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { score, ScoreResult } from './scoring/engine';
 import { determineRouting, NextActionContent } from './scoring/routing';
+import {
+  renderInternalReport, renderClientReport,
+  type InternalReportData, type ClientReportData,
+} from './pdf';
 
 // PR-SCORECARD-1 — Readiness Assessment service.
 //
@@ -407,6 +411,144 @@ export class ScorecardService {
     });
 
     return { consultationBookedAt: now.toISOString() };
+  }
+
+  // ─── PDF generation (PR-SCORECARD-3) ─────────────────────────────────
+
+  async generateClientPdf(
+    submissionId: string,
+    requester: Viewer,
+  ): Promise<{ buffer: Buffer; applicantName: string; submittedAt: Date }> {
+    const row = await this.prisma.scorecardSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        lead: { select: { contact: { select: { fullName: true, email: true, phone: true, countryOfResidence: true } } } },
+      },
+    });
+    if (!row) throw new NotFoundException('Submission not found');
+
+    // Ownership check — own submission OR staff role.
+    const isStaff = STAFF_ROLES.has(requester.role);
+    if (!isStaff && row.userId !== requester.userId) {
+      throw new ForbiddenException('You can only download your own report.');
+    }
+
+    const payload = this.hydrate({ ...row, answersEncrypted: row.answersEncrypted as Buffer });
+    const applicantName = row.lead?.contact?.fullName ?? row.user?.name ?? 'Applicant';
+
+    const clientData: ClientReportData = {
+      applicant: {
+        fullName: applicantName,
+        submittedAt: payload.submittedAt,
+      },
+      totalScore: payload.totalScore,
+      band: payload.band,
+      bandName: payload.bandName,
+      bandRange: payload.bandRange,
+      categoryScores: payload.categoryScores,
+      hasHardStops: payload.hardStops.length > 0,
+      nextActionContent: payload.nextActionContent,
+      nextActionTextEn: payload.nextActionTextEn,
+      shouldShowMalaysiaCallout: payload.shouldShowMalaysiaCallout,
+    };
+
+    const buffer = await renderClientReport(clientData);
+
+    // Audit — fire-and-log on failure.
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId: requester.userId,
+          action: 'READ',
+          eventType: 'SCORECARD_CLIENT_PDF_GENERATED',
+          entityType: 'SCORECARD_SUBMISSION',
+          entityId: submissionId,
+          newValue: {
+            submissionId,
+            byStaff: isStaff,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: requester.name ?? null,
+          actorRoleSnapshot: requester.role ?? null,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to audit client PDF generation: ${err?.message ?? err}`);
+    }
+
+    return { buffer, applicantName, submittedAt: row.submittedAt };
+  }
+
+  async generateInternalPdf(
+    submissionId: string,
+    requester: Viewer,
+  ): Promise<{ buffer: Buffer; applicantName: string; submittedAt: Date }> {
+    if (!STAFF_ROLES.has(requester.role)) {
+      throw new ForbiddenException('Staff-only endpoint.');
+    }
+    const row = await this.prisma.scorecardSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        lead: { select: { contact: { select: { fullName: true, email: true, phone: true, countryOfResidence: true } } } },
+      },
+    });
+    if (!row) throw new NotFoundException('Submission not found');
+
+    const payload = this.hydrate({ ...row, answersEncrypted: row.answersEncrypted as Buffer });
+    const contact = row.lead?.contact;
+    const applicantName = contact?.fullName ?? row.user?.name ?? 'Applicant';
+
+    const internalData: InternalReportData = {
+      applicant: {
+        fullName: applicantName,
+        email:    contact?.email ?? row.user?.email ?? null,
+        phone:    contact?.phone ?? null,
+        country:  contact?.countryOfResidence ?? null,
+        submittedAt: payload.submittedAt,
+      },
+      totalScore: payload.totalScore,
+      band: payload.band,
+      bandName: payload.bandName,
+      categoryScores: payload.categoryScores,
+      hardStops: payload.hardStops.map((hs) => ({
+        code: hs.code,
+        name: hs.name,
+        reason: hs.reason,
+        resolution: hs.resolution,
+      })),
+      riskFlags: payload.riskFlags,
+      gateResults: payload.gateResults,
+      executionEligible: payload.executionEligible,
+      nextActionContent: payload.nextActionContent,
+      nextActionTextEn: payload.nextActionTextEn,
+      answers: payload.answers ?? {},
+      perFieldScores: payload.perFieldScores,
+    };
+
+    const buffer = await renderInternalReport(internalData);
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId: requester.userId,
+          action: 'READ',
+          eventType: 'SCORECARD_INTERNAL_PDF_GENERATED',
+          entityType: 'SCORECARD_SUBMISSION',
+          entityId: submissionId,
+          newValue: {
+            submissionId,
+            viewerUserId: requester.userId,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: requester.name ?? null,
+          actorRoleSnapshot: requester.role ?? null,
+        },
+      });
+    } catch (err: any) {
+      this.logger.error(`Failed to audit internal PDF generation: ${err?.message ?? err}`);
+    }
+
+    return { buffer, applicantName, submittedAt: row.submittedAt };
   }
 
   // ─── List for staff (used by /staff/scorecards index) ────────────────
