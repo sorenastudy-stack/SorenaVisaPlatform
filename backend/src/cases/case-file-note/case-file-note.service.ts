@@ -220,21 +220,32 @@ export class CaseFileNoteService {
       });
       const visaAppIds = visaApps.map((v) => v.id);
       if (visaAppIds.length > 0) {
+        // PR-FILES-2: file metadata + uploadedAt live on the children
+        // now. Fan out to one DOCUMENT_UPLOADED event per child file
+        // (multiple files per parent — each upload is its own event).
         const visaDocs = await this.prisma.visaSupportingDocument.findMany({
           where: { visaApplicationId: { in: visaAppIds } },
-          orderBy: { uploadedAt: 'asc' },
+          select: {
+            documentType: true,
+            files: {
+              orderBy: { uploadedAt: 'asc' },
+              select: { originalFilename: true, uploadedAt: true },
+            },
+          },
         });
         for (const d of visaDocs) {
-          events.push({
-            type: 'DOCUMENT_UPLOADED',
-            at: d.uploadedAt.toISOString(),
-            actorName: null,
-            details: {
-              fileName: d.originalFilename,
-              source: 'VISA_SUPPORTING',
-              docType: String(d.documentType),
-            },
-          });
+          for (const f of d.files) {
+            events.push({
+              type: 'DOCUMENT_UPLOADED',
+              at: f.uploadedAt.toISOString(),
+              actorName: null,
+              details: {
+                fileName: f.originalFilename,
+                source: 'VISA_SUPPORTING',
+                docType: String(d.documentType),
+              },
+            });
+          }
         }
       }
     }

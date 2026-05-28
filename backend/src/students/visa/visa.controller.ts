@@ -30,7 +30,6 @@ import { TravelHistoryDto } from './dto/travel-history.dto';
 import { ImmigrationAssistanceDto } from './dto/immigration-assistance.dto';
 import {
   SupportingDocumentsDto,
-  SupportingDocumentMetadataDto,
   VisaSupportingDocumentTypeDto,
 } from './dto/supporting-documents.dto';
 import {
@@ -368,12 +367,11 @@ export class VisaController {
     return this.visaService.saveImmigrationAssistance(req.user.userId, body);
   }
 
-  // ── Step 13 — Supporting documents page 1 (PR-VISA13) ────────────
-  // File storage is deferred. The four routes below handle only
-  // metadata: the three parent-row fields (gate / country /
-  // areAllDocsInEnglish) save via PATCH; individual metadata rows
-  // upsert via PUT and delete via DELETE. The file bytes never reach
-  // the backend under this PR.
+  // ── Step 13 — Supporting documents page 1 ──────────────────────────
+  // PR-FILES-2 — parent-row flags PATCH + list GET. Per-file routes
+  // live in the PR-FILES-2 block further down (uploads add a child
+  // file; deletes target a child file id; the metadata-only PUT is
+  // gone — uploads always carry bytes now).
 
   @Get('supporting-documents')
   getSupportingDocuments(@Req() req: any) {
@@ -388,23 +386,16 @@ export class VisaController {
     return this.visaService.saveSupportingDocuments(req.user.userId, body);
   }
 
-  @Put('supporting-documents/metadata')
-  upsertSupportingDocumentMetadata(
-    @Req() req: any,
-    @Body() body: SupportingDocumentMetadataDto,
-  ) {
-    return this.visaService.upsertSupportingDocumentMetadata(
-      req.user.userId,
-      body,
-    );
-  }
-
+  // PR-FILES-2 — "clear the whole requirement for this type". Drops
+  // the parent row and cascades every child file (DB CASCADE + best-
+  // effort fs.unlink). The legacy ".../metadata/" segment stays so
+  // the frontend can keep calling this URL through PR-FILES-2 step 3.
   @Delete('supporting-documents/metadata/:documentType')
-  deleteSupportingDocumentMetadata(
+  deleteSupportingDocumentRequirement(
     @Req() req: any,
     @Param('documentType') documentType: VisaSupportingDocumentTypeDto,
   ) {
-    return this.visaService.deleteSupportingDocumentMetadata(
+    return this.visaService.deleteSupportingDocumentRequirement(
       req.user.userId,
       documentType,
     );
@@ -449,32 +440,28 @@ export class VisaController {
     );
   }
 
-  // ── PR-FILES-1: visa supporting-document file storage ──────────────
+  // ── PR-FILES-2: per-file routes ────────────────────────────────────
   //
-  // These four endpoints upgrade Steps 13 + 14 from metadata-only to
-  // real file storage. They do NOT replace the existing metadata
-  // endpoints above: a row can still be created via PUT metadata first
-  // and then have its file attached via POST .../file later — the
-  // service treats them as compatible. (After Step 14's PUT
-  // .../other-evidence creates an entry, that entry's `id` is the
-  // path param for the matching upload endpoint below.)
+  // Uploads ADD a child file (never replace). Per-file delete + per-
+  // file download both take a child-file id and 404 on mismatched
+  // ownership (the service walks file → parent → visaApplicationId
+  // via the JWT-derived visa row).
   //
-  // Security layers wired here:
-  //   - layer 2 (auth + role): every route on this controller is
-  //     gated by JwtAuthGuard + RolesGuard + @Roles('STUDENT','AGENT');
-  //     the service resolves the visa application through the JWT's
-  //     userId so a caller can only touch their own row.
+  // Security layers:
+  //   - layer 2 (auth + role + owner-scoped): every route on this
+  //     controller is gated by JwtAuthGuard + RolesGuard +
+  //     @Roles('STUDENT','AGENT'); the service resolves the visa
+  //     application through the JWT's userId so a caller can only
+  //     touch their own files.
   //   - layer 7 (input): multer config above enforces the 10 MB cap +
   //     PDF/JPEG/PNG allowlist + random filename. Throttle caps the
   //     upload rate to match the admission pattern (10 / 60 s).
   //   - layer 7 (output): downloads return a JWT-signed URL with a
-  //     5-min TTL via the existing /files/signed/:token controller —
-  //     see common/signed-url.util.ts. No raw fileUrl ever leaves
-  //     this process.
-  //   - layer 6 (audit): VISA_DOC_UPLOADED / VISA_DOC_DOWNLOADED rows
-  //     written from the service on every successful call.
+  //     5-min TTL via the existing /files/signed/:token controller.
+  //   - layer 6 (audit): VISA_DOC_UPLOADED / VISA_DOC_DELETED /
+  //     VISA_DOC_DOWNLOADED rows written on every successful call.
 
-  // ── Step 13 supporting documents — file upload + download ──────────
+  // ── Step 13 supporting documents — file ops ────────────────────────
 
   @Post('supporting-documents/:documentType/file')
   @UseGuards(ThrottlerGuard)
@@ -500,30 +487,37 @@ export class VisaController {
     );
   }
 
-  @Get('supporting-documents/:documentType/download')
-  getSupportingDocumentDownloadUrl(
+  @Delete('supporting-documents/files/:fileId')
+  deleteSupportingDocumentFile(
     @Req() req: any,
-    @Param('documentType') documentType: VisaSupportingDocumentTypeDto,
+    @Param('fileId') fileId: string,
   ) {
-    return this.visaService.getSupportingDocumentDownloadUrl(
+    return this.visaService.deleteSupportingDocumentFile(req.user.userId, fileId);
+  }
+
+  @Get('supporting-documents/files/:fileId/download')
+  getSupportingDocumentFileDownloadUrl(
+    @Req() req: any,
+    @Param('fileId') fileId: string,
+  ) {
+    return this.visaService.getSupportingDocumentFileDownloadUrl(
       req.user.userId,
-      documentType,
+      fileId,
     );
   }
 
-  // ── Step 14 other-evidence entries — file upload + download ────────
-  // Keyed by entry id (the row's primary key), not documentType — the
-  // table has no UNIQUE constraint on type because multiple entries
-  // per evidenceType are allowed. The entry must already exist
-  // (created via the PUT .../other-evidence metadata endpoint above)
-  // before its file can be attached.
+  // ── Step 14 other-evidence — file ops ──────────────────────────────
+  // The entry must already exist (created via PUT .../other-evidence)
+  // before files can be attached to it. Per-file delete + download
+  // take a child-file id; entry-level delete (DELETE .../other-evidence/:entryId)
+  // still wipes the entry and cascades its files.
 
   @Post('supporting-documents-2/other-evidence/:entryId/file')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @UseFilters(MulterExceptionFilter)
   @UseInterceptors(FileInterceptor('file', visaMulterOptions))
-  async uploadOtherEvidenceEntryFile(
+  async uploadOtherEvidenceFile(
     @Req() req: any,
     @Param('entryId') entryId: string,
   ) {
@@ -535,21 +529,29 @@ export class VisaController {
     if (!req.file) {
       throw new UnsupportedMediaTypeException('No file provided.');
     }
-    return this.visaService.uploadOtherEvidenceEntryFile(
+    return this.visaService.uploadOtherEvidenceFile(
       req.user.userId,
       entryId,
       req.file,
     );
   }
 
-  @Get('supporting-documents-2/other-evidence/:entryId/download')
-  getOtherEvidenceEntryDownloadUrl(
+  @Delete('supporting-documents-2/other-evidence/files/:fileId')
+  deleteOtherEvidenceFile(
     @Req() req: any,
-    @Param('entryId') entryId: string,
+    @Param('fileId') fileId: string,
   ) {
-    return this.visaService.getOtherEvidenceEntryDownloadUrl(
+    return this.visaService.deleteOtherEvidenceFile(req.user.userId, fileId);
+  }
+
+  @Get('supporting-documents-2/other-evidence/files/:fileId/download')
+  getOtherEvidenceFileDownloadUrl(
+    @Req() req: any,
+    @Param('fileId') fileId: string,
+  ) {
+    return this.visaService.getOtherEvidenceFileDownloadUrl(
       req.user.userId,
-      entryId,
+      fileId,
     );
   }
 }

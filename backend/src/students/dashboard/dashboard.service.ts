@@ -350,7 +350,20 @@ export class DashboardService {
       this.prisma.visaApplication.findUnique({ where: { id: visaApplicationId } }),
       this.prisma.visaCase.findUnique({ where: { visaApplicationId } }),
       this.prisma.assessmentReport.findUnique({ where: { clientId: userId } }),
-      this.prisma.visaSupportingDocument.findMany({ where: { visaApplicationId } }),
+      // PR-FILES-2: pull the parent requirement plus its latest child
+      // file (if any) so "provided" reflects ">=1 file uploaded" and
+      // the displayed filename comes from the most recent upload.
+      this.prisma.visaSupportingDocument.findMany({
+        where: { visaApplicationId },
+        select: {
+          documentType: true,
+          files: {
+            orderBy: { uploadedAt: 'desc' },
+            take: 1,
+            select: { originalFilename: true },
+          },
+        },
+      }),
       this.prisma.admissionEducationEntry.count({
         where: { admissionApplicationId: admission.id },
       }),
@@ -382,9 +395,15 @@ export class DashboardService {
       educationCount,
       employmentEntries,
     );
+    // PR-FILES-2: "provided" means the parent has at least one child
+    // file uploaded; display the most recent file's name. Parents with
+    // zero files are treated as not-yet-provided.
     const providedMap = new Map<string, { originalFilename: string }>();
     for (const d of documents) {
-      providedMap.set(d.documentType, { originalFilename: d.originalFilename });
+      const latest = d.files[0];
+      if (latest) {
+        providedMap.set(d.documentType, { originalFilename: latest.originalFilename });
+      }
     }
     const docs = requiredTypes.map((documentType) => {
       const row = providedMap.get(documentType);

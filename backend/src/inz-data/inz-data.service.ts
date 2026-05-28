@@ -224,33 +224,35 @@ export interface InzDataPayload {
     adviserContactNumber: string | null;
     adviserIsPrimaryContact: boolean | null;
   } | null;
+  // PR-FILES-2 — each supporting-document parent now exposes a files[]
+  // array. The LIA frontend renders one row per child file with its
+  // own download button (the download endpoint takes a child-file id).
+  // Raw fileUrl never leaves the backend.
   supportingDocuments: Array<{
     id: string;
     docType: string;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-    uploadedAt: Date;
-    // PR-FILES-1: surface presence of a stored file (not the URL).
-    // The frontend uses this to decide whether to render a Download
-    // button or a "no file uploaded" state. The signed URL itself is
-    // never embedded in the payload — it's minted on demand by the
-    // download endpoint when the LIA actually clicks Download.
-    hasFile: boolean;
+    files: Array<{
+      id: string;
+      originalFilename: string;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt: Date;
+    }>;
   }>;
-  // PR-FILES-1: new section surfaced because Step-14 other-evidence
-  // entries now carry file bytes too. Same hasFile pattern; customLabel
-  // is decrypted at the boundary (only populated when evidenceType =
-  // OTHER, per the encryption rules in visa.service.ts:upsertOtherEvidenceEntry).
+  // PR-FILES-2 — same per-parent files[] treatment for other-evidence
+  // entries. customLabel is decrypted at the boundary (populated only
+  // when evidenceType = OTHER).
   otherEvidence: Array<{
     id: string;
     evidenceType: string;
     customLabel: string | null;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-    uploadedAt: Date;
-    hasFile: boolean;
+    files: Array<{
+      id: string;
+      originalFilename: string;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt: Date;
+    }>;
   }>;
   completeness: {
     applicant: FieldCompleteness;
@@ -405,14 +407,39 @@ export class InzDataService {
             where: { visaApplicationId: visa.id },
             orderBy: { sortOrder: 'asc' },
           }),
+          // PR-FILES-2: each parent now exposes a files[] child array.
           this.prisma.visaSupportingDocument.findMany({
             where: { visaApplicationId: visa.id },
-            orderBy: { uploadedAt: 'desc' },
+            include: {
+              files: {
+                orderBy: { uploadedAt: 'asc' },
+                select: {
+                  id: true,
+                  originalFilename: true,
+                  mimeType: true,
+                  sizeBytes: true,
+                  uploadedAt: true,
+                },
+              },
+            },
+            orderBy: { createdAt: 'asc' },
           }),
           // PR-FILES-1: surface Step-14 other-evidence entries too.
           this.prisma.visaOtherEvidenceEntry.findMany({
             where: { visaApplicationId: visa.id },
-            orderBy: { uploadedAt: 'desc' },
+            include: {
+              files: {
+                orderBy: { uploadedAt: 'asc' },
+                select: {
+                  id: true,
+                  originalFilename: true,
+                  mimeType: true,
+                  sizeBytes: true,
+                  uploadedAt: true,
+                },
+              },
+            },
+            orderBy: { createdAt: 'asc' },
           }),
         ])
       : [[], [], [], [], null, [], [], [], [], [], [], [], [], []] as const;
@@ -630,29 +657,18 @@ export class InzDataService {
           }
         : null;
 
+    // PR-FILES-2 — each parent emits a files[] of its child file rows.
     const supportingDocumentsOut = (supportingDocuments ?? []).map((d) => ({
       id: d.id,
       docType: String(d.documentType),
-      fileName: d.originalFilename,
-      mimeType: d.mimeType,
-      sizeBytes: d.sizeBytes,
-      uploadedAt: d.uploadedAt,
-      // PR-FILES-1: presence flag — raw fileUrl never leaves the
-      // backend; the LIA frontend calls the download endpoint when
-      // it wants the URL, and that endpoint signs a short-lived URL
-      // on the fly.
-      hasFile: !!d.fileUrl,
+      files: d.files,
     }));
 
     const otherEvidenceOut = (otherEvidenceEntries ?? []).map((d) => ({
       id: d.id,
       evidenceType: String(d.evidenceType),
       customLabel: this.safeDecrypt(d.customLabelEncrypted),
-      fileName: d.originalFilename,
-      mimeType: d.mimeType,
-      sizeBytes: d.sizeBytes,
-      uploadedAt: d.uploadedAt,
-      hasFile: !!d.fileUrl,
+      files: d.files,
     }));
 
     // ─── Pre-compute completeness ──────────────────────────────────────
@@ -746,43 +762,44 @@ export class InzDataService {
 
   async createVisaSupportingDocDownloadUrl(
     caseId: string,
-    docId: string,
+    fileId: string,
     actor: { id: string | null; name: string | null; role: string | null },
   ): Promise<{ url: string; expiresInSeconds: number }> {
-    // Walk visa supporting doc → visa application → admission
-    // application → case. Two queries because schema has no inverse
-    // relation from VisaApplication → AdmissionApplication, only the
-    // FK column. Same shape as case-documents.service.resolveSourceRow
-    // for VISA_SUPPORTING.
-    const doc = await this.prisma.visaSupportingDocument.findUnique({
-      where: { id: docId },
+    // PR-FILES-2 — walk child file → parent (documentType) → visa
+    // application (applicationId) → admission (caseId). Two queries
+    // because schema has no inverse relation from VisaApplication →
+    // AdmissionApplication. 404 (not 403) on mismatched ownership.
+    const file = await this.prisma.visaSupportingDocumentFile.findUnique({
+      where: { id: fileId },
       select: {
         id: true,
-        documentType: true,
         originalFilename: true,
         mimeType: true,
         fileUrl: true,
-        visaApplication: { select: { applicationId: true } },
+        document: {
+          select: {
+            id: true,
+            documentType: true,
+            visaApplication: { select: { applicationId: true } },
+          },
+        },
       },
     });
-    if (!doc) {
+    if (!file) {
       throw new NotFoundException('Document not found on this case.');
     }
     const admission = await this.prisma.admissionApplication.findUnique({
-      where: { id: doc.visaApplication.applicationId },
+      where: { id: file.document.visaApplication.applicationId },
       select: { caseId: true },
     });
     if (!admission || admission.caseId !== caseId) {
       throw new NotFoundException('Document not found on this case.');
     }
-    if (!doc.fileUrl) {
-      throw new NotFoundException('No file uploaded for this document.');
-    }
 
     const token = createSignedDownloadToken({
-      fileUrl:  doc.fileUrl,
-      fileName: doc.originalFilename,
-      mimeType: doc.mimeType,
+      fileUrl:  file.fileUrl,
+      fileName: file.originalFilename,
+      mimeType: file.mimeType,
     });
 
     await this.prisma.auditLog.create({
@@ -790,13 +807,14 @@ export class InzDataService {
         userId: actor.id,
         action: 'DOWNLOAD',
         eventType: 'LIA_VISA_DOC_DOWNLOADED',
-        entityType: 'VisaSupportingDocument',
-        entityId: doc.id,
+        entityType: 'VisaSupportingDocumentFile',
+        entityId: file.id,
         newValue: {
           caseId,
-          docId: doc.id,
-          documentType: String(doc.documentType),
-          fileName: doc.originalFilename,
+          fileId: file.id,
+          parentId: file.document.id,
+          documentType: String(file.document.documentType),
+          fileName: file.originalFilename,
         } as Prisma.InputJsonValue,
         actorNameSnapshot: actor.name ?? null,
         actorRoleSnapshot: actor.role ?? null,
@@ -808,38 +826,40 @@ export class InzDataService {
 
   async createVisaOtherEvidenceDownloadUrl(
     caseId: string,
-    entryId: string,
+    fileId: string,
     actor: { id: string | null; name: string | null; role: string | null },
   ): Promise<{ url: string; expiresInSeconds: number }> {
-    const entry = await this.prisma.visaOtherEvidenceEntry.findUnique({
-      where: { id: entryId },
+    const file = await this.prisma.visaOtherEvidenceFile.findUnique({
+      where: { id: fileId },
       select: {
         id: true,
-        evidenceType: true,
         originalFilename: true,
         mimeType: true,
         fileUrl: true,
-        visaApplication: { select: { applicationId: true } },
+        entry: {
+          select: {
+            id: true,
+            evidenceType: true,
+            visaApplication: { select: { applicationId: true } },
+          },
+        },
       },
     });
-    if (!entry) {
+    if (!file) {
       throw new NotFoundException('Document not found on this case.');
     }
     const admission = await this.prisma.admissionApplication.findUnique({
-      where: { id: entry.visaApplication.applicationId },
+      where: { id: file.entry.visaApplication.applicationId },
       select: { caseId: true },
     });
     if (!admission || admission.caseId !== caseId) {
       throw new NotFoundException('Document not found on this case.');
     }
-    if (!entry.fileUrl) {
-      throw new NotFoundException('No file uploaded for this document.');
-    }
 
     const token = createSignedDownloadToken({
-      fileUrl:  entry.fileUrl,
-      fileName: entry.originalFilename,
-      mimeType: entry.mimeType,
+      fileUrl:  file.fileUrl,
+      fileName: file.originalFilename,
+      mimeType: file.mimeType,
     });
 
     await this.prisma.auditLog.create({
@@ -847,13 +867,14 @@ export class InzDataService {
         userId: actor.id,
         action: 'DOWNLOAD',
         eventType: 'LIA_VISA_DOC_DOWNLOADED',
-        entityType: 'VisaOtherEvidenceEntry',
-        entityId: entry.id,
+        entityType: 'VisaOtherEvidenceFile',
+        entityId: file.id,
         newValue: {
           caseId,
-          docId: entry.id,
-          evidenceType: String(entry.evidenceType),
-          fileName: entry.originalFilename,
+          fileId: file.id,
+          entryId: file.entry.id,
+          evidenceType: String(file.entry.evidenceType),
+          fileName: file.originalFilename,
         } as Prisma.InputJsonValue,
         actorNameSnapshot: actor.name ?? null,
         actorRoleSnapshot: actor.role ?? null,

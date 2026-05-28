@@ -18,7 +18,8 @@ import { ReviewDocumentDto } from './dto/case-documents.dto';
 //
 // Sources: ADMISSION (AdmissionDocument, has fileUrl), APPLICATION
 // (ApplicationDocument, optional fileUrl), VISA_SUPPORTING
-// (VisaSupportingDocument, metadata-only — no fileUrl, NOT downloadable).
+// (VisaSupportingDocument parent + VisaSupportingDocumentFile children
+// — PR-FILES-2; downloadable iff the parent has >=1 child file).
 //
 // The user's original spec mentioned a fourth source
 // (CASE_MESSAGE_FULFILMENT). That's not a separate model — it's just
@@ -104,7 +105,11 @@ export class CaseDocumentsService {
     });
 
     // 3. Visa supporting documents — Case → AdmissionApplication →
-    //    VisaApplication → VisaSupportingDocument. NO fileUrl.
+    //    VisaApplication → VisaSupportingDocument (parent) → files[]
+    //    (children). PR-FILES-2: file metadata lives on the children;
+    //    one row per parent in the listing, using the most recent
+    //    file's metadata for display and counting files for the
+    //    downloadable flag.
     const admissionIds = admissions.map((a) => a.id);
     const visaApps = admissionIds.length
       ? await this.prisma.visaApplication.findMany({
@@ -115,10 +120,17 @@ export class CaseDocumentsService {
               select: {
                 id: true,
                 documentType: true,
-                originalFilename: true,
-                mimeType: true,
-                sizeBytes: true,
-                uploadedAt: true,
+                createdAt: true,
+                files: {
+                  orderBy: { uploadedAt: 'desc' },
+                  select: {
+                    id: true,
+                    originalFilename: true,
+                    mimeType: true,
+                    sizeBytes: true,
+                    uploadedAt: true,
+                  },
+                },
                 fulfilmentMessages: {
                   where: { caseId },
                   select: { id: true },
@@ -197,20 +209,29 @@ export class CaseDocumentsService {
 
     for (const va of visaApps) {
       for (const d of va.supportingDocuments) {
+        // PR-FILES-2 — surface one row per parent. Display the latest
+        // file's metadata; `fileName` falls back to a synthetic label
+        // when the parent has no files yet. downloadable = there's at
+        // least one child file (in which case createDownloadUrl
+        // returns the first child's signed URL).
+        const latest = d.files[0]; // ordered desc by uploadedAt
         rows.push(
           this.shapeRow({
             source: 'VISA_SUPPORTING',
             sourceRowId: d.id,
             docType: String(d.documentType),
-            fileName: d.originalFilename,
-            mimeType: d.mimeType,
-            sizeBytes: d.sizeBytes,
-            uploadedAt: d.uploadedAt,
+            fileName: latest
+              ? (d.files.length > 1
+                  ? `${latest.originalFilename} (+${d.files.length - 1} more)`
+                  : latest.originalFilename)
+              : '(no file uploaded)',
+            mimeType: latest?.mimeType ?? 'application/octet-stream',
+            sizeBytes: latest?.sizeBytes ?? 0,
+            uploadedAt: latest?.uploadedAt ?? d.createdAt,
             uploadedById: clientUserId,
             uploadedByName: clientName,
-            // Metadata-only per PR-VISA-13/14 — bytes never reached
-            // the backend, so no URL to sign.
-            downloadable: false,
+            // PR-FILES-2: downloadable iff the parent has >=1 child file.
+            downloadable: d.files.length > 0,
             linkedToRequestMessageId: d.fulfilmentMessages[0]?.id ?? null,
             review: reviewByKey.get(this.reviewKey('VISA_SUPPORTING', d.id)),
           }),
@@ -429,31 +450,46 @@ export class CaseDocumentsService {
         mimeType: 'application/octet-stream',
       };
     }
-    // VISA_SUPPORTING — Case → AdmissionApplication → VisaApplication →
-    // VisaSupportingDocument. Walked in two queries because the
-    // schema has no inverse relation from VisaApplication →
-    // AdmissionApplication, only the FK column (applicationId).
-    const d = await this.prisma.visaSupportingDocument.findUnique({
+    // VISA_SUPPORTING — Case → AdmissionApplication → VisaApplication
+    // → VisaSupportingDocument (parent) → files[]. PR-FILES-2: file
+    // metadata lives on the children; this listing's `sourceRowId` is
+    // the PARENT id, so we pick the most recent child file's URL for
+    // the signed download. Callers that need per-file granularity
+    // should use the inz-data per-file download endpoint instead.
+    const parent = await this.prisma.visaSupportingDocument.findUnique({
       where: { id: sourceRowId },
       select: {
-        originalFilename: true,
-        mimeType: true,
-        visaApplication: { select: { applicationId: true } },
+        visaApplicationId: true,
+        files: {
+          orderBy: { uploadedAt: 'desc' },
+          take: 1,
+          select: { fileUrl: true, originalFilename: true, mimeType: true },
+        },
       },
     });
-    if (!d) throw new NotFoundException('Document not found on this case.');
+    if (!parent) throw new NotFoundException('Document not found on this case.');
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { id: parent.visaApplicationId },
+      select: { applicationId: true },
+    });
+    if (!visa) throw new NotFoundException('Document not found on this case.');
     const admission = await this.prisma.admissionApplication.findUnique({
-      where: { id: d.visaApplication.applicationId },
+      where: { id: visa.applicationId },
       select: { caseId: true },
     });
     if (!admission || admission.caseId !== caseId) {
       throw new NotFoundException('Document not found on this case.');
     }
-    // Metadata-only — no fileUrl. The download endpoint rejects.
+    const latest = parent.files[0];
+    if (!latest) {
+      // Parent exists but no files yet — caller's download endpoint
+      // rejects with the existing "metadata-only" path.
+      return { fileUrl: null, fileName: '(no file)', mimeType: 'application/octet-stream' };
+    }
     return {
-      fileUrl: null,
-      fileName: d.originalFilename,
-      mimeType: d.mimeType,
+      fileUrl: latest.fileUrl,
+      fileName: latest.originalFilename,
+      mimeType: latest.mimeType,
     };
   }
 

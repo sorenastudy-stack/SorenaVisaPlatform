@@ -2507,21 +2507,22 @@ enum OtherEvidenceType {
 // UNIQUE (visaApplicationId, documentType): enforces one row per
 // type per application — replace-on-upload (service deletes the
 // existing row by composite key before inserting the new one).
+// PR-FILES-2 — represents a per-application requirement of this
+// documentType. Files live in the visa_supporting_document_files
+// child. The UNIQUE(visaApplicationId, documentType) survives — still
+// one requirement per type per application. fulfilmentMessages
+// continues to point at the parent (fulfilling a doc request means
+// "you've provided >=1 file for this type", not "you provided THIS
+// specific file"), so pre-existing CaseMessage FKs keep working.
 model VisaSupportingDocument {
   id                 String                     @id @default(cuid())
   visaApplicationId  String
   documentType       VisaSupportingDocumentType
-  originalFilename   String
-  mimeType           String
-  sizeBytes          Int
-  // PR-FILES-1 — populated once the uploaded file lands on disk.
-  // Nullable because metadata rows can exist before the bytes do.
-  fileUrl            String?
-  uploadedAt         DateTime                   @default(now())
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
 
   visaApplication    VisaApplication            @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  files              VisaSupportingDocumentFile[]
   // PR-LIA-4: CaseMessage DOCUMENT_REQUEST rows that the client
   // fulfilled by linking THIS supporting-document row.
   fulfilmentMessages CaseMessage[]              @relation("CaseMessageFulfilment")
@@ -2531,32 +2532,61 @@ model VisaSupportingDocument {
   @@map("visa_supporting_documents")
 }
 
-// Step 14 (PR-VISA14) — repeating "Other evidence" entries. Multiple
-// rows allowed per application (unlike visa_supporting_documents
-// which is keyed UNIQUE on (visaApplicationId, documentType)).
-// customLabelEncrypted is required when evidenceType = OTHER —
-// service validates, encrypts at the boundary, decrypts on read.
-// File storage is deferred: only originalFilename / mimeType /
-// sizeBytes are stored; bytes never reach the backend.
+// PR-FILES-2 — per-entry classification (evidenceType + optional
+// encrypted label). Files move to visa_other_evidence_entry_files.
 model VisaOtherEvidenceEntry {
   id                    String            @id @default(cuid())
   visaApplicationId     String
   evidenceType          OtherEvidenceType
   customLabelEncrypted  Bytes?
-  originalFilename      String
-  mimeType              String
-  sizeBytes             Int
-  // PR-FILES-1 — populated once the uploaded file lands on disk.
-  // Nullable because metadata rows can exist before the bytes do.
-  fileUrl               String?
-  uploadedAt            DateTime          @default(now())
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
   visaApplication       VisaApplication   @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  files                 VisaOtherEvidenceFile[]
 
   @@index([visaApplicationId])
   @@map("visa_other_evidence_entries")
+}
+
+// PR-FILES-2 — one row per uploaded file under a parent requirement.
+// fileUrl is NOT NULL: a row in this table only exists when the bytes
+// are on disk. createdAt is identical to uploadedAt for any row this
+// service produces, but kept separate so a future audit/restore flow
+// can distinguish "when did the file land in storage" from "when was
+// this row written".
+model VisaSupportingDocumentFile {
+  id                       String   @id @default(cuid())
+  visaSupportingDocumentId String
+  originalFilename         String
+  mimeType                 String
+  sizeBytes                Int
+  fileUrl                  String
+  uploadedAt               DateTime @default(now())
+  createdAt                DateTime @default(now())
+
+  document                 VisaSupportingDocument @relation(fields: [visaSupportingDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([visaSupportingDocumentId])
+  @@map("visa_supporting_document_files")
+}
+
+// PR-FILES-2 — one row per uploaded file under an other-evidence
+// entry. Same shape as VisaSupportingDocumentFile.
+model VisaOtherEvidenceFile {
+  id                       String   @id @default(cuid())
+  visaOtherEvidenceEntryId String
+  originalFilename         String
+  mimeType                 String
+  sizeBytes                Int
+  fileUrl                  String
+  uploadedAt               DateTime @default(now())
+  createdAt                DateTime @default(now())
+
+  entry                    VisaOtherEvidenceEntry @relation(fields: [visaOtherEvidenceEntryId], references: [id], onDelete: Cascade)
+
+  @@index([visaOtherEvidenceEntryId])
+  @@map("visa_other_evidence_entry_files")
 }
 
 // PR-DASH-1 — Client-dashboard workflow status.

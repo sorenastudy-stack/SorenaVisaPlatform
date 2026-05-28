@@ -2477,14 +2477,17 @@ export class VisaService {
     return this.getImmigrationAssistance(userId);
   }
 
-  // ── Step 13 — Supporting documents page 1 (PR-VISA13) ───────────────
-  // File storage is deferred to a later PR. The backend stores only
-  // metadata rows (originalFilename / mimeType / sizeBytes /
-  // uploadedAt); the bytes never reach us. Replace-on-upload by
-  // (visaApplicationId, documentType) — the UNIQUE constraint on
-  // that pair makes the delete-then-insert pattern safe.
+  // ── Step 13 — Supporting documents page 1 ──────────────────────────
+  //
+  // PR-FILES-2 — each visa_supporting_documents row is a REQUIREMENT
+  // (one per documentType per application, UNIQUE-constrained). Files
+  // live in the visa_supporting_document_files child; a parent can
+  // hold many child files. Uploads add a child row, never replace.
+  // The legacy PUT .../metadata endpoint is gone — uploads always
+  // carry bytes now.
 
   // GET /students/me/visa/supporting-documents
+  // Returns each parent requirement with its files[] array.
   async getSupportingDocuments(userId: string) {
     const { admission } = await this.resolveAdmissionApplication(userId);
     const visa = await this.prisma.visaApplication.findUnique({
@@ -2497,23 +2500,31 @@ export class VisaService {
     }
     const documents = await this.prisma.visaSupportingDocument.findMany({
       where: { visaApplicationId: visa.id },
-      orderBy: { uploadedAt: 'asc' },
+      include: {
+        files: {
+          orderBy: { uploadedAt: 'asc' },
+          select: {
+            id: true,
+            originalFilename: true,
+            mimeType: true,
+            sizeBytes: true,
+            uploadedAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
     });
     return {
       livingInDifferentCountry: visa.livingInDifferentCountry,
       countryOfResidence:       this.decryptOrNull(visa.countryOfResidenceEncrypted),
       areAllDocsInEnglish:      visa.areAllDocsInEnglish,
       documents: documents.map((d) => ({
-        documentType:     d.documentType,
-        originalFilename: d.originalFilename,
-        mimeType:         d.mimeType,
-        sizeBytes:        d.sizeBytes,
-        uploadedAt:       d.uploadedAt,
-        // PR-FILES-1 — boolean presence flag so the student UI can
-        // decide whether to render the Download button. Raw fileUrl
-        // stays server-side; it's minted into a signed URL only on
-        // an explicit GET .../download call.
-        hasFile:          !!d.fileUrl,
+        id:           d.id,
+        documentType: d.documentType,
+        // PR-FILES-2 — each parent now exposes its children. The raw
+        // fileUrl never leaves the backend; downloads use the per-file
+        // signed-URL endpoint and pass a child file id.
+        files: d.files,
       })),
     };
   }
@@ -2602,52 +2613,14 @@ export class VisaService {
     return this.getSupportingDocuments(userId);
   }
 
-  // PUT /students/me/visa/supporting-documents/metadata
-  // Replace-on-upload one metadata row. Single transaction:
-  // deleteMany by composite key, then create. The UNIQUE constraint
-  // protects against any race, but the delete-then-insert pattern
-  // matches Step 10 / 11 / 12 style. File bytes are NEVER stored.
-  async upsertSupportingDocumentMetadata(
-    userId: string,
-    body: {
-      documentType:
-        | 'PASSPORT' | 'NATIONAL_ID' | 'RESIDENCE_VISA'
-        | 'MILITARY_RECORD' | 'TRAVEL_HISTORY' | 'AUTHORITY_DOC';
-      originalFilename: string;
-      mimeType: string;
-      sizeBytes: number;
-    },
-  ) {
-    const { admission } = await this.resolveAdmissionApplication(userId);
-    const visa = await this.prisma.visaApplication.findUnique({
-      where: { applicationId: admission.id },
-    });
-    if (!visa) {
-      throw new NotFoundException(
-        'Visa application not found. Save Step 1 first to create it.',
-      );
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.visaSupportingDocument.deleteMany({
-        where: { visaApplicationId: visa.id, documentType: body.documentType },
-      });
-      await tx.visaSupportingDocument.create({
-        data: {
-          visaApplicationId: visa.id,
-          documentType:      body.documentType,
-          originalFilename:  body.originalFilename,
-          mimeType:          body.mimeType,
-          sizeBytes:         body.sizeBytes,
-        },
-      });
-    });
-
-    return this.getSupportingDocuments(userId);
-  }
-
   // DELETE /students/me/visa/supporting-documents/metadata/:documentType
-  async deleteSupportingDocumentMetadata(
+  // PR-FILES-2 — "clear the entire requirement". Drops the parent row,
+  // which cascades to every child file on disk (the FK is
+  // ON DELETE CASCADE in Postgres + best-effort fs.unlink per child
+  // below so we don't leak bytes). The route path keeps the legacy
+  // ".../metadata/" segment to avoid a frontend churn in this step;
+  // the frontend will be repointed in PR-FILES-2 step 3.
+  async deleteSupportingDocumentRequirement(
     userId: string,
     documentType:
       | 'PASSPORT' | 'NATIONAL_ID' | 'RESIDENCE_VISA'
@@ -2662,9 +2635,50 @@ export class VisaService {
         'Visa application not found. Save Step 1 first to create it.',
       );
     }
-    await this.prisma.visaSupportingDocument.deleteMany({
+    const parent = await this.prisma.visaSupportingDocument.findFirst({
       where: { visaApplicationId: visa.id, documentType },
+      include: { files: { select: { id: true, fileUrl: true, originalFilename: true } } },
     });
+    if (!parent) {
+      // Nothing to clear — return the current state idempotently.
+      return this.getSupportingDocuments(userId);
+    }
+
+    // Snapshot before delete so the audit log can record what was wiped.
+    const removedFiles = parent.files.map((f) => ({
+      id:               f.id,
+      originalFilename: f.originalFilename,
+      fileUrl:          f.fileUrl,
+    }));
+
+    await this.prisma.visaSupportingDocument.delete({ where: { id: parent.id } });
+
+    // Best-effort cleanup of bytes on disk. The DB cascade already
+    // removed the child rows; this just keeps the uploads dir tidy.
+    for (const f of removedFiles) {
+      try {
+        await fs.promises.unlink(path.resolve(f.fileUrl));
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          console.warn(`Failed to unlink visa supporting file ${f.fileUrl}`, err);
+        }
+      }
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'VISA_DOC_REQUIREMENT_CLEARED',
+        entityType: 'VisaSupportingDocument',
+        entityId: parent.id,
+        oldValue: {
+          documentType,
+          visaApplicationId: visa.id,
+          removedFiles: removedFiles.map((f) => ({ id: f.id, fileName: f.originalFilename })),
+        },
+      },
+    });
+
     return this.getSupportingDocuments(userId);
   }
 
@@ -2677,30 +2691,28 @@ export class VisaService {
   // dependent metadata rows in the same transaction so stale data
   // can't linger.
 
+  // PR-FILES-2 — each entry is a classification (evidenceType +
+  // optional customLabel) and carries its own files[] array; the
+  // entry's own row no longer has file metadata.
   private serializeOtherEvidence(r: {
     id: string;
     evidenceType:
       | 'COVER_LETTER' | 'STATEMENT_OF_PURPOSE'
       | 'ADDITIONAL_FUNDS_EVIDENCE' | 'FAMILY_TIES_EVIDENCE' | 'OTHER';
     customLabelEncrypted: Buffer | Uint8Array | null;
-    originalFilename: string;
-    mimeType: string;
-    sizeBytes: number;
-    uploadedAt: Date;
-    // PR-FILES-1: included so the response can expose `hasFile` to
-    // the student UI without leaking the raw path.
-    fileUrl: string | null;
+    files: Array<{
+      id: string;
+      originalFilename: string;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt: Date;
+    }>;
   }) {
     return {
-      id:               r.id,
-      evidenceType:     r.evidenceType,
-      customLabel:      this.decryptOrNull(r.customLabelEncrypted),
-      originalFilename: r.originalFilename,
-      mimeType:         r.mimeType,
-      sizeBytes:        r.sizeBytes,
-      uploadedAt:       r.uploadedAt,
-      // PR-FILES-1 — see comment in getSupportingDocuments above.
-      hasFile:          !!r.fileUrl,
+      id:           r.id,
+      evidenceType: r.evidenceType,
+      customLabel:  this.decryptOrNull(r.customLabelEncrypted),
+      files:        r.files,
     };
   }
 
@@ -2717,7 +2729,19 @@ export class VisaService {
     }
     const otherEvidence = await this.prisma.visaOtherEvidenceEntry.findMany({
       where: { visaApplicationId: visa.id },
-      orderBy: { uploadedAt: 'asc' },
+      include: {
+        files: {
+          orderBy: { uploadedAt: 'asc' },
+          select: {
+            id: true,
+            originalFilename: true,
+            mimeType: true,
+            sizeBytes: true,
+            uploadedAt: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
     });
     return {
       tuitionFeesPaid:                 visa.tuitionFeesPaid,
@@ -2968,9 +2992,10 @@ export class VisaService {
   }
 
   // PUT /students/me/visa/supporting-documents-2/other-evidence
-  // Create-or-update by optional id. customLabel required iff
-  // evidenceType = OTHER (encrypted at the boundary). File metadata
-  // follows the PR-13 pattern; bytes never reach us.
+  // PR-FILES-2 — entries are now PURE classifications (evidenceType +
+  // optional encrypted customLabel). Files attach via the separate
+  // POST .../other-evidence/:entryId/file endpoint. customLabel is
+  // required iff evidenceType = OTHER (encrypted at the boundary).
   async upsertOtherEvidenceEntry(
     userId: string,
     body: {
@@ -2979,9 +3004,6 @@ export class VisaService {
         | 'COVER_LETTER' | 'STATEMENT_OF_PURPOSE'
         | 'ADDITIONAL_FUNDS_EVIDENCE' | 'FAMILY_TIES_EVIDENCE' | 'OTHER';
       customLabel?: string | null;
-      originalFilename: string;
-      mimeType: string;
-      sizeBytes: number;
     },
   ) {
     const { admission } = await this.resolveAdmissionApplication(userId);
@@ -3013,29 +3035,20 @@ export class VisaService {
       if (!existing || existing.visaApplicationId !== visa.id) {
         throw new ForbiddenException('Entry does not belong to this application');
       }
-      const updateData: Record<string, unknown> = {
-        evidenceType:         body.evidenceType,
-        customLabelEncrypted,
-        originalFilename:     body.originalFilename,
-        mimeType:             body.mimeType,
-        sizeBytes:            body.sizeBytes,
-        uploadedAt:           new Date(),
-      };
       await this.prisma.visaOtherEvidenceEntry.update({
         where: { id: body.id },
-        data: updateData as never,
+        data: {
+          evidenceType:         body.evidenceType,
+          customLabelEncrypted: customLabelEncrypted as never,
+        },
       });
     } else {
-      const createData: Record<string, unknown> = {
-        visaApplicationId:    visa.id,
-        evidenceType:         body.evidenceType,
-        customLabelEncrypted,
-        originalFilename:     body.originalFilename,
-        mimeType:             body.mimeType,
-        sizeBytes:            body.sizeBytes,
-      };
       await this.prisma.visaOtherEvidenceEntry.create({
-        data: createData as never,
+        data: {
+          visaApplicationId:    visa.id,
+          evidenceType:         body.evidenceType,
+          customLabelEncrypted: customLabelEncrypted as never,
+        },
       });
     }
 
@@ -3063,23 +3076,21 @@ export class VisaService {
     return this.getSupportingDocuments2(userId);
   }
 
-  // ── PR-FILES-1: file upload + download for visa documents ──────────
+  // ── PR-FILES-2: per-file upload / download / delete ───────────────
   //
-  // Mirrors admission.service.uploadDocument / getDownloadUrl. Owner-
-  // only access (layer 2) flows from resolveAdmissionApplication — it
-  // resolves contact → lead → case → admission strictly through the
-  // JWT's userId, so a caller can only ever touch their own visa row.
-  // Audit (layer 6) is written on every successful upload + download.
-  // The multer config in visa.controller.ts is the layer-7 boundary
-  // (size cap, MIME allowlist, random filename); downloads return a
-  // signed URL with a 5-min TTL via files/signed/:token.
+  // Uploads ADD a child file row under a parent requirement (or other-
+  // evidence entry) — never replace. Deletes operate on a single child
+  // file id and leave the parent row intact (it represents the
+  // requirement). Downloads materialise a 5-min signed URL pointing at
+  // /files/signed/:token. Owner-only (layer 2) flows from
+  // resolveAdmissionApplication, audit (layer 6) is written on every
+  // successful mutation/download, layer-7 input limits live in the
+  // multer config in visa.controller.ts.
 
   // POST /students/me/visa/supporting-documents/:documentType/file
-  // Replace-on-upload, keyed on the existing
-  // UNIQUE(visaApplicationId, documentType). If an old file is on
-  // disk it is unlinked after the new row is committed (best-effort —
-  // an ENOENT is logged, not raised, so a missing old file never
-  // blocks the new upload).
+  // Find-or-create the parent (visaApplicationId, documentType), then
+  // INSERT a new child file. Multiple uploads under the same type
+  // produce multiple child rows.
   async uploadSupportingDocumentFile(
     userId: string,
     documentType:
@@ -3097,13 +3108,6 @@ export class VisaService {
       );
     }
 
-    // Capture the existing fileUrl (if any) BEFORE we overwrite the
-    // row so we can clean up the orphaned file on disk afterwards.
-    const existing = await this.prisma.visaSupportingDocument.findFirst({
-      where: { visaApplicationId: visa.id, documentType },
-    });
-    const oldFileUrl = existing?.fileUrl ?? null;
-
     // Move pending → final dir. The pending sweep in main.ts deletes
     // anything left behind in PENDING_DIR older than 1 h, so a crash
     // between multer write and this rename self-heals.
@@ -3112,47 +3116,45 @@ export class VisaService {
     const destPath = path.join(destDir, path.basename(file.path));
     await fs.promises.rename(file.path, destPath);
 
-    // Replace-on-upload via the existing delete-then-insert pattern
-    // used elsewhere in this service. Returns the new row so the
-    // audit log can use a stable entityId.
-    const newRow = await this.prisma.$transaction(async (tx) => {
-      await tx.visaSupportingDocument.deleteMany({
+    // Find-or-create the parent requirement. The UNIQUE constraint on
+    // (visaApplicationId, documentType) means a concurrent create
+    // would error — wrapped in a single transaction so the find-then-
+    // create is atomic for the purposes of any subsequent child write
+    // in this request. The race window for two near-simultaneous
+    // uploads on the same type is still narrow but tolerable: the
+    // second one would just retry or be handled by the unique catch.
+    const { parentId, childFile } = await this.prisma.$transaction(async (tx) => {
+      let parent = await tx.visaSupportingDocument.findFirst({
         where: { visaApplicationId: visa.id, documentType },
+        select: { id: true },
       });
-      return tx.visaSupportingDocument.create({
+      if (!parent) {
+        parent = await tx.visaSupportingDocument.create({
+          data: { visaApplicationId: visa.id, documentType },
+          select: { id: true },
+        });
+      }
+      const child = await tx.visaSupportingDocumentFile.create({
         data: {
-          visaApplicationId: visa.id,
-          documentType,
-          originalFilename: file.originalname,
-          mimeType:         file.mimetype,
-          sizeBytes:        file.size,
-          fileUrl:          destPath,
+          visaSupportingDocumentId: parent.id,
+          originalFilename:         file.originalname,
+          mimeType:                 file.mimetype,
+          sizeBytes:                file.size,
+          fileUrl:                  destPath,
         },
       });
+      return { parentId: parent.id, childFile: child };
     });
-
-    // Best-effort cleanup of the displaced file. Same pattern as
-    // admission.service.deleteDocument — ENOENT is downgraded to a
-    // warn because the row is what matters; an orphan on disk only
-    // wastes a few kilobytes.
-    if (oldFileUrl) {
-      try {
-        await fs.promises.unlink(path.resolve(oldFileUrl));
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') {
-          console.warn(`Failed to remove displaced visa doc file: ${oldFileUrl}`, err);
-        }
-      }
-    }
 
     await this.prisma.auditLog.create({
       data: {
         userId,
         action: 'VISA_DOC_UPLOADED',
-        entityType: 'VisaSupportingDocument',
-        entityId: newRow.id,
+        entityType: 'VisaSupportingDocumentFile',
+        entityId: childFile.id,
         newValue: {
           documentType,
+          parentId,
           fileName:          file.originalname,
           sizeBytes:         file.size,
           visaApplicationId: visa.id,
@@ -3163,15 +3165,12 @@ export class VisaService {
     return this.getSupportingDocuments(userId);
   }
 
-  // GET /students/me/visa/supporting-documents/:documentType/download
-  // Returns a signed URL with a 5-min TTL. 404 when no row exists or
-  // when the row exists but has no file attached yet (metadata-only).
-  async getSupportingDocumentDownloadUrl(
-    userId: string,
-    documentType:
-      | 'PASSPORT' | 'NATIONAL_ID' | 'RESIDENCE_VISA'
-      | 'MILITARY_RECORD' | 'TRAVEL_HISTORY' | 'AUTHORITY_DOC',
-  ) {
+  // DELETE /students/me/visa/supporting-documents/files/:fileId
+  // Delete a single child file row and its bytes from disk. The
+  // parent requirement is left intact even if it ends up with zero
+  // files (the requirement itself is what the LIA may still need
+  // recorded; per-file delete is not a requirement-clearing op).
+  async deleteSupportingDocumentFile(userId: string, fileId: string) {
     const { admission } = await this.resolveAdmissionApplication(userId);
     const visa = await this.prisma.visaApplication.findUnique({
       where: { applicationId: admission.id },
@@ -3182,31 +3181,83 @@ export class VisaService {
       );
     }
 
-    const row = await this.prisma.visaSupportingDocument.findFirst({
-      where: { visaApplicationId: visa.id, documentType },
+    // Ownership: file → parent.visaApplicationId must equal visa.id.
+    // Mismatched / unknown ids return 404 (not 403) so the existence
+    // of files on other applications never leaks.
+    const file = await this.prisma.visaSupportingDocumentFile.findUnique({
+      where: { id: fileId },
+      include: { document: { select: { id: true, documentType: true, visaApplicationId: true } } },
     });
-    if (!row) {
-      throw new NotFoundException('Document not found');
+    if (!file || file.document.visaApplicationId !== visa.id) {
+      throw new NotFoundException('File not found');
     }
-    if (!row.fileUrl) {
-      throw new NotFoundException('No file uploaded for this document yet');
+
+    await this.prisma.visaSupportingDocumentFile.delete({ where: { id: fileId } });
+
+    try {
+      await fs.promises.unlink(path.resolve(file.fileUrl));
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        console.warn(`Failed to unlink visa supporting file ${file.fileUrl}`, err);
+      }
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'VISA_DOC_DELETED',
+        entityType: 'VisaSupportingDocumentFile',
+        entityId: fileId,
+        oldValue: {
+          documentType:      file.document.documentType,
+          parentId:          file.document.id,
+          fileName:          file.originalFilename,
+          visaApplicationId: visa.id,
+        },
+      },
+    });
+
+    return this.getSupportingDocuments(userId);
+  }
+
+  // GET /students/me/visa/supporting-documents/files/:fileId/download
+  // Mint a signed URL for a single child file. Same owner-scoping +
+  // 404-not-403 rule as delete.
+  async getSupportingDocumentFileDownloadUrl(userId: string, fileId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    const file = await this.prisma.visaSupportingDocumentFile.findUnique({
+      where: { id: fileId },
+      include: { document: { select: { id: true, documentType: true, visaApplicationId: true } } },
+    });
+    if (!file || file.document.visaApplicationId !== visa.id) {
+      throw new NotFoundException('File not found');
     }
 
     const token = createSignedDownloadToken({
-      fileUrl:  row.fileUrl,
-      fileName: row.originalFilename,
-      mimeType: row.mimeType,
+      fileUrl:  file.fileUrl,
+      fileName: file.originalFilename,
+      mimeType: file.mimeType,
     });
 
     await this.prisma.auditLog.create({
       data: {
         userId,
         action: 'VISA_DOC_DOWNLOADED',
-        entityType: 'VisaSupportingDocument',
-        entityId: row.id,
+        entityType: 'VisaSupportingDocumentFile',
+        entityId: file.id,
         newValue: {
-          documentType,
-          fileName:          row.originalFilename,
+          documentType:      file.document.documentType,
+          parentId:          file.document.id,
+          fileName:          file.originalFilename,
           visaApplicationId: visa.id,
         },
       },
@@ -3216,11 +3267,9 @@ export class VisaService {
   }
 
   // POST /students/me/visa/supporting-documents-2/other-evidence/:entryId/file
-  // Replace-on-upload keyed by entry id (no UNIQUE on evidenceType —
-  // the entry must pre-exist via the PUT .../other-evidence metadata
-  // endpoint). Ownership is verified through
-  // existing.visaApplicationId === visa.id.
-  async uploadOtherEvidenceEntryFile(
+  // Add a new child file under an existing other-evidence entry. The
+  // entry must already exist (created via PUT .../other-evidence).
+  async uploadOtherEvidenceFile(
     userId: string,
     entryId: string,
     file: Express.Multer.File,
@@ -3235,48 +3284,38 @@ export class VisaService {
       );
     }
 
-    const existing = await this.prisma.visaOtherEvidenceEntry.findUnique({
+    const entry = await this.prisma.visaOtherEvidenceEntry.findUnique({
       where: { id: entryId },
+      select: { id: true, evidenceType: true, visaApplicationId: true },
     });
-    if (!existing || existing.visaApplicationId !== visa.id) {
-      throw new ForbiddenException('Entry does not belong to this application');
+    if (!entry || entry.visaApplicationId !== visa.id) {
+      throw new NotFoundException('Entry not found');
     }
-    const oldFileUrl = existing.fileUrl ?? null;
 
     const destDir = path.join(UPLOAD_DIR, 'visa-other-evidence', visa.id);
     await fs.promises.mkdir(destDir, { recursive: true });
     const destPath = path.join(destDir, path.basename(file.path));
     await fs.promises.rename(file.path, destPath);
 
-    await this.prisma.visaOtherEvidenceEntry.update({
-      where: { id: entryId },
+    const childFile = await this.prisma.visaOtherEvidenceFile.create({
       data: {
-        originalFilename: file.originalname,
-        mimeType:         file.mimetype,
-        sizeBytes:        file.size,
-        fileUrl:          destPath,
-        uploadedAt:       new Date(),
+        visaOtherEvidenceEntryId: entry.id,
+        originalFilename:         file.originalname,
+        mimeType:                 file.mimetype,
+        sizeBytes:                file.size,
+        fileUrl:                  destPath,
       },
     });
-
-    if (oldFileUrl) {
-      try {
-        await fs.promises.unlink(path.resolve(oldFileUrl));
-      } catch (err: any) {
-        if (err.code !== 'ENOENT') {
-          console.warn(`Failed to remove displaced visa other-evidence file: ${oldFileUrl}`, err);
-        }
-      }
-    }
 
     await this.prisma.auditLog.create({
       data: {
         userId,
         action: 'VISA_DOC_UPLOADED',
-        entityType: 'VisaOtherEvidenceEntry',
-        entityId: entryId,
+        entityType: 'VisaOtherEvidenceFile',
+        entityId: childFile.id,
         newValue: {
-          evidenceType:      existing.evidenceType,
+          evidenceType:      entry.evidenceType,
+          entryId:           entry.id,
           fileName:          file.originalname,
           sizeBytes:         file.size,
           visaApplicationId: visa.id,
@@ -3287,8 +3326,8 @@ export class VisaService {
     return this.getSupportingDocuments2(userId);
   }
 
-  // GET /students/me/visa/supporting-documents-2/other-evidence/:entryId/download
-  async getOtherEvidenceEntryDownloadUrl(userId: string, entryId: string) {
+  // DELETE /students/me/visa/supporting-documents-2/other-evidence/files/:fileId
+  async deleteOtherEvidenceFile(userId: string, fileId: string) {
     const { admission } = await this.resolveAdmissionApplication(userId);
     const visa = await this.prisma.visaApplication.findUnique({
       where: { applicationId: admission.id },
@@ -3299,31 +3338,78 @@ export class VisaService {
       );
     }
 
-    const row = await this.prisma.visaOtherEvidenceEntry.findUnique({
-      where: { id: entryId },
+    const file = await this.prisma.visaOtherEvidenceFile.findUnique({
+      where: { id: fileId },
+      include: { entry: { select: { id: true, evidenceType: true, visaApplicationId: true } } },
     });
-    if (!row || row.visaApplicationId !== visa.id) {
-      throw new ForbiddenException('Entry does not belong to this application');
+    if (!file || file.entry.visaApplicationId !== visa.id) {
+      throw new NotFoundException('File not found');
     }
-    if (!row.fileUrl) {
-      throw new NotFoundException('No file uploaded for this entry yet');
+
+    await this.prisma.visaOtherEvidenceFile.delete({ where: { id: fileId } });
+
+    try {
+      await fs.promises.unlink(path.resolve(file.fileUrl));
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') {
+        console.warn(`Failed to unlink visa other-evidence file ${file.fileUrl}`, err);
+      }
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'VISA_DOC_DELETED',
+        entityType: 'VisaOtherEvidenceFile',
+        entityId: fileId,
+        oldValue: {
+          evidenceType:      file.entry.evidenceType,
+          entryId:           file.entry.id,
+          fileName:          file.originalFilename,
+          visaApplicationId: visa.id,
+        },
+      },
+    });
+
+    return this.getSupportingDocuments2(userId);
+  }
+
+  // GET /students/me/visa/supporting-documents-2/other-evidence/files/:fileId/download
+  async getOtherEvidenceFileDownloadUrl(userId: string, fileId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    const file = await this.prisma.visaOtherEvidenceFile.findUnique({
+      where: { id: fileId },
+      include: { entry: { select: { id: true, evidenceType: true, visaApplicationId: true } } },
+    });
+    if (!file || file.entry.visaApplicationId !== visa.id) {
+      throw new NotFoundException('File not found');
     }
 
     const token = createSignedDownloadToken({
-      fileUrl:  row.fileUrl,
-      fileName: row.originalFilename,
-      mimeType: row.mimeType,
+      fileUrl:  file.fileUrl,
+      fileName: file.originalFilename,
+      mimeType: file.mimeType,
     });
 
     await this.prisma.auditLog.create({
       data: {
         userId,
         action: 'VISA_DOC_DOWNLOADED',
-        entityType: 'VisaOtherEvidenceEntry',
-        entityId: row.id,
+        entityType: 'VisaOtherEvidenceFile',
+        entityId: file.id,
         newValue: {
-          evidenceType:      row.evidenceType,
-          fileName:          row.originalFilename,
+          evidenceType:      file.entry.evidenceType,
+          entryId:           file.entry.id,
+          fileName:          file.originalFilename,
           visaApplicationId: visa.id,
         },
       },

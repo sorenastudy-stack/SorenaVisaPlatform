@@ -60,28 +60,31 @@ export class InzDataController {
   // supporting doc id and an other-evidence entry id are separate
   // tables and shouldn't share a single dispatcher path).
 
-  @Get(':caseId/visa-documents/supporting/:docId/download-url')
-  downloadSupportingDoc(
+  // PR-FILES-2 — the path params are CHILD FILE ids, not parent ids.
+  // The service walks file → parent → visaApplication → admission →
+  // case and 404s on mismatched ownership.
+  @Get(':caseId/visa-documents/supporting/:fileId/download-url')
+  downloadSupportingDocFile(
     @Param('caseId') caseId: string,
-    @Param('docId') docId: string,
+    @Param('fileId') fileId: string,
     @Req() req: any,
   ) {
     return this.service.createVisaSupportingDocDownloadUrl(
       caseId,
-      docId,
+      fileId,
       this.actor(req),
     );
   }
 
-  @Get(':caseId/visa-documents/other-evidence/:entryId/download-url')
-  downloadOtherEvidence(
+  @Get(':caseId/visa-documents/other-evidence/:fileId/download-url')
+  downloadOtherEvidenceFile(
     @Param('caseId') caseId: string,
-    @Param('entryId') entryId: string,
+    @Param('fileId') fileId: string,
     @Req() req: any,
   ) {
     return this.service.createVisaOtherEvidenceDownloadUrl(
       caseId,
-      entryId,
+      fileId,
       this.actor(req),
     );
   }

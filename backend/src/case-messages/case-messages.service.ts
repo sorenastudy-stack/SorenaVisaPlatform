@@ -155,12 +155,25 @@ export class CaseMessagesService {
     // ("pick the simpler one") — the client picked it, the LIA can
     // reject in-thread if they wanted something else.
     const visaAppIds = await this.resolveVisaApplicationIdsForCase(caseId);
+    // PR-FILES-2: parent VisaSupportingDocument is the "fulfilment
+    // target" (fulfilling a doc request = "you've provided >=1 file
+    // for this type"); the parent's latest child file is what we use
+    // for the human-readable note text below.
     const file = await this.prisma.visaSupportingDocument.findUnique({
       where: { id: dto.fileId },
+      include: {
+        files: {
+          orderBy: { uploadedAt: 'desc' },
+          take: 1,
+          select: { id: true, originalFilename: true },
+        },
+      },
     });
     if (!file || !visaAppIds.includes(file.visaApplicationId)) {
       throw new ForbiddenException('That file does not belong to your case.');
     }
+    const fulfilmentFileName =
+      file.files[0]?.originalFilename ?? `${file.documentType}`;
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.caseMessage.update({
@@ -182,13 +195,13 @@ export class CaseMessagesService {
           fileId: file.id,
           documentType: file.documentType,
         },
-        noteSummary: `Client fulfilled document request "${msg.requestedDocType ?? ''}" with ${file.originalFilename}`,
+        noteSummary: `Client fulfilled document request "${msg.requestedDocType ?? ''}" with ${fulfilmentFileName}`,
         noteType: 'TICKET',
       });
       return this.shapeMessage(
         updated,
         actor,
-        file ? file.originalFilename : null,
+        fulfilmentFileName,
       );
     });
   }
@@ -271,14 +284,29 @@ export class CaseMessagesService {
       orderBy: { createdAt: 'asc' },
       include: {
         author: { select: { id: true, name: true } },
-        fulfilledByFile: { select: { id: true, originalFilename: true } },
+        // PR-FILES-2: fulfilledByFile is the parent VisaSupportingDocument
+        // (the requirement); its latest child file's name surfaces as
+        // the displayed "fulfilled with" label.
+        fulfilledByFile: {
+          select: {
+            id: true,
+            documentType: true,
+            files: {
+              orderBy: { uploadedAt: 'desc' },
+              take: 1,
+              select: { originalFilename: true },
+            },
+          },
+        },
       },
     });
     return rows.map((r) =>
       this.shapeMessage(
         r,
         { id: r.author.id, name: r.author?.name ?? null },
-        r.fulfilledByFile?.originalFilename ?? null,
+        r.fulfilledByFile
+          ? (r.fulfilledByFile.files[0]?.originalFilename ?? `${r.fulfilledByFile.documentType}`)
+          : null,
       ),
     );
   }
