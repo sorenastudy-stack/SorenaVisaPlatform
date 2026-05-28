@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   CreditCard, ArrowLeft, User, Calendar, MapPin, Phone, Mail, ExternalLink, Code2,
@@ -55,8 +55,8 @@ const STATUS_COLOR: Record<WixPaymentDetail['status'], string> = {
 
 export default function WixPaymentDetailPage({
   params,
-}: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+}: { params: { id: string } }) {
+  const { id } = params;
   const [row, setRow] = useState<WixPaymentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

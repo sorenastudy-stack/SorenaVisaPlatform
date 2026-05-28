@@ -33,7 +33,7 @@ export function drawHeader(doc: Doc, opts: HeaderOpts = {}): void {
     lineBreak: false,
   });
   // Right — version caption. Measured + placed manually.
-  const rightText = 'Lead Scoring Report · v2.0';
+  const rightText = 'Lead Scoring Report - v2.0';
   doc.fillColor(BRAND.COLORS.PALETTE.WARMGRAY).font(BRAND.FONTS.BODY).fontSize(7.5);
   const w = doc.widthOfString(rightText);
   doc.text(rightText, width - margins.right - w, margins.top - 32, {
@@ -75,10 +75,10 @@ export function drawFooter(doc: Doc, opts: FooterOpts): void {
      .font(BRAND.FONTS.BODY).fontSize(7.5);
 
   const leftText  = opts.variant === 'internal'
-    ? 'Sorena Visa · www.sorenavisa.com'
-    : `Sorena Visa · ${BRAND.SLOGAN}`;
+    ? 'Sorena Visa - www.sorenavisa.com'
+    : `Sorena Visa - ${BRAND.SLOGAN}`;
   const centerText = opts.variant === 'internal'
-    ? `Confidential — Do Not Distribute · Generated ${dateText}`
+    ? `Confidential - Do Not Distribute - Generated ${dateText}`
     : `Generated ${dateText}`;
   const rightText = `Page ${opts.pageNumber} of ${opts.pageCount}`;
 
@@ -236,7 +236,7 @@ export function drawProgressBar(
   if (warn) {
     doc.save();
     doc.fillColor(BRAND.COLORS.WARNING).font(BRAND.FONTS.ITALIC).fontSize(8.5);
-    doc.text(`⚠ Below execution threshold (${warningBelow})`, margins.left, doc.y);
+    doc.text(`! Below execution threshold (${warningBelow})`, margins.left, doc.y);
     doc.restore();
     doc.moveDown(0.2);
   }
@@ -303,7 +303,7 @@ export function drawGateRow(doc: Doc, gate: GateRowShape): void {
   doc.save();
   doc.fillColor(gate.passed ? BRAND.COLORS.SUCCESS : BRAND.COLORS.DANGER)
      .font(BRAND.FONTS.BOLD).fontSize(10);
-  doc.text(gate.passed ? '✓' : '✗', margins.left, doc.y, { lineBreak: false, width: 12 });
+  doc.text(gate.passed ? 'Y' : 'N', margins.left, doc.y, { lineBreak: false, width: 14 });
   doc.fillColor(BRAND.COLORS.PALETTE.NAVY_DEEP).font(BRAND.FONTS.BODY).fontSize(9.5);
   doc.text(gate.label, margins.left + 14, doc.y, { width: contentW - 14 });
   doc.restore();
@@ -351,7 +351,7 @@ export function drawKvRow(
   doc.fillColor(BRAND.COLORS.PALETTE.WARMGRAY).font(BRAND.FONTS.BODY).fontSize(9.5);
   doc.text(label, margins.left, startY, { lineBreak: false, width: labelWidth });
   doc.fillColor(BRAND.COLORS.NAVY).font(BRAND.FONTS.BOLD).fontSize(9.5);
-  doc.text(value || '—', margins.left + labelWidth, startY, {
+  doc.text(value || '-', margins.left + labelWidth, startY, {
     lineBreak: false, width: contentW - labelWidth,
   });
   doc.restore();
@@ -436,7 +436,7 @@ export function drawCoverBand(
 
 export function truncate(s: string, max: number): string {
   if (!s) return '';
-  return s.length <= max ? s : s.slice(0, max - 1) + '…';
+  return s.length <= max ? s : s.slice(0, max - 1) + '...';
 }
 
 export function formatDateOnly(iso: string): string {

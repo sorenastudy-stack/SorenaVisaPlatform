@@ -51,7 +51,7 @@ export function detectHardStops(answers: Record<string, string>): HardStop[] {
       code: 'HS3',
       name: 'Severe English Unreadiness',
       reason: 'English level is below the minimum for any direct-entry programme.',
-      resolution: 'Language school pathway or long-term English nurture. Re-assess in 3–6 months.',
+      resolution: 'Language school pathway or long-term English nurture. Re-assess in 3-6 months.',
     });
   }
 
@@ -92,7 +92,7 @@ export function detectHardStops(answers: Record<string, string>): HardStop[] {
   if (answers.q47_medical === 'Serious / unresolved') {
     hs.push({
       code: 'HS6',
-      name: 'Serious Medical Condition — Manual Review',
+      name: 'Serious Medical Condition - Manual Review',
       reason: 'Self-disclosed serious / unresolved medical condition.',
       resolution: 'LIA / medical assessment required before any application.',
     });

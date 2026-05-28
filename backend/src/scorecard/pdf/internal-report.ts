@@ -166,7 +166,7 @@ export async function renderInternalReport(data: InternalReportData): Promise<Bu
 
     // ─── PAGE 1 — Cover + Headline Result ──────────────────────────
     drawCoverBand(doc, {
-      sublabel:   'LEAD SCORING REPORT · v2.0',
+      sublabel:   'LEAD SCORING REPORT - v2.0',
       headline:   'Assessment Result',
       appliedFor: `For: ${data.applicant.fullName || '(name not provided)'}`,
       dateText:   `Generated: ${formatDateTime(data.applicant.submittedAt)}`,
@@ -210,7 +210,7 @@ export async function renderInternalReport(data: InternalReportData): Promise<Bu
     doc.moveDown(0.3);
     doc.fillColor(BRAND.COLORS.PALETTE.NAVY_DEEP).font(BRAND.FONTS.BODY).fontSize(10);
     doc.text(
-      `Execution eligible: ${data.executionEligible ? 'YES — ready to proceed' : 'NOT YET — see hard stops + gates'}`,
+      `Execution eligible: ${data.executionEligible ? 'YES - ready to proceed' : 'NOT YET - see hard stops + gates'}`,
       doc.page.margins.left, doc.y,
     );
 
@@ -249,7 +249,7 @@ export async function renderInternalReport(data: InternalReportData): Promise<Bu
     }
 
     if (doc.y > doc.page.height - 180) doc.addPage();
-    drawSectionTitle(doc, 'EXECUTION ELIGIBILITY — 5-GATE CHECK');
+    drawSectionTitle(doc, 'EXECUTION ELIGIBILITY - 5-GATE CHECK');
     for (const gate of data.gateResults) {
       drawGateRow(doc, { label: gate.label, passed: gate.passed });
     }
@@ -269,14 +269,14 @@ export async function renderInternalReport(data: InternalReportData): Promise<Bu
       if (doc.y > doc.page.height - 80) doc.addPage();
       drawSubhead(
         doc,
-        `Category ${catId}: ${CATEGORY_NAMES[catId]}  ·  ${data.categoryScores[catId]} / ${CATEGORY_MAX[catId]}`,
+        `Category ${catId}: ${CATEGORY_NAMES[catId]}  -  ${data.categoryScores[catId]} / ${CATEGORY_MAX[catId]}`,
       );
       // Rows.
       const fields = Object.keys(QUESTION_LABELS).filter((q) => FIELD_CATEGORIES[q] === catId);
       for (const fld of fields) {
         const label = QUESTION_LABELS[fld] ?? fld;
-        const ans = data.answers[fld] ?? '—';
-        const pts = data.perFieldScores?.[fld]?.[1] ?? 0;
+        const ans = data.answers[fld] ?? '-';
+        const pts = data.perFieldScores?.[fld]?.points ?? 0;
         if (doc.y > doc.page.height - 70) doc.addPage();
         drawAnswerRow(doc, label, ans, pts);
       }
@@ -288,31 +288,31 @@ export async function renderInternalReport(data: InternalReportData): Promise<Bu
     drawSectionTitle(doc, 'CLIENT CONTACT SUMMARY');
     const a = data.answers;
     drawKvRow(doc, 'Full name',         a.full_name ?? data.applicant.fullName);
-    drawKvRow(doc, 'Email',             a.email ?? data.applicant.email ?? '—');
-    drawKvRow(doc, 'Mobile / WhatsApp', a.mobile ?? data.applicant.phone ?? '—');
-    drawKvRow(doc, 'Date of birth',     a.dob ?? '—');
-    drawKvRow(doc, 'Nationality',       a.nationality ?? '—');
-    drawKvRow(doc, 'Current country',   a.country_resident ?? data.applicant.country ?? '—');
-    drawKvRow(doc, 'Current city',      a.city_resident ?? '—');
+    drawKvRow(doc, 'Email',             a.email ?? data.applicant.email ?? '-');
+    drawKvRow(doc, 'Mobile / WhatsApp', a.mobile ?? data.applicant.phone ?? '-');
+    drawKvRow(doc, 'Date of birth',     a.dob ?? '-');
+    drawKvRow(doc, 'Nationality',       a.nationality ?? '-');
+    drawKvRow(doc, 'Current country',   a.country_resident ?? data.applicant.country ?? '-');
+    drawKvRow(doc, 'Current city',      a.city_resident ?? '-');
     drawDivider(doc);
     drawKvRow(doc, 'Field specialisation',
-      truncate(a.q16b_field_specialisation ?? '—', 80));
+      truncate(a.q16b_field_specialisation ?? '-', 80));
     drawKvRow(doc, 'Countries visited',
-      truncate(a.q14_countries_list ?? '—', 80));
+      truncate(a.q14_countries_list ?? '-', 80));
     drawKvRow(doc, 'Role description',
-      truncate(a.q32b_role_description ?? '—', 80));
+      truncate(a.q32b_role_description ?? '-', 80));
     drawKvRow(doc, 'Refusal countries (if any)',
-      truncate(a.q44b_refusal_countries ?? '—', 80));
+      truncate(a.q44b_refusal_countries ?? '-', 80));
     drawDivider(doc);
-    drawKvRow(doc, 'Source',            a.q53_source ?? '—');
+    drawKvRow(doc, 'Source',            a.q53_source ?? '-');
     drawKvRow(doc, 'Additional notes',
-      truncate(a.q54_notes ?? '—', 80));
+      truncate(a.q54_notes ?? '-', 80));
 
     doc.moveDown(1.5);
     drawSubhead(doc, 'Staff observations');
     doc.fillColor(BRAND.COLORS.PALETTE.WARMGRAY).font(BRAND.FONTS.ITALIC).fontSize(9);
     doc.text(
-      '— Space below for handwritten/staff notes after review —',
+      '- Space below for handwritten/staff notes after review -',
       doc.page.margins.left, doc.y,
     );
     doc.moveDown(0.5);

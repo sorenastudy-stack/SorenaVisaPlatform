@@ -20,9 +20,9 @@ export function checkExecutionGates(
   answers: Record<string, string>,
 ): GateCheck {
   const gates: Record<string, boolean> = {};
-  gates['Gate 1: Total Score ≥ 70'] = total >= 70;
-  gates['Gate 2: Academic & Career ≥ 12'] = (catScores[2] ?? 0) >= 12;
-  gates['Gate 3: Financial & Operational ≥ 12'] = (catScores[3] ?? 0) >= 12;
+  gates['Gate 1: Total Score >= 70'] = total >= 70;
+  gates['Gate 2: Academic & Career >= 12'] = (catScores[2] ?? 0) >= 12;
+  gates['Gate 3: Financial & Operational >= 12'] = (catScores[3] ?? 0) >= 12;
   gates['Gate 4: No Active Hard Stop'] = hardStops.length === 0;
 
   const liaClear = !hardStops.some((h) => h.code === 'HS4');

@@ -110,7 +110,7 @@ export function score(answers: Record<string, string>): ScoreResult {
   } else if (band.number === '4') {
     nextAction = 'Offer free 15-minute session to qualify for Account Opening.';
   } else if (band.number === '1' || band.number === '2') {
-    nextAction = 'Place into nurture sequence. Webinar invitation. Re-assess in 3–6 months.';
+    nextAction = 'Place into nurture sequence. Webinar invitation. Re-assess in 3-6 months.';
   } else {
     nextAction = 'Manual review.';
   }

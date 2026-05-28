@@ -16,7 +16,8 @@
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "backfill:gate-labels": "ts-node scripts/backfill-gate-labels.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

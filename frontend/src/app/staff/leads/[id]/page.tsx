@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Mail, Phone, Globe, Award, ExternalLink, UserCog,
@@ -97,8 +97,8 @@ function relativeDays(iso: string): string {
 
 export default function StaffLeadDetailPage({
   params,
-}: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+}: { params: { id: string } }) {
+  const { id } = params;
 
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
