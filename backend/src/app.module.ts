@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { AcquisitionModule } from './acquisition/acquisition.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { EmailModule } from './email/email.module';
+import { MailModule } from './mail/mail.module';
 import { AuthModule } from './auth/auth.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { LeadsModule } from './leads/leads.module';
@@ -50,6 +51,10 @@ import { WixIntegrationModule } from './wix-integration/wix-integration.module';
       },
     ]),
     PrismaModule,
+    // PR-EMAIL-1 — unified Resend-based mail. @Global, so available
+    // app-wide without re-importing. Coexists with EmailModule +
+    // NotificationsModule until call sites are repointed.
+    MailModule,
     EmailModule,
     AuthModule,
     ContactsModule,
