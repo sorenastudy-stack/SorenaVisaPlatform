@@ -10,11 +10,20 @@ import {
   Post,
   Put,
   Req,
+  UnsupportedMediaTypeException,
+  UseFilters,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { diskStorage } from 'multer';
+import * as fs from 'fs';
+import * as path from 'path';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
+import { MulterExceptionFilter } from '../admission/multer-exception.filter';
 import { VisaService } from './visa.service';
 import { MilitaryHistoryDto } from './dto/military-history.dto';
 import { TravelHistoryDto } from './dto/travel-history.dto';
@@ -28,6 +37,47 @@ import {
   SupportingDocuments2Dto,
   OtherEvidenceEntryDto,
 } from './dto/supporting-documents-2.dto';
+
+// PR-FILES-1 — multer config mirrors the admission upload pattern
+// (admission.controller.ts:39-59). Disk storage lands the file in
+// PENDING_DIR with a random filename; the boot-time pending sweep
+// in main.ts removes any pending file older than 1 h. The 10 MB
+// size cap + PDF / JPEG / PNG allowlist match the DTO-level limits
+// declared in supporting-documents.dto.ts and matches the page-1
+// guidance copy in the UI. Security-layer hooks (see also the
+// service file): layer 7 (size limit + type allowlist + random
+// filename), enforced at the multer boundary so a rejected file
+// never even reaches the service.
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
+const PENDING_DIR = path.join(UPLOAD_DIR, 'pending');
+
+const VISA_ALLOWED_MIMES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+];
+
+const visaMulterOptions = {
+  storage: diskStorage({
+    destination: (_req: any, _file: any, cb: any) => {
+      fs.mkdirSync(PENDING_DIR, { recursive: true });
+      cb(null, PENDING_DIR);
+    },
+    filename: (_req: any, file: any, cb: any) => {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      cb(null, `${unique}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req: any, file: any, cb: any) => {
+    if (VISA_ALLOWED_MIMES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      req.fileTypeRejected = true;
+      cb(null, false);
+    }
+  },
+};
 
 // All endpoints are gated by JwtAuthGuard + RolesGuard. STUDENT and AGENT are
 // the only roles allowed — same scope as AdmissionController. Every method
@@ -394,6 +444,110 @@ export class VisaController {
     @Param('entryId') entryId: string,
   ) {
     return this.visaService.deleteOtherEvidenceEntry(
+      req.user.userId,
+      entryId,
+    );
+  }
+
+  // ── PR-FILES-1: visa supporting-document file storage ──────────────
+  //
+  // These four endpoints upgrade Steps 13 + 14 from metadata-only to
+  // real file storage. They do NOT replace the existing metadata
+  // endpoints above: a row can still be created via PUT metadata first
+  // and then have its file attached via POST .../file later — the
+  // service treats them as compatible. (After Step 14's PUT
+  // .../other-evidence creates an entry, that entry's `id` is the
+  // path param for the matching upload endpoint below.)
+  //
+  // Security layers wired here:
+  //   - layer 2 (auth + role): every route on this controller is
+  //     gated by JwtAuthGuard + RolesGuard + @Roles('STUDENT','AGENT');
+  //     the service resolves the visa application through the JWT's
+  //     userId so a caller can only touch their own row.
+  //   - layer 7 (input): multer config above enforces the 10 MB cap +
+  //     PDF/JPEG/PNG allowlist + random filename. Throttle caps the
+  //     upload rate to match the admission pattern (10 / 60 s).
+  //   - layer 7 (output): downloads return a JWT-signed URL with a
+  //     5-min TTL via the existing /files/signed/:token controller —
+  //     see common/signed-url.util.ts. No raw fileUrl ever leaves
+  //     this process.
+  //   - layer 6 (audit): VISA_DOC_UPLOADED / VISA_DOC_DOWNLOADED rows
+  //     written from the service on every successful call.
+
+  // ── Step 13 supporting documents — file upload + download ──────────
+
+  @Post('supporting-documents/:documentType/file')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @UseFilters(MulterExceptionFilter)
+  @UseInterceptors(FileInterceptor('file', visaMulterOptions))
+  async uploadSupportingDocumentFile(
+    @Req() req: any,
+    @Param('documentType') documentType: VisaSupportingDocumentTypeDto,
+  ) {
+    if (req.fileTypeRejected) {
+      throw new UnsupportedMediaTypeException(
+        'Only PDF, JPEG, and PNG files are accepted.',
+      );
+    }
+    if (!req.file) {
+      throw new UnsupportedMediaTypeException('No file provided.');
+    }
+    return this.visaService.uploadSupportingDocumentFile(
+      req.user.userId,
+      documentType,
+      req.file,
+    );
+  }
+
+  @Get('supporting-documents/:documentType/download')
+  getSupportingDocumentDownloadUrl(
+    @Req() req: any,
+    @Param('documentType') documentType: VisaSupportingDocumentTypeDto,
+  ) {
+    return this.visaService.getSupportingDocumentDownloadUrl(
+      req.user.userId,
+      documentType,
+    );
+  }
+
+  // ── Step 14 other-evidence entries — file upload + download ────────
+  // Keyed by entry id (the row's primary key), not documentType — the
+  // table has no UNIQUE constraint on type because multiple entries
+  // per evidenceType are allowed. The entry must already exist
+  // (created via the PUT .../other-evidence metadata endpoint above)
+  // before its file can be attached.
+
+  @Post('supporting-documents-2/other-evidence/:entryId/file')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @UseFilters(MulterExceptionFilter)
+  @UseInterceptors(FileInterceptor('file', visaMulterOptions))
+  async uploadOtherEvidenceEntryFile(
+    @Req() req: any,
+    @Param('entryId') entryId: string,
+  ) {
+    if (req.fileTypeRejected) {
+      throw new UnsupportedMediaTypeException(
+        'Only PDF, JPEG, and PNG files are accepted.',
+      );
+    }
+    if (!req.file) {
+      throw new UnsupportedMediaTypeException('No file provided.');
+    }
+    return this.visaService.uploadOtherEvidenceEntryFile(
+      req.user.userId,
+      entryId,
+      req.file,
+    );
+  }
+
+  @Get('supporting-documents-2/other-evidence/:entryId/download')
+  getOtherEvidenceEntryDownloadUrl(
+    @Req() req: any,
+    @Param('entryId') entryId: string,
+  ) {
+    return this.visaService.getOtherEvidenceEntryDownloadUrl(
       req.user.userId,
       entryId,
     );

@@ -6,6 +6,7 @@ import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { formatRelative, formatDate } from '../../../_utils/format';
 import { CopyButton } from './CopyButton';
 import { InzSection } from './InzSection';
+import { InzDocDownloadButton } from './InzDocDownloadButton';
 
 // PR-LIA-6 — Consolidated INZ application data viewer for the LIA.
 // Read-only. Every section ships with a copy-to-clipboard button.
@@ -177,6 +178,20 @@ interface InzData {
     mimeType: string;
     sizeBytes: number;
     uploadedAt: string;
+    // PR-FILES-1: indicates the row carries an actual stored file
+    // (vs. metadata-only). The signed URL is fetched on demand by
+    // the download button — it never lands in this payload.
+    hasFile: boolean;
+  }>;
+  otherEvidence: Array<{
+    id: string;
+    evidenceType: string;
+    customLabel: string | null;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+    hasFile: boolean;
   }>;
   completeness: {
     applicant: { filled: number; total: number };
@@ -197,6 +212,7 @@ interface InzData {
     travelHistory: { count: number };
     immigrationAssistance: { filled: boolean };
     supportingDocuments: { count: number };
+    otherEvidence: { count: number };
   };
 }
 
@@ -693,6 +709,45 @@ export default async function InzDataPage({ params }: { params: { id: string } }
                   <span className="font-semibold text-[#1E3A5F] min-w-[10rem]">{d.docType}</span>
                   <span className="text-[#4A4A4A] truncate flex-1 min-w-0" title={d.fileName}>{d.fileName}</span>
                   <span className="text-xs text-[#4A4A4A]/60">{formatDate(d.uploadedAt)}</span>
+                  <InzDocDownloadButton
+                    caseId={params.id}
+                    kind="supporting"
+                    docId={d.id}
+                    fileName={d.fileName}
+                    hasFile={d.hasFile}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+      </InzSection>
+
+      <InzSection
+        title="Other evidence"
+        badge={data.otherEvidence.length === 1 ? '1 entry' : `${data.otherEvidence.length} entries`}
+        badgeTone={data.otherEvidence.length === 0 ? 'gray' : 'emerald'}
+        copyText={serialiseList('Other evidence', data.otherEvidence.map(d => `Type: ${d.evidenceType}${d.customLabel ? ` (${d.customLabel})` : ''}\nFilename: ${d.fileName}\nUploaded: ${formatDate(d.uploadedAt)}`))}
+        defaultOpen={data.otherEvidence.length > 0}
+      >
+        {data.otherEvidence.length === 0
+          ? <EmptyMsg />
+          : (
+            <ul className="space-y-2 text-sm">
+              {data.otherEvidence.map(d => (
+                <li key={d.id} className="flex items-center gap-2 flex-wrap py-1.5 border-b border-gray-100 last:border-b-0">
+                  <span className="font-semibold text-[#1E3A5F] min-w-[10rem]">
+                    {d.evidenceType}
+                    {d.customLabel && <span className="text-[#4A4A4A]/70 font-normal"> ({d.customLabel})</span>}
+                  </span>
+                  <span className="text-[#4A4A4A] truncate flex-1 min-w-0" title={d.fileName}>{d.fileName}</span>
+                  <span className="text-xs text-[#4A4A4A]/60">{formatDate(d.uploadedAt)}</span>
+                  <InzDocDownloadButton
+                    caseId={params.id}
+                    kind="other-evidence"
+                    docId={d.id}
+                    fileName={d.fileName}
+                    hasFile={d.hasFile}
+                  />
                 </li>
               ))}
             </ul>

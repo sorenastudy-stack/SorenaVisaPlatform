@@ -240,9 +240,6 @@ export function Step13SupportingDocuments() {
         <h3 className="text-xl font-bold text-sorena-navy">{t('visaDocsSectionGuidance')}</h3>
       </div>
       <p className="text-sm text-sorena-navy/70">{t('visaDocsGuidanceBody')}</p>
-      <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        {t('visaDocsDeferralNotice')}
-      </div>
 
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">

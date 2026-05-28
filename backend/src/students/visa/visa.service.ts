@@ -4,9 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { decryptPiiFields } from '../admission/admission-encryption.util';
+
+// PR-FILES-1 — same UPLOAD_DIR convention as admission.service.ts:16.
+// Stored fileUrls are the rename target produced by path.join() — the
+// existing files/signed/:token controller path.resolve()'s the value
+// when serving downloads, so a relative path here is safe.
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 
 // PII fields stored encrypted on the row. Each lands in its `<field>Encrypted`
 // BYTEA column via the standard AES-256-GCM envelope.
@@ -2500,6 +2509,11 @@ export class VisaService {
         mimeType:         d.mimeType,
         sizeBytes:        d.sizeBytes,
         uploadedAt:       d.uploadedAt,
+        // PR-FILES-1 — boolean presence flag so the student UI can
+        // decide whether to render the Download button. Raw fileUrl
+        // stays server-side; it's minted into a signed URL only on
+        // an explicit GET .../download call.
+        hasFile:          !!d.fileUrl,
       })),
     };
   }
@@ -2673,6 +2687,9 @@ export class VisaService {
     mimeType: string;
     sizeBytes: number;
     uploadedAt: Date;
+    // PR-FILES-1: included so the response can expose `hasFile` to
+    // the student UI without leaking the raw path.
+    fileUrl: string | null;
   }) {
     return {
       id:               r.id,
@@ -2682,6 +2699,8 @@ export class VisaService {
       mimeType:         r.mimeType,
       sizeBytes:        r.sizeBytes,
       uploadedAt:       r.uploadedAt,
+      // PR-FILES-1 — see comment in getSupportingDocuments above.
+      hasFile:          !!r.fileUrl,
     };
   }
 
@@ -3042,5 +3061,274 @@ export class VisaService {
     }
     await this.prisma.visaOtherEvidenceEntry.delete({ where: { id: entryId } });
     return this.getSupportingDocuments2(userId);
+  }
+
+  // ── PR-FILES-1: file upload + download for visa documents ──────────
+  //
+  // Mirrors admission.service.uploadDocument / getDownloadUrl. Owner-
+  // only access (layer 2) flows from resolveAdmissionApplication — it
+  // resolves contact → lead → case → admission strictly through the
+  // JWT's userId, so a caller can only ever touch their own visa row.
+  // Audit (layer 6) is written on every successful upload + download.
+  // The multer config in visa.controller.ts is the layer-7 boundary
+  // (size cap, MIME allowlist, random filename); downloads return a
+  // signed URL with a 5-min TTL via files/signed/:token.
+
+  // POST /students/me/visa/supporting-documents/:documentType/file
+  // Replace-on-upload, keyed on the existing
+  // UNIQUE(visaApplicationId, documentType). If an old file is on
+  // disk it is unlinked after the new row is committed (best-effort —
+  // an ENOENT is logged, not raised, so a missing old file never
+  // blocks the new upload).
+  async uploadSupportingDocumentFile(
+    userId: string,
+    documentType:
+      | 'PASSPORT' | 'NATIONAL_ID' | 'RESIDENCE_VISA'
+      | 'MILITARY_RECORD' | 'TRAVEL_HISTORY' | 'AUTHORITY_DOC',
+    file: Express.Multer.File,
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    // Capture the existing fileUrl (if any) BEFORE we overwrite the
+    // row so we can clean up the orphaned file on disk afterwards.
+    const existing = await this.prisma.visaSupportingDocument.findFirst({
+      where: { visaApplicationId: visa.id, documentType },
+    });
+    const oldFileUrl = existing?.fileUrl ?? null;
+
+    // Move pending → final dir. The pending sweep in main.ts deletes
+    // anything left behind in PENDING_DIR older than 1 h, so a crash
+    // between multer write and this rename self-heals.
+    const destDir = path.join(UPLOAD_DIR, 'visa-supporting', visa.id);
+    await fs.promises.mkdir(destDir, { recursive: true });
+    const destPath = path.join(destDir, path.basename(file.path));
+    await fs.promises.rename(file.path, destPath);
+
+    // Replace-on-upload via the existing delete-then-insert pattern
+    // used elsewhere in this service. Returns the new row so the
+    // audit log can use a stable entityId.
+    const newRow = await this.prisma.$transaction(async (tx) => {
+      await tx.visaSupportingDocument.deleteMany({
+        where: { visaApplicationId: visa.id, documentType },
+      });
+      return tx.visaSupportingDocument.create({
+        data: {
+          visaApplicationId: visa.id,
+          documentType,
+          originalFilename: file.originalname,
+          mimeType:         file.mimetype,
+          sizeBytes:        file.size,
+          fileUrl:          destPath,
+        },
+      });
+    });
+
+    // Best-effort cleanup of the displaced file. Same pattern as
+    // admission.service.deleteDocument — ENOENT is downgraded to a
+    // warn because the row is what matters; an orphan on disk only
+    // wastes a few kilobytes.
+    if (oldFileUrl) {
+      try {
+        await fs.promises.unlink(path.resolve(oldFileUrl));
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          console.warn(`Failed to remove displaced visa doc file: ${oldFileUrl}`, err);
+        }
+      }
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'VISA_DOC_UPLOADED',
+        entityType: 'VisaSupportingDocument',
+        entityId: newRow.id,
+        newValue: {
+          documentType,
+          fileName:          file.originalname,
+          sizeBytes:         file.size,
+          visaApplicationId: visa.id,
+        },
+      },
+    });
+
+    return this.getSupportingDocuments(userId);
+  }
+
+  // GET /students/me/visa/supporting-documents/:documentType/download
+  // Returns a signed URL with a 5-min TTL. 404 when no row exists or
+  // when the row exists but has no file attached yet (metadata-only).
+  async getSupportingDocumentDownloadUrl(
+    userId: string,
+    documentType:
+      | 'PASSPORT' | 'NATIONAL_ID' | 'RESIDENCE_VISA'
+      | 'MILITARY_RECORD' | 'TRAVEL_HISTORY' | 'AUTHORITY_DOC',
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    const row = await this.prisma.visaSupportingDocument.findFirst({
+      where: { visaApplicationId: visa.id, documentType },
+    });
+    if (!row) {
+      throw new NotFoundException('Document not found');
+    }
+    if (!row.fileUrl) {
+      throw new NotFoundException('No file uploaded for this document yet');
+    }
+
+    const token = createSignedDownloadToken({
+      fileUrl:  row.fileUrl,
+      fileName: row.originalFilename,
+      mimeType: row.mimeType,
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'VISA_DOC_DOWNLOADED',
+        entityType: 'VisaSupportingDocument',
+        entityId: row.id,
+        newValue: {
+          documentType,
+          fileName:          row.originalFilename,
+          visaApplicationId: visa.id,
+        },
+      },
+    });
+
+    return { url: `/files/signed/${token}`, expiresInSeconds: 300 };
+  }
+
+  // POST /students/me/visa/supporting-documents-2/other-evidence/:entryId/file
+  // Replace-on-upload keyed by entry id (no UNIQUE on evidenceType —
+  // the entry must pre-exist via the PUT .../other-evidence metadata
+  // endpoint). Ownership is verified through
+  // existing.visaApplicationId === visa.id.
+  async uploadOtherEvidenceEntryFile(
+    userId: string,
+    entryId: string,
+    file: Express.Multer.File,
+  ) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    const existing = await this.prisma.visaOtherEvidenceEntry.findUnique({
+      where: { id: entryId },
+    });
+    if (!existing || existing.visaApplicationId !== visa.id) {
+      throw new ForbiddenException('Entry does not belong to this application');
+    }
+    const oldFileUrl = existing.fileUrl ?? null;
+
+    const destDir = path.join(UPLOAD_DIR, 'visa-other-evidence', visa.id);
+    await fs.promises.mkdir(destDir, { recursive: true });
+    const destPath = path.join(destDir, path.basename(file.path));
+    await fs.promises.rename(file.path, destPath);
+
+    await this.prisma.visaOtherEvidenceEntry.update({
+      where: { id: entryId },
+      data: {
+        originalFilename: file.originalname,
+        mimeType:         file.mimetype,
+        sizeBytes:        file.size,
+        fileUrl:          destPath,
+        uploadedAt:       new Date(),
+      },
+    });
+
+    if (oldFileUrl) {
+      try {
+        await fs.promises.unlink(path.resolve(oldFileUrl));
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          console.warn(`Failed to remove displaced visa other-evidence file: ${oldFileUrl}`, err);
+        }
+      }
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'VISA_DOC_UPLOADED',
+        entityType: 'VisaOtherEvidenceEntry',
+        entityId: entryId,
+        newValue: {
+          evidenceType:      existing.evidenceType,
+          fileName:          file.originalname,
+          sizeBytes:         file.size,
+          visaApplicationId: visa.id,
+        },
+      },
+    });
+
+    return this.getSupportingDocuments2(userId);
+  }
+
+  // GET /students/me/visa/supporting-documents-2/other-evidence/:entryId/download
+  async getOtherEvidenceEntryDownloadUrl(userId: string, entryId: string) {
+    const { admission } = await this.resolveAdmissionApplication(userId);
+    const visa = await this.prisma.visaApplication.findUnique({
+      where: { applicationId: admission.id },
+    });
+    if (!visa) {
+      throw new NotFoundException(
+        'Visa application not found. Save Step 1 first to create it.',
+      );
+    }
+
+    const row = await this.prisma.visaOtherEvidenceEntry.findUnique({
+      where: { id: entryId },
+    });
+    if (!row || row.visaApplicationId !== visa.id) {
+      throw new ForbiddenException('Entry does not belong to this application');
+    }
+    if (!row.fileUrl) {
+      throw new NotFoundException('No file uploaded for this entry yet');
+    }
+
+    const token = createSignedDownloadToken({
+      fileUrl:  row.fileUrl,
+      fileName: row.originalFilename,
+      mimeType: row.mimeType,
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'VISA_DOC_DOWNLOADED',
+        entityType: 'VisaOtherEvidenceEntry',
+        entityId: row.id,
+        newValue: {
+          evidenceType:      row.evidenceType,
+          fileName:          row.originalFilename,
+          visaApplicationId: visa.id,
+        },
+      },
+    });
+
+    return { url: `/files/signed/${token}`, expiresInSeconds: 300 };
   }
 }

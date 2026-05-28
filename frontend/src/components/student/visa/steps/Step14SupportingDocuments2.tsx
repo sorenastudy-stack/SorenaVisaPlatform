@@ -447,9 +447,6 @@ export function Step14SupportingDocuments2() {
         <h3 className="text-xl font-bold text-sorena-navy">{t('visaDocs2SectionGuidance')}</h3>
       </div>
       <p className="text-sm text-sorena-navy/70">{t('visaDocs2GuidanceBody')}</p>
-      <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        {t('visaDocsDeferralNotice')}
-      </div>
 
       {/* Evidence of study */}
       <div className="mt-2 border-t border-sorena-navy/10 pt-6">
@@ -802,7 +799,10 @@ export function Step14SupportingDocuments2() {
           onServerChange={(next) => onOtherEvidenceChange(next as unknown as ServerPayload)}
         />
       ))}
-      <OtherEvidenceAdder onServerChange={(next) => onOtherEvidenceChange(next as unknown as ServerPayload)} />
+      <OtherEvidenceAdder
+        currentEntries={s.otherEvidence}
+        onServerChange={(next) => onOtherEvidenceChange(next as unknown as ServerPayload)}
+      />
 
       {/* Declaration */}
       <div className="mt-2 border-t border-sorena-navy/10 pt-6">

@@ -45,4 +45,52 @@ export class InzDataController {
     }
     return payload;
   }
+
+  // ── PR-FILES-1: LIA download endpoints for visa documents ─────────
+  //
+  // Class-level guards already enforce JwtAuthGuard + RolesGuard +
+  // @Roles('LIA','ADMIN','SUPER_ADMIN','OWNER') (layer 2). The service
+  // additionally verifies the doc belongs to the requested case — so
+  // an LIA on case A can't pull a doc that lives on case B by
+  // guessing ids; a mismatch returns 404 (not 403) to avoid leaking
+  // doc existence. Signed-URL minting + audit live in the service
+  // (layers 7 + 6).
+  //
+  // Two routes — one per kind — to keep ids unambiguous (a visa
+  // supporting doc id and an other-evidence entry id are separate
+  // tables and shouldn't share a single dispatcher path).
+
+  @Get(':caseId/visa-documents/supporting/:docId/download-url')
+  downloadSupportingDoc(
+    @Param('caseId') caseId: string,
+    @Param('docId') docId: string,
+    @Req() req: any,
+  ) {
+    return this.service.createVisaSupportingDocDownloadUrl(
+      caseId,
+      docId,
+      this.actor(req),
+    );
+  }
+
+  @Get(':caseId/visa-documents/other-evidence/:entryId/download-url')
+  downloadOtherEvidence(
+    @Param('caseId') caseId: string,
+    @Param('entryId') entryId: string,
+    @Req() req: any,
+  ) {
+    return this.service.createVisaOtherEvidenceDownloadUrl(
+      caseId,
+      entryId,
+      this.actor(req),
+    );
+  }
+
+  private actor(req: any) {
+    return {
+      id: req.user?.userId ?? req.user?.id ?? null,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    };
+  }
 }

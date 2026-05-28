@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
+import { createSignedDownloadToken } from '../common/signed-url.util';
 
 // PR-LIA-6 — Consolidated INZ application data viewer (read-only).
 //
@@ -229,6 +231,26 @@ export interface InzDataPayload {
     mimeType: string;
     sizeBytes: number;
     uploadedAt: Date;
+    // PR-FILES-1: surface presence of a stored file (not the URL).
+    // The frontend uses this to decide whether to render a Download
+    // button or a "no file uploaded" state. The signed URL itself is
+    // never embedded in the payload — it's minted on demand by the
+    // download endpoint when the LIA actually clicks Download.
+    hasFile: boolean;
+  }>;
+  // PR-FILES-1: new section surfaced because Step-14 other-evidence
+  // entries now carry file bytes too. Same hasFile pattern; customLabel
+  // is decrypted at the boundary (only populated when evidenceType =
+  // OTHER, per the encryption rules in visa.service.ts:upsertOtherEvidenceEntry).
+  otherEvidence: Array<{
+    id: string;
+    evidenceType: string;
+    customLabel: string | null;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: Date;
+    hasFile: boolean;
   }>;
   completeness: {
     applicant: FieldCompleteness;
@@ -243,6 +265,7 @@ export interface InzDataPayload {
     travelHistory: CountCompleteness;
     immigrationAssistance: BoolCompleteness;
     supportingDocuments: CountCompleteness;
+    otherEvidence: CountCompleteness;
   };
 }
 
@@ -332,6 +355,7 @@ export class InzDataService {
       militaryServices,
       travelHistoryEntries,
       supportingDocuments,
+      otherEvidenceEntries,
     ] = visa
       ? await Promise.all([
           this.prisma.visaOtherCitizenship.findMany({
@@ -385,8 +409,13 @@ export class InzDataService {
             where: { visaApplicationId: visa.id },
             orderBy: { uploadedAt: 'desc' },
           }),
+          // PR-FILES-1: surface Step-14 other-evidence entries too.
+          this.prisma.visaOtherEvidenceEntry.findMany({
+            where: { visaApplicationId: visa.id },
+            orderBy: { uploadedAt: 'desc' },
+          }),
         ])
-      : [[], [], [], [], null, [], [], [], [], [], [], [], []] as const;
+      : [[], [], [], [], null, [], [], [], [], [], [], [], [], []] as const;
 
     // ─── Build applicant block ──────────────────────────────────────────
     const applicant: InzDataPayload['applicant'] = {
@@ -608,6 +637,22 @@ export class InzDataService {
       mimeType: d.mimeType,
       sizeBytes: d.sizeBytes,
       uploadedAt: d.uploadedAt,
+      // PR-FILES-1: presence flag — raw fileUrl never leaves the
+      // backend; the LIA frontend calls the download endpoint when
+      // it wants the URL, and that endpoint signs a short-lived URL
+      // on the fly.
+      hasFile: !!d.fileUrl,
+    }));
+
+    const otherEvidenceOut = (otherEvidenceEntries ?? []).map((d) => ({
+      id: d.id,
+      evidenceType: String(d.evidenceType),
+      customLabel: this.safeDecrypt(d.customLabelEncrypted),
+      fileName: d.originalFilename,
+      mimeType: d.mimeType,
+      sizeBytes: d.sizeBytes,
+      uploadedAt: d.uploadedAt,
+      hasFile: !!d.fileUrl,
     }));
 
     // ─── Pre-compute completeness ──────────────────────────────────────
@@ -646,6 +691,7 @@ export class InzDataService {
           : false,
       },
       supportingDocuments: { count: supportingDocumentsOut.length },
+      otherEvidence: { count: otherEvidenceOut.length },
     };
 
     return {
@@ -676,8 +722,145 @@ export class InzDataService {
       travelHistory,
       immigrationAssistance,
       supportingDocuments: supportingDocumentsOut,
+      otherEvidence: otherEvidenceOut,
       completeness,
     };
+  }
+
+  // ─── PR-FILES-1: LIA-side download URLs ────────────────────────────
+  //
+  // The LIA hits these from the INZ-data viewer when they click
+  // Download next to a document row. Each method:
+  //   - layer 2 (case-scoped): resolves the row and verifies it
+  //     belongs to the requested caseId through the
+  //     Case → AdmissionApplication → VisaApplication chain. A
+  //     mismatched/unknown id throws 404, NOT 403 — we don't leak
+  //     whether the doc id exists on another case.
+  //   - layer 7 (output): mints a signed URL with a 5-min TTL via
+  //     createSignedDownloadToken; the existing /files/signed/:token
+  //     controller validates the JWT before streaming bytes. The raw
+  //     fileUrl never crosses the API boundary.
+  //   - layer 6 (audit): writes LIA_VISA_DOC_DOWNLOADED with the
+  //     caseId + entityId + fileName so we have a who-downloaded-what
+  //     trail for every successful call.
+
+  async createVisaSupportingDocDownloadUrl(
+    caseId: string,
+    docId: string,
+    actor: { id: string | null; name: string | null; role: string | null },
+  ): Promise<{ url: string; expiresInSeconds: number }> {
+    // Walk visa supporting doc → visa application → admission
+    // application → case. Two queries because schema has no inverse
+    // relation from VisaApplication → AdmissionApplication, only the
+    // FK column. Same shape as case-documents.service.resolveSourceRow
+    // for VISA_SUPPORTING.
+    const doc = await this.prisma.visaSupportingDocument.findUnique({
+      where: { id: docId },
+      select: {
+        id: true,
+        documentType: true,
+        originalFilename: true,
+        mimeType: true,
+        fileUrl: true,
+        visaApplication: { select: { applicationId: true } },
+      },
+    });
+    if (!doc) {
+      throw new NotFoundException('Document not found on this case.');
+    }
+    const admission = await this.prisma.admissionApplication.findUnique({
+      where: { id: doc.visaApplication.applicationId },
+      select: { caseId: true },
+    });
+    if (!admission || admission.caseId !== caseId) {
+      throw new NotFoundException('Document not found on this case.');
+    }
+    if (!doc.fileUrl) {
+      throw new NotFoundException('No file uploaded for this document.');
+    }
+
+    const token = createSignedDownloadToken({
+      fileUrl:  doc.fileUrl,
+      fileName: doc.originalFilename,
+      mimeType: doc.mimeType,
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: actor.id,
+        action: 'DOWNLOAD',
+        eventType: 'LIA_VISA_DOC_DOWNLOADED',
+        entityType: 'VisaSupportingDocument',
+        entityId: doc.id,
+        newValue: {
+          caseId,
+          docId: doc.id,
+          documentType: String(doc.documentType),
+          fileName: doc.originalFilename,
+        } as Prisma.InputJsonValue,
+        actorNameSnapshot: actor.name ?? null,
+        actorRoleSnapshot: actor.role ?? null,
+      },
+    });
+
+    return { url: `/files/signed/${token}`, expiresInSeconds: 5 * 60 };
+  }
+
+  async createVisaOtherEvidenceDownloadUrl(
+    caseId: string,
+    entryId: string,
+    actor: { id: string | null; name: string | null; role: string | null },
+  ): Promise<{ url: string; expiresInSeconds: number }> {
+    const entry = await this.prisma.visaOtherEvidenceEntry.findUnique({
+      where: { id: entryId },
+      select: {
+        id: true,
+        evidenceType: true,
+        originalFilename: true,
+        mimeType: true,
+        fileUrl: true,
+        visaApplication: { select: { applicationId: true } },
+      },
+    });
+    if (!entry) {
+      throw new NotFoundException('Document not found on this case.');
+    }
+    const admission = await this.prisma.admissionApplication.findUnique({
+      where: { id: entry.visaApplication.applicationId },
+      select: { caseId: true },
+    });
+    if (!admission || admission.caseId !== caseId) {
+      throw new NotFoundException('Document not found on this case.');
+    }
+    if (!entry.fileUrl) {
+      throw new NotFoundException('No file uploaded for this document.');
+    }
+
+    const token = createSignedDownloadToken({
+      fileUrl:  entry.fileUrl,
+      fileName: entry.originalFilename,
+      mimeType: entry.mimeType,
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: actor.id,
+        action: 'DOWNLOAD',
+        eventType: 'LIA_VISA_DOC_DOWNLOADED',
+        entityType: 'VisaOtherEvidenceEntry',
+        entityId: entry.id,
+        newValue: {
+          caseId,
+          docId: entry.id,
+          evidenceType: String(entry.evidenceType),
+          fileName: entry.originalFilename,
+        } as Prisma.InputJsonValue,
+        actorNameSnapshot: actor.name ?? null,
+        actorRoleSnapshot: actor.role ?? null,
+      },
+    });
+
+    return { url: `/files/signed/${token}`, expiresInSeconds: 5 * 60 };
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────
