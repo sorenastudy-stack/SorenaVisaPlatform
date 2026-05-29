@@ -1,10 +1,11 @@
 'use client';
 
 import {
-  createContext, useCallback, useContext,
+  createContext, useCallback, useContext, useEffect, useRef,
   useState, type ReactNode,
 } from 'react';
 import { api } from '@/lib/api';
+import { scrollPortalToTop } from '@/lib/scrollToTop';
 
 export interface Application {
   id: string;
@@ -141,6 +142,11 @@ interface ContextValue {
   setDocuments: (d: AdmissionDocument[]) => void;
   currentStep: number;
   setCurrentStep: (s: number) => void;
+  // PR-SCROLL-TOP: bypass-scroll setter for system reconciliation
+  // (e.g., the safeStep sync useEffect in AdmissionFormShell when
+  // visibleSteps changes mid-form due to DOB editing). User-initiated
+  // navigation uses setCurrentStep above and scrolls; this one does not.
+  setCurrentStepSilent: (s: number) => void;
   isReadOnly: boolean;
   patchApplication: (fields: Record<string, unknown>) => Promise<void>;
   submitApplication: () => Promise<void>;
@@ -189,7 +195,31 @@ export function AdmissionProvider({
   const [programmeChoices, setProgrammeChoicesRaw] = useState<ProgrammeChoice[]>(initialProgrammeChoices ?? []);
   const [educationEntries, setEducationEntriesRaw] = useState<EducationEntry[]>(initialEducationEntries ?? []);
   const [documents, setDocumentsRaw] = useState<AdmissionDocument[]>(initialDocuments ?? []);
-  const [currentStep, setCurrentStep] = useState(initialApplication?.currentStep ?? 1);
+  const [currentStep, setCurrentStepRaw] = useState(initialApplication?.currentStep ?? 1);
+
+  // PR-SCROLL-TOP: scroll the portal <main> back to the top whenever
+  // the student crosses to a different step. Guarded by hasMountedRef
+  // so first render is silent, and by an equality check so re-sets
+  // to the same value are no-ops. Pair with setCurrentStepSilent
+  // below for system reconciliation paths that must NOT scroll.
+  const hasMountedRef = useRef(false);
+  useEffect(() => { hasMountedRef.current = true; }, []);
+
+  const setCurrentStep = useCallback((next: number) => {
+    setCurrentStepRaw((prev) => {
+      if (next !== prev && hasMountedRef.current) {
+        scrollPortalToTop();
+      }
+      return next;
+    });
+  }, []);
+
+  // Used by AdmissionFormShell's safeStep reconciliation useEffect —
+  // a forced sync (e.g. when DOB editing changes visibleSteps) is not
+  // a user-initiated step change, so we bypass the scroll side-effect.
+  const setCurrentStepSilent = useCallback((next: number) => {
+    setCurrentStepRaw(next);
+  }, []);
   const [step2FieldsRaw, setStep2FieldsRaw] = useState<Step2Fields>({
     // dateOfBirth from the DB is an ISO timestamp; HTML date inputs need YYYY-MM-DD.
     dateOfBirth:                        ((initialApplication?.dateOfBirth     as string) ?? '').slice(0, 10),
@@ -410,7 +440,7 @@ export function AdmissionProvider({
       application, setApplication,
       programmeChoices, setProgrammeChoices: safeSetProgrammeChoices,
       documents, setDocuments: safeSetDocuments,
-      currentStep, setCurrentStep,
+      currentStep, setCurrentStep, setCurrentStepSilent,
       isReadOnly,
       patchApplication,
       submitApplication,

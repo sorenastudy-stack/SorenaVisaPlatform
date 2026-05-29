@@ -77,7 +77,7 @@ export function AdmissionFormShell({ session, initialData }: Props) {
 
 function ShellInner({ session }: { session: Session }) {
   const t = useTranslations();
-  const { currentStep, setCurrentStep, isReadOnly, application, step2Fields } = useAdmission();
+  const { currentStep, setCurrentStep, setCurrentStepSilent, isReadOnly, application, step2Fields } = useAdmission();
   const isAgent = session.role === 'AGENT';
 
   // Visible steps depend on the live DOB in Step 2: 18+ skips Steps 5 & 6.
@@ -96,9 +96,12 @@ function ShellInner({ session }: { session: Session }) {
   // Sync context's currentStep to the safe value so the footer's Next/Back
   // arithmetic operates on a valid index. Only fires when they actually
   // diverge (otherwise it's a no-op).
+  // PR-SCROLL-TOP: use setCurrentStepSilent so this system reconciliation
+  // (triggered by DOB editing changing visibleSteps) doesn't smooth-scroll
+  // — only user-initiated navigation should scroll.
   useEffect(() => {
-    if (safeStep !== currentStep) setCurrentStep(safeStep);
-  }, [safeStep, currentStep, setCurrentStep]);
+    if (safeStep !== currentStep) setCurrentStepSilent(safeStep);
+  }, [safeStep, currentStep, setCurrentStepSilent]);
 
   return (
     <div className="flex flex-col gap-6">

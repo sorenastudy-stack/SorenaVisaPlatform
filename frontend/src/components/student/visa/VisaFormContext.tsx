@@ -1,10 +1,11 @@
 'use client';
 
 import {
-  createContext, useCallback, useContext, useState,
+  createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from 'react';
 import { api } from '@/lib/api';
+import { scrollPortalToTop } from '@/lib/scrollToTop';
 
 // All fields are nullable in the DB — the student fills the form over time.
 // The shape mirrors what the backend returns from GET/POST/PATCH
@@ -621,9 +622,26 @@ export function VisaProvider({
   const [nzContacts, setNzContacts] = useState<NzContactRow[]>(initialNzContacts ?? []);
   // Clamp the initial step in case the row has a stale value from before
   // VISA_TOTAL_STEPS bumped — we never want the UI in an off-by-one state.
-  const [activeStep, setActiveStep] = useState<number>(() =>
+  const [activeStep, setActiveStepRaw] = useState<number>(() =>
     Math.max(1, Math.min(VISA_TOTAL_STEPS, initialVisa.currentStep ?? 1)),
   );
+
+  // PR-SCROLL-TOP: smoothly scroll the portal <main> back to the top
+  // whenever the student crosses to a different step (Save & continue,
+  // Back, or stepper jump). Guarded by `hasMountedRef` so the page
+  // doesn't smooth-scroll on initial paint, and by an equality check
+  // so re-sets to the same step value are no-ops.
+  const hasMountedRef = useRef(false);
+  useEffect(() => { hasMountedRef.current = true; }, []);
+
+  const setActiveStep = useCallback((next: number) => {
+    setActiveStepRaw((prev) => {
+      if (next !== prev && hasMountedRef.current) {
+        scrollPortalToTop();
+      }
+      return next;
+    });
+  }, []);
 
   const patchVisa = useCallback(async (fields: Record<string, unknown>) => {
     const res = await api.patch<{
