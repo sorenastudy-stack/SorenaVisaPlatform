@@ -1,25 +1,32 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { ExternalLink, Paperclip, Download } from 'lucide-react';
 import {
   useVisa,
   type EducationEntryRow,
   type EducationSupplement,
   type EducationSupplementPatch,
 } from '../VisaFormContext';
+import { api } from '@/lib/api';
 
 // PR-VISA6 — INZ 1200 Section 6 "Education history".
-// Per docs/VISA_FIELD_INVENTORY.md, the admission form already collects
-// qualification name, institution name, country, and year-only start/end
-// dates. This step displays those READ-ONLY (sourced from the admission
-// row, not re-typed by the student) and adds editable inputs for the
-// INZ-extra fields per entry: start month, end month, institution
-// state, institution town, and "Was the qualification awarded?".
+// Admission entries are shown READ-ONLY (sourced from the admission row,
+// not re-typed here). Per-entry attached documents are listed with a
+// download action. The only editable fields are the INZ-extra
+// supplement columns: start/end month, institution state, institution
+// town, and "Was the qualification awarded?".
 //
 // Each supplement persists live via PATCH /students/me/visa/education-
 // supplements/<entryId> — the backend upserts the row.
+
+const BACKEND =
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:3001';
 
 const MONTH_KEYS = [
   'visaCommonMonthJan', 'visaCommonMonthFeb', 'visaCommonMonthMar',
@@ -42,6 +49,29 @@ const QUAL_LEVEL_KEY: Record<string, string> = {
   OTHER:            'admissionEducationHistoryLevelOther',
 };
 
+// Translation t-keys for the document-type labels we know about. Any
+// unknown doc type falls back to the raw enum string.
+const DOC_TYPE_KEY: Record<string, string> = {
+  NOTARIZED_CERTIFICATE: 'visaEducationDocTypeNotarizedCertificate',
+  NOTARIZED_TRANSCRIPT:  'visaEducationDocTypeNotarizedTranscript',
+};
+
+type AdmissionDocument = {
+  id: string;
+  documentType: string;
+  educationEntryId: string | null;
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  uploadedAt: string;
+};
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1_048_576).toFixed(1)} MB`;
+}
+
 export function Step6EducationHistory() {
   const t = useTranslations();
   const {
@@ -61,8 +91,42 @@ export function Step6EducationHistory() {
     return map;
   }, [educationSupplements]);
 
+  // Sort latest-graduated-first, client-side. Primary key: endYear desc
+  // (nulls/ongoing last). Secondary: completed desc.
+  const sortedEntries = useMemo(() => {
+    return [...educationEntries].sort((a, b) => {
+      const aEnd = a.endYear;
+      const bEnd = b.endYear;
+      if (aEnd === null && bEnd !== null) return 1;
+      if (aEnd !== null && bEnd === null) return -1;
+      if (aEnd !== null && bEnd !== null && aEnd !== bEnd) return bEnd - aEnd;
+      // Tie-break: completed first.
+      if (a.completed !== b.completed) return a.completed ? -1 : 1;
+      return 0;
+    });
+  }, [educationEntries]);
+
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+
+  // Per-entry attached documents. Fetched once on mount.
+  const [documents, setDocuments] = useState<AdmissionDocument[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const docs = await api.get<AdmissionDocument[]>(
+          '/students/me/admission/documents',
+        );
+        if (!cancelled) setDocuments(docs);
+      } catch {
+        // Silent — documents block is optional; admission has its own
+        // error surfaces for upload/list problems.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Local-state buffer for the two text inputs (state + town) so we PATCH
   // on blur, not on every keystroke. Initialised from the server values
   // and kept in sync as supplements change.
@@ -135,13 +199,30 @@ export function Step6EducationHistory() {
     upsert(entryId, { qualificationAwarded: awarded });
   };
 
+  // ── Signed-URL download (mirrors DocumentUploader.openSignedUrl) ───
+
+  const downloadDocument = async (docId: string, fileName: string) => {
+    try {
+      const { url } = await api.get<{ url: string; expiresInSeconds: number }>(
+        `/students/me/admission/documents/${docId}/download`,
+      );
+      const full = `${BACKEND}${url}`;
+      window.open(full, '_blank', 'noopener,noreferrer');
+    } catch {
+      toast.error(t('visaEducationHistoryUpdateError'));
+    }
+    // fileName isn't used for the new-tab path; kept in signature for
+    // parity with the admission flow in case we switch to an <a download>.
+    void fileName;
+  };
+
   // ── Save validator ────────────────────────────────────────────────
 
   const validate = (): string[] => {
     const missing: string[] = [];
     const e: Record<string, boolean> = {};
 
-    if (educationEntries.length === 0) {
+    if (sortedEntries.length === 0) {
       // Surfaced as the "no entries" banner — Save is blocked.
       e.noEntries = true;
       missing.push('noEntries');
@@ -149,7 +230,7 @@ export function Step6EducationHistory() {
       return missing;
     }
 
-    for (const entry of educationEntries) {
+    for (const entry of sortedEntries) {
       const s = supplementsByEntryId.get(entry.id);
       const buf = getBuffer(entry.id);
       const stateValue = (s?.institutionState ?? buf.state).trim();
@@ -186,11 +267,10 @@ export function Step6EducationHistory() {
     try {
       // No top-level fields beyond currentStep — supplements were already
       // persisted live as the student edited them. Bump currentStep to 7
-      // so the stepper opens cleanly there when PR-VISA7 lands.
+      // so the stepper opens cleanly there.
       await patchVisa({ currentStep: 7 });
       setSavedAt(new Date().toISOString());
       toast.success(t('visaEducationHistorySaveSuccess'));
-      // PR-VISA7: advance the stepper now that Section 7 exists.
       setActiveStep(7);
     } catch {
       toast.error(t('visaEducationHistorySaveError'));
@@ -264,21 +344,57 @@ export function Step6EducationHistory() {
     const qualLevelLabel = QUAL_LEVEL_KEY[entry.qualificationLevel]
       ? t(QUAL_LEVEL_KEY[entry.qualificationLevel] as Parameters<typeof t>[0])
       : entry.qualificationLevel;
+    const qualificationDisplay = `${qualLevelLabel}${entry.fieldOfStudy ? ` · ${entry.fieldOfStudy}` : ''}`;
+
+    // Year range string.
+    let yearRange: string;
+    if (entry.endYear === null) {
+      yearRange = t('visaEducationYearRangeOngoing');
+    } else if (entry.startYear !== null && entry.startYear === entry.endYear) {
+      yearRange = String(entry.startYear);
+    } else if (entry.startYear !== null) {
+      yearRange = `${entry.startYear} – ${entry.endYear}`;
+    } else {
+      yearRange = String(entry.endYear);
+    }
+
+    const completedLabel = entry.completed ? t('visaCommonYes') : t('visaCommonNo');
+
+    // Documents attached to this admission entry.
+    const entryDocuments = documents.filter(d => d.educationEntryId === entry.id);
+
     return (
       <div
         key={entry.id}
         className="flex flex-col gap-4 rounded-xl border border-sorena-navy/10 bg-white p-4"
       >
+        {/* Header: green-tick badge + "Edit in admission ↗" quiet link */}
         <div className="flex items-start justify-between gap-3">
           <h4 className="text-sm font-bold uppercase tracking-wide text-sorena-navy/70">
-            {t('visaEducationHistoryEntryHeading', { n: idx + 1 })}
+            <span className="inline-flex items-center gap-2">
+              <span
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-xs font-bold text-green-700"
+                aria-label={t('visaEducationFromAdmissionBadge')}
+                title={t('visaEducationFromAdmissionBadge')}
+              >
+                ✓
+              </span>
+              {t('visaEducationHistoryEntryHeading', { n: idx + 1 })}
+            </span>
           </h4>
+          <Link
+            href="/student/admission"
+            className="inline-flex items-center gap-1 text-xs text-sorena-navy/60 transition-colors hover:text-sorena-navy"
+          >
+            {t('visaEducationEditInAdmission')}
+            <ExternalLink size={12} />
+          </Link>
         </div>
 
-        {/* Reused, read-only from admission */}
+        {/* Read-only summary from admission */}
         <ReadonlyField
           label={t('visaEducationHistoryQualificationLabel')}
-          value={`${qualLevelLabel}${entry.fieldOfStudy ? ` — ${entry.fieldOfStudy}` : ''}`}
+          value={qualificationDisplay}
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ReadonlyField
@@ -290,8 +406,61 @@ export function Step6EducationHistory() {
             value={entry.country}
           />
         </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ReadonlyField
+            label={t('visaEducationHistoryStartDateLabel')}
+            value={yearRange}
+          />
+          <ReadonlyField
+            label={t('visaEducationCompletedLabel')}
+            value={completedLabel}
+          />
+        </div>
 
-        {/* Reused YEAR + new MONTH side-by-side */}
+        {/* Per-entry attached documents (read-only download list) */}
+        {entryDocuments.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
+              {t('visaEducationDocumentsHeading')}
+            </p>
+            <div className="flex flex-col gap-2">
+              {entryDocuments.map(doc => {
+                const docTypeKey = DOC_TYPE_KEY[doc.documentType];
+                const docTypeLabel = docTypeKey
+                  ? t(docTypeKey as Parameters<typeof t>[0])
+                  : doc.documentType;
+                return (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 rounded-lg border border-sorena-navy/10 bg-gray-50 px-3 py-2"
+                  >
+                    <Paperclip size={14} className="shrink-0 text-sorena-navy/50" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-sorena-navy">{docTypeLabel}</p>
+                      <p className="truncate text-xs text-sorena-navy/60">
+                        {doc.fileName}{' '}
+                        <span className="text-sorena-navy/40">({fmtBytes(doc.fileSizeBytes)})</span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => downloadDocument(doc.id, doc.fileName)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-sorena-navy/20 bg-white px-2.5 py-1 text-xs font-medium text-sorena-navy transition-colors hover:bg-sorena-navy/5"
+                    >
+                      <Download size={12} />
+                      {t('admissionUploadDownload')}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Divider before editable visa-specific extras */}
+        <div className="border-t border-sorena-navy/10" />
+
+        {/* Editable: month selectors + read-only year box */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
@@ -308,7 +477,7 @@ export function Step6EducationHistory() {
                   <option key={k} value={i + 1}>{t(k)}</option>
                 ))}
               </select>
-              <div className="rounded-lg border border-sorena-navy/10 bg-gray-50 px-3 py-2.5 text-sm text-sorena-navy/80 w-28 text-center">
+              <div className="w-28 rounded-lg border border-sorena-navy/10 bg-gray-50 px-3 py-2.5 text-center text-sm text-sorena-navy/80">
                 {entry.startYear ?? '—'}
               </div>
             </div>
@@ -328,14 +497,14 @@ export function Step6EducationHistory() {
                   <option key={k} value={i + 1}>{t(k)}</option>
                 ))}
               </select>
-              <div className="rounded-lg border border-sorena-navy/10 bg-gray-50 px-3 py-2.5 text-sm text-sorena-navy/80 w-28 text-center">
+              <div className="w-28 rounded-lg border border-sorena-navy/10 bg-gray-50 px-3 py-2.5 text-center text-sm text-sorena-navy/80">
                 {entry.endYear ?? '—'}
               </div>
             </div>
           </div>
         </div>
 
-        {/* New: institution state + town */}
+        {/* Editable: institution state + town */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
@@ -363,7 +532,7 @@ export function Step6EducationHistory() {
           </div>
         </div>
 
-        {/* New: qualification awarded Y/N */}
+        {/* Editable: qualification awarded Y/N */}
         <div className="flex flex-col gap-2">
           <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaEducationHistoryAwardedLabel')}<Asterisk />
@@ -395,12 +564,26 @@ export function Step6EducationHistory() {
         <p className="mt-2 text-sm text-sorena-navy/70">{t('visaEducationHistoryEditOnAdmissionHelper')}</p>
       </div>
 
-      {educationEntries.length === 0 ? (
+      {sortedEntries.length === 0 ? (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {t('visaEducationHistoryNoEntries')}
         </div>
       ) : (
-        educationEntries.map((entry, idx) => renderEntry(entry, idx))
+        sortedEntries.map((entry, idx) => renderEntry(entry, idx))
+      )}
+
+      {/* Quiet helper: how to add / correct entries (admission-side) */}
+      {sortedEntries.length > 0 && (
+        <p className="text-xs text-sorena-navy/60">
+          {t('visaEducationAddViaAdmissionNote')}{' '}
+          <Link
+            href="/student/admission"
+            className="inline-flex items-center gap-1 text-sorena-navy underline-offset-2 hover:underline"
+          >
+            {t('visaEducationEditInAdmission')}
+            <ExternalLink size={12} />
+          </Link>
+        </p>
       )}
 
       {/* Back + Save row */}
@@ -415,7 +598,7 @@ export function Step6EducationHistory() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving || educationEntries.length === 0}
+          disabled={saving || sortedEntries.length === 0}
           className="rounded-lg bg-sorena-navy px-6 py-2 text-base font-semibold text-white transition-colors hover:bg-sorena-navy/90 disabled:opacity-40"
         >
           {saving ? t('visaCommonSaving') : t('visaEducationHistorySaveButton')}
