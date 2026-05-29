@@ -6,7 +6,7 @@ import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { formatRelative, formatDate } from '../../../_utils/format';
 import { CopyButton } from './CopyButton';
 import { InzSection } from './InzSection';
-import { InzDocDownloadButton } from './InzDocDownloadButton';
+import { InzDocDownloadButton, NoFileBadge } from './InzDocDownloadButton';
 
 // PR-LIA-6 — Consolidated INZ application data viewer for the LIA.
 // Read-only. Every section ships with a copy-to-clipboard button.
@@ -171,27 +171,31 @@ interface InzData {
     adviserContactNumber: string | null;
     adviserIsPrimaryContact: boolean | null;
   } | null;
+  // PR-FILES-2 — each parent requirement / other-evidence entry now
+  // carries its own files[] array. The LIA viewer renders one
+  // download button per file; raw fileUrl never enters this payload.
   supportingDocuments: Array<{
     id: string;
     docType: string;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-    uploadedAt: string;
-    // PR-FILES-1: indicates the row carries an actual stored file
-    // (vs. metadata-only). The signed URL is fetched on demand by
-    // the download button — it never lands in this payload.
-    hasFile: boolean;
+    files: Array<{
+      id: string;
+      originalFilename: string;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt: string;
+    }>;
   }>;
   otherEvidence: Array<{
     id: string;
     evidenceType: string;
     customLabel: string | null;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-    uploadedAt: string;
-    hasFile: boolean;
+    files: Array<{
+      id: string;
+      originalFilename: string;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt: string;
+    }>;
   }>;
   completeness: {
     applicant: { filled: number; total: number };
@@ -695,27 +699,45 @@ export default async function InzDataPage({ params }: { params: { id: string } }
 
       <InzSection
         title="Supporting documents"
-        badge={data.supportingDocuments.length === 1 ? '1 document' : `${data.supportingDocuments.length} documents`}
+        badge={data.supportingDocuments.length === 1 ? '1 requirement' : `${data.supportingDocuments.length} requirements`}
         badgeTone={data.supportingDocuments.length === 0 ? 'gray' : 'emerald'}
-        copyText={serialiseList('Supporting documents', data.supportingDocuments.map(d => `Type: ${d.docType}\nFilename: ${d.fileName}\nUploaded: ${formatDate(d.uploadedAt)}`))}
+        copyText={serialiseList('Supporting documents', data.supportingDocuments.map(d => `Type: ${d.docType}\n${d.files.length === 0 ? '(no files uploaded)' : d.files.map(f => `  - ${f.originalFilename} (${formatDate(f.uploadedAt)})`).join('\n')}`))}
         defaultOpen={data.supportingDocuments.length > 0}
       >
         {data.supportingDocuments.length === 0
           ? <EmptyMsg />
           : (
-            <ul className="space-y-2 text-sm">
+            // PR-FILES-2: one group per parent requirement, with the
+            // requirement label shown once and each child file
+            // getting its own row + Download button. Empty
+            // requirements get the subdued "No file uploaded" badge.
+            <ul className="space-y-4 text-sm">
               {data.supportingDocuments.map(d => (
-                <li key={d.id} className="flex items-center gap-2 flex-wrap py-1.5 border-b border-gray-100 last:border-b-0">
-                  <span className="font-semibold text-[#1E3A5F] min-w-[10rem]">{d.docType}</span>
-                  <span className="text-[#4A4A4A] truncate flex-1 min-w-0" title={d.fileName}>{d.fileName}</span>
-                  <span className="text-xs text-[#4A4A4A]/60">{formatDate(d.uploadedAt)}</span>
-                  <InzDocDownloadButton
-                    caseId={params.id}
-                    kind="supporting"
-                    docId={d.id}
-                    fileName={d.fileName}
-                    hasFile={d.hasFile}
-                  />
+                <li key={d.id} className="py-1.5 border-b border-gray-100 last:border-b-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-semibold text-[#1E3A5F]">{d.docType}</span>
+                    <span className="text-xs text-[#4A4A4A]/60">
+                      {d.files.length === 0 ? '0 files' : d.files.length === 1 ? '1 file' : `${d.files.length} files`}
+                    </span>
+                  </div>
+                  {d.files.length === 0 ? (
+                    <div className="pl-2"><NoFileBadge /></div>
+                  ) : (
+                    <ul className="space-y-1 pl-2">
+                      {d.files.map(f => (
+                        <li key={f.id} className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[#4A4A4A] truncate flex-1 min-w-0" title={f.originalFilename}>{f.originalFilename}</span>
+                          <span className="text-xs text-[#4A4A4A]/60">{formatDate(f.uploadedAt)}</span>
+                          <InzDocDownloadButton
+                            caseId={params.id}
+                            kind="supporting"
+                            fileId={f.id}
+                            fileName={f.originalFilename}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>
@@ -726,28 +748,42 @@ export default async function InzDataPage({ params }: { params: { id: string } }
         title="Other evidence"
         badge={data.otherEvidence.length === 1 ? '1 entry' : `${data.otherEvidence.length} entries`}
         badgeTone={data.otherEvidence.length === 0 ? 'gray' : 'emerald'}
-        copyText={serialiseList('Other evidence', data.otherEvidence.map(d => `Type: ${d.evidenceType}${d.customLabel ? ` (${d.customLabel})` : ''}\nFilename: ${d.fileName}\nUploaded: ${formatDate(d.uploadedAt)}`))}
+        copyText={serialiseList('Other evidence', data.otherEvidence.map(d => `Type: ${d.evidenceType}${d.customLabel ? ` (${d.customLabel})` : ''}\n${d.files.length === 0 ? '(no files uploaded)' : d.files.map(f => `  - ${f.originalFilename} (${formatDate(f.uploadedAt)})`).join('\n')}`))}
         defaultOpen={data.otherEvidence.length > 0}
       >
         {data.otherEvidence.length === 0
           ? <EmptyMsg />
           : (
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-4 text-sm">
               {data.otherEvidence.map(d => (
-                <li key={d.id} className="flex items-center gap-2 flex-wrap py-1.5 border-b border-gray-100 last:border-b-0">
-                  <span className="font-semibold text-[#1E3A5F] min-w-[10rem]">
-                    {d.evidenceType}
-                    {d.customLabel && <span className="text-[#4A4A4A]/70 font-normal"> ({d.customLabel})</span>}
-                  </span>
-                  <span className="text-[#4A4A4A] truncate flex-1 min-w-0" title={d.fileName}>{d.fileName}</span>
-                  <span className="text-xs text-[#4A4A4A]/60">{formatDate(d.uploadedAt)}</span>
-                  <InzDocDownloadButton
-                    caseId={params.id}
-                    kind="other-evidence"
-                    docId={d.id}
-                    fileName={d.fileName}
-                    hasFile={d.hasFile}
-                  />
+                <li key={d.id} className="py-1.5 border-b border-gray-100 last:border-b-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-semibold text-[#1E3A5F]">
+                      {d.evidenceType}
+                      {d.customLabel && <span className="text-[#4A4A4A]/70 font-normal"> ({d.customLabel})</span>}
+                    </span>
+                    <span className="text-xs text-[#4A4A4A]/60">
+                      {d.files.length === 0 ? '0 files' : d.files.length === 1 ? '1 file' : `${d.files.length} files`}
+                    </span>
+                  </div>
+                  {d.files.length === 0 ? (
+                    <div className="pl-2"><NoFileBadge /></div>
+                  ) : (
+                    <ul className="space-y-1 pl-2">
+                      {d.files.map(f => (
+                        <li key={f.id} className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[#4A4A4A] truncate flex-1 min-w-0" title={f.originalFilename}>{f.originalFilename}</span>
+                          <span className="text-xs text-[#4A4A4A]/60">{formatDate(f.uploadedAt)}</span>
+                          <InzDocDownloadButton
+                            caseId={params.id}
+                            kind="other-evidence"
+                            fileId={f.id}
+                            fileName={f.originalFilename}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               ))}
             </ul>
@@ -1040,6 +1076,6 @@ function serialiseEntire(d: InzData): string {
   parts.push(d.militaryHistory ? formatMilitary(d.militaryHistory) : 'Military history\n\n(none recorded)');
   parts.push(serialiseList('Travel history', d.travelHistory.map(t => formatTravel(t))));
   parts.push(d.immigrationAssistance ? `Immigration assistance\n\n${formatAssistance(d.immigrationAssistance)}` : 'Immigration assistance\n\n(none recorded)');
-  parts.push(serialiseList('Supporting documents', d.supportingDocuments.map(doc => `Type: ${doc.docType}\nFilename: ${doc.fileName}`)));
+  parts.push(serialiseList('Supporting documents', d.supportingDocuments.map(doc => `Type: ${doc.docType}\n${doc.files.length === 0 ? '(no files)' : doc.files.map(f => `  - ${f.originalFilename}`).join('\n')}`)));
   return parts.join('\n\n══════════════════════════════════════\n\n');
 }

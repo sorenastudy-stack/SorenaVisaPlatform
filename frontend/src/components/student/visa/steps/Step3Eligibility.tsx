@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useVisa } from '../VisaFormContext';
 import { SORENA_AGENT_DETAILS } from '@/lib/sorenaAgent';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-VISA3 — INZ 1200 Section 3 "Eligibility".
 // Pre-filled read-only from admission (per docs/VISA_FIELD_INVENTORY.md):
@@ -475,22 +476,24 @@ export function Step3Eligibility() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaEligibilityCourseStartDateLabel')}<Asterisk />
           </label>
-          <input
-            type="date"
-            value={form.courseStartDate}
-            onChange={(e) => update('courseStartDate', e.target.value)}
-            className={dateInputClass(!!errors.courseStartDate)}
+          <DateInput
+            value={form.courseStartDate || null}
+            onChange={(iso) => update('courseStartDate', iso ?? '')}
+            minYear={1900}
+            maxYear={2100}
+            ariaInvalid={!!errors.courseStartDate}
           />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaEligibilityCourseEndDateLabel')}<Asterisk />
           </label>
-          <input
-            type="date"
-            value={form.courseEndDate}
-            onChange={(e) => update('courseEndDate', e.target.value)}
-            className={dateInputClass(!!errors.courseEndDate)}
+          <DateInput
+            value={form.courseEndDate || null}
+            onChange={(iso) => update('courseEndDate', iso ?? '')}
+            minYear={1900}
+            maxYear={2100}
+            ariaInvalid={!!errors.courseEndDate}
           />
         </div>
       </div>
@@ -499,11 +502,12 @@ export function Step3Eligibility() {
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('visaEligibilityIntendedArrivalDateLabel')}<Asterisk />
         </label>
-        <input
-          type="date"
-          value={form.intendedArrivalDate}
-          onChange={(e) => update('intendedArrivalDate', e.target.value)}
-          className={dateInputClass(!!errors.intendedArrivalDate)}
+        <DateInput
+          value={form.intendedArrivalDate || null}
+          onChange={(iso) => update('intendedArrivalDate', iso ?? '')}
+          minYear={1900}
+          maxYear={2100}
+          ariaInvalid={!!errors.intendedArrivalDate}
         />
       </div>
 

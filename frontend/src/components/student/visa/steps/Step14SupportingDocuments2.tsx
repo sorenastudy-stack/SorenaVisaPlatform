@@ -131,6 +131,12 @@ export function Step14SupportingDocuments2() {
     return m;
   }, [documents]);
 
+  // PR-FILES-2 — "has document" now means ">=1 file uploaded under
+  // this requirement". A parent with zero files still counts as
+  // unsatisfied (last file just deleted, for instance).
+  const hasFilesFor = (dt: DocumentType): boolean =>
+    (docMap.get(dt)?.files.length ?? 0) > 0;
+
   // Helpers to mutate the parent payload.
   const set = (patch: Partial<ServerPayload>) => {
     setS((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -214,33 +220,33 @@ export function Step14SupportingDocuments2() {
     };
 
     // Required docs (always)
-    if (!docMap.has('OFFER_OF_PLACE')) {
+    if (!hasFilesFor('OFFER_OF_PLACE')) {
       e.OFFER_OF_PLACE = true;
       if (!first) first = t('visaDocs2ValidationDocRequired');
     }
-    if (!docMap.has('PERSONAL_CIRCUMSTANCES_EVIDENCE')) {
+    if (!hasFilesFor('PERSONAL_CIRCUMSTANCES_EVIDENCE')) {
       e.PERSONAL_CIRCUMSTANCES_EVIDENCE = true;
       if (!first) first = t('visaDocs2ValidationDocRequired');
     }
     // Conditional doc requireds
-    if (isPhd && !docMap.has('PHD_RESEARCH_PROPOSAL')) {
+    if (isPhd && !hasFilesFor('PHD_RESEARCH_PROPOSAL')) {
       e.PHD_RESEARCH_PROPOSAL = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
-    if (hasPublications && !docMap.has('PUBLICATIONS_LIST')) {
+    if (hasPublications && !hasFilesFor('PUBLICATIONS_LIST')) {
       e.PUBLICATIONS_LIST = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
-    if (hasEducationEntries && !docMap.has('PREVIOUS_TERTIARY_EVIDENCE')) {
+    if (hasEducationEntries && !hasFilesFor('PREVIOUS_TERTIARY_EVIDENCE')) {
       e.PREVIOUS_TERTIARY_EVIDENCE = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
-    if (isCurrentlyEmployed && !docMap.has('CURRENT_EMPLOYMENT_EVIDENCE')) {
+    if (isCurrentlyEmployed && !hasFilesFor('CURRENT_EMPLOYMENT_EVIDENCE')) {
       e.CURRENT_EMPLOYMENT_EVIDENCE = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
-    if (hasPreviousEmployment && !docMap.has('PREVIOUS_EMPLOYMENT_EVIDENCE')) {
+    if (hasPreviousEmployment && !hasFilesFor('PREVIOUS_EMPLOYMENT_EVIDENCE')) {
       e.PREVIOUS_EMPLOYMENT_EVIDENCE = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
 
     flag('tookEnglishTest', s?.tookEnglishTest !== null && s?.tookEnglishTest !== undefined, t('visaDocs2ValidationRequired'));
-    if (s?.tookEnglishTest === true && !docMap.has('ENGLISH_TEST_RESULTS')) {
+    if (s?.tookEnglishTest === true && !hasFilesFor('ENGLISH_TEST_RESULTS')) {
       e.ENGLISH_TEST_RESULTS = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
 
@@ -248,20 +254,20 @@ export function Step14SupportingDocuments2() {
     if (tuitionFeesPaid === false) {
       flag('tuitionPaymentMethod', tuitionPaymentMethod !== null, t('visaDocs2ValidationRequired'));
     }
-    if (requireTuitionPaymentConfirmation && !docMap.has('TUITION_PAYMENT_CONFIRMATION')) {
+    if (requireTuitionPaymentConfirmation && !hasFilesFor('TUITION_PAYMENT_CONFIRMATION')) {
       e.TUITION_PAYMENT_CONFIRMATION = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
 
     flag('fundsSource', atLeastOneFundsSource, t('visaDocs2ValidationAtLeastOneFundsSource'));
     flag('outwardSource', atLeastOneOutwardSource, t('visaDocs2ValidationAtLeastOneOutwardSource'));
 
-    if (requireInz1014 && !docMap.has('INZ1014_FINANCIAL_UNDERTAKING')) {
+    if (requireInz1014 && !hasFilesFor('INZ1014_FINANCIAL_UNDERTAKING')) {
       e.INZ1014_FINANCIAL_UNDERTAKING = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
-    if (requirePrepaidAccom && !docMap.has('PREPAID_ACCOMMODATION_EVIDENCE')) {
+    if (requirePrepaidAccom && !hasFilesFor('PREPAID_ACCOMMODATION_EVIDENCE')) {
       e.PREPAID_ACCOMMODATION_EVIDENCE = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
-    if (requireOutwardTravelDoc && !docMap.has('OUTWARD_TRAVEL_EVIDENCE')) {
+    if (requireOutwardTravelDoc && !hasFilesFor('OUTWARD_TRAVEL_EVIDENCE')) {
       e.OUTWARD_TRAVEL_EVIDENCE = true; if (!first) first = t('visaDocs2ValidationDocRequired');
     }
 
@@ -270,10 +276,10 @@ export function Step14SupportingDocuments2() {
     }
     if (showSavingsSources) {
       flag('savingsSource', atLeastOneSavingsSource, t('visaDocs2ValidationAtLeastOneSavingsSource'));
-      if (!docMap.has('BANK_STATEMENTS')) {
+      if (!hasFilesFor('BANK_STATEMENTS')) {
         e.BANK_STATEMENTS = true; if (!first) first = t('visaDocs2ValidationDocRequired');
       }
-      if (requireEmploymentIncomeEvidence && !docMap.has('EMPLOYMENT_INCOME_EVIDENCE')) {
+      if (requireEmploymentIncomeEvidence && !hasFilesFor('EMPLOYMENT_INCOME_EVIDENCE')) {
         e.EMPLOYMENT_INCOME_EVIDENCE = true; if (!first) first = t('visaDocs2ValidationDocRequired');
       }
     }
@@ -281,7 +287,7 @@ export function Step14SupportingDocuments2() {
     if (scholarshipActive) {
       flag('scholarshipName', scholarshipName.trim() !== '', t('visaDocs2ValidationScholarshipNameRequired'));
       flag('scholarshipOrganisation', scholarshipOrganisation.trim() !== '', t('visaDocs2ValidationScholarshipOrganisationRequired'));
-      if (!docMap.has('SCHOLARSHIP_EVIDENCE')) {
+      if (!hasFilesFor('SCHOLARSHIP_EVIDENCE')) {
         e.SCHOLARSHIP_EVIDENCE = true; if (!first) first = t('visaDocs2ValidationDocRequired');
       }
     }
@@ -800,7 +806,6 @@ export function Step14SupportingDocuments2() {
         />
       ))}
       <OtherEvidenceAdder
-        currentEntries={s.otherEvidence}
         onServerChange={(next) => onOtherEvidenceChange(next as unknown as ServerPayload)}
       />
 

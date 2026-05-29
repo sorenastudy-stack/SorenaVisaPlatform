@@ -21,6 +21,7 @@ import {
 } from '../VisaFormContext';
 import { COUNTRIES } from '@/lib/data/countries';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-VISA8 — INZ 1200 Section 8 "Relationships".
 // READ-ONLY relays from admission:
@@ -77,6 +78,81 @@ function isoToDateInput(iso: string | null): string {
 }
 function dateInputToIso(v: string): string | null {
   return v ? new Date(v).toISOString() : null;
+}
+
+// Module-scope current year — used as a bound on DateInput.
+const CURRENT_YEAR = new Date().getFullYear();
+
+// Hoisted out of the parent component to fix the one-character-per-
+// focus bug: when defined inside the parent function body, the
+// component identity changed on every render, causing React to
+// unmount + remount the underlying <input>/<select> on each
+// keystroke and drop focus. Stable module-level identity keeps the
+// DOM node mounted across re-renders.
+function inputClass(hasError: boolean): string {
+  return [
+    'w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:outline-none',
+    hasError ? 'border-red-400 focus:border-red-500' : 'border-sorena-navy/20 focus:border-sorena-navy/60',
+  ].join(' ');
+}
+
+function NameInput({
+  value, onChange, onBlur, label, asterisk, ariaInvalid,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
+  label: string;
+  asterisk?: boolean;
+  ariaInvalid: boolean;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+        {label}{asterisk && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
+      <input
+        type="text"
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        className={inputClass(ariaInvalid)}
+      />
+    </div>
+  );
+}
+
+function SelectField({
+  value, onChange, options, label, asterisk, ariaInvalid,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  // The hoisted SelectField calls useTranslations() itself to resolve
+  // both the placeholder and the per-option label keys — same
+  // behaviour as the inline version, just on a stable identity.
+  options: { value: string; key: string }[];
+  label: string;
+  asterisk?: boolean;
+  ariaInvalid: boolean;
+}) {
+  const t = useTranslations();
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+        {label}{asterisk && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputClass(ariaInvalid)}
+      >
+        <option value="" disabled>{t('visaCommonSelectPlaceholder')}</option>
+        {options.map(({ value: v, key }) => (
+          <option key={v} value={v}>{t(key as Parameters<typeof t>[0])}</option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 export function Step8Relationships() {
@@ -322,10 +398,87 @@ export function Step8Relationships() {
     return missing;
   };
 
+  // Field-name → human label for the validation toast. Keeps the
+  // generic "Please complete every required field" message but tacks
+  // on the specific labels of what's missing so the user doesn't have
+  // to hunt through the whole form for red borders.
+  const FIELD_LABELS: Record<string, string> = {
+    relationshipToApplicant: 'relationship',
+    givenName:               'given name',
+    middleNames:             'middle names',
+    surname:                 'surname',
+    gender:                  'gender',
+    dateOfBirth:             'date of birth',
+    relationshipStatus:      'marital status',
+    countryOfBirth:          'country of birth',
+    stateOfBirth:            'state of birth',
+    cityOfBirth:             'city of birth',
+    nationality:             'nationality',
+    countryOfResidence:      'country of residence',
+    occupation:              'occupation',
+    holdsPassport:           'holds passport (Yes/No)',
+    passportNumber:          'passport number',
+    passportCountryOfIssue:  'passport country',
+    passportIssueDate:       'passport issue date',
+    passportExpiryDate:      'passport expiry date',
+    isDeceased:              'is deceased (Yes/No)',
+    citizenship:             'citizenship',
+    phone:                   'phone',
+    email:                   'email',
+    street:                  'street',
+    townCity:                'town/city',
+    livesWithApplicant:      'lives with applicant (Yes/No)',
+  };
+
+  const labelForMissingKey = (key: string): string => {
+    // Top-level keys.
+    switch (key) {
+      case 'maritalStatusMissing': return 'Marital status (from admission)';
+      case 'partnerMissing':       return 'Partner details';
+      case 'hasFormerPartners':    return '"Do you have former partners?" Yes/No';
+      case 'formerPartnersEmpty':  return 'Add at least one former partner';
+      case 'childrenEmpty':        return 'Add at least one child';
+      case 'parentsEmpty':         return 'Add at least one parent';
+      case 'hasSiblings':          return '"Do you have siblings?" Yes/No';
+      case 'siblingsEmpty':        return 'Add at least one sibling';
+      case 'hasNzContacts':        return '"Do you have NZ contacts?" Yes/No';
+      case 'nzContactsEmpty':      return 'Add at least one NZ contact';
+    }
+    const parts = key.split('.');
+    // Partner-prefixed (singleton, no rowId): partner.<field>
+    if (parts[0] === 'partner' && parts.length === 2) {
+      return `Partner's ${FIELD_LABELS[parts[1]] ?? parts[1]}`;
+    }
+    // Indexed entities: <prefix>.<rowId>.<field>
+    if (parts.length === 3) {
+      const [prefix, rowId, field] = parts;
+      const fieldLabel = FIELD_LABELS[field] ?? field;
+      const lookup: Record<string, { rows: { id: string }[]; label: string }> = {
+        formerPartner: { rows: formerPartners,  label: 'Former partner' },
+        child:         { rows: childrenRows,    label: 'Child' },
+        parent:        { rows: parents,         label: 'Parent' },
+        sibling:       { rows: siblings,        label: 'Sibling' },
+        nzContact:     { rows: nzContacts,      label: 'NZ contact' },
+      };
+      const entry = lookup[prefix];
+      if (entry) {
+        const idx = entry.rows.findIndex((r) => r.id === rowId);
+        const nLabel = idx >= 0 ? ` ${idx + 1}` : '';
+        return `${entry.label}${nLabel} ${fieldLabel}`;
+      }
+    }
+    return key;
+  };
+
   const handleSave = async () => {
     const missing = validate();
     if (missing.length > 0) {
-      toast.error(t('visaRelValidationMissing'));
+      // Build a human-readable list, dedup, cap at 6 to keep the toast
+      // legible — extra items are summarised as "+N more".
+      const labels = Array.from(new Set(missing.map(labelForMissingKey)));
+      const sample = labels.slice(0, 6);
+      const more = labels.length > 6 ? `, +${labels.length - 6} more` : '';
+      toast.error(`Please complete: ${sample.join(', ')}${more}`);
       return;
     }
     setSaving(true);
@@ -393,64 +546,14 @@ export function Step8Relationships() {
     </div>
   );
 
-  const inputClass = (hasError: boolean) =>
-    [
-      'w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:outline-none',
-      hasError ? 'border-red-400 focus:border-red-500' : 'border-sorena-navy/20 focus:border-sorena-navy/60',
-    ].join(' ');
+  // PR-FIX: `inputClass`, `NameInput`, and `SelectField` were hoisted
+  // to module scope above to fix a focus-loss bug. `dateInputClass`
+  // stays here — used only inline below for the date inputs.
   const dateInputClass = (hasError: boolean) =>
     [
       'w-44 rounded-lg border bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:outline-none',
       hasError ? 'border-red-400 focus:border-red-500' : 'border-sorena-navy/20 focus:border-sorena-navy/60',
     ].join(' ');
-
-  // Reusable encrypted-name text input bound to a row's text buffer.
-  const NameInput = ({
-    rowId, field, label, value, asterisk, onCommit, errKey,
-  }: {
-    rowId: string; field: string; label: string; value: string;
-    asterisk?: boolean;
-    onCommit: (val: string) => void;
-    errKey: string;
-  }) => (
-    <div>
-      <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
-        {label}{asterisk && <Asterisk />}
-      </label>
-      <input
-        type="text"
-        value={getBuf(rowId, field, value)}
-        onChange={(e) => setBuf(rowId, field, e.target.value)}
-        onBlur={(e) => onCommit(e.target.value.trim())}
-        className={inputClass(!!errors[errKey])}
-      />
-    </div>
-  );
-
-  const SelectField = ({
-    label, asterisk, value, onChange, options, errKey,
-  }: {
-    label: string; asterisk?: boolean;
-    value: string; onChange: (v: string) => void;
-    options: { value: string; key: Parameters<typeof t>[0] }[];
-    errKey: string;
-  }) => (
-    <div>
-      <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
-        {label}{asterisk && <Asterisk />}
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={inputClass(!!errors[errKey])}
-      >
-        <option value="" disabled>{t('visaCommonSelectPlaceholder')}</option>
-        {options.map(({ value: v, key }) => (
-          <option key={v} value={v}>{t(key)}</option>
-        ))}
-      </select>
-    </div>
-  );
 
   // ── Partner block render ──────────────────────────────────────────
 
@@ -478,43 +581,47 @@ export function Step8Relationships() {
           value={row.relationshipToApplicant ?? ''}
           onChange={(v) => patchPartner({ relationshipToApplicant: v }, k('relationshipToApplicant'))}
           options={PARTNER_REL_OPTIONS}
-          errKey={k('relationshipToApplicant')}
+          ariaInvalid={!!errors[k('relationshipToApplicant')]}
         />
 
         <NameInput
-          rowId="partner" field="givenName" asterisk
-          label={t('visaRelGivenNameLabel')} value={row.givenName ?? ''}
-          onCommit={(v) => patchPartner({ givenName: v || null }, k('givenName'))}
-          errKey={k('givenName')}
+          label={t('visaRelGivenNameLabel')} asterisk
+          value={getBuf('partner', 'givenName', row.givenName ?? '')}
+          onChange={(e) => setBuf('partner', 'givenName', e.target.value)}
+          onBlur={(e) => patchPartner({ givenName: e.target.value.trim() || null }, k('givenName'))}
+          ariaInvalid={!!errors[k('givenName')]}
         />
         <NameInput
-          rowId="partner" field="middleNames"
-          label={t('visaRelMiddleNamesLabel')} value={row.middleNames ?? ''}
-          onCommit={(v) => patchPartner({ middleNames: v || null })}
-          errKey="never"
+          label={t('visaRelMiddleNamesLabel')}
+          value={getBuf('partner', 'middleNames', row.middleNames ?? '')}
+          onChange={(e) => setBuf('partner', 'middleNames', e.target.value)}
+          onBlur={(e) => patchPartner({ middleNames: e.target.value.trim() || null })}
+          ariaInvalid={false}
         />
         <NameInput
-          rowId="partner" field="surname" asterisk
-          label={t('visaRelSurnameLabel')} value={row.surname ?? ''}
-          onCommit={(v) => patchPartner({ surname: v || null }, k('surname'))}
-          errKey={k('surname')}
+          label={t('visaRelSurnameLabel')} asterisk
+          value={getBuf('partner', 'surname', row.surname ?? '')}
+          onChange={(e) => setBuf('partner', 'surname', e.target.value)}
+          onBlur={(e) => patchPartner({ surname: e.target.value.trim() || null }, k('surname'))}
+          ariaInvalid={!!errors[k('surname')]}
         />
 
         <SelectField
           label={t('visaRelGenderLabel')} asterisk
           value={row.gender ?? ''} onChange={(v) => patchPartner({ gender: v }, k('gender'))}
-          options={GENDER_OPTIONS} errKey={k('gender')}
+          options={GENDER_OPTIONS} ariaInvalid={!!errors[k('gender')]}
         />
 
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelDateOfBirthLabel')}<Asterisk />
           </label>
-          <input
-            type="date"
-            value={isoToDateInput(row.dateOfBirth)}
-            onChange={(e) => patchPartner({ dateOfBirth: dateInputToIso(e.target.value) }, k('dateOfBirth'))}
-            className={dateInputClass(!!errors[k('dateOfBirth')])}
+          <DateInput
+            value={row.dateOfBirth}
+            onChange={(iso) => patchPartner({ dateOfBirth: iso ? dateInputToIso(iso) : null }, k('dateOfBirth'))}
+            minYear={1900}
+            maxYear={CURRENT_YEAR}
+            ariaInvalid={!!errors[k('dateOfBirth')]}
           />
         </div>
 
@@ -522,7 +629,7 @@ export function Step8Relationships() {
           label={t('visaRelRelationshipStatusLabel')} asterisk
           value={row.relationshipStatus ?? ''}
           onChange={(v) => patchPartner({ relationshipStatus: v }, k('relationshipStatus'))}
-          options={RELATIONSHIP_STATUSES} errKey={k('relationshipStatus')}
+          options={RELATIONSHIP_STATUSES} ariaInvalid={!!errors[k('relationshipStatus')]}
         />
 
         <div>
@@ -538,16 +645,18 @@ export function Step8Relationships() {
           />
         </div>
         <NameInput
-          rowId="partner" field="stateOfBirth" asterisk
-          label={t('visaRelStateOfBirthLabel')} value={row.stateOfBirth ?? ''}
-          onCommit={(v) => patchPartner({ stateOfBirth: v || null }, k('stateOfBirth'))}
-          errKey={k('stateOfBirth')}
+          label={t('visaRelStateOfBirthLabel')} asterisk
+          value={getBuf('partner', 'stateOfBirth', row.stateOfBirth ?? '')}
+          onChange={(e) => setBuf('partner', 'stateOfBirth', e.target.value)}
+          onBlur={(e) => patchPartner({ stateOfBirth: e.target.value.trim() || null }, k('stateOfBirth'))}
+          ariaInvalid={!!errors[k('stateOfBirth')]}
         />
         <NameInput
-          rowId="partner" field="cityOfBirth" asterisk
-          label={t('visaRelCityOfBirthLabel')} value={row.cityOfBirth ?? ''}
-          onCommit={(v) => patchPartner({ cityOfBirth: v || null }, k('cityOfBirth'))}
-          errKey={k('cityOfBirth')}
+          label={t('visaRelCityOfBirthLabel')} asterisk
+          value={getBuf('partner', 'cityOfBirth', row.cityOfBirth ?? '')}
+          onChange={(e) => setBuf('partner', 'cityOfBirth', e.target.value)}
+          onBlur={(e) => patchPartner({ cityOfBirth: e.target.value.trim() || null }, k('cityOfBirth'))}
+          ariaInvalid={!!errors[k('cityOfBirth')]}
         />
 
         <div>
@@ -602,10 +711,11 @@ export function Step8Relationships() {
         {row.holdsPassport === true && (
           <>
             <NameInput
-              rowId="partner" field="passportNumber" asterisk
-              label={t('visaRelPartnerPassportNumberLabel')} value={row.passportNumber ?? ''}
-              onCommit={(v) => patchPartner({ passportNumber: v || null }, k('passportNumber'))}
-              errKey={k('passportNumber')}
+              label={t('visaRelPartnerPassportNumberLabel')} asterisk
+              value={getBuf('partner', 'passportNumber', row.passportNumber ?? '')}
+              onChange={(e) => setBuf('partner', 'passportNumber', e.target.value)}
+              onBlur={(e) => patchPartner({ passportNumber: e.target.value.trim() || null }, k('passportNumber'))}
+              ariaInvalid={!!errors[k('passportNumber')]}
             />
             <div>
               <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
@@ -625,22 +735,24 @@ export function Step8Relationships() {
                 <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
                   {t('visaRelPartnerPassportIssueDateLabel')}<Asterisk />
                 </label>
-                <input
-                  type="date"
-                  value={isoToDateInput(row.passportIssueDate)}
-                  onChange={(e) => patchPartner({ passportIssueDate: dateInputToIso(e.target.value) }, k('passportIssueDate'))}
-                  className={dateInputClass(!!errors[k('passportIssueDate')])}
+                <DateInput
+                  value={row.passportIssueDate}
+                  onChange={(iso) => patchPartner({ passportIssueDate: iso ? dateInputToIso(iso) : null }, k('passportIssueDate'))}
+                  minYear={1900}
+                  maxYear={CURRENT_YEAR}
+                  ariaInvalid={!!errors[k('passportIssueDate')]}
                 />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
                   {t('visaRelPartnerPassportExpiryDateLabel')}<Asterisk />
                 </label>
-                <input
-                  type="date"
-                  value={isoToDateInput(row.passportExpiryDate)}
-                  onChange={(e) => patchPartner({ passportExpiryDate: dateInputToIso(e.target.value) }, k('passportExpiryDate'))}
-                  className={dateInputClass(!!errors[k('passportExpiryDate')])}
+                <DateInput
+                  value={row.passportExpiryDate}
+                  onChange={(iso) => patchPartner({ passportExpiryDate: iso ? dateInputToIso(iso) : null }, k('passportExpiryDate'))}
+                  minYear={CURRENT_YEAR}
+                  maxYear={2100}
+                  ariaInvalid={!!errors[k('passportExpiryDate')]}
                 />
               </div>
             </div>
@@ -672,38 +784,46 @@ export function Step8Relationships() {
             <Trash2 size={16} />
           </button>
         </div>
-        <NameInput rowId={row.id} field="givenName" asterisk
-          label={t('visaRelGivenNameLabel')} value={row.givenName ?? ''}
-          onCommit={(v) => patchFormerPartner(row.id, { givenName: v || null }, k('givenName'))}
-          errKey={k('givenName')}
+        <NameInput
+          label={t('visaRelGivenNameLabel')} asterisk
+          value={getBuf(row.id, 'givenName', row.givenName ?? '')}
+          onChange={(e) => setBuf(row.id, 'givenName', e.target.value)}
+          onBlur={(e) => patchFormerPartner(row.id, { givenName: e.target.value.trim() || null }, k('givenName'))}
+          ariaInvalid={!!errors[k('givenName')]}
         />
-        <NameInput rowId={row.id} field="middleNames"
-          label={t('visaRelMiddleNamesLabel')} value={row.middleNames ?? ''}
-          onCommit={(v) => patchFormerPartner(row.id, { middleNames: v || null })}
-          errKey="never"
+        <NameInput
+          label={t('visaRelMiddleNamesLabel')}
+          value={getBuf(row.id, 'middleNames', row.middleNames ?? '')}
+          onChange={(e) => setBuf(row.id, 'middleNames', e.target.value)}
+          onBlur={(e) => patchFormerPartner(row.id, { middleNames: e.target.value.trim() || null })}
+          ariaInvalid={false}
         />
-        <NameInput rowId={row.id} field="surname" asterisk
-          label={t('visaRelSurnameLabel')} value={row.surname ?? ''}
-          onCommit={(v) => patchFormerPartner(row.id, { surname: v || null }, k('surname'))}
-          errKey={k('surname')}
+        <NameInput
+          label={t('visaRelSurnameLabel')} asterisk
+          value={getBuf(row.id, 'surname', row.surname ?? '')}
+          onChange={(e) => setBuf(row.id, 'surname', e.target.value)}
+          onBlur={(e) => patchFormerPartner(row.id, { surname: e.target.value.trim() || null }, k('surname'))}
+          ariaInvalid={!!errors[k('surname')]}
         />
         <SelectField label={t('visaRelGenderLabel')} asterisk
           value={row.gender ?? ''} onChange={(v) => patchFormerPartner(row.id, { gender: v }, k('gender'))}
-          options={GENDER_OPTIONS} errKey={k('gender')} />
+          options={GENDER_OPTIONS} ariaInvalid={!!errors[k('gender')]} />
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelDateOfBirthLabel')}<Asterisk />
           </label>
-          <input type="date"
-            value={isoToDateInput(row.dateOfBirth)}
-            onChange={(e) => patchFormerPartner(row.id, { dateOfBirth: dateInputToIso(e.target.value) }, k('dateOfBirth'))}
-            className={dateInputClass(!!errors[k('dateOfBirth')])}
+          <DateInput
+            value={row.dateOfBirth}
+            onChange={(iso) => patchFormerPartner(row.id, { dateOfBirth: iso ? dateInputToIso(iso) : null }, k('dateOfBirth'))}
+            minYear={1900}
+            maxYear={CURRENT_YEAR}
+            ariaInvalid={!!errors[k('dateOfBirth')]}
           />
         </div>
         <SelectField label={t('visaRelRelationshipStatusLabel')} asterisk
           value={row.relationshipStatus ?? ''}
           onChange={(v) => patchFormerPartner(row.id, { relationshipStatus: v }, k('relationshipStatus'))}
-          options={RELATIONSHIP_STATUSES} errKey={k('relationshipStatus')} />
+          options={RELATIONSHIP_STATUSES} ariaInvalid={!!errors[k('relationshipStatus')]} />
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCountryOfBirthLabel')}<Asterisk />
@@ -746,28 +866,37 @@ export function Step8Relationships() {
             <Trash2 size={16} />
           </button>
         </div>
-        <NameInput rowId={row.id} field="givenName" asterisk
-          label={t('visaRelGivenNameLabel')} value={row.givenName ?? ''}
-          onCommit={(v) => patchChild(row.id, { givenName: v || null }, k('givenName'))}
-          errKey={k('givenName')} />
-        <NameInput rowId={row.id} field="middleNames"
-          label={t('visaRelMiddleNamesLabel')} value={row.middleNames ?? ''}
-          onCommit={(v) => patchChild(row.id, { middleNames: v || null })}
-          errKey="never" />
-        <NameInput rowId={row.id} field="surname" asterisk
-          label={t('visaRelSurnameLabel')} value={row.surname ?? ''}
-          onCommit={(v) => patchChild(row.id, { surname: v || null }, k('surname'))}
-          errKey={k('surname')} />
+        <NameInput
+          label={t('visaRelGivenNameLabel')} asterisk
+          value={getBuf(row.id, 'givenName', row.givenName ?? '')}
+          onChange={(e) => setBuf(row.id, 'givenName', e.target.value)}
+          onBlur={(e) => patchChild(row.id, { givenName: e.target.value.trim() || null }, k('givenName'))}
+          ariaInvalid={!!errors[k('givenName')]} />
+        <NameInput
+          label={t('visaRelMiddleNamesLabel')}
+          value={getBuf(row.id, 'middleNames', row.middleNames ?? '')}
+          onChange={(e) => setBuf(row.id, 'middleNames', e.target.value)}
+          onBlur={(e) => patchChild(row.id, { middleNames: e.target.value.trim() || null })}
+          ariaInvalid={false} />
+        <NameInput
+          label={t('visaRelSurnameLabel')} asterisk
+          value={getBuf(row.id, 'surname', row.surname ?? '')}
+          onChange={(e) => setBuf(row.id, 'surname', e.target.value)}
+          onBlur={(e) => patchChild(row.id, { surname: e.target.value.trim() || null }, k('surname'))}
+          ariaInvalid={!!errors[k('surname')]} />
         <SelectField label={t('visaRelGenderLabel')} asterisk
           value={row.gender ?? ''} onChange={(v) => patchChild(row.id, { gender: v }, k('gender'))}
-          options={GENDER_OPTIONS} errKey={k('gender')} />
+          options={GENDER_OPTIONS} ariaInvalid={!!errors[k('gender')]} />
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelDateOfBirthLabel')}<Asterisk />
           </label>
-          <input type="date" value={isoToDateInput(row.dateOfBirth)}
-            onChange={(e) => patchChild(row.id, { dateOfBirth: dateInputToIso(e.target.value) }, k('dateOfBirth'))}
-            className={dateInputClass(!!errors[k('dateOfBirth')])} />
+          <DateInput
+            value={row.dateOfBirth}
+            onChange={(iso) => patchChild(row.id, { dateOfBirth: iso ? dateInputToIso(iso) : null }, k('dateOfBirth'))}
+            minYear={1900}
+            maxYear={CURRENT_YEAR}
+            ariaInvalid={!!errors[k('dateOfBirth')]} />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
@@ -790,7 +919,7 @@ export function Step8Relationships() {
         <SelectField label={t('visaRelChildRelLabel')} asterisk
           value={row.relationshipToApplicant ?? ''}
           onChange={(v) => patchChild(row.id, { relationshipToApplicant: v }, k('relationshipToApplicant'))}
-          options={CHILD_REL_OPTIONS} errKey={k('relationshipToApplicant')} />
+          options={CHILD_REL_OPTIONS} ariaInvalid={!!errors[k('relationshipToApplicant')]} />
         <div className="flex flex-col gap-2">
           <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelChildLivesWithLabel')}<Asterisk />
@@ -816,22 +945,28 @@ export function Step8Relationships() {
     const isParent = kind === 'parent';
     return (
       <>
-        <NameInput rowId={row.id} field="givenName" asterisk
-          label={t('visaRelGivenNameLabel')} value={row.givenName ?? ''}
-          onCommit={(v) => update({ givenName: v || null }, k('givenName'))}
-          errKey={k('givenName')} />
-        <NameInput rowId={row.id} field="middleNames"
-          label={t('visaRelMiddleNamesLabel')} value={row.middleNames ?? ''}
-          onCommit={(v) => update({ middleNames: v || null })}
-          errKey="never" />
-        <NameInput rowId={row.id} field="surname" asterisk
-          label={t('visaRelSurnameLabel')} value={row.surname ?? ''}
-          onCommit={(v) => update({ surname: v || null }, k('surname'))}
-          errKey={k('surname')} />
+        <NameInput
+          label={t('visaRelGivenNameLabel')} asterisk
+          value={getBuf(row.id, 'givenName', row.givenName ?? '')}
+          onChange={(e) => setBuf(row.id, 'givenName', e.target.value)}
+          onBlur={(e) => update({ givenName: e.target.value.trim() || null }, k('givenName'))}
+          ariaInvalid={!!errors[k('givenName')]} />
+        <NameInput
+          label={t('visaRelMiddleNamesLabel')}
+          value={getBuf(row.id, 'middleNames', row.middleNames ?? '')}
+          onChange={(e) => setBuf(row.id, 'middleNames', e.target.value)}
+          onBlur={(e) => update({ middleNames: e.target.value.trim() || null })}
+          ariaInvalid={false} />
+        <NameInput
+          label={t('visaRelSurnameLabel')} asterisk
+          value={getBuf(row.id, 'surname', row.surname ?? '')}
+          onChange={(e) => setBuf(row.id, 'surname', e.target.value)}
+          onBlur={(e) => update({ surname: e.target.value.trim() || null }, k('surname'))}
+          ariaInvalid={!!errors[k('surname')]} />
         <SelectField label={relLabel} asterisk
           value={row.relationshipToApplicant ?? ''}
           onChange={(v) => update({ relationshipToApplicant: v }, k('relationshipToApplicant'))}
-          options={relOptions} errKey={k('relationshipToApplicant')} />
+          options={relOptions} ariaInvalid={!!errors[k('relationshipToApplicant')]} />
         {isParent && (
           <div className="flex flex-col gap-2">
             <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
@@ -845,15 +980,18 @@ export function Step8Relationships() {
         <SelectField label={t('visaRelGenderLabel')} asterisk
           value={row.gender ?? ''}
           onChange={(v) => update({ gender: v }, k('gender'))}
-          options={GENDER_OPTIONS} errKey={k('gender')} />
+          options={GENDER_OPTIONS} ariaInvalid={!!errors[k('gender')]} />
         <div className="flex flex-col gap-2">
           <label className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelDateOfBirthLabel')}<Asterisk />
           </label>
-          <input type="date" value={isoToDateInput(row.dateOfBirth)}
+          <DateInput
+            value={row.dateOfBirth}
             disabled={row.dateOfBirthUnknown === true}
-            onChange={(e) => update({ dateOfBirth: dateInputToIso(e.target.value) }, k('dateOfBirth'))}
-            className={dateInputClass(!!errors[k('dateOfBirth')])} />
+            onChange={(iso) => update({ dateOfBirth: iso ? dateInputToIso(iso) : null }, k('dateOfBirth'))}
+            minYear={1900}
+            maxYear={CURRENT_YEAR}
+            ariaInvalid={!!errors[k('dateOfBirth')]} />
           <label className="flex cursor-pointer items-center gap-3">
             <input type="checkbox"
               checked={row.dateOfBirthUnknown === true}
@@ -865,7 +1003,7 @@ export function Step8Relationships() {
         <SelectField label={t('visaRelRelationshipStatusLabel')} asterisk
           value={row.relationshipStatus ?? ''}
           onChange={(v) => update({ relationshipStatus: v }, k('relationshipStatus'))}
-          options={RELATIONSHIP_STATUSES} errKey={k('relationshipStatus')} />
+          options={RELATIONSHIP_STATUSES} ariaInvalid={!!errors[k('relationshipStatus')]} />
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCountryOfBirthLabel')}<Asterisk />
@@ -965,50 +1103,72 @@ export function Step8Relationships() {
             <Trash2 size={16} />
           </button>
         </div>
-        <NameInput rowId={row.id} field="givenName" asterisk
-          label={t('visaRelGivenNameLabel')} value={row.givenName ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { givenName: v || null }, k('givenName'))}
-          errKey={k('givenName')} />
-        <NameInput rowId={row.id} field="middleNames"
-          label={t('visaRelMiddleNamesLabel')} value={row.middleNames ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { middleNames: v || null })}
-          errKey="never" />
-        <NameInput rowId={row.id} field="surname" asterisk
-          label={t('visaRelSurnameLabel')} value={row.surname ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { surname: v || null }, k('surname'))}
-          errKey={k('surname')} />
-        <NameInput rowId={row.id} field="relationshipToApplicant" asterisk
-          label={t('visaRelNzContactRelLabel')} value={row.relationshipToApplicant ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { relationshipToApplicant: v || null }, k('relationshipToApplicant'))}
-          errKey={k('relationshipToApplicant')} />
-        <NameInput rowId={row.id} field="phone" asterisk
-          label={t('visaRelNzContactPhoneLabel')} value={row.phone ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { phone: v || null }, k('phone'))}
-          errKey={k('phone')} />
-        <NameInput rowId={row.id} field="email" asterisk
-          label={t('visaRelNzContactEmailLabel')} value={row.email ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { email: v || null }, k('email'))}
-          errKey={k('email')} />
-        <NameInput rowId={row.id} field="street" asterisk
-          label={t('visaRelNzContactStreetLabel')} value={row.street ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { street: v || null }, k('street'))}
-          errKey={k('street')} />
-        <NameInput rowId={row.id} field="suburb"
-          label={t('visaRelNzContactSuburbLabel')} value={row.suburb ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { suburb: v || null })}
-          errKey="never" />
-        <NameInput rowId={row.id} field="townCity" asterisk
-          label={t('visaRelNzContactTownCityLabel')} value={row.townCity ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { townCity: v || null }, k('townCity'))}
-          errKey={k('townCity')} />
-        <NameInput rowId={row.id} field="region"
-          label={t('visaRelNzContactRegionLabel')} value={row.region ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { region: v || null })}
-          errKey="never" />
-        <NameInput rowId={row.id} field="postcode"
-          label={t('visaRelNzContactPostcodeLabel')} value={row.postcode ?? ''}
-          onCommit={(v) => patchNzContact(row.id, { postcode: v || null })}
-          errKey="never" />
+        <NameInput
+          label={t('visaRelGivenNameLabel')} asterisk
+          value={getBuf(row.id, 'givenName', row.givenName ?? '')}
+          onChange={(e) => setBuf(row.id, 'givenName', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { givenName: e.target.value.trim() || null }, k('givenName'))}
+          ariaInvalid={!!errors[k('givenName')]} />
+        <NameInput
+          label={t('visaRelMiddleNamesLabel')}
+          value={getBuf(row.id, 'middleNames', row.middleNames ?? '')}
+          onChange={(e) => setBuf(row.id, 'middleNames', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { middleNames: e.target.value.trim() || null })}
+          ariaInvalid={false} />
+        <NameInput
+          label={t('visaRelSurnameLabel')} asterisk
+          value={getBuf(row.id, 'surname', row.surname ?? '')}
+          onChange={(e) => setBuf(row.id, 'surname', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { surname: e.target.value.trim() || null }, k('surname'))}
+          ariaInvalid={!!errors[k('surname')]} />
+        <NameInput
+          label={t('visaRelNzContactRelLabel')} asterisk
+          value={getBuf(row.id, 'relationshipToApplicant', row.relationshipToApplicant ?? '')}
+          onChange={(e) => setBuf(row.id, 'relationshipToApplicant', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { relationshipToApplicant: e.target.value.trim() || null }, k('relationshipToApplicant'))}
+          ariaInvalid={!!errors[k('relationshipToApplicant')]} />
+        <NameInput
+          label={t('visaRelNzContactPhoneLabel')} asterisk
+          value={getBuf(row.id, 'phone', row.phone ?? '')}
+          onChange={(e) => setBuf(row.id, 'phone', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { phone: e.target.value.trim() || null }, k('phone'))}
+          ariaInvalid={!!errors[k('phone')]} />
+        <NameInput
+          label={t('visaRelNzContactEmailLabel')} asterisk
+          value={getBuf(row.id, 'email', row.email ?? '')}
+          onChange={(e) => setBuf(row.id, 'email', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { email: e.target.value.trim() || null }, k('email'))}
+          ariaInvalid={!!errors[k('email')]} />
+        <NameInput
+          label={t('visaRelNzContactStreetLabel')} asterisk
+          value={getBuf(row.id, 'street', row.street ?? '')}
+          onChange={(e) => setBuf(row.id, 'street', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { street: e.target.value.trim() || null }, k('street'))}
+          ariaInvalid={!!errors[k('street')]} />
+        <NameInput
+          label={t('visaRelNzContactSuburbLabel')}
+          value={getBuf(row.id, 'suburb', row.suburb ?? '')}
+          onChange={(e) => setBuf(row.id, 'suburb', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { suburb: e.target.value.trim() || null })}
+          ariaInvalid={false} />
+        <NameInput
+          label={t('visaRelNzContactTownCityLabel')} asterisk
+          value={getBuf(row.id, 'townCity', row.townCity ?? '')}
+          onChange={(e) => setBuf(row.id, 'townCity', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { townCity: e.target.value.trim() || null }, k('townCity'))}
+          ariaInvalid={!!errors[k('townCity')]} />
+        <NameInput
+          label={t('visaRelNzContactRegionLabel')}
+          value={getBuf(row.id, 'region', row.region ?? '')}
+          onChange={(e) => setBuf(row.id, 'region', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { region: e.target.value.trim() || null })}
+          ariaInvalid={false} />
+        <NameInput
+          label={t('visaRelNzContactPostcodeLabel')}
+          value={getBuf(row.id, 'postcode', row.postcode ?? '')}
+          onChange={(e) => setBuf(row.id, 'postcode', e.target.value)}
+          onBlur={(e) => patchNzContact(row.id, { postcode: e.target.value.trim() || null })}
+          ariaInvalid={false} />
       </div>
     );
   };

@@ -7,6 +7,7 @@ import { useVisa } from '../VisaFormContext';
 import { VisaPhotoUploader } from '../VisaPhotoUploader';
 import { COUNTRIES } from '@/lib/data/countries';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-VISA1 — INZ 1200 Section 1 "Identity Details".
 // Read-only fields are pulled from the readonly snapshot (contacts + admission).
@@ -45,6 +46,10 @@ function isoToDateInput(iso: string | null): string {
 function dateInputToIso(value: string): string | null {
   return value ? new Date(value).toISOString() : null;
 }
+
+// Module-scope current year — used as a bound on DateInput so users
+// can't pick year 0055 or year 9999. Captured at module load.
+const CURRENT_YEAR = new Date().getFullYear();
 
 export function Step1IdentityDetails() {
   const t = useTranslations();
@@ -425,22 +430,24 @@ export function Step1IdentityDetails() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaIdentityPassportIssueDateLabel')}<Asterisk />
           </label>
-          <input
-            type="date"
-            value={form.passportIssueDate}
-            onChange={(e) => update('passportIssueDate', e.target.value)}
-            className={inputClass(!!errors.passportIssueDate)}
+          <DateInput
+            value={form.passportIssueDate || null}
+            onChange={(iso) => update('passportIssueDate', iso ?? '')}
+            minYear={1900}
+            maxYear={CURRENT_YEAR}
+            ariaInvalid={!!errors.passportIssueDate}
           />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaIdentityPassportExpiryDateLabel')}<Asterisk />
           </label>
-          <input
-            type="date"
-            value={form.passportExpiryDate}
-            onChange={(e) => update('passportExpiryDate', e.target.value)}
-            className={inputClass(!!errors.passportExpiryDate)}
+          <DateInput
+            value={form.passportExpiryDate || null}
+            onChange={(iso) => update('passportExpiryDate', iso ?? '')}
+            minYear={CURRENT_YEAR}
+            maxYear={2100}
+            ariaInvalid={!!errors.passportExpiryDate}
           />
         </div>
       </div>

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { useVisa } from '../VisaFormContext';
 import { api } from '@/lib/api';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-VISA10 — INZ 1200 Section D "Military service".
 // Three gating Y/Ns (D1/D2/D3) + a conditional D3 explanation
@@ -47,6 +48,45 @@ const emptyEntry = (): ServiceEntryForm => ({
 // Backend returns ISO datetimes; the date input wants YYYY-MM-DD.
 function isoToDateInput(iso: string | null | undefined): string {
   return (iso ?? '').slice(0, 10);
+}
+
+// Module-scope current year — used as a bound on DateInput.
+const CURRENT_YEAR = new Date().getFullYear();
+
+// Hoisted out of the parent component to fix the one-character-per-
+// focus bug: when defined inside the parent function body, the
+// component identity changed on every render, causing React to
+// unmount + remount the underlying <input> on each keystroke and
+// drop focus. Stable module-level identity keeps the DOM node
+// mounted across re-renders.
+function inputClass(hasError: boolean): string {
+  return [
+    'w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:outline-none',
+    hasError ? 'border-red-400 focus:border-red-500' : 'border-sorena-navy/20 focus:border-sorena-navy/60',
+  ].join(' ');
+}
+
+function TextField({
+  value, onChange, label, ariaInvalid,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  label: string;
+  ariaInvalid: boolean;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
+        {label}<span className="ml-0.5 text-red-500">*</span>
+      </label>
+      <input
+        type="text"
+        value={value}
+        onChange={onChange}
+        className={inputClass(ariaInvalid)}
+      />
+    </div>
+  );
 }
 
 interface ServerEntry {
@@ -264,32 +304,14 @@ export function Step10MilitaryHistory() {
     </div>
   );
 
-  const inputClass = (hasError: boolean) =>
-    [
-      'w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:outline-none',
-      hasError ? 'border-red-400 focus:border-red-500' : 'border-sorena-navy/20 focus:border-sorena-navy/60',
-    ].join(' ');
+  // PR-FIX: `inputClass` and `TextField` were hoisted to module
+  // scope above to fix a focus-loss bug. `dateInputClass` stays
+  // here — used only inline below for the date inputs.
   const dateInputClass = (hasError: boolean) =>
     [
       'w-44 rounded-lg border bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:outline-none',
       hasError ? 'border-red-400 focus:border-red-500' : 'border-sorena-navy/20 focus:border-sorena-navy/60',
     ].join(' ');
-
-  const TextField = ({
-    idx, field, label,
-  }: { idx: number; field: keyof ServiceEntryForm; label: string }) => (
-    <div>
-      <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
-        {label}<Asterisk />
-      </label>
-      <input
-        type="text"
-        value={entries[idx][field]}
-        onChange={(e) => updateEntry(idx, { [field]: e.target.value } as Partial<ServiceEntryForm>)}
-        className={inputClass(!!errors[`entry.${idx}.${field}`])}
-      />
-    </div>
-  );
 
   if (!loaded) {
     return (
@@ -409,33 +431,70 @@ export function Step10MilitaryHistory() {
                   <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
                     {t('visaMilitaryDateStartedLabel')}<Asterisk />
                   </label>
-                  <input
-                    type="date"
-                    value={entry.dateStarted}
-                    onChange={(e) => updateEntry(i, { dateStarted: e.target.value })}
-                    className={dateInputClass(!!errors[`entry.${i}.dateStarted`])}
+                  <DateInput
+                    value={entry.dateStarted || null}
+                    onChange={(iso) => updateEntry(i, { dateStarted: iso ?? '' })}
+                    minYear={1900}
+                    maxYear={CURRENT_YEAR}
+                    ariaInvalid={!!errors[`entry.${i}.dateStarted`]}
                   />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
                     {t('visaMilitaryDateFinishedLabel')}<Asterisk />
                   </label>
-                  <input
-                    type="date"
-                    value={entry.dateFinished}
-                    onChange={(e) => updateEntry(i, { dateFinished: e.target.value })}
-                    className={dateInputClass(!!errors[`entry.${i}.dateFinished`])}
+                  <DateInput
+                    value={entry.dateFinished || null}
+                    onChange={(iso) => updateEntry(i, { dateFinished: iso ?? '' })}
+                    minYear={1900}
+                    maxYear={CURRENT_YEAR}
+                    ariaInvalid={!!errors[`entry.${i}.dateFinished`]}
                   />
                 </div>
               </div>
 
-              <TextField idx={i} field="location"  label={t('visaMilitaryLocationLabel')} />
-              <TextField idx={i} field="corps"     label={t('visaMilitaryCorpsLabel')} />
-              <TextField idx={i} field="division"  label={t('visaMilitaryDivisionLabel')} />
-              <TextField idx={i} field="brigade"   label={t('visaMilitaryBrigadeLabel')} />
-              <TextField idx={i} field="battalion" label={t('visaMilitaryBattalionLabel')} />
-              <TextField idx={i} field="unit"      label={t('visaMilitaryUnitLabel')} />
-              <TextField idx={i} field="rank"      label={t('visaMilitaryRankLabel')} />
+              <TextField
+                value={entry.location}
+                onChange={(e) => updateEntry(i, { location: e.target.value })}
+                label={t('visaMilitaryLocationLabel')}
+                ariaInvalid={!!errors[`entry.${i}.location`]}
+              />
+              <TextField
+                value={entry.corps}
+                onChange={(e) => updateEntry(i, { corps: e.target.value })}
+                label={t('visaMilitaryCorpsLabel')}
+                ariaInvalid={!!errors[`entry.${i}.corps`]}
+              />
+              <TextField
+                value={entry.division}
+                onChange={(e) => updateEntry(i, { division: e.target.value })}
+                label={t('visaMilitaryDivisionLabel')}
+                ariaInvalid={!!errors[`entry.${i}.division`]}
+              />
+              <TextField
+                value={entry.brigade}
+                onChange={(e) => updateEntry(i, { brigade: e.target.value })}
+                label={t('visaMilitaryBrigadeLabel')}
+                ariaInvalid={!!errors[`entry.${i}.brigade`]}
+              />
+              <TextField
+                value={entry.battalion}
+                onChange={(e) => updateEntry(i, { battalion: e.target.value })}
+                label={t('visaMilitaryBattalionLabel')}
+                ariaInvalid={!!errors[`entry.${i}.battalion`]}
+              />
+              <TextField
+                value={entry.unit}
+                onChange={(e) => updateEntry(i, { unit: e.target.value })}
+                label={t('visaMilitaryUnitLabel')}
+                ariaInvalid={!!errors[`entry.${i}.unit`]}
+              />
+              <TextField
+                value={entry.rank}
+                onChange={(e) => updateEntry(i, { rank: e.target.value })}
+                label={t('visaMilitaryRankLabel')}
+                ariaInvalid={!!errors[`entry.${i}.rank`]}
+              />
 
               <div>
                 <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
@@ -449,7 +508,12 @@ export function Step10MilitaryHistory() {
                 />
               </div>
 
-              <TextField idx={i} field="commandingOfficer" label={t('visaMilitaryCommanderLabel')} />
+              <TextField
+                value={entry.commandingOfficer}
+                onChange={(e) => updateEntry(i, { commandingOfficer: e.target.value })}
+                label={t('visaMilitaryCommanderLabel')}
+                ariaInvalid={!!errors[`entry.${i}.commandingOfficer`]}
+              />
             </div>
           ))}
 

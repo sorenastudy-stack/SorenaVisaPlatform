@@ -89,6 +89,12 @@ export function Step13SupportingDocuments() {
     setDocuments(next.documents ?? []);
   };
 
+  // PR-FILES-2 — "has document" now means ">=1 file uploaded under
+  // this requirement", not "parent row exists". A parent with zero
+  // files (last one just deleted) still counts as unsatisfied.
+  const hasFilesFor = (dt: DocumentType): boolean =>
+    (docMap.get(dt)?.files.length ?? 0) > 0;
+
   const validate = (): string | null => {
     const e: Record<string, boolean> = {};
     let firstError: string | null = null;
@@ -111,20 +117,20 @@ export function Step13SupportingDocuments() {
         countryOfResidence.trim() !== '',
         t('visaDocsErrorCountryOfResidenceRequired'),
       );
-      if (!docMap.has('RESIDENCE_VISA')) {
+      if (!hasFilesFor('RESIDENCE_VISA')) {
         e.residenceVisa = true;
         if (!firstError) firstError = t('visaDocsValidationResidenceVisaRequired');
       }
     }
-    if (!docMap.has('PASSPORT')) {
+    if (!hasFilesFor('PASSPORT')) {
       e.passport = true;
       if (!firstError) firstError = t('visaDocsValidationPassportRequired');
     }
-    if (showMilitary && !docMap.has('MILITARY_RECORD')) {
+    if (showMilitary && !hasFilesFor('MILITARY_RECORD')) {
       e.militaryRecord = true;
       if (!firstError) firstError = t('visaDocsValidationMilitaryRecordRequired');
     }
-    if (showAuthority && !docMap.has('AUTHORITY_DOC')) {
+    if (showAuthority && !hasFilesFor('AUTHORITY_DOC')) {
       e.authorityDoc = true;
       if (!firstError) firstError = t('visaDocsValidationAuthorityDocRequired');
     }

@@ -8,6 +8,7 @@ import { useVisa } from '../VisaFormContext';
 import { COUNTRIES } from '@/lib/data/countries';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { VisaDocumentUploader } from '../VisaDocumentUploader';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-VISA4 — INZ 1200 Section 4 "Character".
 // Layout mirrors INZ exactly: four character declarations, then police
@@ -22,6 +23,9 @@ function isoToDateInput(iso: string | null): string {
 function dateInputToIso(value: string): string | null {
   return value ? new Date(value).toISOString() : null;
 }
+
+// Module-scope current year — used as a bound on DateInput.
+const CURRENT_YEAR = new Date().getFullYear();
 
 export function Step4Character() {
   const t = useTranslations();
@@ -350,11 +354,12 @@ export function Step4Character() {
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('visaCharacterPoliceCertIssueDateLabel')}<Asterisk />
         </label>
-        <input
-          type="date"
-          value={form.policeCertIssueDate}
-          onChange={(e) => update('policeCertIssueDate', e.target.value)}
-          className={dateInputClass(!!errors.policeCertIssueDate)}
+        <DateInput
+          value={form.policeCertIssueDate || null}
+          onChange={(iso) => update('policeCertIssueDate', iso ?? '')}
+          minYear={1900}
+          maxYear={CURRENT_YEAR}
+          ariaInvalid={!!errors.policeCertIssueDate}
         />
       </div>
 
