@@ -62,3 +62,22 @@ export function getSearchableCountries(locale: 'en' | 'fa'): SearchableCountry[]
   items.sort((a, b) => a.name.localeCompare(b.name, locale) || a.code.localeCompare(b.code));
   return items;
 }
+
+/**
+ * Tolerant country-display formatter. Converts an ISO 3166-1 alpha-2 code
+ * to its localized full name. Designed to be safe across all display sites
+ * including those that may receive legacy free-text or null values.
+ *
+ * - null / undefined / '' → null (caller can render '—' or skip)
+ * - 'OVERSEAS' sentinel  → 'Other / overseas country'
+ * - 'IR'                 → 'Islamic Republic of Iran' (or localized)
+ * - Unknown value        → returns input unchanged (fail-soft, e.g. 'Atlantis' stays 'Atlantis')
+ */
+export function displayCountry(
+  code: string | null | undefined,
+  locale: 'en' | 'fa' = 'en',
+): string | null {
+  if (code === null || code === undefined || code === '') return null;
+  if (code === 'OVERSEAS') return locale === 'fa' ? 'دیگر / کشور خارجی' : 'Other / overseas country';
+  return getCountryName(code, locale);
+}

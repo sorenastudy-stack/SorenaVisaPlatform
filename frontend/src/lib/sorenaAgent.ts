@@ -6,7 +6,7 @@
 // updated values get written to every subsequent save.
 export const SORENA_AGENT_DETAILS = {
   organisationName: 'Sorena Visa',
-  country:          'New Zealand',
+  country:          'NZ',
   givenName:        'Yashua',
   surname:          'Arjmand',
   email:            'admission@sorenavisa.com',

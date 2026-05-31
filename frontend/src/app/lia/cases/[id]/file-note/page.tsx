@@ -8,6 +8,7 @@ import {
 import { Card, CardContent } from '@/components/ui/Card';
 import { BackLink } from '@/components/ui/BackLink';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { displayCountry } from '@/lib/country-codes';
 import { getSession } from '@/lib/auth';
 import { formatDate, formatRelative, formatDateTime } from '../../../_utils/format';
 import { ExportFileNoteButtons } from './ExportFileNoteButtons';
@@ -161,7 +162,7 @@ export default async function CaseFileNotePage({ params }: { params: { id: strin
               <Row icon={<UserCheck size={14} />} label="Applicant" value={c.applicant.fullName ?? '—'} />
               <Row icon={<Mail size={14} />} label="Email" value={c.applicant.email ?? '—'} />
               <Row icon={<Phone size={14} />} label="Phone" value={c.applicant.phone ?? '—'} />
-              <Row icon={<Globe size={14} />} label="Country" value={c.applicant.countryOfResidence ?? '—'} />
+              <Row icon={<Globe size={14} />} label="Country" value={displayCountry(c.applicant.countryOfResidence) ?? '—'} />
             </div>
             <div className="space-y-2">
               <Row icon={<Briefcase size={14} />} label="Stage" value={c.stage} />

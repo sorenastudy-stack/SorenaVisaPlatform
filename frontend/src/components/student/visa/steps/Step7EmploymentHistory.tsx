@@ -11,8 +11,7 @@ import {
   type UnemploymentEntry,
   type UnemploymentEntryPatch,
 } from '../VisaFormContext';
-import { COUNTRIES } from '@/lib/data/countries';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { CountrySelect } from '@/components/common/CountrySelect';
 
 // PR-VISA7 — INZ 1200 Section 7 "Employment history".
 // Three repeating sub-blocks share the same draft-then-fill, live-API
@@ -442,12 +441,11 @@ export function Step7EmploymentHistory() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaEmploymentCountryOfWorkLabel')}<Asterisk />
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={row.countryOfWork ?? ''}
-            onChange={(v) => patchEmpField(row.id, { countryOfWork: v }, k('countryOfWork'))}
+          <CountrySelect
+            value={row.countryOfWork || null}
+            onChange={(code) => patchEmpField(row.id, { countryOfWork: code ?? '' }, k('countryOfWork'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('countryOfWork')]}
+            ariaInvalid={!!errors[k('countryOfWork')]}
           />
         </div>
 
@@ -459,12 +457,11 @@ export function Step7EmploymentHistory() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaEmploymentOrgCountryLabel')}<Asterisk />
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={row.organisationCountry ?? ''}
-            onChange={(v) => patchEmpField(row.id, { organisationCountry: v }, k('organisationCountry'))}
+          <CountrySelect
+            value={row.organisationCountry || null}
+            onChange={(code) => patchEmpField(row.id, { organisationCountry: code ?? '' }, k('organisationCountry'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('organisationCountry')]}
+            ariaInvalid={!!errors[k('organisationCountry')]}
           />
         </div>
 

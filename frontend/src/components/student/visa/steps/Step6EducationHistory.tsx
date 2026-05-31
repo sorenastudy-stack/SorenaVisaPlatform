@@ -12,6 +12,7 @@ import {
   type EducationSupplementPatch,
 } from '../VisaFormContext';
 import { api } from '@/lib/api';
+import { displayCountry } from '@/lib/country-codes';
 
 // PR-VISA6 — INZ 1200 Section 6 "Education history".
 // Admission entries are shown READ-ONLY (sourced from the admission row,
@@ -403,7 +404,7 @@ export function Step6EducationHistory() {
           />
           <ReadonlyField
             label={t('visaEducationHistoryCountryLabel')}
-            value={entry.country}
+            value={displayCountry(entry.country) ?? entry.country}
           />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

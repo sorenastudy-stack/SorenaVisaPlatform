@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useVisa } from '../VisaFormContext';
 import { SORENA_AGENT_DETAILS } from '@/lib/sorenaAgent';
+import { getCountryName } from '@/lib/country-codes';
 import { DateInput } from '@/components/ui/DateInput';
 
 // PR-VISA3 — INZ 1200 Section 3 "Eligibility".
@@ -376,7 +377,7 @@ export function Step3Eligibility() {
           />
           <ReadonlyField
             label={t('visaEligibilityAgentCountryLabel')}
-            value={SORENA_AGENT_DETAILS.country}
+            value={getCountryName(SORENA_AGENT_DETAILS.country, 'en')}
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <ReadonlyField

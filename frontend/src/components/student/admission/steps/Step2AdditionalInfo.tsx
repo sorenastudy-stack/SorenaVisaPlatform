@@ -1,66 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useAdmission }     from '../AdmissionFormContext';
 import { DocumentUploader } from '../DocumentUploader';
-import { COUNTRIES }        from '@/lib/data/countries';
+import { CountrySelect }    from '@/components/common/CountrySelect';
 import { ETHNICITIES }      from '@/lib/data/ethnicities';
-
-function SearchableSelect({
-  options,
-  value,
-  onChange,
-  placeholder,
-}: {
-  options: string[];
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen]   = useState(false);
-  const inputValue        = open ? query : value;
-  const filtered          = query
-    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
-    : options;
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={inputValue}
-        onChange={(e) => { setQuery(e.target.value); onChange(''); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder={placeholder}
-        className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
-      />
-      {open && filtered.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-sorena-navy/20 bg-white shadow-lg">
-          {filtered.map(opt => (
-            <li
-              key={opt}
-              onMouseDown={() => { onChange(opt); setQuery(''); setOpen(false); }}
-              className={[
-                'cursor-pointer px-3 py-2 text-sm text-sorena-navy hover:bg-sorena-navy/5',
-                opt === value ? 'bg-sorena-navy/5 font-medium' : '',
-              ].join(' ')}
-            >
-              {opt}
-            </li>
-          ))}
-        </ul>
-      )}
-      {open && filtered.length === 0 && query && (
-        <div className="absolute z-20 mt-1 w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2 text-sm text-sorena-navy/50 shadow-lg">
-          No results
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function Step2AdditionalInfo() {
   const t = useTranslations();
@@ -188,10 +134,9 @@ export function Step2AdditionalInfo() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionStep2FieldCLabel')}
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={countryOfBirth}
-            onChange={(v) => setStep2Fields({ countryOfBirth: v })}
+          <CountrySelect
+            value={countryOfBirth || null}
+            onChange={(code) => setStep2Fields({ countryOfBirth: code ?? '' })}
             placeholder={t('admissionStep2FieldCPlaceholder')}
           />
         </div>
@@ -201,10 +146,9 @@ export function Step2AdditionalInfo() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionStep2FieldDLabel')}
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={citizenship}
-            onChange={(v) => setStep2Fields({ citizenship: v })}
+          <CountrySelect
+            value={citizenship || null}
+            onChange={(code) => setStep2Fields({ citizenship: code ?? '' })}
             placeholder={t('admissionStep2FieldDPlaceholder')}
           />
         </div>

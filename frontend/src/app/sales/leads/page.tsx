@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { apiServer } from '@/lib/apiServer';
+import { displayCountry } from '@/lib/country-codes';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Users } from 'lucide-react';
 import { InfoTip } from '@/components/ui/InfoTip';
@@ -130,7 +131,7 @@ export default async function SalesLeadsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-[#4A4A4A]">
-                      {lead.contact.countryOfResidence || '—'}
+                      {displayCountry(lead.contact.countryOfResidence) ?? '—'}
                     </td>
                     <td className="px-4 py-3">
                       {lead.scoreBand ? (

@@ -12,6 +12,7 @@ import { EmailService } from '../../email/email.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { encryptPiiFields, decryptPiiFields } from './admission-encryption.util';
+import { isValidCountryCode } from '../../common/country-codes';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 
@@ -111,6 +112,50 @@ const VALID_MARITAL_STATUSES = [
   'WIDOWED',
   'DIVORCED',
   'SEPARATED',
+] as const;
+
+// PR-COUNTRY-CONSOLIDATE — country-code validators. Same shape as the
+// visa-side helper. Allows null/undefined/'' for draft state; otherwise
+// must match the ISO 3166-1 alpha-2 catalogue.
+function assertCountryCodeOrEmpty(value: unknown, fieldName: string): void {
+  if (value === null || value === undefined) return;
+  if (typeof value !== 'string') {
+    throw new BadRequestException(`${fieldName} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  if (!isValidCountryCode(trimmed)) {
+    throw new BadRequestException(
+      `${fieldName} must be a valid ISO 3166-1 alpha-2 country code`,
+    );
+  }
+}
+
+// schoolCountry is special: the Step 3 UI is a 2-pill NZ/Overseas toggle.
+// Per PR-COUNTRY-CONSOLIDATE the literal stored is now 'NZ' (was
+// 'NEW_ZEALAND') OR the 'OVERSEAS' sentinel. Both are accepted; null/
+// undefined/'' pass through for draft state.
+function assertSchoolCountryOrEmpty(value: unknown): void {
+  if (value === null || value === undefined) return;
+  if (typeof value !== 'string') {
+    throw new BadRequestException('schoolCountry must be a string');
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  if (trimmed === 'OVERSEAS') return;
+  if (!isValidCountryCode(trimmed)) {
+    throw new BadRequestException(
+      'schoolCountry must be a valid ISO 3166-1 alpha-2 country code or "OVERSEAS"',
+    );
+  }
+}
+
+// Country fields stored directly on admission_applications (excluding
+// schoolCountry, which uses the OVERSEAS-aware validator above).
+const ADMISSION_APPLICATION_COUNTRY_FIELDS = [
+  'countryOfBirth',
+  'citizenship',
+  'guardianCountry',
 ] as const;
 
 // ── Auto-ticket triggers ──────────────────────────────────────────────────────
@@ -595,6 +640,14 @@ export class AdmissionService {
       }
     }
 
+    // PR-COUNTRY-CONSOLIDATE: validate every country-storing field as
+    // an ISO 3166-1 alpha-2 code (or null / empty). schoolCountry is
+    // handled separately because it also accepts the 'OVERSEAS' literal.
+    for (const field of ADMISSION_APPLICATION_COUNTRY_FIELDS) {
+      assertCountryCodeOrEmpty(data[field], field);
+    }
+    assertSchoolCountryOrEmpty(data.schoolCountry);
+
     const changedKeys = Object.keys(data);
     // PII fields in `data` are still plaintext; encryptPiiFields renames each
     // accepted PII key to `<name>Encrypted` with an AES-256-GCM Buffer value
@@ -835,6 +888,9 @@ export class AdmissionService {
     if (!body.country?.trim()) {
       throw new BadRequestException('country is required');
     }
+    // PR-COUNTRY-CONSOLIDATE: ISO-code validation on top of the
+    // non-empty guard above.
+    assertCountryCodeOrEmpty(body.country, 'country');
     // PR-C1: fieldOfStudy is now app-required (column stays nullable for
     // backward compat with rows created before the rule).
     if (!body.fieldOfStudy?.trim()) {
@@ -918,6 +974,8 @@ export class AdmissionService {
     if (body.country !== undefined) {
       const v = String(body.country).trim();
       if (!v) throw new BadRequestException('country cannot be empty');
+      // PR-COUNTRY-CONSOLIDATE: ISO-code validation on the patched value.
+      assertCountryCodeOrEmpty(v, 'country');
       data.country = v;
     }
     if (body.fieldOfStudy !== undefined) {

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, AlertTriangle, Lock, FileText, UserCheck, Mail, Phone, Gavel, Scale, MessageSquare, FilePlus2, CheckCircle2, Files, XCircle, HelpCircle, ScrollText } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { displayCountry } from '@/lib/country-codes';
 import { getSession } from '@/lib/auth';
 import {
   riskStyles, riskLabel, stageStyles, stageLabel,
@@ -345,7 +346,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
               <Row icon={<UserCheck size={14} />} value={contact?.fullName ?? '—'} />
               <Row icon={<Mail size={14} />}      value={contact?.email ?? '—'} />
               <Row icon={<Phone size={14} />}     value={contact?.phone ?? '—'} />
-              <Row icon={<FileText size={14} />}  value={contact?.countryOfResidence ?? caseData.lead.countryRaw ?? '—'} label="Country" />
+              <Row icon={<FileText size={14} />}  value={displayCountry(contact?.countryOfResidence) ?? caseData.lead.countryRaw ?? '—'} label="Country" />
             </div>
           </CardContent>
         </Card>

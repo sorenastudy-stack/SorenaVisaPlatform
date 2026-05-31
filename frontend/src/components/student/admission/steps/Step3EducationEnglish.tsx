@@ -299,10 +299,10 @@ export function Step3EducationEnglish() {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setStep3Fields({ schoolCountry: 'NEW_ZEALAND' })}
+            onClick={() => setStep3Fields({ schoolCountry: 'NZ' })}
             className={[
               'rounded-lg border px-5 py-2 text-base font-medium transition-colors',
-              schoolCountry === 'NEW_ZEALAND'
+              schoolCountry === 'NZ'
                 ? 'border-sorena-navy bg-sorena-navy text-white'
                 : 'border-sorena-navy/20 text-sorena-navy hover:bg-sorena-navy/5',
             ].join(' ')}

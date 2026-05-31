@@ -21,7 +21,16 @@ import {
 } from '../VisaFormContext';
 import { COUNTRIES } from '@/lib/data/countries';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { CountrySelect } from '@/components/common/CountrySelect';
 import { DateInput } from '@/components/ui/DateInput';
+
+// PR-COUNTRY-CONSOLIDATE: the partner block (renderPartnerBlock) intentionally
+// still uses SearchableSelect+COUNTRIES because VisaPartner.* country fields
+// are stored encrypted (Bytes columns). Migrating them needs decrypt → map →
+// re-encrypt logic and a separate audit pass — tracked as the
+// PR-COUNTRY-ENCRYPTED follow-up. Plaintext relations (formerPartners,
+// children, parents, siblings) have already been swapped to CountrySelect.
+// TODO PR-COUNTRY-ENCRYPTED: convert partner country fields too.
 
 // PR-VISA8 — INZ 1200 Section 8 "Relationships".
 // READ-ONLY relays from admission:
@@ -828,21 +837,21 @@ export function Step8Relationships() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCountryOfBirthLabel')}<Asterisk />
           </label>
-          <SearchableSelect options={COUNTRIES}
-            value={row.countryOfBirth ?? ''}
-            onChange={(v) => patchFormerPartner(row.id, { countryOfBirth: v }, k('countryOfBirth'))}
+          <CountrySelect
+            value={row.countryOfBirth || null}
+            onChange={(code) => patchFormerPartner(row.id, { countryOfBirth: code ?? '' }, k('countryOfBirth'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('countryOfBirth')]} />
+            ariaInvalid={!!errors[k('countryOfBirth')]} />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelNationalityLabel')}<Asterisk />
           </label>
-          <SearchableSelect options={COUNTRIES}
-            value={row.nationality ?? ''}
-            onChange={(v) => patchFormerPartner(row.id, { nationality: v }, k('nationality'))}
+          <CountrySelect
+            value={row.nationality || null}
+            onChange={(code) => patchFormerPartner(row.id, { nationality: code ?? '' }, k('nationality'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('nationality')]} />
+            ariaInvalid={!!errors[k('nationality')]} />
         </div>
       </div>
     );
@@ -902,19 +911,19 @@ export function Step8Relationships() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCountryOfBirthLabel')}<Asterisk />
           </label>
-          <SearchableSelect options={COUNTRIES} value={row.countryOfBirth ?? ''}
-            onChange={(v) => patchChild(row.id, { countryOfBirth: v }, k('countryOfBirth'))}
+          <CountrySelect value={row.countryOfBirth || null}
+            onChange={(code) => patchChild(row.id, { countryOfBirth: code ?? '' }, k('countryOfBirth'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('countryOfBirth')]} />
+            ariaInvalid={!!errors[k('countryOfBirth')]} />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelNationalityLabel')}<Asterisk />
           </label>
-          <SearchableSelect options={COUNTRIES} value={row.nationality ?? ''}
-            onChange={(v) => patchChild(row.id, { nationality: v }, k('nationality'))}
+          <CountrySelect value={row.nationality || null}
+            onChange={(code) => patchChild(row.id, { nationality: code ?? '' }, k('nationality'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('nationality')]} />
+            ariaInvalid={!!errors[k('nationality')]} />
         </div>
         <SelectField label={t('visaRelChildRelLabel')} asterisk
           value={row.relationshipToApplicant ?? ''}
@@ -1008,28 +1017,28 @@ export function Step8Relationships() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCountryOfBirthLabel')}<Asterisk />
           </label>
-          <SearchableSelect options={COUNTRIES} value={row.countryOfBirth ?? ''}
-            onChange={(v) => update({ countryOfBirth: v }, k('countryOfBirth'))}
+          <CountrySelect value={row.countryOfBirth || null}
+            onChange={(code) => update({ countryOfBirth: code ?? '' }, k('countryOfBirth'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('countryOfBirth')]} />
+            ariaInvalid={!!errors[k('countryOfBirth')]} />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCitizenshipLabel')}<Asterisk />
           </label>
-          <SearchableSelect options={COUNTRIES} value={row.citizenship ?? ''}
-            onChange={(v) => update({ citizenship: v }, k('citizenship'))}
+          <CountrySelect value={row.citizenship || null}
+            onChange={(code) => update({ citizenship: code ?? '' }, k('citizenship'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('citizenship')]} />
+            ariaInvalid={!!errors[k('citizenship')]} />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCountryOfResidenceLabel')}<Asterisk />
           </label>
-          <SearchableSelect options={COUNTRIES} value={row.countryOfResidence ?? ''}
-            onChange={(v) => update({ countryOfResidence: v }, k('countryOfResidence'))}
+          <CountrySelect value={row.countryOfResidence || null}
+            onChange={(code) => update({ countryOfResidence: code ?? '' }, k('countryOfResidence'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('countryOfResidence')]} />
+            ariaInvalid={!!errors[k('countryOfResidence')]} />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">

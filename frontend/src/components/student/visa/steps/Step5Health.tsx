@@ -5,8 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { useVisa } from '../VisaFormContext';
-import { COUNTRIES } from '@/lib/data/countries';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { CountrySelect } from '@/components/common/CountrySelect';
 
 // PR-VISA5 — INZ 1200 Section 5 "Health".
 // Layout mirrors INZ exactly. Reuses the established blue NOTE, helper,
@@ -411,12 +410,11 @@ export function Step5Health() {
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('visaHealthTbCountryLabel')}<Asterisk />
             </label>
-            <SearchableSelect
-              options={COUNTRIES}
-              value={row.country ?? ''}
-              onChange={(v) => handleTbCountry(row.id, v)}
+            <CountrySelect
+              value={row.country || null}
+              onChange={(code) => handleTbCountry(row.id, code ?? '')}
               placeholder={t('visaCommonCountryPlaceholder')}
-              hasError={!!errors[`tbCountry:${row.id}`]}
+              ariaInvalid={!!errors[`tbCountry:${row.id}`]}
             />
           </div>
           <div>

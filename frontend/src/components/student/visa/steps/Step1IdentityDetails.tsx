@@ -5,8 +5,8 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useVisa } from '../VisaFormContext';
 import { VisaPhotoUploader } from '../VisaPhotoUploader';
-import { COUNTRIES } from '@/lib/data/countries';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { CountrySelect } from '@/components/common/CountrySelect';
+import { displayCountry } from '@/lib/country-codes';
 import { DateInput } from '@/components/ui/DateInput';
 
 // PR-VISA1 — INZ 1200 Section 1 "Identity Details".
@@ -341,12 +341,11 @@ export function Step1IdentityDetails() {
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('visaIdentityCountryWhenSubmittingLabel')}<Asterisk />
         </label>
-        <SearchableSelect
-          options={COUNTRIES}
-          value={form.countryWhenSubmitting}
-          onChange={(v) => update('countryWhenSubmitting', v)}
+        <CountrySelect
+          value={form.countryWhenSubmitting || null}
+          onChange={(code) => update('countryWhenSubmitting', code ?? '')}
           placeholder={t('visaCommonCountryPlaceholder')}
-          hasError={errors.countryWhenSubmitting}
+          ariaInvalid={!!errors.countryWhenSubmitting}
         />
       </div>
 
@@ -407,7 +406,7 @@ export function Step1IdentityDetails() {
       {/* 12. Nationality — RO */}
       <ReadonlyField
         label={t('visaIdentityNationalityLabel')}
-        value={readonly.citizenship ?? ''}
+        value={displayCountry(readonly.citizenship) ?? ''}
       />
 
       {/* 13. Country of issue */}
@@ -415,12 +414,11 @@ export function Step1IdentityDetails() {
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('visaIdentityPassportCountryOfIssueLabel')}<Asterisk />
         </label>
-        <SearchableSelect
-          options={COUNTRIES}
-          value={form.passportCountryOfIssue}
-          onChange={(v) => update('passportCountryOfIssue', v)}
+        <CountrySelect
+          value={form.passportCountryOfIssue || null}
+          onChange={(code) => update('passportCountryOfIssue', code ?? '')}
           placeholder={t('visaCommonCountryPlaceholder')}
-          hasError={errors.passportCountryOfIssue}
+          ariaInvalid={!!errors.passportCountryOfIssue}
         />
       </div>
 
@@ -479,7 +477,7 @@ export function Step1IdentityDetails() {
       {/* 18. Country of birth — RO */}
       <ReadonlyField
         label={t('visaIdentityCountryOfBirthLabel')}
-        value={readonly.countryOfBirth ?? ''}
+        value={displayCountry(readonly.countryOfBirth) ?? ''}
       />
 
       {/* 19. State of birth */}
@@ -542,12 +540,11 @@ export function Step1IdentityDetails() {
               <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
                 {t('visaIdentityNationalIdCountryLabel')}<Asterisk />
               </label>
-              <SearchableSelect
-                options={COUNTRIES}
-                value={form.nationalIdCountry}
-                onChange={(v) => update('nationalIdCountry', v)}
+              <CountrySelect
+                value={form.nationalIdCountry || null}
+                onChange={(code) => update('nationalIdCountry', code ?? '')}
                 placeholder={t('visaCommonCountryPlaceholder')}
-                hasError={errors.nationalIdCountry}
+                ariaInvalid={!!errors.nationalIdCountry}
               />
             </div>
           </div>

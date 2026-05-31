@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useAdmission } from '../AdmissionFormContext';
-import { COUNTRIES } from '@/lib/data/countries';
+import { CountrySelect } from '@/components/common/CountrySelect';
 
 const RELATIONSHIP_OPTIONS = [
   { value: 'PARENT',     key: 'admissionStep5RelationshipOptionParent'     },
@@ -14,60 +14,6 @@ const RELATIONSHIP_OPTIONS = [
 ] as const;
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
-
-function SearchableSelect({
-  options,
-  value,
-  onChange,
-  placeholder,
-}: {
-  options: string[];
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen]   = useState(false);
-  const inputValue        = open ? query : value;
-  const filtered          = query
-    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
-    : options;
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={inputValue}
-        onChange={(e) => { setQuery(e.target.value); onChange(''); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder={placeholder}
-        className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
-      />
-      {open && filtered.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-sorena-navy/20 bg-white shadow-lg">
-          {filtered.map(opt => (
-            <li
-              key={opt}
-              onMouseDown={() => { onChange(opt); setQuery(''); setOpen(false); }}
-              className={[
-                'cursor-pointer px-3 py-2 text-sm text-sorena-navy hover:bg-sorena-navy/5',
-                opt === value ? 'bg-sorena-navy/5 font-medium' : '',
-              ].join(' ')}
-            >
-              {opt}
-            </li>
-          ))}
-        </ul>
-      )}
-      {open && filtered.length === 0 && query && (
-        <div className="absolute z-20 mt-1 w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2 text-sm text-sorena-navy/50 shadow-lg">
-          No results
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function Step5GuardianInfo() {
   const t = useTranslations();
@@ -381,10 +327,9 @@ export function Step5GuardianInfo() {
               {t('admissionStep5CountryLabel')}
               <span className="ml-0.5 text-red-500">*</span>
             </label>
-            <SearchableSelect
-              options={COUNTRIES}
-              value={guardianCountry ?? ''}
-              onChange={(v) => setStep5Fields({ guardianCountry: v })}
+            <CountrySelect
+              value={guardianCountry || null}
+              onChange={(code) => setStep5Fields({ guardianCountry: code ?? '' })}
               placeholder={t('admissionStep5CountryPlaceholder')}
             />
           </div>

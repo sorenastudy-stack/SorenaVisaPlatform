@@ -5,8 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { useVisa } from '../VisaFormContext';
-import { COUNTRIES } from '@/lib/data/countries';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { CountrySelect } from '@/components/common/CountrySelect';
 import { VisaDocumentUploader } from '../VisaDocumentUploader';
 import { DateInput } from '@/components/ui/DateInput';
 
@@ -368,12 +367,11 @@ export function Step4Character() {
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('visaCharacterPoliceCertCountryOfIssueLabel')}<Asterisk />
         </label>
-        <SearchableSelect
-          options={COUNTRIES}
-          value={form.policeCertCountryOfIssue}
-          onChange={(v) => update('policeCertCountryOfIssue', v)}
+        <CountrySelect
+          value={form.policeCertCountryOfIssue || null}
+          onChange={(code) => update('policeCertCountryOfIssue', code ?? '')}
           placeholder={t('visaCommonCountryPlaceholder')}
-          hasError={errors.policeCertCountryOfIssue}
+          ariaInvalid={!!errors.policeCertCountryOfIssue}
         />
       </div>
 
@@ -436,12 +434,11 @@ export function Step4Character() {
                 <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
                   {t('visaCharacterCitizenshipCountryLabel')}<Asterisk />
                 </label>
-                <SearchableSelect
-                  options={COUNTRIES}
-                  value={row.country ?? ''}
-                  onChange={(v) => handleCitizenshipCountry(row.id, v)}
+                <CountrySelect
+                  value={row.country || null}
+                  onChange={(code) => handleCitizenshipCountry(row.id, code ?? '')}
                   placeholder={t('visaCommonCountryPlaceholder')}
-                  hasError={!!errors[`citizenshipCountry:${row.id}`]}
+                  ariaInvalid={!!errors[`citizenshipCountry:${row.id}`]}
                 />
               </div>
               <div className="flex flex-col gap-2">

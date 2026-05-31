@@ -7,6 +7,7 @@ import {
   Megaphone, AlertTriangle, Clock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { displayCountry } from '@/lib/country-codes';
 import { Card, CardContent } from '@/components/ui/Card';
 import {
   LeadStatusChip,
@@ -164,7 +165,7 @@ export default function StaffLeadDetailPage({
                 )}
                 {lead.country && (
                   <span className="inline-flex items-center gap-1">
-                    <Globe size={12} />{lead.country}
+                    <Globe size={12} />{displayCountry(lead.country) ?? lead.country}
                   </span>
                 )}
               </div>

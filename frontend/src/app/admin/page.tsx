@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { displayCountry } from '@/lib/country-codes';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://sorenavisaplatform-production.up.railway.app';
 
@@ -292,7 +293,7 @@ function LeadModal({ lead, token, onClose }: { lead: Lead; token: string; onClos
               </div>
             } />
             <Row label="Phone" value={lead.contact.phone || '—'} />
-            <Row label="Nationality" value={lead.contact.nationality || '—'} />
+            <Row label="Nationality" value={displayCountry(lead.contact.nationality) ?? '—'} />
           </Section>
 
           <Section title="Scoring">

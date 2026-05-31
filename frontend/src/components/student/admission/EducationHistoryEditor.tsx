@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { useAdmission, type EducationEntry, type EducationEntryInput, type AdmissionDocument } from './AdmissionFormContext';
 import { DocumentUploader } from './DocumentUploader';
-import { COUNTRIES } from '@/lib/data/countries';
+import { CountrySelect } from '@/components/common/CountrySelect';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MIN_YEAR = 1950;
@@ -129,63 +129,6 @@ const QUALIFICATION_LEVELS = [
 function qualificationKey(value: string): string {
   const opt = QUALIFICATION_LEVELS.find(o => o.value === value);
   return opt?.key ?? 'admissionEducationHistoryLevelOther';
-}
-
-// Searchable country select — inlined here to match the existing
-// Step2/Step5 pattern (no shared component yet). Mirrors that signature
-// so swapping later is mechanical.
-function SearchableSelect({
-  options,
-  value,
-  onChange,
-  placeholder,
-}: {
-  options: string[];
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen]   = useState(false);
-  const inputValue        = open ? query : value;
-  const filtered          = query
-    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
-    : options;
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={inputValue}
-        onChange={(e) => { setQuery(e.target.value); onChange(''); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder={placeholder}
-        className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy placeholder:text-sorena-navy/40 focus:border-sorena-navy/60 focus:outline-none"
-      />
-      {open && filtered.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-sorena-navy/20 bg-white shadow-lg">
-          {filtered.map(opt => (
-            <li
-              key={opt}
-              onMouseDown={() => { onChange(opt); setQuery(''); setOpen(false); }}
-              className={[
-                'cursor-pointer px-3 py-2 text-sm text-sorena-navy hover:bg-sorena-navy/5',
-                opt === value ? 'bg-sorena-navy/5 font-medium' : '',
-              ].join(' ')}
-            >
-              {opt}
-            </li>
-          ))}
-        </ul>
-      )}
-      {open && filtered.length === 0 && query && (
-        <div className="absolute z-20 mt-1 w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2 text-sm text-sorena-navy/50 shadow-lg">
-          No results
-        </div>
-      )}
-    </div>
-  );
 }
 
 // In-memory shape of a card that hasn't been POSTed yet. Drafts have a
@@ -499,19 +442,19 @@ function SavedEntryCard({
           />
         </div>
 
-        {/* country — PR-C1: now a SearchableSelect over ISO country names */}
+        {/* country — alpha-2 code via shared CountrySelect (PR-COUNTRY-CONSOLIDATE) */}
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryCountryLabel')}
             <span className="ml-0.5 text-red-500">*</span>
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={country}
-            onChange={(v) => {
-              setCountry(v);
-              if (v && v !== entry.country) {
-                onFieldChange(entry.id, { country: v });
+          <CountrySelect
+            value={country || null}
+            onChange={(code) => {
+              const next = code ?? '';
+              setCountry(next);
+              if (next && next !== entry.country) {
+                onFieldChange(entry.id, { country: next });
               }
             }}
             placeholder={t('admissionEducationHistoryCountryPlaceholder')}
@@ -718,10 +661,9 @@ function DraftEntryCard({
             {t('admissionEducationHistoryCountryLabel')}
             <span className="ml-0.5 text-red-500">*</span>
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={draft.country}
-            onChange={(v) => onChange({ country: v })}
+          <CountrySelect
+            value={draft.country || null}
+            onChange={(code) => onChange({ country: code ?? '' })}
             placeholder={t('admissionEducationHistoryCountryPlaceholder')}
           />
         </div>

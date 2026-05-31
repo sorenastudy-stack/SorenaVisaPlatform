@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { displayCountry } from '@/lib/country-codes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ArrowLeft, Mail, Phone, Globe, AlertTriangle, Sparkles } from 'lucide-react';
 import { LeadStatusActions } from './LeadStatusActions';
@@ -201,10 +202,10 @@ export default async function LeadDetailPage({
               <div className="flex items-center gap-2 text-[#4A4A4A]">
                 <Globe size={14} className="text-[#E8B923] flex-shrink-0" />
                 <span>
-                  {lead.contact.countryOfResidence}
+                  {displayCountry(lead.contact.countryOfResidence) ?? lead.contact.countryOfResidence}
                   {lead.contact.nationality &&
                   lead.contact.nationality !== lead.contact.countryOfResidence
-                    ? ` (${lead.contact.nationality})`
+                    ? ` (${displayCountry(lead.contact.nationality) ?? lead.contact.nationality})`
                     : ''}
                 </span>
               </div>

@@ -3,6 +3,7 @@ import { FileSearch, Inbox } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { BackLink } from '@/components/ui/BackLink';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { displayCountry } from '@/lib/country-codes';
 import { formatRelative, formatDate } from '../../../_utils/format';
 import { CopyButton } from './CopyButton';
 import { InzSection } from './InzSection';
@@ -318,11 +319,11 @@ export default async function InzDataPage({ params }: { params: { id: string } }
           <FieldRow label="Gender" value={data.applicant.gender} />
           <FieldRow label="Email" value={data.applicant.email} />
           <FieldRow label="Phone" value={data.applicant.phone} />
-          <FieldRow label="Country of birth" value={data.applicant.countryOfBirth} />
-          <FieldRow label="Country of residence" value={data.applicant.countryOfResidence} />
+          <FieldRow label="Country of birth" value={displayCountry(data.applicant.countryOfBirth) ?? '—'} />
+          <FieldRow label="Country of residence" value={displayCountry(data.applicant.countryOfResidence) ?? '—'} />
           <FieldRow label="Passport number" value={data.applicant.passportNumber} />
           <FieldRow label="Passport expiry" value={data.applicant.passportExpiry} />
-          <FieldRow label="Passport country of issue" value={data.applicant.passportCountry} />
+          <FieldRow label="Passport country of issue" value={displayCountry(data.applicant.passportCountry) ?? '—'} />
         </dl>
       </InzSection>
 
@@ -330,7 +331,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
         title="Other citizenships"
         badge={data.citizenships.length === 1 ? '1 entry' : `${data.citizenships.length} entries`}
         badgeTone={data.citizenships.length === 0 ? 'gray' : 'emerald'}
-        copyText={serialiseList('Other citizenships', data.citizenships.map(c => `Country: ${c.country}\nHolds passport: ${yesno(c.holdsPassport)}`))}
+        copyText={serialiseList('Other citizenships', data.citizenships.map(c => `Country: ${displayCountry(c.country) ?? '—'}\nHolds passport: ${yesno(c.holdsPassport)}`))}
         defaultOpen={data.citizenships.length > 0}
       >
         {data.citizenships.length === 0
@@ -340,9 +341,9 @@ export default async function InzDataPage({ params }: { params: { id: string } }
               {data.citizenships.map((c) => (
                 <EntryCard
                   key={c.id}
-                  copyText={`Country: ${c.country}\nHolds passport: ${yesno(c.holdsPassport)}`}
+                  copyText={`Country: ${displayCountry(c.country) ?? '—'}\nHolds passport: ${yesno(c.holdsPassport)}`}
                 >
-                  <FieldRow label="Country" value={c.country} />
+                  <FieldRow label="Country" value={displayCountry(c.country) ?? '—'} />
                   <FieldRow label="Holds passport" value={yesno(c.holdsPassport)} />
                 </EntryCard>
               ))}
@@ -356,7 +357,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
         badgeTone={data.tbCountries.length === 0 ? 'gray' : 'emerald'}
         copyText={serialiseList(
           'TB countries',
-          data.tbCountries.map(c => `Country: ${c.country}\nDuration (days): ${c.totalDurationDays ?? '—'}`),
+          data.tbCountries.map(c => `Country: ${displayCountry(c.country) ?? '—'}\nDuration (days): ${c.totalDurationDays ?? '—'}`),
         )}
         defaultOpen={data.tbCountries.length > 0}
       >
@@ -367,9 +368,9 @@ export default async function InzDataPage({ params }: { params: { id: string } }
               {data.tbCountries.map(c => (
                 <EntryCard
                   key={c.id}
-                  copyText={`Country: ${c.country}\nDuration (days): ${c.totalDurationDays ?? '—'}`}
+                  copyText={`Country: ${displayCountry(c.country) ?? '—'}\nDuration (days): ${c.totalDurationDays ?? '—'}`}
                 >
-                  <FieldRow label="Country" value={c.country} />
+                  <FieldRow label="Country" value={displayCountry(c.country) ?? '—'} />
                   <FieldRow label="Duration (days)" value={c.totalDurationDays?.toString() ?? null} />
                 </EntryCard>
               ))}
@@ -396,7 +397,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
                   <FieldRow label="Institution" value={e.institution} />
                   <FieldRow label="Qualification" value={e.qualification} />
                   <FieldRow label="Field of study" value={e.fieldOfStudy} />
-                  <FieldRow label="Country" value={e.country} />
+                  <FieldRow label="Country" value={displayCountry(e.country) ?? '—'} />
                   <FieldRow label="Start year" value={e.startYear?.toString() ?? null} />
                   <FieldRow label="End year" value={e.endYear?.toString() ?? null} />
                   <FieldRow label="Completed" value={yesno(e.completed)} />
@@ -433,7 +434,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
                   <FieldRow label="Role" value={e.role} />
                   <FieldRow label="Start date" value={formatDateOrNull(e.startDate)} />
                   <FieldRow label="End date" value={formatDateOrNull(e.endDate)} />
-                  <FieldRow label="Country" value={e.country} />
+                  <FieldRow label="Country" value={displayCountry(e.country) ?? '—'} />
                   <FieldRow label="State" value={e.state} />
                   <FieldRow label="Supervisor" value={e.supervisorName} />
                   <FieldRow label="Duties" value={e.duties} long />
@@ -479,12 +480,12 @@ export default async function InzDataPage({ params }: { params: { id: string } }
             <FieldRow label="Date of birth" value={formatDateOrNull(data.partner.dateOfBirth)} />
             <FieldRow label="Gender" value={data.partner.gender} />
             <FieldRow label="Relationship status" value={data.partner.relationshipStatus} />
-            <FieldRow label="Country of birth" value={data.partner.countryOfBirth} />
-            <FieldRow label="Nationality" value={data.partner.nationality} />
-            <FieldRow label="Country of residence" value={data.partner.countryOfResidence} />
+            <FieldRow label="Country of birth" value={displayCountry(data.partner.countryOfBirth) ?? '—'} />
+            <FieldRow label="Nationality" value={displayCountry(data.partner.nationality) ?? '—'} />
+            <FieldRow label="Country of residence" value={displayCountry(data.partner.countryOfResidence) ?? '—'} />
             <FieldRow label="Occupation" value={data.partner.occupation} />
             <FieldRow label="Passport number" value={data.partner.passportNumber} />
-            <FieldRow label="Passport country" value={data.partner.passportCountry} />
+            <FieldRow label="Passport country" value={displayCountry(data.partner.passportCountry) ?? '—'} />
           </dl>
         ) : <EmptyMsg />}
       </InzSection>
@@ -505,8 +506,8 @@ export default async function InzDataPage({ params }: { params: { id: string } }
                   <FieldRow label="Full name" value={p.fullName} />
                   <FieldRow label="Date of birth" value={formatDateOrNull(p.dateOfBirth)} />
                   <FieldRow label="Relationship status" value={p.relationshipStatus} />
-                  <FieldRow label="Country of birth" value={p.countryOfBirth} />
-                  <FieldRow label="Nationality" value={p.nationality} />
+                  <FieldRow label="Country of birth" value={displayCountry(p.countryOfBirth) ?? '—'} />
+                  <FieldRow label="Nationality" value={displayCountry(p.nationality) ?? '—'} />
                 </EntryCard>
               ))}
             </ul>
@@ -528,8 +529,8 @@ export default async function InzDataPage({ params }: { params: { id: string } }
                 <EntryCard key={c.id} copyText={formatChild(c)}>
                   <FieldRow label="Full name" value={c.fullName} />
                   <FieldRow label="Date of birth" value={formatDateOrNull(c.dateOfBirth)} />
-                  <FieldRow label="Country of birth" value={c.countryOfBirth} />
-                  <FieldRow label="Nationality" value={c.nationality} />
+                  <FieldRow label="Country of birth" value={displayCountry(c.countryOfBirth) ?? '—'} />
+                  <FieldRow label="Nationality" value={displayCountry(c.nationality) ?? '—'} />
                   <FieldRow label="Lives with applicant" value={yesno(c.livesWithApplicant)} />
                 </EntryCard>
               ))}
@@ -554,7 +555,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
                   <FieldRow label="Relationship" value={p.relationshipToApplicant} />
                   <FieldRow label="Deceased" value={yesno(p.isDeceased)} />
                   <FieldRow label="Date of birth" value={formatDateOrNull(p.dateOfBirth)} />
-                  <FieldRow label="Country of residence" value={p.countryOfResidence} />
+                  <FieldRow label="Country of residence" value={displayCountry(p.countryOfResidence) ?? '—'} />
                   <FieldRow label="Occupation" value={p.occupation} />
                 </EntryCard>
               ))}
@@ -578,7 +579,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
                   <FieldRow label="Full name" value={s.fullName} />
                   <FieldRow label="Relationship" value={s.relationshipToApplicant} />
                   <FieldRow label="Date of birth" value={formatDateOrNull(s.dateOfBirth)} />
-                  <FieldRow label="Country of residence" value={s.countryOfResidence} />
+                  <FieldRow label="Country of residence" value={displayCountry(s.countryOfResidence) ?? '—'} />
                   <FieldRow label="Occupation" value={s.occupation} />
                 </EntryCard>
               ))}
@@ -881,11 +882,11 @@ function serialiseApplicant(a: InzData['applicant']): string {
     `Gender: ${a.gender ?? '—'}`,
     `Email: ${a.email ?? '—'}`,
     `Phone: ${a.phone ?? '—'}`,
-    `Country of birth: ${a.countryOfBirth ?? '—'}`,
-    `Country of residence: ${a.countryOfResidence ?? '—'}`,
+    `Country of birth: ${displayCountry(a.countryOfBirth) ?? '—'}`,
+    `Country of residence: ${displayCountry(a.countryOfResidence) ?? '—'}`,
     `Passport number: ${a.passportNumber ?? '—'}`,
     `Passport expiry: ${a.passportExpiry ?? '—'}`,
-    `Passport country: ${a.passportCountry ?? '—'}`,
+    `Passport country: ${displayCountry(a.passportCountry) ?? '—'}`,
   ];
   return `Applicant\n\n${lines.join('\n')}`;
 }
@@ -900,7 +901,7 @@ function formatEducation(e: InzData['educationEntries'][number]): string {
     `Institution: ${e.institution}`,
     `Qualification: ${e.qualification}`,
     `Field of study: ${e.fieldOfStudy ?? '—'}`,
-    `Country: ${e.country}`,
+    `Country: ${displayCountry(e.country) ?? '—'}`,
     `Start year: ${e.startYear ?? '—'}`,
     `End year: ${e.endYear ?? '—'}`,
     `Completed: ${yesno(e.completed) ?? '—'}`,
@@ -924,7 +925,7 @@ function formatEmployment(e: InzData['employmentEntries'][number]): string {
     `Role: ${e.role ?? '—'}`,
     `Start: ${formatDateOrNull(e.startDate) ?? '—'}`,
     `End: ${formatDateOrNull(e.endDate) ?? '—'}`,
-    `Country: ${e.country ?? '—'}`,
+    `Country: ${displayCountry(e.country) ?? '—'}`,
     `State: ${e.state ?? '—'}`,
     `Supervisor: ${e.supervisorName ?? '—'}`,
     `Duties: ${e.duties ?? '—'}`,
@@ -946,12 +947,12 @@ function formatPartner(p: NonNullable<InzData['partner']>): string {
     `Date of birth: ${formatDateOrNull(p.dateOfBirth) ?? '—'}`,
     `Gender: ${p.gender ?? '—'}`,
     `Relationship status: ${p.relationshipStatus ?? '—'}`,
-    `Country of birth: ${p.countryOfBirth ?? '—'}`,
-    `Nationality: ${p.nationality ?? '—'}`,
-    `Country of residence: ${p.countryOfResidence ?? '—'}`,
+    `Country of birth: ${displayCountry(p.countryOfBirth) ?? '—'}`,
+    `Nationality: ${displayCountry(p.nationality) ?? '—'}`,
+    `Country of residence: ${displayCountry(p.countryOfResidence) ?? '—'}`,
     `Occupation: ${p.occupation ?? '—'}`,
     `Passport number: ${p.passportNumber ?? '—'}`,
-    `Passport country: ${p.passportCountry ?? '—'}`,
+    `Passport country: ${displayCountry(p.passportCountry) ?? '—'}`,
   ].join('\n');
 }
 
@@ -960,8 +961,8 @@ function formatFormerPartner(p: InzData['formerPartners'][number]): string {
     `Full name: ${p.fullName}`,
     `Date of birth: ${formatDateOrNull(p.dateOfBirth) ?? '—'}`,
     `Relationship status: ${p.relationshipStatus ?? '—'}`,
-    `Country of birth: ${p.countryOfBirth ?? '—'}`,
-    `Nationality: ${p.nationality ?? '—'}`,
+    `Country of birth: ${displayCountry(p.countryOfBirth) ?? '—'}`,
+    `Nationality: ${displayCountry(p.nationality) ?? '—'}`,
   ].join('\n');
 }
 
@@ -969,8 +970,8 @@ function formatChild(c: InzData['children'][number]): string {
   return [
     `Full name: ${c.fullName}`,
     `Date of birth: ${formatDateOrNull(c.dateOfBirth) ?? '—'}`,
-    `Country of birth: ${c.countryOfBirth ?? '—'}`,
-    `Nationality: ${c.nationality ?? '—'}`,
+    `Country of birth: ${displayCountry(c.countryOfBirth) ?? '—'}`,
+    `Nationality: ${displayCountry(c.nationality) ?? '—'}`,
     `Lives with applicant: ${yesno(c.livesWithApplicant) ?? '—'}`,
   ].join('\n');
 }
@@ -981,7 +982,7 @@ function formatParent(p: InzData['parents'][number]): string {
     `Relationship: ${p.relationshipToApplicant ?? '—'}`,
     `Deceased: ${yesno(p.isDeceased) ?? '—'}`,
     `Date of birth: ${formatDateOrNull(p.dateOfBirth) ?? '—'}`,
-    `Country of residence: ${p.countryOfResidence ?? '—'}`,
+    `Country of residence: ${displayCountry(p.countryOfResidence) ?? '—'}`,
     `Occupation: ${p.occupation ?? '—'}`,
   ].join('\n');
 }
@@ -991,7 +992,7 @@ function formatSibling(s: InzData['siblings'][number]): string {
     `Full name: ${s.fullName}`,
     `Relationship: ${s.relationshipToApplicant ?? '—'}`,
     `Date of birth: ${formatDateOrNull(s.dateOfBirth) ?? '—'}`,
-    `Country of residence: ${s.countryOfResidence ?? '—'}`,
+    `Country of residence: ${displayCountry(s.countryOfResidence) ?? '—'}`,
     `Occupation: ${s.occupation ?? '—'}`,
   ].join('\n');
 }
@@ -1062,8 +1063,8 @@ function formatAssistance(a: NonNullable<InzData['immigrationAssistance']>): str
 function serialiseEntire(d: InzData): string {
   const parts: string[] = [];
   parts.push(serialiseApplicant(d.applicant));
-  parts.push(serialiseList('Other citizenships', d.citizenships.map(c => `Country: ${c.country}\nHolds passport: ${yesno(c.holdsPassport) ?? '—'}`)));
-  parts.push(serialiseList('TB countries', d.tbCountries.map(c => `Country: ${c.country}\nDuration (days): ${c.totalDurationDays ?? '—'}`)));
+  parts.push(serialiseList('Other citizenships', d.citizenships.map(c => `Country: ${displayCountry(c.country) ?? '—'}\nHolds passport: ${yesno(c.holdsPassport) ?? '—'}`)));
+  parts.push(serialiseList('TB countries', d.tbCountries.map(c => `Country: ${displayCountry(c.country) ?? '—'}\nDuration (days): ${c.totalDurationDays ?? '—'}`)));
   parts.push(serialiseList('Education entries', d.educationEntries.map(e => formatEducation(e))));
   parts.push(serialiseList('Employment history', d.employmentEntries.map(e => formatEmployment(e))));
   parts.push(serialiseList('Unemployment periods', d.unemploymentEntries.map(u => formatUnemployment(u))));

@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useVisa } from '../VisaFormContext';
-import { COUNTRIES } from '@/lib/data/countries';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
+import { CountrySelect } from '@/components/common/CountrySelect';
+import { displayCountry } from '@/lib/country-codes';
 
 // PR-VISA2 — INZ 1200 Section 2 "Address and contact information".
 // Read-only fields are pulled from contacts (countryOfResidence, fullName,
@@ -227,7 +227,7 @@ export function Step2AddressContact() {
       {/* 1. Current country or territory — RO */}
       <ReadonlyField
         label={t('visaAddressCurrentCountryLabel')}
-        value={readonly.countryOfResidence ?? ''}
+        value={displayCountry(readonly.countryOfResidence) ?? ''}
       />
 
       {/* 2. Street address — encrypted */}
@@ -375,12 +375,11 @@ export function Step2AddressContact() {
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('visaAddressPostalCountryLabel')}<Asterisk />
             </label>
-            <SearchableSelect
-              options={COUNTRIES}
-              value={form.postalCountry}
-              onChange={(v) => update('postalCountry', v)}
+            <CountrySelect
+              value={form.postalCountry || null}
+              onChange={(code) => update('postalCountry', code ?? '')}
               placeholder={t('visaCommonCountryPlaceholder')}
-              hasError={errors.postalCountry}
+              ariaInvalid={!!errors.postalCountry}
             />
           </div>
         </div>

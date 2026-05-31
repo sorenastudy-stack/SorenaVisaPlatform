@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { decryptPiiFields } from '../admission/admission-encryption.util';
+import { isValidCountryCode } from '../../common/country-codes';
 
 // PR-FILES-1 — same UPLOAD_DIR convention as admission.service.ts:16.
 // Stored fileUrls are the rename target produced by path.join() — the
@@ -169,6 +170,37 @@ const PATCHABLE_VISA_FIELDS: Record<string, 'text' | 'boolean' | 'int' | 'dateti
 };
 
 const VALID_EMPLOYMENT_KINDS = new Set(['CURRENT', 'PREVIOUS']);
+
+// PR-COUNTRY-CONSOLIDATE — country-code validation helpers. The repeating-
+// table CRUD already allows empty-string country on create (draft state),
+// so the validator must too: null/undefined/'' pass through; anything else
+// must match the ISO 3166-1 alpha-2 catalogue exposed by
+// `backend/src/common/country-codes.ts`.
+function assertCountryCodeOrEmpty(value: unknown, fieldName: string): void {
+  if (value === null || value === undefined) return;
+  if (typeof value !== 'string') {
+    throw new BadRequestException(`${fieldName} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  if (!isValidCountryCode(trimmed)) {
+    throw new BadRequestException(
+      `${fieldName} must be a valid ISO 3166-1 alpha-2 country code`,
+    );
+  }
+}
+
+// Country fields stored directly on visa_applications. Validated by
+// updateApplication after the standard coercion pass.
+const VISA_APPLICATION_COUNTRY_FIELDS = [
+  'countryWhenSubmitting',
+  'passportCountryOfIssue',
+  'nationalIdCountry',
+  'physicalCountry',
+  'postalCountry',
+  'agentCountry',
+  'policeCertCountryOfIssue',
+] as const;
 
 const VALID_GENDERS = new Set(['MALE', 'FEMALE', 'GENDER_DIVERSE']);
 const VALID_MASTERS_OR_PHD = new Set(['MASTERS', 'PHD', 'NEITHER']);
@@ -639,6 +671,12 @@ export class VisaService {
         `middleNames must be ${MIDDLE_NAMES_MAX} characters or fewer`,
       );
     }
+    // PR-COUNTRY-CONSOLIDATE: validate every country-storing field as
+    // an ISO 3166-1 alpha-2 code (or null / empty). Runs after coercion
+    // so we're checking the string-form value, not raw input.
+    for (const field of VISA_APPLICATION_COUNTRY_FIELDS) {
+      assertCountryCodeOrEmpty(sanitized[field], field);
+    }
     if (
       sanitized.passportGender !== null &&
       sanitized.passportGender !== undefined &&
@@ -842,6 +880,9 @@ export class VisaService {
     ) {
       throw new BadRequestException('holdsPassport must be a boolean');
     }
+    // PR-COUNTRY-CONSOLIDATE: ISO-code validation for the optional
+    // create-time country. Empty/missing stays allowed for the draft state.
+    assertCountryCodeOrEmpty(body?.country, 'country');
     // sortOrder = current max + 1 — append to the end, same shape as
     // admission's education entries.
     const last = await this.prisma.visaOtherCitizenship.findFirst({
@@ -872,6 +913,10 @@ export class VisaService {
     body: { country?: string; holdsPassport?: boolean },
   ) {
     await this.assertCitizenshipOwnership(citizenshipId, userId);
+    // PR-COUNTRY-CONSOLIDATE: update may set country (must be valid),
+    // but the existing "must not be empty" guard runs first so an empty
+    // string still raises a clearer 400 than the ISO-code message.
+    assertCountryCodeOrEmpty(body?.country, 'country');
     const data: Record<string, unknown> = {};
     if (body.country !== undefined) {
       if (!body.country.trim()) {
@@ -933,6 +978,8 @@ export class VisaService {
         'totalDurationDays must be a non-negative integer',
       );
     }
+    // PR-COUNTRY-CONSOLIDATE: ISO-code validation. Empty allowed for draft.
+    assertCountryCodeOrEmpty(body?.country, 'country');
     const last = await this.prisma.visaTbRiskCountry.findFirst({
       where: { visaApplicationId: visa.id },
       orderBy: { sortOrder: 'desc' },
@@ -961,6 +1008,8 @@ export class VisaService {
     body: { country?: string; totalDurationDays?: number },
   ) {
     await this.assertTbRiskCountryOwnership(rowId, userId);
+    // PR-COUNTRY-CONSOLIDATE: ISO-code validation. Empty allowed for draft.
+    assertCountryCodeOrEmpty(body?.country, 'country');
     const data: Record<string, unknown> = {};
     if (body.country !== undefined) {
       data.country = body.country.trim();
@@ -1157,6 +1206,12 @@ export class VisaService {
         throw new BadRequestException('duties must be a string');
       }
     }
+    // PR-COUNTRY-CONSOLIDATE: ISO-code validation on the two country
+    // fields here. Validated from raw body so we surface a 400 before
+    // anything writes — passText() trims and passes through, so by the
+    // time data.* is set we've already accepted the value.
+    assertCountryCodeOrEmpty(body.countryOfWork, 'countryOfWork');
+    assertCountryCodeOrEmpty(body.organisationCountry, 'organisationCountry');
     passText('countryOfWork');
     passText('stateOfWork');
     passText('supervisorName');
@@ -1424,6 +1479,12 @@ export class VisaService {
   }
 
   private buildPartnerData(body: Record<string, unknown>): Record<string, unknown> {
+    // TODO PR-COUNTRY-ENCRYPTED: VisaPartner stores country fields
+    // (countryOfBirth, nationality, countryOfResidence,
+    // passportCountryOfIssue) as encrypted Bytes columns. Migrating them
+    // needs a decrypt → map → re-encrypt pass and a separate audit log;
+    // tracked as the PR-COUNTRY-ENCRYPTED follow-up. Plaintext relations
+    // (formerPartners, children, parents, siblings) are validated below.
     const data: Record<string, unknown> = {};
     const passText = (k: string) => {
       if (body[k] === undefined) return;
@@ -1502,6 +1563,10 @@ export class VisaService {
     };
   }
   private buildFormerPartnerData(body: Record<string, unknown>): Record<string, unknown> {
+    // PR-COUNTRY-CONSOLIDATE: ISO-code validation for the plaintext
+    // country fields on visa_former_partners.
+    assertCountryCodeOrEmpty(body.countryOfBirth, 'countryOfBirth');
+    assertCountryCodeOrEmpty(body.nationality, 'nationality');
     const data: Record<string, unknown> = {};
     if (body.givenName !== undefined)    data.givenNameEncrypted    = this.encryptOrNull(body.givenName);
     if (body.middleNames !== undefined)  data.middleNamesEncrypted  = this.encryptOrNull(body.middleNames);
@@ -1537,6 +1602,9 @@ export class VisaService {
     };
   }
   private buildChildData(body: Record<string, unknown>): Record<string, unknown> {
+    // PR-COUNTRY-CONSOLIDATE: ISO-code validation for visa_children.
+    assertCountryCodeOrEmpty(body.countryOfBirth, 'countryOfBirth');
+    assertCountryCodeOrEmpty(body.nationality, 'nationality');
     const data: Record<string, unknown> = {};
     if (body.givenName !== undefined)    data.givenNameEncrypted    = this.encryptOrNull(body.givenName);
     if (body.middleNames !== undefined)  data.middleNamesEncrypted  = this.encryptOrNull(body.middleNames);
@@ -1583,6 +1651,11 @@ export class VisaService {
   private buildPersonWithDobData(body: Record<string, unknown>, extraTextKeys: string[]): Record<string, unknown> {
     // Shared builder for VisaParent / VisaSibling — same shape minus a
     // couple of fields each.
+    // PR-COUNTRY-CONSOLIDATE: ISO-code validation for the three
+    // plaintext country fields on visa_parents / visa_siblings.
+    assertCountryCodeOrEmpty(body.countryOfBirth, 'countryOfBirth');
+    assertCountryCodeOrEmpty(body.citizenship, 'citizenship');
+    assertCountryCodeOrEmpty(body.countryOfResidence, 'countryOfResidence');
     const data: Record<string, unknown> = {};
     if (body.givenName !== undefined)    data.givenNameEncrypted    = this.encryptOrNull(body.givenName);
     if (body.middleNames !== undefined)  data.middleNamesEncrypted  = this.encryptOrNull(body.middleNames);

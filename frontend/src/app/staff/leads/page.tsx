@@ -7,6 +7,7 @@ import {
   Users, Search, Filter, X, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { displayCountry } from '@/lib/country-codes';
 import { Card, CardContent } from '@/components/ui/Card';
 import {
   LeadStatusChip,
@@ -405,7 +406,7 @@ export default function StaffLeadsPage() {
                           {r.scorecardScore ?? <span className="text-[#4A4A4A]/40">—</span>}
                         </td>
                         <td className="py-2.5 pr-3"><LeadStatusChip status={r.status} compact /></td>
-                        <td className="py-2.5 pr-3 text-[#4A4A4A]">{r.country ?? '—'}</td>
+                        <td className="py-2.5 pr-3 text-[#4A4A4A]">{displayCountry(r.country) ?? '—'}</td>
                         <td className="py-2.5 pr-3 text-[#4A4A4A]">
                           {r.assignedToName ?? <span className="italic text-[#4A4A4A]/60">Unassigned</span>}
                         </td>
