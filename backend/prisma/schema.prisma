@@ -188,19 +188,13 @@ enum InvoiceStatus {
   REFUNDED
 }
 
-enum PaymentMethod {
-  STRIPE
-  BANK_TRANSFER
-  CASH
-  OTHER
-}
-
-enum InvoicePaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  REFUNDED
-}
+// PR-LIA-AUTO-ASSIGN Phase 6 (Option A): the PaymentMethod and
+// InvoicePaymentStatus enums + the dead invoice-line `Payment` model
+// were removed in favour of a Stripe-webhook-event `Payment` model
+// (see the new model further down). The AR domain (invoice line-item
+// payments) will be redesigned when the student invoice receipts
+// page ships out of "Coming soon" — at that point the new model can
+// either grow `invoiceId` or sit alongside a fresh `InvoicePayment`.
 
 enum CaseStage {
   ADMISSION
@@ -726,6 +720,12 @@ model Lead {
   // we never auto-update lead status from a payment.
   wixPayments             WixPayment[]      @relation("WixPaymentLead")
 
+  // PR-LIA-AUTO-ASSIGN: Stripe-webhook-event payments tied to this lead
+  // (consultation, ACCOUNT_OPENING, subscription). One row per Stripe
+  // paymentIntent.id; written by the /payments/webhook handler with
+  // @unique idempotency on stripePaymentIntentId.
+  payments                Payment[]
+
   @@index([contactId])
   @@index([leadStatus])
   @@index([scoreBand])
@@ -923,6 +923,11 @@ model Case {
   // means re-linking the same officer is an upsert. Re-linking a
   // DIFFERENT officer would 409; LIA must unlink first.
   officerLinkage        CaseOfficerLinkage?
+  // PR-LIA-AUTO-ASSIGN: Stripe-webhook-event payments tied to this case
+  // (e.g. the $200 ACCOUNT_OPENING charge). The payment row is what the
+  // ACCOUNT_OPENING webhook branch consults before firing the LIA
+  // auto-assign — it's the durable record of the trigger event.
+  payments              Payment[]
 
   @@index([leadId])
   @@index([stage])
@@ -1623,30 +1628,51 @@ model Invoice {
 
   case            Case?          @relation(fields: [caseId], references: [id])
   contact         Contact        @relation(fields: [contactId], references: [id])
-  payments        Payment[]
 
   @@index([contactId])
   @@index([status])
   @@map("invoices")
 }
 
+// PR-LIA-AUTO-ASSIGN Phase 6 — Stripe-webhook-event payment log.
+//
+// One row per `paymentIntent.succeeded` event from Stripe. The unique
+// constraint on `stripePaymentIntentId` is the idempotency key: when
+// Stripe retries a webhook (it will, on any non-2xx response or just
+// at random), the `prisma.payment.create` call hits a P2002 collision
+// and the handler short-circuits the rest of the work (no double
+// emails, no double `assignLiaToCase`, no double `activateSubscription`).
+//
+// `leadId` is always set — every Stripe link is created with the lead
+// in metadata. `caseId` is optional: the ACCOUNT_OPENING charge sets it
+// (since the contract was just signed and the case is known); the
+// consultation and subscription flows don't.
+//
+// `paymentType` is the discriminator written into the Stripe link
+// metadata at creation time. Today's known values: 'ACCOUNT_OPENING',
+// 'consultation', 'subscription'. When the webhook receives metadata
+// it doesn't recognise we record 'unknown' rather than silently drop —
+// downstream queries can use that to flag suspect events for review.
+//
+// `metadata` snapshots the full Stripe-side metadata blob so we can
+// reconstruct what link produced the charge without going to Stripe.
 model Payment {
-  id                    String               @id @default(cuid())
-  invoiceId             String
-  amount                Decimal              @db.Decimal(10, 2)
-  currency              String               @default("NZD")
-  method                PaymentMethod        @default(STRIPE)
-  status                InvoicePaymentStatus @default(PENDING)
-  stripePaymentIntentId String?              @unique
-  receivedAt            DateTime?
-  notes                 String?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  id                    String   @id @default(cuid())
+  stripePaymentIntentId String   @unique
+  leadId                String
+  caseId                String?
+  paymentType           String
+  amount                Int
+  currency              String   @default("nzd")
+  status                String
+  metadata              Json?
+  createdAt             DateTime @default(now())
 
-  invoice               Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  lead Lead  @relation(fields: [leadId], references: [id])
+  case Case? @relation(fields: [caseId], references: [id])
 
-  @@index([invoiceId])
-  @@index([status])
+  @@index([leadId])
+  @@index([caseId])
   @@map("payments")
 }
 

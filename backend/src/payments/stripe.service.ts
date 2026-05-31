@@ -122,6 +122,11 @@ export class StripeService {
     consultationType: string,
     amountNZD: number,
     currency: string = 'nzd',
+    // PR-LIA-AUTO-ASSIGN — optional caseId to plumb through the Stripe
+    // link metadata. The webhook handler reads this to know which case
+    // to assign an LIA to on ACCOUNT_OPENING success. Existing callers
+    // (consultation bookings without a case) continue to work unchanged.
+    caseId?: string,
   ) {
     this.assertConfigured();
     const amountCents = Math.round(amountNZD * 100);
@@ -135,9 +140,17 @@ export class StripeService {
       },
     });
 
+    // PR-LIA-AUTO-ASSIGN — when this is the $200 account-opening charge,
+    // tag the metadata with paymentType: 'ACCOUNT_OPENING' so the
+    // webhook handler can route it past the consultation/subscription
+    // branches into the new auto-assign path.
+    const metadata: Record<string, string> = { leadId, consultationType };
+    if (caseId) metadata.caseId = caseId;
+    if (consultationType === 'ACCOUNT_OPENING') metadata.paymentType = 'ACCOUNT_OPENING';
+
     const paymentLink = await this.stripe.paymentLinks.create({
       line_items: [{ price: price.id, quantity: 1 }],
-      metadata: { leadId, consultationType },
+      metadata,
       after_completion: {
         type: 'redirect',
         redirect: {

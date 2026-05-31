@@ -1,15 +1,18 @@
-import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest, Logger } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EventsService } from '../events/events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import Stripe from 'stripe';
 
 @Controller('payments')
 export class PaymentsController {
+  private readonly logger = new Logger(PaymentsController.name);
+
   constructor(
     private stripeService: StripeService,
     private paymentsService: PaymentsService,
@@ -17,6 +20,9 @@ export class PaymentsController {
     private eventsService: EventsService,
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    // PR-LIA-AUTO-ASSIGN — auto-assign an LIA when the $200 ACCOUNT_OPENING
+    // charge succeeds and the matching case has a signed contract.
+    private liaAssignments: LiaAssignmentService,
   ) {}
 
   /**
@@ -139,6 +145,35 @@ export class PaymentsController {
 
     if (!lead) return;
 
+    // PR-LIA-AUTO-ASSIGN Phase 6 — durable payment record + Stripe-retry
+    // idempotency. Written BEFORE the per-paymentType branches so a
+    // retried webhook short-circuits the whole handler (no double email,
+    // no double subscription activation, no double assignLiaToCase).
+    // The @unique constraint on stripePaymentIntentId is the lock.
+    try {
+      await this.prisma.payment.create({
+        data: {
+          stripePaymentIntentId: paymentIntent.id,
+          leadId,
+          caseId: (paymentIntent.metadata?.caseId as string | undefined) ?? null,
+          paymentType: (paymentIntent.metadata?.paymentType as string | undefined) ?? 'unknown',
+          amount: paymentIntent.amount_received,
+          currency: paymentIntent.currency ?? 'nzd',
+          status: 'succeeded',
+          metadata: paymentIntent.metadata ?? {},
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        // Stripe retried — payment already recorded, idempotent skip.
+        this.logger.log(
+          `Stripe webhook retry for paymentIntent ${paymentIntent.id} — payment already recorded, skipping`,
+        );
+        return;
+      }
+      throw err;
+    }
+
     // Check if it's a consultation or subscription payment
     if (paymentIntent.metadata?.paymentType === 'consultation') {
       // Mark consultation as paid - would need additional logic here
@@ -162,8 +197,66 @@ export class PaymentsController {
         null,
         { type: consultationType, amount: paymentIntent.amount_received },
       );
+    } else if (paymentIntent.metadata?.paymentType === 'ACCOUNT_OPENING') {
+      // PR-LIA-AUTO-ASSIGN, Phase 3 — log + emit the domain event so the
+      // rest of the pipeline (timeline, downstream listeners) has the signal
+      // even when caseId is missing or the contract isn't yet signed.
+      const caseId = (paymentIntent.metadata?.caseId as string | undefined) ?? null;
+      this.logger.log(
+        `ACCOUNT_OPENING payment succeeded for lead ${leadId}${caseId ? ` (case ${caseId})` : ' (no caseId in metadata)'} — paymentIntent ${paymentIntent.id}`,
+      );
+
+      await this.eventsService.emit(
+        'ACCOUNT_OPENING_CONFIRMED',
+        'ACCOUNT_OPENING',
+        paymentIntent.id,
+        leadId,
+        'SYSTEM',
+        null,
+        { caseId, amount: paymentIntent.amount_received },
+      );
+
+      // PR-LIA-AUTO-ASSIGN, Phase 4 — fire LIA auto-assignment when
+      // ACCOUNT_OPENING payment succeeds AND the contract for this case is
+      // signed. Sign-first-then-pay workflow: payment is the LAST event.
+      // Defensive: use signedAt IS NOT NULL (not status === 'SIGNED') to
+      // survive the ContractStatus enum mismatch (fixed in Phase 5).
+      // Mirrors the contracts.service.ts:120-137 pattern: try/catch with
+      // logger; failures never block the webhook response; the underlying
+      // assignLiaToCase service is idempotent on already-assigned cases.
+      if (paymentIntent.metadata.caseId) {
+        try {
+          const targetCaseId = paymentIntent.metadata.caseId as string;
+          const contract = await this.prisma.contract.findFirst({
+            where: { caseId: targetCaseId, signedAt: { not: null } },
+          });
+          if (contract) {
+            const result = await this.liaAssignments.assignLiaToCase(targetCaseId);
+            if (result.status === 'assigned') {
+              this.logger.log(
+                `LIA ${result.liaName} (${result.liaId}) auto-assigned to case ${targetCaseId} on ACCOUNT_OPENING payment`,
+              );
+            } else if (result.status === 'no_candidates') {
+              this.logger.warn(
+                `ACCOUNT_OPENING payment for case ${targetCaseId} confirmed but no active LIAs available — case left unassigned`,
+              );
+            }
+          } else {
+            this.logger.warn(
+              `ACCOUNT_OPENING payment received but contract not yet signed for case ${targetCaseId} — assignment deferred`,
+            );
+          }
+        } catch (err: any) {
+          this.logger.error(
+            `LIA auto-assignment failed for case ${paymentIntent.metadata.caseId}: ${err?.message ?? err}`,
+          );
+        }
+      }
     } else {
-      // Handle subscription payment
+      // Handle subscription payment. Note: pre-PR-LIA-AUTO-ASSIGN this branch
+      // also (incorrectly) swallowed ACCOUNT_OPENING webhooks because the
+      // metadata never carried paymentType. With Phase 2 + Phase 3 in place,
+      // ACCOUNT_OPENING is routed above and this branch is subscription-only.
       const plan = paymentIntent.metadata.plan as 'BASIC' | 'PRO' | 'PREMIUM';
 
       // Activate subscription

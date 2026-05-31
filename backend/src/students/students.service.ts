@@ -258,20 +258,16 @@ export class StudentsService {
   async getInvoices(userId: string) {
     const contact = await this.getContactByUserId(userId);
 
+    // PR-LIA-AUTO-ASSIGN Phase 6 (Option A): the per-invoice payment
+    // line-items include block was removed when the invoice-line Payment
+    // model was replaced by the Stripe-webhook-event Payment model.
+    // When the student-facing invoice receipts page ships (today it's
+    // "Coming soon"), the AR domain is redesigned and this endpoint
+    // gets its payment breakdown back — either by adding `invoiceId`
+    // to the new Payment model, or by introducing a fresh
+    // `InvoicePayment` join table.
     return this.prisma.invoice.findMany({
       where: { contactId: contact.id },
-      include: {
-        payments: {
-          select: {
-            id: true,
-            amount: true,
-            currency: true,
-            method: true,
-            status: true,
-            receivedAt: true,
-          },
-        },
-      },
       orderBy: { createdAt: 'desc' },
     });
   }

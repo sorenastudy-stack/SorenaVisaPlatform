@@ -18,6 +18,11 @@ export class PaymentsService {
     consultationType: string,
     amount?: number,
     currency: string = 'nzd',
+    // PR-LIA-AUTO-ASSIGN — optional caseId, plumbed through to the Stripe
+    // link's metadata so the post-payment webhook can auto-assign an LIA
+    // to that case. Callers that don't have a case (regular consultation
+    // bookings) omit this and the chain behaves as before.
+    caseId?: string,
   ) {
     const amountNZD = amount ?? CONSULTATION_AMOUNTS[consultationType];
     if (amountNZD === undefined) {
@@ -31,6 +36,7 @@ export class PaymentsService {
       consultationType,
       amountNZD,
       currency,
+      caseId,
     );
     return { url: paymentLink.url, free: false, consultationType };
   }

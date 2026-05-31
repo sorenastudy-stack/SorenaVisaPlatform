@@ -1,9 +1,11 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ContractStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DocuSignService } from './docusign.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
+import { docusignToContractStatus } from './contract-status';
 
 @Injectable()
 export class ContractsService {
@@ -93,16 +95,29 @@ export class ContractsService {
     // Sync status from DocuSign
     const statusData = await this.docuSignService.syncStatus(envelopeId);
 
-    // Update contract
-    const updateData: any = { status: statusData.status };
+    // PR-LIA-AUTO-ASSIGN, Phase 5 — map the raw DocuSign envelope status
+    // ("completed", "declined", ...) to the ContractStatus enum
+    // (SIGNED, DECLINED, ...). Unknown DocuSign statuses are skipped
+    // with a warning rather than written as raw text (the previous
+    // behaviour produced rows whose status didn't match any enum value).
+    const mappedStatus = docusignToContractStatus(statusData.status);
+    if (!mappedStatus) {
+      this.logger.warn(
+        `handleWebhook: unknown DocuSign status "${statusData.status}" for envelope ${envelopeId} — skipping status update`,
+      );
+      return contract;
+    }
 
-    if (statusData.status === 'completed') {
+    // Update contract
+    const updateData: any = { status: mappedStatus };
+
+    if (mappedStatus === ContractStatus.SIGNED) {
       updateData.signedAt = new Date(statusData.signedAt);
       updateData.signedFileUrl = statusData.signedFileUrl;
       updateData.auditTrailUrl = statusData.auditTrailUrl;
-    } else if (statusData.status === 'declined') {
+    } else if (mappedStatus === ContractStatus.DECLINED) {
       updateData.declinedAt = new Date(statusData.declinedAt);
-    } else if (statusData.status === 'expired') {
+    } else if (mappedStatus === ContractStatus.EXPIRED) {
       updateData.expiredAt = new Date(statusData.expiredAt);
     }
 
@@ -117,7 +132,7 @@ export class ContractsService {
     // Failures (no active LIAs, transient DB error) are logged and
     // an audit row is written by the service. Idempotent: if the
     // case already has an LIA, the service is a no-op.
-    if (statusData.status === 'completed') {
+    if (mappedStatus === ContractStatus.SIGNED) {
       try {
         const result = await this.liaAssignments.assignLiaToCase(contract.caseId);
         if (result.status === 'assigned') {
