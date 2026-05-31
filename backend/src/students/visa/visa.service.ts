@@ -1479,12 +1479,13 @@ export class VisaService {
   }
 
   private buildPartnerData(body: Record<string, unknown>): Record<string, unknown> {
-    // TODO PR-COUNTRY-ENCRYPTED: VisaPartner stores country fields
-    // (countryOfBirth, nationality, countryOfResidence,
-    // passportCountryOfIssue) as encrypted Bytes columns. Migrating them
-    // needs a decrypt → map → re-encrypt pass and a separate audit log;
-    // tracked as the PR-COUNTRY-ENCRYPTED follow-up. Plaintext relations
-    // (formerPartners, children, parents, siblings) are validated below.
+    // PR-COUNTRY-ENCRYPTED: VisaPartner country fields are PLAINTEXT String?
+    // columns (Phase 1 inventory error — verified in PR-COUNTRY-ENCRYPTED
+    // investigation). Validated the same as the other plaintext relations.
+    assertCountryCodeOrEmpty(body.countryOfBirth, 'countryOfBirth');
+    assertCountryCodeOrEmpty(body.nationality, 'nationality');
+    assertCountryCodeOrEmpty(body.countryOfResidence, 'countryOfResidence');
+    assertCountryCodeOrEmpty(body.passportCountryOfIssue, 'passportCountryOfIssue');
     const data: Record<string, unknown> = {};
     const passText = (k: string) => {
       if (body[k] === undefined) return;
@@ -2624,6 +2625,12 @@ export class VisaService {
         'Visa application not found. Save Step 1 first to create it.',
       );
     }
+
+    // PR-COUNTRY-ENCRYPTED: the value lands in the encrypted column
+    // countryOfResidenceEncrypted, but the plaintext that gets encrypted
+    // must still be an ISO 3166-1 alpha-2 code. Validate the incoming
+    // body before any of the gate-reconciliation logic below.
+    assertCountryCodeOrEmpty(body.countryOfResidence, 'countryOfResidence');
 
     // Resolve gate + country reconciliation. We accept null/undefined
     // on a draft save (partial) but, when livingInDifferentCountry

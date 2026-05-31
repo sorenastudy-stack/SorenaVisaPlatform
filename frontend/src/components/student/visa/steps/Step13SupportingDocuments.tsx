@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useVisa } from '../VisaFormContext';
 import { api } from '@/lib/api';
+import { CountrySelect } from '@/components/common/CountrySelect';
 import {
   DocumentMetadataPicker,
   type DocumentMetadata,
@@ -306,14 +307,14 @@ export function Step13SupportingDocuments() {
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('visaDocsCountryOfResidenceLabel')}<Asterisk />
             </label>
-            <input
-              type="text"
-              value={countryOfResidence}
-              onChange={(e) => {
-                setCountryOfResidence(e.target.value);
+            <CountrySelect
+              value={countryOfResidence || null}
+              onChange={(code) => {
+                setCountryOfResidence(code ?? '');
                 clearError('countryOfResidence');
               }}
-              className={inputClass(!!errors.countryOfResidence)}
+              placeholder={t('visaCommonCountryPlaceholder')}
+              ariaInvalid={!!errors.countryOfResidence}
             />
           </div>
           <DocumentMetadataPicker

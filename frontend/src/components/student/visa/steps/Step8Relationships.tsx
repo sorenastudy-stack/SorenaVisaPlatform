@@ -19,18 +19,13 @@ import {
   type NzContactRow,
   type NzContactPatch,
 } from '../VisaFormContext';
-import { COUNTRIES } from '@/lib/data/countries';
-import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { CountrySelect } from '@/components/common/CountrySelect';
 import { DateInput } from '@/components/ui/DateInput';
 
-// PR-COUNTRY-CONSOLIDATE: the partner block (renderPartnerBlock) intentionally
-// still uses SearchableSelect+COUNTRIES because VisaPartner.* country fields
-// are stored encrypted (Bytes columns). Migrating them needs decrypt → map →
-// re-encrypt logic and a separate audit pass — tracked as the
-// PR-COUNTRY-ENCRYPTED follow-up. Plaintext relations (formerPartners,
-// children, parents, siblings) have already been swapped to CountrySelect.
-// TODO PR-COUNTRY-ENCRYPTED: convert partner country fields too.
+// PR-COUNTRY-ENCRYPTED: partner country fields (countryOfBirth, nationality,
+// countryOfResidence, passportCountryOfIssue) are PLAINTEXT String? columns
+// — Phase 1 inventory error. All four use CountrySelect now; no encrypted
+// migration path is needed.
 
 // PR-VISA8 — INZ 1200 Section 8 "Relationships".
 // READ-ONLY relays from admission:
@@ -645,12 +640,11 @@ export function Step8Relationships() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCountryOfBirthLabel')}<Asterisk />
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={row.countryOfBirth ?? ''}
-            onChange={(v) => patchPartner({ countryOfBirth: v }, k('countryOfBirth'))}
+          <CountrySelect
+            value={row.countryOfBirth || null}
+            onChange={(code) => patchPartner({ countryOfBirth: code ?? '' }, k('countryOfBirth'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('countryOfBirth')]}
+            ariaInvalid={!!errors[k('countryOfBirth')]}
           />
         </div>
         <NameInput
@@ -672,24 +666,22 @@ export function Step8Relationships() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelNationalityLabel')}<Asterisk />
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={row.nationality ?? ''}
-            onChange={(v) => patchPartner({ nationality: v }, k('nationality'))}
+          <CountrySelect
+            value={row.nationality || null}
+            onChange={(code) => patchPartner({ nationality: code ?? '' }, k('nationality'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('nationality')]}
+            ariaInvalid={!!errors[k('nationality')]}
           />
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaRelCountryOfResidenceLabel')}<Asterisk />
           </label>
-          <SearchableSelect
-            options={COUNTRIES}
-            value={row.countryOfResidence ?? ''}
-            onChange={(v) => patchPartner({ countryOfResidence: v }, k('countryOfResidence'))}
+          <CountrySelect
+            value={row.countryOfResidence || null}
+            onChange={(code) => patchPartner({ countryOfResidence: code ?? '' }, k('countryOfResidence'))}
             placeholder={t('visaCommonCountryPlaceholder')}
-            hasError={!!errors[k('countryOfResidence')]}
+            ariaInvalid={!!errors[k('countryOfResidence')]}
           />
         </div>
 
@@ -731,12 +723,11 @@ export function Step8Relationships() {
                 {t('visaRelPartnerPassportCountryLabel')}<Asterisk />
               </label>
               <p className="mb-1.5 text-sm text-sorena-navy/60">{t('visaRelPartnerPassportCountryHelper')}</p>
-              <SearchableSelect
-                options={COUNTRIES}
-                value={row.passportCountryOfIssue ?? ''}
-                onChange={(v) => patchPartner({ passportCountryOfIssue: v }, k('passportCountryOfIssue'))}
+              <CountrySelect
+                value={row.passportCountryOfIssue || null}
+                onChange={(code) => patchPartner({ passportCountryOfIssue: code ?? '' }, k('passportCountryOfIssue'))}
                 placeholder={t('visaCommonCountryPlaceholder')}
-                hasError={!!errors[k('passportCountryOfIssue')]}
+                ariaInvalid={!!errors[k('passportCountryOfIssue')]}
               />
             </div>
             <div className="flex flex-wrap items-end gap-6">
