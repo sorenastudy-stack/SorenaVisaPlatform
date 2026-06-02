@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
-  Settings, CreditCard,
+  Settings, CreditCard, BadgeCheck,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -45,6 +45,10 @@ const LEADS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'FINANCE'] a
 // controller's @Roles(...) for list/detail (FINANCE excluded — they
 // don't action client support threads).
 const TICKETS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'CONSULTANT', 'LIA'] as const;
+// PR-DOCUSIGN-1 step 3 (Screen B): verifier roles. Matches the backend
+// @Roles set on LiaProfilesVerifierController (E5-E8). LIA is excluded
+// — they manage their own credential via /lia/licence (Screen A).
+const LIA_VERIFICATION_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 
 const NAV: NavItem[] = [
   { label: 'staff.nav.overview',          href: '/staff',                    icon: <LayoutDashboard size={18} /> },
@@ -57,6 +61,11 @@ const NAV: NavItem[] = [
   { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} />,       roleGate: TICKETS_ROLES },
   { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },
   { label: 'staff.nav.approvals',         href: '/staff/approvals',          icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
+  // PR-DOCUSIGN-1 step 3 (Screen B): LIA credential verification queue.
+  // Inline label string — no next-intl yet, matching the rest of this
+  // surface's English-only labels (the .nav.* keys above are the
+  // pre-existing translated ones).
+  { label: 'LIA verification',            href: '/staff/lia-verification',   icon: <BadgeCheck size={18} />,  roleGate: LIA_VERIFICATION_ROLES },
   { label: 'staff.nav.marketing',         href: '/staff/marketing',          icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },
   // PR-SCORECARD-4: Wix payments visible to OWNER/SUPER_ADMIN/ADMIN/FINANCE.
   { label: 'staff.nav.wixPayments',       href: '/staff/wix-payments',       icon: <CreditCard size={18} />,  roleGate: WIX_PAYMENT_ROLES },
