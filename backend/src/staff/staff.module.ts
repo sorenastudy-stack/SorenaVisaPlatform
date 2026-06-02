@@ -6,6 +6,7 @@ import { StaffUsersModule } from './users/staff-users.module';
 import { StaffMeModule } from './me/staff-me.module';
 import { StaffCasesModule } from './cases/staff-cases.module';
 import { StaffTicketsModule } from './tickets/staff-tickets.module';
+import { LiaProfilesModule } from './lia-profiles/lia-profiles.module';
 
 // PR-CONSULT-1 — Staff root module.
 //
@@ -17,6 +18,9 @@ import { StaffTicketsModule } from './tickets/staff-tickets.module';
 // staff dashboard shell and cases list / detail UI.
 // PR-SUPPORT-1 added the `tickets` sub-module exposing /staff/tickets/*
 // on top of the existing VisaSupportTicket schema.
+// PR-DOCUSIGN-1 step 3 added the `lia-profiles` sub-module exposing
+// /staff/lia-profile/me/* (LIA self) and (in C2) /staff/lia-profiles/*
+// (OWNER/ADMIN verifier).
 @Module({
   imports: [
     StaffRolesModule,
@@ -26,6 +30,7 @@ import { StaffTicketsModule } from './tickets/staff-tickets.module';
     StaffMeModule,
     StaffCasesModule,
     StaffTicketsModule,
+    LiaProfilesModule,
   ],
   exports: [
     AssignmentsModule,
