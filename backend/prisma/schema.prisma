@@ -465,6 +465,14 @@ model User {
   platformSettingUpdates  PlatformSetting[]                 @relation("PlatformSettingUpdater")
   wixPayments             WixPayment[]                      @relation("WixPaymentUser")
 
+  // PR-DOCUSIGN-1: LIA credential profile (1:0..1 — only LIAs get one).
+  // `liaProfile` is this user's own credential row; cascade on user delete.
+  // `liaProfilesVerified` are the credential rows this user (as OWNER/ADMIN)
+  // has manually verified against the IAA register; SetNull on verifier
+  // delete, so the array is empty for every non-OWNER/ADMIN user.
+  liaProfile              LiaProfile?                       @relation("LiaProfileOwner")
+  liaProfilesVerified     LiaProfile[]                      @relation("LiaProfileVerifier")
+
   @@map("users")
 }
 
@@ -1869,6 +1877,59 @@ model AgentProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("agent_profiles")
+}
+
+// ─── LIA PROFILES (PR-DOCUSIGN-1) ─────────────────────────────────────────────
+// LIA's IAA (Immigration Advisers Authority) credential record. 1:1 with a
+// User of role=LIA. Mirrors the AgentProfile shape — 1:1 child table on User,
+// snake_case @@map, cascade on user delete.
+//
+// Lifecycle: an LIA logs in for the first time after this migration ships,
+// sees a "Complete your profile" banner, enters their iaaLicenceNumber +
+// uploads a licence cert PDF (multer pending → ./uploads/lia-licences/<userId>/
+// <filename>.pdf). At that point iaaLicenceNumber + iaaLicenceFileUrl +
+// the three file-metadata columns are populated, but iaaLicenceVerifiedAt +
+// iaaLicenceVerifiedById stay null. An OWNER/ADMIN then manually cross-checks
+// the cert against the IAA register and marks it verified. Only verified LIAs
+// become eligible for auto-assign + contract-send (gate added in a later step).
+//
+// Every field nullable because a row may exist BEFORE the LIA submits anything.
+// Service layer enforces "verified" = all of iaaLicenceNumber, iaaLicenceFileUrl,
+// iaaLicenceVerifiedAt are non-null.
+//
+// Forward-compat: iaaLicenceExpiryDate, iaaLicenceClass, and similar columns
+// land via additive migrations later. All would be nullable, no backfill needed.
+model LiaProfile {
+  id                       String    @id @default(cuid())
+  userId                   String    @unique
+
+  // Credential — populated when the LIA submits their profile.
+  // @unique because IAA licence numbers are globally unique per natural
+  // person in NZ. Postgres allows multiple NULLs in a unique index, so
+  // "not uploaded yet" rows don't conflict.
+  iaaLicenceNumber         String?   @unique
+
+  // Licence cert PDF metadata. Same shape as case-documents, visa-supporting,
+  // inz-receipts — filesystem path + denormalised size/mime/name so list views
+  // don't need fs.stat. Stored under ./uploads/lia-licences/<userId>/<file>.pdf.
+  iaaLicenceFileUrl        String?
+  iaaLicenceFileName       String?
+  iaaLicenceFileMime       String?
+  iaaLicenceSizeBytes      Int?
+
+  // Verification trail — written together by an OWNER/ADMIN after manual
+  // cross-check against the IAA register. SetNull on verifier hard-delete:
+  // timestamp survives as audit evidence, attribution is lost.
+  iaaLicenceVerifiedAt     DateTime?
+  iaaLicenceVerifiedById   String?
+
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  user        User  @relation("LiaProfileOwner",    fields: [userId],                 references: [id], onDelete: Cascade)
+  verifiedBy  User? @relation("LiaProfileVerifier", fields: [iaaLicenceVerifiedById],  references: [id], onDelete: SetNull)
+
+  @@map("lia_profiles")
 }
 
 // ─── VISA APPLICATION (INZ 1200) ──────────────────────────────────────────────
