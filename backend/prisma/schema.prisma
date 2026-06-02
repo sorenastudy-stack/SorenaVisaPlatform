@@ -290,6 +290,34 @@ enum ContractStatus {
   EXPIRED
 }
 
+// PR-DOCUSIGN-1 step 2: per-signer roles. CLIENT / LIA / DIRECTOR are
+// wired at soft-launch (adult-student flow); GUARDIAN is wired at
+// soft-launch too (under-18 student flow — guardian signs INSTEAD of
+// the minor). PARTNER and FAMILY_MEMBER ship in the enum but no flow
+// constructs envelopes with those roles until the post-launch
+// family-visa work; values present now so that work is additive code,
+// not an enum migration.
+enum ContractSignerRole {
+  CLIENT
+  GUARDIAN
+  PARTNER
+  FAMILY_MEMBER
+  LIA
+  DIRECTOR
+}
+
+// PR-DOCUSIGN-1 step 2: per-signer state. Mirrors DocuSign recipient
+// statuses (created/sent/delivered/completed/declined). PENDING is the
+// default for non-first signers — they're queued behind a routing-order
+// predecessor and haven't received the envelope yet.
+enum ContractSignerStatus {
+  PENDING
+  SENT
+  VIEWED
+  SIGNED
+  DECLINED
+}
+
 enum EventSource {
   AI
   OPS
@@ -472,6 +500,13 @@ model User {
   // delete, so the array is empty for every non-OWNER/ADMIN user.
   liaProfile              LiaProfile?                       @relation("LiaProfileOwner")
   liaProfilesVerified     LiaProfile[]                      @relation("LiaProfileVerifier")
+
+  // PR-DOCUSIGN-1 step 2: ContractSigner rows where this user IS the
+  // signer (LIA, DIRECTOR, or any client-side signer who has a User
+  // account at envelope-creation time). SetNull on user hard-delete:
+  // the signer row survives with its snapshotted name/email as audit
+  // evidence.
+  contractsSigned         ContractSigner[]
 
   @@map("users")
 }
@@ -1221,7 +1256,91 @@ model Contract {
 
   case Case @relation(fields: [caseId], references: [id])
 
+  // PR-DOCUSIGN-1 step 2: per-party signer rows. Sequential routing —
+  // one row per signer slot; "fully signed" is derived from all rows
+  // having signedAt non-null (no PARTIALLY_SIGNED enum value).
+  signers ContractSigner[]
+
   @@map("contracts")
+}
+
+// ─── CONTRACT SIGNERS (PR-DOCUSIGN-1 step 2) ─────────────────────────────────
+// One row per party on a contract envelope. Sequential routing — lowest
+// routingOrder signs first, then envelope advances to the next slot.
+//
+// Launch flows (the only two wired at soft-launch):
+//   • Adult student:    CLIENT (1)   → LIA (2) → DIRECTOR (3)
+//   • Under-18 student: GUARDIAN (1) → LIA (2) → DIRECTOR (3)
+//     (the minor does NOT sign; the guardian signs on their behalf, with
+//     the minor's name captured in signingOnBehalfOf)
+//
+// PARTNER and FAMILY_MEMBER values exist in the role enum so the post-
+// launch family-visa flow can add them without an enum migration — but
+// no flow constructs envelopes with those roles yet.
+//
+// Identity is SNAPSHOTTED at envelope-creation time (signerName +
+// signerEmail). If a User's email later changes, this row keeps what
+// was actually sent. userId FK is optional and SetNull on hard-delete:
+// the row survives with the snapshotted identity as audit evidence —
+// mirrors actorNameSnapshot in audit_logs.
+//
+// Why @@unique([contractId, role]) is intentionally NOT here: a family-
+// visa envelope can carry multiple family-type signers (partner +
+// family member) on the same contract. routingOrder is the slot-
+// uniqueness guarantee; role is descriptive, not constraint-bearing.
+model ContractSigner {
+  id                    String                @id @default(cuid())
+  contractId            String
+
+  role                  ContractSignerRole
+  routingOrder          Int                                          // 1, 2, 3, … — matches DocuSign routingOrder
+
+  // Identity snapshot — durable truth, what the envelope was actually
+  // addressed to at send time. NOT updated when the underlying User /
+  // Contact later changes their name or email.
+  signerName            String
+  signerEmail           String
+
+  // GUARDIAN only — the name of the minor student this guardian is
+  // authorized to sign on behalf of. Null for every other role.
+  // Provides the legal record of the guardian-to-minor relationship
+  // that backed this signature. Stored as a plain name snapshot (the
+  // minor is not a signer; no FK or status of their own). App-layer
+  // invariant: role === 'GUARDIAN' ⇒ signingOnBehalfOf IS NOT NULL.
+  signingOnBehalfOf     String?
+
+  // Optional FK to User. Populated for LIA + DIRECTOR rows (always
+  // staff). Populated for CLIENT / GUARDIAN / PARTNER / FAMILY_MEMBER
+  // rows when that person has a User account at envelope-creation
+  // time. SetNull on user hard-delete — the snapshotted identity
+  // above survives.
+  userId                String?
+
+  // Per-signer state — independent of the parent Contract.status,
+  // which mirrors the envelope-level state DocuSign reports back.
+  // "Fully signed" is derived from child rows (all signedAt non-null),
+  // not stored as a dedicated ContractStatus value.
+  status                ContractSignerStatus  @default(PENDING)
+  viewedAt              DateTime?
+  signedAt              DateTime?
+  declinedAt            DateTime?
+  declineReason         String?                                      // DocuSign returns a free-text reason
+
+  // DocuSign-side recipient id (string "1"/"2"/"3"/… within an envelope).
+  // Webhook payloads reference recipients by this id; we look up the
+  // ContractSigner row by (contractId, docusignRecipientId).
+  docusignRecipientId   String?
+
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  contract              Contract              @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user                  User?                 @relation(fields: [userId],     references: [id], onDelete: SetNull)
+
+  @@unique([contractId, routingOrder])    // slot uniqueness — no two signers share a position
+  @@index([contractId])
+  @@index([userId])
+  @@map("contract_signers")
 }
 
 // ─── LEGAL NOTES (PR-LIA-1) ──────────────────────────────────────────────────
