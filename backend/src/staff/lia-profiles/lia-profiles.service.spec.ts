@@ -127,20 +127,27 @@ async function cleanupLia(prisma: PrismaClient, lia: SeededLia) {
 // Construct a real on-disk file in PENDING_DIR and return a synthetic
 // Multer file descriptor pointing at it. Mirrors the shape Multer
 // hands the controller after disk-storage diskStorage().
-async function makePendingPdf(
+//
+// PR-DOCUSIGN-1 (scope widening): parametrised so a test can drive a
+// PDF / PNG / JPG payload through the same helper. Defaults reproduce
+// the original PDF behaviour for callers that don't opt in.
+async function makePendingFile(
   stamp: string,
-  size = 2048,
+  opts: { mime?: string; ext?: string; size?: number } = {},
 ): Promise<Express.Multer.File> {
+  const mime = opts.mime ?? 'application/pdf';
+  const ext = opts.ext ?? '.pdf';
+  const size = opts.size ?? 2048;
   await fs.promises.mkdir(PENDING_DIR, { recursive: true });
-  const basename = `${Date.now()}-${Math.round(Math.random() * 1e9)}.pdf`;
+  const basename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
   const fullPath = path.join(PENDING_DIR, basename);
   const buf = Buffer.alloc(size, 0x42);  // arbitrary content; never read
   await fs.promises.writeFile(fullPath, buf);
   return {
     fieldname:    'file',
-    originalname: `licence-${stamp}.pdf`,
+    originalname: `licence-${stamp}${ext}`,
     encoding:     '7bit',
-    mimetype:     'application/pdf',
+    mimetype:     mime,
     size,
     destination:  PENDING_DIR,
     filename:     basename,
@@ -215,7 +222,7 @@ describe('LiaProfilesService (PR-DOCUSIGN-1 step 3 — C3)', () => {
     afterEach(async () => { await cleanupLia(prisma, lia); });
 
     it('file lands under lia-licences/<userId>/, 4 columns set, LIA_LICENCE_UPLOADED row written', async () => {
-      const file = await makePendingPdf(lia.stamp, 4096);
+      const file = await makePendingFile(lia.stamp, { size: 4096 });
       const actor = { id: lia.userId, name: 'A', role: 'LIA' };
 
       const result = await service.uploadOwnLicenceFile(lia.userId, file, actor);
@@ -262,6 +269,56 @@ describe('LiaProfilesService (PR-DOCUSIGN-1 step 3 — C3)', () => {
       // Stamp profileId on the fixture so afterEach finds the audit rows
       lia.profileId = row!.id;
     });
+
+    // PR-DOCUSIGN-1 (scope widening): the allowlist now accepts PNG +
+    // JPG too. Proves an image upload writes the correct mime + ext
+    // through the same code path as PDF — same renamer, same audit
+    // shape, same return contract. We only test PNG; JPG/JPEG follows
+    // the identical branch in extFromMime.
+    it('PNG upload lands as image/png with the right ext + columns + audit', async () => {
+      const file = await makePendingFile(lia.stamp, {
+        mime: 'image/png',
+        ext:  '.png',
+        size: 3072,
+      });
+      const actor = { id: lia.userId, name: 'A', role: 'LIA' };
+
+      const result = await service.uploadOwnLicenceFile(lia.userId, file, actor);
+
+      expect(result.ok).toBe(true);
+      expect(result.fileName).toBe(`licence-${lia.stamp}.png`);
+      expect(result.sizeBytes).toBe(3072);
+      expect(result.mime).toBe('image/png');
+      expect(result.replacedPrior).toBe(false);
+
+      const row = await prisma.liaProfile.findUnique({ where: { userId: lia.userId } });
+      expect(row).not.toBeNull();
+      expect(row!.iaaLicenceFileName).toBe(`licence-${lia.stamp}.png`);
+      expect(row!.iaaLicenceFileMime).toBe('image/png');
+      expect(row!.iaaLicenceSizeBytes).toBe(3072);
+      expect(row!.iaaLicenceFileUrl).toMatch(
+        new RegExp(`lia-licences[\\\\/]${lia.userId}[\\\\/].*\\.png$`),
+      );
+      expect(fs.existsSync(row!.iaaLicenceFileUrl!)).toBe(true);
+      expect(fs.existsSync(file.path)).toBe(false);
+
+      const audit = await prisma.auditLog.findMany({
+        where: {
+          entityType: 'LIA_PROFILE',
+          entityId: row!.id,
+          eventType: 'LIA_LICENCE_UPLOADED',
+        },
+      });
+      expect(audit).toHaveLength(1);
+      const nv = audit[0]!.newValue as Record<string, unknown>;
+      expect(nv.fileName).toBe(`licence-${lia.stamp}.png`);
+      expect(nv.sizeBytes).toBe(3072);
+      expect(nv.mime).toBe('image/png');
+      expect(nv.replacedPrior).toBe(false);
+      expect(nv.resetsVerification).toBe(false);
+
+      lia.profileId = row!.id;
+    });
   });
 
   // ─── Test 3 — Verification reset on credential change ──────────────────
@@ -301,7 +358,7 @@ describe('LiaProfilesService (PR-DOCUSIGN-1 step 3 — C3)', () => {
       const before = await prisma.liaProfile.findUnique({ where: { userId: lia.userId } });
       expect(before?.iaaLicenceVerifiedAt).not.toBeNull();
 
-      const file = await makePendingPdf(lia.stamp);
+      const file = await makePendingFile(lia.stamp);
       const actor = { id: lia.userId, name: 'A', role: 'LIA' };
       const result = await service.uploadOwnLicenceFile(lia.userId, file, actor);
       expect(result.resetsVerification).toBe(true);

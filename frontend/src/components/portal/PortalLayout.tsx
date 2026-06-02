@@ -71,6 +71,13 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     // same gate; this is UX-only.
     { label: 'LIA Productivity', href: '/lia/productivity', icon: <LineChart size={18} />,
       requiresRoleIn: ['OWNER', 'ADMIN', 'SUPER_ADMIN'] },
+    // PR-DOCUSIGN-1 step 3 (Screen A): LIA self-service for IAA
+    // licence + verification status. Hidden from non-LIA viewers —
+    // the backend gates the endpoints to @Roles('LIA'), so the link
+    // would only return 403 for them. Backend security is unchanged;
+    // this is UX-only.
+    { label: 'My Licence',       href: '/lia/licence',      icon: <Shield size={18} />,
+      requiresRoleIn: ['LIA'] },
   ],
   student: [
     { label: 'Dashboard', href: '/student',            icon: <LayoutDashboard size={18} /> },

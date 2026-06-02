@@ -35,7 +35,11 @@ import { UpdateLicenceNumberDto } from './dto/lia-profile.dto';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 const PENDING_DIR = path.join(UPLOAD_DIR, 'pending');
-const ALLOWED_LICENCE_MIMES = ['application/pdf'];
+// PR-DOCUSIGN-1 (scope widening): IAA licence accepts a PDF or a
+// register-page screenshot (PNG / JPG). 10 MB size cap unchanged.
+// Must mirror the service-side allowlist — service re-validates
+// after multer's fileFilter passes.
+const ALLOWED_LICENCE_MIMES = ['application/pdf', 'image/png', 'image/jpeg'];
 
 const licenceFileMulterOptions = {
   storage: diskStorage({
@@ -87,7 +91,7 @@ export class LiaProfilesController {
   ) {
     if (req.fileTypeRejected) {
       throw new BadRequestException(
-        'Unsupported licence file type. Only PDF (application/pdf) is allowed.',
+        'Unsupported licence file type. Allowed: PDF, PNG, or JPEG.',
       );
     }
     return this.service.uploadOwnLicenceFile(this.userId(req), file, this.actor(req));

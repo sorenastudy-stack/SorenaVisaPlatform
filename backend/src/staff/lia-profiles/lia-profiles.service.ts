@@ -37,8 +37,30 @@ interface Actor {
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 const LIA_LICENCE_DIR = path.join(UPLOAD_DIR, 'lia-licences');
-const ALLOWED_LICENCE_MIMES = new Set(['application/pdf']);
+// PR-DOCUSIGN-1 (scope widening): IAA licence accepts a PDF or a
+// register-page screenshot (PNG / JPG). Must mirror the controller-
+// side allowlist — defence-in-depth: controller rejects at multer
+// (before the file is parsed), this re-validates after.
+const ALLOWED_LICENCE_MIMES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+]);
 const MAX_LICENCE_BYTES = 10 * 1024 * 1024;
+
+// PR-DOCUSIGN-1 (scope widening): derive a sensible filesystem
+// extension from the upload's mime when the user's original filename
+// has none (e.g. a phone screenshot named "IMG_1234" with no .png).
+// Mirrors the inz-submission helper. Empty string for unknown mimes —
+// the allowlist gate above rejects those upstream anyway.
+function extFromMime(mime: string): string {
+  switch (mime) {
+    case 'application/pdf': return '.pdf';
+    case 'image/png':       return '.png';
+    case 'image/jpeg':      return '.jpg';
+    default:                return '';
+  }
+}
 
 export type VerificationState = 'PENDING' | 'VERIFIED' | 'REJECTED';
 
@@ -215,7 +237,7 @@ export class LiaProfilesService {
 
     const destDir = path.join(LIA_LICENCE_DIR, userId);
     await fs.promises.mkdir(destDir, { recursive: true });
-    const ext = path.extname(file.originalname) || '.pdf';
+    const ext = path.extname(file.originalname) || extFromMime(file.mimetype);
     const destBasename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
     const destPath = path.join(destDir, destBasename);
 
@@ -305,8 +327,13 @@ export class LiaProfilesService {
     }
     const token = createSignedDownloadToken({
       fileUrl: profile.iaaLicenceFileUrl,
-      fileName: profile.iaaLicenceFileName ?? 'lia-licence.pdf',
-      mimeType: profile.iaaLicenceFileMime ?? 'application/pdf',
+      // PR-DOCUSIGN-1 (scope widening): fallback was hardcoded PDF
+      // when the licence accepted PDF only. With PNG/JPG now valid
+      // too, fall back to a format-agnostic name + octet-stream so a
+      // degenerate row (file URL set but metadata null — shouldn't
+      // happen) doesn't mis-serve an image as a PDF.
+      fileName: profile.iaaLicenceFileName ?? 'lia-licence',
+      mimeType: profile.iaaLicenceFileMime ?? 'application/octet-stream',
     });
     return { url: `/files/signed/${token}`, expiresInSeconds: 300 };
   }
@@ -421,8 +448,13 @@ export class LiaProfilesService {
 
     const token = createSignedDownloadToken({
       fileUrl: profile.iaaLicenceFileUrl,
-      fileName: profile.iaaLicenceFileName ?? 'lia-licence.pdf',
-      mimeType: profile.iaaLicenceFileMime ?? 'application/pdf',
+      // PR-DOCUSIGN-1 (scope widening): fallback was hardcoded PDF
+      // when the licence accepted PDF only. With PNG/JPG now valid
+      // too, fall back to a format-agnostic name + octet-stream so a
+      // degenerate row (file URL set but metadata null — shouldn't
+      // happen) doesn't mis-serve an image as a PDF.
+      fileName: profile.iaaLicenceFileName ?? 'lia-licence',
+      mimeType: profile.iaaLicenceFileMime ?? 'application/octet-stream',
     });
     return { url: `/files/signed/${token}`, expiresInSeconds: 300 };
   }
