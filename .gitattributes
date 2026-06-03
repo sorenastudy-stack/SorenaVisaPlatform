@@ -1,0 +1,19 @@
+# Binary file types — never apply EOL conversion.
+#
+# core.autocrlf=true (Windows default) would otherwise silently
+# rewrite LF→CRLF on checkout, corrupting files whose byte offsets
+# matter — most painfully PDFs whose xref tables encode absolute
+# byte positions. Without these rules the PR-DOCUSIGN-1 step 5
+# placeholder PDF would break on the next Windows checkout / reset.
+#
+# Coverage rationale:
+#   *.pdf       — contract templates, generated reports, fixtures
+#   *.png /     — LIA licence uploads accept PNG and JPG per
+#   *.jpg /       PR-DOCUSIGN-1 step 3's image-widening; matches the
+#   *.jpeg        backend allowlist so any future committed asset
+#                 (logo, doc screenshot, etc.) inherits the rule.
+
+*.pdf  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary

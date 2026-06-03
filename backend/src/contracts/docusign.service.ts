@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as docusign from 'docusign-esign';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { ContractSignerRole } from '@prisma/client';
 
 // PR-DOCUSIGN-1 step 5 — JWT-grant auth with in-memory token cache.
 //
@@ -57,6 +58,102 @@ const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 // max so the cache window is as wide as possible.
 const TOKEN_LIFETIME_SECONDS = 3600;
 const SCOPES = ['signature', 'impersonation'];
+
+// ─── PR-DOCUSIGN-1 step 5 piece 1 — multi-signer envelope shape ──────────
+//
+// buildEnvelopeDefinition() is a PURE shape constructor for the
+// multi-signer DocuSign envelope. Split out of createEnvelope() so
+// the test suite can assert on the exact recipients/documents/tabs
+// shape without making a network call — no SDK quota burn in CI.
+//
+// The output is the same docusign.EnvelopeDefinition instance that
+// createEnvelope() will pass to envelopesApi.createEnvelope() once
+// piece 2 lands the wiring. Build inputs are deliberately Prisma-
+// aware (role: ContractSignerRole) so the caller can hand spec rows
+// over directly. Build outputs are the SDK's own model instances —
+// no mapping layer hides behind this function.
+
+export interface EnvelopeRecipientSpec {
+  recipientId:  string;      // '1' / '2' / '3' — DocuSign-side id within the envelope
+  routingOrder: number;      // 1, 2, 3 — lower signs first; equal = parallel
+  email:        string;
+  name:         string;
+  role:         ContractSignerRole;
+}
+
+export interface EnvelopeDocumentSpec {
+  documentId:    string;     // '1' / '2' / '3' — distinct per envelope
+  name:          string;     // shown in DocuSign UI
+  fileExtension: string;     // 'pdf' / 'png' / 'jpg'
+  bytes:         Buffer;
+}
+
+export interface BuildEnvelopeOptions {
+  emailSubject: string;      // recipient email subject line
+  emailBlurb:   string;      // recipient email body
+}
+
+// Fixed-position SignHere tabs on documentId='1', page 1. The y-spacing
+// keeps signatures from overlapping on the placeholder PDF. When the
+// real engagement letter ships (a later step), switch to anchored tabs
+// (SignHere.anchorString = '/signClient/', etc.) so positions survive
+// template-content edits.
+const SIGN_HERE_X                   = '100';
+const SIGN_HERE_PAGE                = '1';
+const SIGN_HERE_BASE_Y              = 600;
+const SIGN_HERE_Y_GAP               = 50;
+const SIGN_HERE_TARGET_DOCUMENT_ID  = '1';
+
+export function buildEnvelopeDefinition(
+  documents: EnvelopeDocumentSpec[],
+  signers:   EnvelopeRecipientSpec[],
+  options:   BuildEnvelopeOptions,
+): docusign.EnvelopeDefinition {
+  const envelopeDefinition = new docusign.EnvelopeDefinition();
+  envelopeDefinition.emailSubject = options.emailSubject;
+  envelopeDefinition.emailBlurb   = options.emailBlurb;
+  // status='sent' dispatches the envelope to the lowest-routingOrder
+  // signer's email immediately on receipt by DocuSign. status='created'
+  // would leave it as a draft requiring a later send call.
+  envelopeDefinition.status = 'sent';
+
+  envelopeDefinition.documents = documents.map((d) => {
+    const doc = new docusign.Document();
+    doc.documentBase64 = d.bytes.toString('base64');
+    doc.name           = d.name;
+    doc.fileExtension  = d.fileExtension;
+    doc.documentId     = d.documentId;
+    return doc;
+  });
+
+  const sdkSigners = signers.map((s) => {
+    const signer = new docusign.Signer();
+    signer.recipientId  = s.recipientId;
+    // SDK expects routingOrder as a string on the wire.
+    signer.routingOrder = String(s.routingOrder);
+    signer.email        = s.email;
+    signer.name         = s.name;
+
+    const signHere = new docusign.SignHere();
+    signHere.documentId  = SIGN_HERE_TARGET_DOCUMENT_ID;
+    signHere.pageNumber  = SIGN_HERE_PAGE;
+    signHere.recipientId = s.recipientId;
+    // tabLabel helps debug in the DocuSign envelope UI: a unique label
+    // per signer lets ops staff identify whose tab they're looking at.
+    signHere.tabLabel    = `SignHere_${s.role}_${s.recipientId}`;
+    signHere.xPosition   = SIGN_HERE_X;
+    signHere.yPosition   = String(SIGN_HERE_BASE_Y + (s.routingOrder - 1) * SIGN_HERE_Y_GAP);
+
+    signer.tabs               = new docusign.Tabs();
+    signer.tabs.signHereTabs  = [signHere];
+    return signer;
+  });
+
+  const recipients = new docusign.Recipients();
+  recipients.signers = sdkSigners;
+  envelopeDefinition.recipients = recipients;
+  return envelopeDefinition;
+}
 
 @Injectable()
 export class DocuSignService {
@@ -171,54 +268,34 @@ export class DocuSignService {
   // SignHere tab positions, response shaping. The multi-signer
   // envelope rewrite is a later step.
 
+  // PR-DOCUSIGN-1 step 5 piece 2 — rewrite to use buildEnvelopeDefinition.
+  //
+  // Signature changed from (caseId, signerEmail, signerName) to
+  // (documents, signers, options). Callers must pre-resolve all
+  // signer identities. Single call site lives in
+  // contracts.service.ts:createContract (updated in this piece).
+  //
+  // The pure builder produces the EnvelopeDefinition; this wrapper
+  // owns only the JWT-authed apiClient + the SDK dispatch. Envelope
+  // shape (3 signers, sequential routing, single document, SignHere
+  // tab positions) is the spec-covered build output.
   async createEnvelope(
-    caseId: string,
-    signerEmail: string,
-    signerName: string,
+    documents: EnvelopeDocumentSpec[],
+    signers:   EnvelopeRecipientSpec[],
+    options:   { emailSubject: string; emailBlurb: string; caseId: string },
   ): Promise<string> {
     const apiClient = await this.makeAuthedApiClient();
     const envelopesApi = new docusign.EnvelopesApi(apiClient);
-
-    const envelopeDefinition = new docusign.EnvelopeDefinition();
-    envelopeDefinition.emailSubject = 'Please sign this contract';
-    envelopeDefinition.emailBlurb = 'Please review and sign the attached contract.';
-    envelopeDefinition.status = 'sent';
-
-    // Add document (placeholder - in real implementation, you'd upload actual contract)
-    const document = new docusign.Document();
-    document.documentBase64 = Buffer.from('Contract content here').toString('base64');
-    document.name = 'Contract.pdf';
-    document.fileExtension = 'pdf';
-    document.documentId = '1';
-    envelopeDefinition.documents = [document];
-
-    // Add signer
-    const signer = new docusign.Signer();
-    signer.email = signerEmail;
-    signer.name = signerName;
-    signer.recipientId = '1';
-    signer.routingOrder = '1';
-
-    // Add sign here tab
-    const signHere = new docusign.SignHere();
-    signHere.documentId = '1';
-    signHere.pageNumber = '1';
-    signHere.recipientId = '1';
-    signHere.tabLabel = 'SignHereTab';
-    signHere.xPosition = '100';
-    signHere.yPosition = '150';
-
-    signer.tabs = new docusign.Tabs();
-    signer.tabs.signHereTabs = [signHere];
-
-    const recipients = new docusign.Recipients();
-    recipients.signers = [signer];
-    envelopeDefinition.recipients = recipients;
-
+    const envelopeDefinition = buildEnvelopeDefinition(documents, signers, {
+      emailSubject: options.emailSubject,
+      emailBlurb:   options.emailBlurb,
+    });
+    this.logger.log(
+      `Creating envelope for case ${options.caseId} with ${signers.length} signers, ${documents.length} document(s)`,
+    );
     const results = await envelopesApi.createEnvelope(this.accountId, {
       envelopeDefinition,
     });
-
     return results.envelopeId;
   }
 
@@ -261,6 +338,18 @@ export class DocuSignService {
       signedFileUrl: envelope.documents?.[0]?.uri,
       auditTrailUrl: envelope.certificateUri,
     };
+  }
+
+  // PR-DOCUSIGN-1 step 5 piece 3 — authoritative per-recipient state
+  // for the multi-signer webhook handler. Option (b) re-sync: we
+  // don't trust the webhook body's shape, we ask DocuSign for the
+  // current Recipients structure and map it ourselves. The returned
+  // SDK object exposes .signers (Array<Signer>) plus other recipient
+  // categories (agents/editors/cc/etc.) that this PR doesn't use.
+  async listRecipients(envelopeId: string): Promise<docusign.Recipients> {
+    const apiClient = await this.makeAuthedApiClient();
+    const envelopesApi = new docusign.EnvelopesApi(apiClient);
+    return envelopesApi.listRecipients(this.accountId, envelopeId);
   }
 
   // ─── Internals ─────────────────────────────────────────────────────
