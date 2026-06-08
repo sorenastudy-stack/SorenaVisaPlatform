@@ -19,17 +19,24 @@ import {
   DocuSignService,
   EnvelopeDocumentSpec,
   EnvelopeRecipientSpec,
+  TEMPLATE_ROLE_CLIENT,
+  TEMPLATE_ROLE_LIA,
+  TEMPLATE_ROLE_DIRECTOR,
 } from './docusign.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { docusignToContractStatus } from './contract-status';
+import { stampLiaIdentity } from './engagement-letter-stamp';
 
-// PR-DOCUSIGN-1 step 5 piece 2 — placeholder engagement-letter PDF.
+// PR-DOCUSIGN-1 step 5 piece 5a/5b — real engagement-letter PDF.
 // Lives at backend/assets/contract-templates/. Read lazily on first
 // createContract() call and cached for the rest of the process
-// lifetime (it's static content committed with the code).
-const PLACEHOLDER_PDF_REL_PATH = 'assets/contract-templates/engagement-letter-placeholder-v1.pdf';
+// lifetime (it's static content committed with the code). The earlier
+// placeholder-v1 file stays alongside this one as an artifact —
+// referenced by nothing in code, kept in case anyone wants to compare
+// the multi-signer scaffolding shape against the real document.
+const ENGAGEMENT_LETTER_PDF_REL_PATH = 'assets/contract-templates/engagement-letter-v1.pdf';
 
 // PR-DOCUSIGN-1 step 5 piece 3 — DocuSign recipient status →
 // ContractSignerStatus mapping. Returns null on unrecognized values
@@ -134,12 +141,39 @@ export class ContractsService {
         `LIA assignment returned status=${assignResult.status} but no liaId — inconsistent state`,
       );
     }
+    // PR-DOCUSIGN-1 step 5 piece 5c — load liaProfile alongside the
+    // user so the LIA's IAA licence number can pre-fill the Clause 2.1
+    // + page-11 IAA tabs the 5b tab map emits. liaProfile is an
+    // optional 1:1 relation on User (a brand-new LIA may not have one
+    // yet); iaaLicenceNumber inside it is nullable too. Both missing
+    // states are treated the same (blank IAA tab, send proceeds, see
+    // below).
     const lia = await this.prisma.user.findUnique({
       where: { id: assignResult.liaId },
-      select: { id: true, email: true, name: true },
+      select: {
+        id:    true,
+        email: true,
+        name:  true,
+        liaProfile: { select: { iaaLicenceNumber: true } },
+      },
     });
     if (!lia) {
       throw new InternalServerErrorException('Assigned LIA user not found in DB');
+    }
+
+    // Missing-IAA policy: WARN, do NOT block. 5b made the IAA tabs
+    // unlocked text fields, so the LIA can fill the number at signing
+    // time on their device. Blocking the send here would be more
+    // disruptive than helpful — the case is already at the contract-
+    // dispatch stage, the client is waiting, and the LIA has a
+    // separate "complete your profile" path to backfill the DB row.
+    const iaaLicenceNumber = lia.liaProfile?.iaaLicenceNumber ?? null;
+    if (!iaaLicenceNumber) {
+      this.logger.warn(
+        `Contract dispatch for case ${dto.caseId}: assigned LIA ${lia.id} (${lia.email}) ` +
+        `has no IAA licence number on file — the IAA Licence Number tab will be sent blank; ` +
+        `the LIA can fill it at signing time. Send proceeds.`,
+      );
     }
 
     // 3. Director identity from env (D5). Refuse if either is missing —
@@ -152,33 +186,46 @@ export class ContractsService {
       );
     }
 
-    // 4. Read the placeholder engagement-letter PDF. Lazy + cached for
-    //    the process lifetime (static asset).
-    const placeholderBytes = this.getPlaceholderBytes();
+    // 4. Read the engagement-letter PDF (lazy + cached, static asset)
+    //    and stamp the LIA's identity into it BEFORE handing to
+    //    DocuSign. After 5g the LIA's name + IAA Licence Number live
+    //    in the document's static layer at both occurrences (page 1
+    //    Clause 2.1 and page 11 LIA-block) — DocuSign sees them as
+    //    document content, not editable tabs. Pure function.
+    const engagementLetterBytes = this.getEngagementLetterBytes();
+    const stampedBytes = await stampLiaIdentity(engagementLetterBytes, {
+      liaName:          lia.name,
+      iaaLicenceNumber: iaaLicenceNumber ?? '',
+    });
 
     // 5. Build the signer + document specs. recipientId 1/2/3 mirrors
     //    routingOrder so the matching ContractSigner row's
     //    docusignRecipientId is the same value, simplifying the
     //    piece-3 webhook lookup.
+    // Per 5h — each signer carries the DocuSign template roleName
+    // (verbatim, case-sensitive — typos break sends with
+    // TEMPLATE_ROLE_NOT_FOUND). The template owns all field positions
+    // and the visa-checkbox group; the platform supplies only
+    // identity + routing.
     const signers: EnvelopeRecipientSpec[] = [
       {
         recipientId:  '1',
         routingOrder: 1,
-        role:         ContractSignerRole.CLIENT,
+        templateRole: TEMPLATE_ROLE_CLIENT,
         email:        clientContact.email,
         name:         clientContact.fullName,
       },
       {
         recipientId:  '2',
         routingOrder: 2,
-        role:         ContractSignerRole.LIA,
+        templateRole: TEMPLATE_ROLE_LIA,
         email:        lia.email,
         name:         lia.name,
       },
       {
         recipientId:  '3',
         routingOrder: 3,
-        role:         ContractSignerRole.DIRECTOR,
+        templateRole: TEMPLATE_ROLE_DIRECTOR,
         email:        directorEmail,
         name:         directorName,
       },
@@ -187,7 +234,7 @@ export class ContractsService {
       documentId:    '1',
       name:          'Engagement letter.pdf',
       fileExtension: 'pdf',
-      bytes:         placeholderBytes,
+      bytes:         stampedBytes,
     }];
 
     // 6. Dispatch to DocuSign. Outside the DB transaction — if this
@@ -263,18 +310,18 @@ export class ContractsService {
     return contract;
   }
 
-  private placeholderBytesCache: Buffer | null = null;
+  private engagementLetterBytesCache: Buffer | null = null;
 
-  private getPlaceholderBytes(): Buffer {
-    if (this.placeholderBytesCache !== null) return this.placeholderBytesCache;
-    const filePath = path.resolve(PLACEHOLDER_PDF_REL_PATH);
+  private getEngagementLetterBytes(): Buffer {
+    if (this.engagementLetterBytesCache !== null) return this.engagementLetterBytesCache;
+    const filePath = path.resolve(ENGAGEMENT_LETTER_PDF_REL_PATH);
     if (!fs.existsSync(filePath)) {
       throw new InternalServerErrorException(
-        `Placeholder engagement-letter PDF not found at ${filePath} (cwd: ${process.cwd()})`,
+        `Engagement-letter PDF not found at ${filePath} (cwd: ${process.cwd()})`,
       );
     }
-    this.placeholderBytesCache = fs.readFileSync(filePath);
-    return this.placeholderBytesCache;
+    this.engagementLetterBytesCache = fs.readFileSync(filePath);
+    return this.engagementLetterBytesCache;
   }
 
   async getContract(caseId: string) {

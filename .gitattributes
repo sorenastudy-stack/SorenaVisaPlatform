@@ -12,8 +12,13 @@
 #   *.jpg /       PR-DOCUSIGN-1 step 3's image-widening; matches the
 #   *.jpeg        backend allowlist so any future committed asset
 #                 (logo, doc screenshot, etc.) inherits the rule.
+#   *.ttf       — Caladea (SIL OFL 1.1) bundled under
+#                 backend/assets/fonts/ for PR-DOCUSIGN-1 step 5g
+#                 engagement-letter LIA-identity stamping; any TTF
+#                 corruption would crash font embedding at runtime.
 
 *.pdf  binary
 *.png  binary
 *.jpg  binary
 *.jpeg binary
+*.ttf  binary

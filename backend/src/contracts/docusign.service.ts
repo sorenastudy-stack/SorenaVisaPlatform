@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as docusign from 'docusign-esign';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { ContractSignerRole } from '@prisma/client';
 
 // PR-DOCUSIGN-1 step 5 — JWT-grant auth with in-memory token cache.
 //
@@ -16,15 +15,6 @@ import type { ContractSignerRole } from '@prisma/client';
 // is 5 min shorter than the DocuSign-advertised expires_in so an
 // in-flight envelope op never races a token that's about to expire
 // on DocuSign's side.
-//
-// The three public methods (createEnvelope, getSigningUrl, syncStatus)
-// have unchanged signatures and unchanged envelope-building bodies.
-// They differ from the previous static-bearer implementation in only
-// the apiClient acquisition: a fresh authed instance per call via
-// makeAuthedApiClient(). The per-call ApiClient pattern mirrors the
-// proven probe at scripts/test-docusign-jwt.ts and avoids the SDK's
-// addDefaultHeader-appends-not-replaces quirk that would accumulate
-// stale Authorization headers on a held client.
 //
 // DOCUSIGN_ACCESS_TOKEN is no longer read by this service. The line
 // in backend/.env is deadweight from this commit forward — safe to
@@ -59,73 +49,115 @@ const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 const TOKEN_LIFETIME_SECONDS = 3600;
 const SCOPES = ['signature', 'impersonation'];
 
-// ─── PR-DOCUSIGN-1 step 5 piece 1 — multi-signer envelope shape ──────────
+// ─── PR-DOCUSIGN-1 step 5h — composite-template envelope shape ──────────
 //
 // buildEnvelopeDefinition() is a PURE shape constructor for the
-// multi-signer DocuSign envelope. Split out of createEnvelope() so
-// the test suite can assert on the exact recipients/documents/tabs
-// shape without making a network call — no SDK quota burn in CI.
+// engagement-letter envelope. The envelope uses a DocuSign composite
+// template:
 //
-// The output is the same docusign.EnvelopeDefinition instance that
-// createEnvelope() will pass to envelopesApi.createEnvelope() once
-// piece 2 lands the wiring. Build inputs are deliberately Prisma-
-// aware (role: ContractSignerRole) so the caller can hand spec rows
-// over directly. Build outputs are the SDK's own model instances —
-// no mapping layer hides behind this function.
+//   serverTemplates[0]: references our saved DocuSign template by
+//     templateId; the template owns all field positions (signatures,
+//     dates, full-name / passport text fields, the 11 visa-type
+//     checkboxes + their pick-exactly-one group) and the recipient
+//     role definitions ("Client" / "LIA" / "Director").
+//
+//   inlineTemplates[0]: supplies per-send identity — three Signers
+//     keyed to the template's roleNames, with email + name + routing
+//     order from the call site.
+//
+//   compositeTemplate.document: our freshly STAMPED engagement-letter
+//     PDF (the LIA's name + IAA Licence Number drawn into the static
+//     content layer by stampLiaIdentity() in engagement-letter-stamp.ts).
+//     DocuSign substitutes this document for the template's stored copy
+//     and overlays the template's field layout on top. The substituted
+//     PDF MUST preserve the template's page count + dimensions; pdf-lib
+//     stamping is purely additive so this invariant holds.
+//
+// Tabs are NOT constructed in code any more. The template is the source
+// of truth for field positions; this builder only supplies identities
+// and the substituted document.
+
+// Template role names — must match the DocuSign template EXACTLY
+// (case-sensitive). A typo breaks every send with TEMPLATE_ROLE_NOT_FOUND.
+// These three strings are also the union type of EnvelopeRecipientSpec
+// .templateRole below.
+export const TEMPLATE_ROLE_CLIENT   = 'Client'   as const;
+export const TEMPLATE_ROLE_LIA      = 'LIA'      as const;
+export const TEMPLATE_ROLE_DIRECTOR = 'Director' as const;
+
+export type TemplateRoleName =
+  | typeof TEMPLATE_ROLE_CLIENT
+  | typeof TEMPLATE_ROLE_LIA
+  | typeof TEMPLATE_ROLE_DIRECTOR;
 
 export interface EnvelopeRecipientSpec {
-  recipientId:  string;      // '1' / '2' / '3' — DocuSign-side id within the envelope
-  routingOrder: number;      // 1, 2, 3 — lower signs first; equal = parallel
+  recipientId:  string;            // '1' / '2' / '3' — DocuSign-side id within the envelope
+  routingOrder: number;            // 1, 2, 3 — lower signs first; equal = parallel
   email:        string;
   name:         string;
-  role:         ContractSignerRole;
+  templateRole: TemplateRoleName;  // must match the saved DocuSign template's role name
 }
 
 export interface EnvelopeDocumentSpec {
-  documentId:    string;     // '1' / '2' / '3' — distinct per envelope
+  documentId:    string;     // '1' — single-document envelope only
   name:          string;     // shown in DocuSign UI
-  fileExtension: string;     // 'pdf' / 'png' / 'jpg'
-  bytes:         Buffer;
+  fileExtension: string;     // 'pdf'
+  bytes:         Buffer;     // STAMPED PDF — must match the template's source page count + dimensions
 }
 
 export interface BuildEnvelopeOptions {
-  emailSubject: string;      // recipient email subject line
-  emailBlurb:   string;      // recipient email body
+  emailSubject: string;     // recipient email subject line
+  emailBlurb:   string;     // recipient email body
+  templateId:   string;     // DocuSign template UUID — the saved layout this envelope inherits from
 }
 
-// Fixed-position SignHere tabs on documentId='1', page 1. The y-spacing
-// keeps signatures from overlapping on the placeholder PDF. When the
-// real engagement letter ships (a later step), switch to anchored tabs
-// (SignHere.anchorString = '/signClient/', etc.) so positions survive
-// template-content edits.
-const SIGN_HERE_X                   = '100';
-const SIGN_HERE_PAGE                = '1';
-const SIGN_HERE_BASE_Y              = 600;
-const SIGN_HERE_Y_GAP               = 50;
-const SIGN_HERE_TARGET_DOCUMENT_ID  = '1';
+// Sequence numbers for the composite-template arrays. DocuSign applies
+// lower sequence first; inlineTemplate at sequence > serverTemplate so
+// any inline overrides win.
+const SERVER_TEMPLATE_SEQUENCE = '1';
+const INLINE_TEMPLATE_SEQUENCE = '2';
+const COMPOSITE_TEMPLATE_ID    = '1';
 
 export function buildEnvelopeDefinition(
   documents: EnvelopeDocumentSpec[],
   signers:   EnvelopeRecipientSpec[],
   options:   BuildEnvelopeOptions,
 ): docusign.EnvelopeDefinition {
+  if (documents.length !== 1) {
+    throw new Error(
+      `buildEnvelopeDefinition: composite-template send expects exactly 1 document, got ${documents.length}`,
+    );
+  }
+  if (!options.templateId) {
+    throw new Error(
+      'buildEnvelopeDefinition: templateId is required for composite-template send',
+    );
+  }
+  const docSpec = documents[0];
+
   const envelopeDefinition = new docusign.EnvelopeDefinition();
   envelopeDefinition.emailSubject = options.emailSubject;
   envelopeDefinition.emailBlurb   = options.emailBlurb;
   // status='sent' dispatches the envelope to the lowest-routingOrder
-  // signer's email immediately on receipt by DocuSign. status='created'
-  // would leave it as a draft requiring a later send call.
+  // signer's email immediately on receipt by DocuSign.
   envelopeDefinition.status = 'sent';
 
-  envelopeDefinition.documents = documents.map((d) => {
-    const doc = new docusign.Document();
-    doc.documentBase64 = d.bytes.toString('base64');
-    doc.name           = d.name;
-    doc.fileExtension  = d.fileExtension;
-    doc.documentId     = d.documentId;
-    return doc;
-  });
+  // ─── Substituted document — our stamped engagement letter ────────────
+  const document = new docusign.Document();
+  document.documentBase64 = docSpec.bytes.toString('base64');
+  document.name           = docSpec.name;
+  document.fileExtension  = docSpec.fileExtension;
+  document.documentId     = docSpec.documentId;
 
+  // ─── ServerTemplate — references the saved template's field layout ───
+  const serverTemplate = new docusign.ServerTemplate();
+  serverTemplate.sequence   = SERVER_TEMPLATE_SEQUENCE;
+  serverTemplate.templateId = options.templateId;
+
+  // ─── InlineTemplate — per-send recipient identities, no tabs ─────────
+  // Each Signer.roleName binds to a template role; DocuSign attaches
+  // that role's tabs from the template at send time. We deliberately
+  // do NOT set signer.tabs — that's the template's job now.
   const sdkSigners = signers.map((s) => {
     const signer = new docusign.Signer();
     signer.recipientId  = s.recipientId;
@@ -133,25 +165,24 @@ export function buildEnvelopeDefinition(
     signer.routingOrder = String(s.routingOrder);
     signer.email        = s.email;
     signer.name         = s.name;
-
-    const signHere = new docusign.SignHere();
-    signHere.documentId  = SIGN_HERE_TARGET_DOCUMENT_ID;
-    signHere.pageNumber  = SIGN_HERE_PAGE;
-    signHere.recipientId = s.recipientId;
-    // tabLabel helps debug in the DocuSign envelope UI: a unique label
-    // per signer lets ops staff identify whose tab they're looking at.
-    signHere.tabLabel    = `SignHere_${s.role}_${s.recipientId}`;
-    signHere.xPosition   = SIGN_HERE_X;
-    signHere.yPosition   = String(SIGN_HERE_BASE_Y + (s.routingOrder - 1) * SIGN_HERE_Y_GAP);
-
-    signer.tabs               = new docusign.Tabs();
-    signer.tabs.signHereTabs  = [signHere];
+    signer.roleName     = s.templateRole;
     return signer;
   });
 
   const recipients = new docusign.Recipients();
   recipients.signers = sdkSigners;
-  envelopeDefinition.recipients = recipients;
+
+  const inlineTemplate = new docusign.InlineTemplate();
+  inlineTemplate.sequence   = INLINE_TEMPLATE_SEQUENCE;
+  inlineTemplate.recipients = recipients;
+
+  const compositeTemplate = new docusign.CompositeTemplate();
+  compositeTemplate.compositeTemplateId = COMPOSITE_TEMPLATE_ID;
+  compositeTemplate.document            = document;
+  compositeTemplate.serverTemplates     = [serverTemplate];
+  compositeTemplate.inlineTemplates     = [inlineTemplate];
+
+  envelopeDefinition.compositeTemplates = [compositeTemplate];
   return envelopeDefinition;
 }
 
@@ -168,9 +199,10 @@ export class DocuSignService {
   private readonly userId:         string;
   private readonly oauthBase:      string;
   private readonly keyPath:        string;
+  private readonly templateId:     string;
 
-  // D3 — lazy-loaded on first getAccessToken() call. Held as Buffer
-  // once read; keeps the app boot resilient to a missing key file.
+  // Lazy-loaded on first getAccessToken() call. Held as Buffer once
+  // read; keeps the app boot resilient to a missing key file.
   private privateKey: Buffer | null = null;
 
   // Token cache. expiresAt carries the 5-min safety buffer pre-
@@ -187,6 +219,7 @@ export class DocuSignService {
     this.userId         = process.env.DOCUSIGN_USER_ID          || '';
     this.oauthBase      = process.env.DOCUSIGN_OAUTH_BASE       || '';
     this.keyPath        = process.env.DOCUSIGN_PRIVATE_KEY_PATH || '';
+    this.templateId     = process.env.DOCUSIGN_TEMPLATE_ID      || '';
 
     const missing = this.listMissingEnv();
     if (missing.length > 0) {
@@ -196,7 +229,7 @@ export class DocuSignService {
     }
   }
 
-  // D5 — public readonly getter, used by the cache probe. Stays at 1
+  // Public readonly getter, used by the cache probe. Stays at 1
   // across two consecutive getAccessToken() calls within the hour.
   get mintCount(): number {
     return this._mintCount;
@@ -212,9 +245,9 @@ export class DocuSignService {
 
   // ─── Token mint + cache ────────────────────────────────────────────
 
-  // D6 — public so the probe can call it directly. Production callers
-  // don't need this; they go through createEnvelope / getSigningUrl /
-  // syncStatus which all use makeAuthedApiClient() internally.
+  // Public so the probe can call it directly. Production callers go
+  // through createEnvelope / getSigningUrl / syncStatus which all use
+  // makeAuthedApiClient() internally.
   async getAccessToken(): Promise<string> {
     if (this.cachedToken !== null && Date.now() < this.expiresAt) {
       return this.cachedToken;
@@ -260,38 +293,31 @@ export class DocuSignService {
     return this.cachedToken;
   }
 
-  // ─── Existing public methods (signatures + bodies preserved) ──────
+  // PR-DOCUSIGN-1 step 5h — composite-template send.
   //
-  // Only the apiClient acquisition changed (fresh authed instance per
-  // call). Everything below that one swap is byte-identical to the
-  // pre-rewrite implementation — envelope assembly, recipient setup,
-  // SignHere tab positions, response shaping. The multi-signer
-  // envelope rewrite is a later step.
-
-  // PR-DOCUSIGN-1 step 5 piece 2 — rewrite to use buildEnvelopeDefinition.
-  //
-  // Signature changed from (caseId, signerEmail, signerName) to
-  // (documents, signers, options). Callers must pre-resolve all
-  // signer identities. Single call site lives in
-  // contracts.service.ts:createContract (updated in this piece).
-  //
-  // The pure builder produces the EnvelopeDefinition; this wrapper
-  // owns only the JWT-authed apiClient + the SDK dispatch. Envelope
-  // shape (3 signers, sequential routing, single document, SignHere
-  // tab positions) is the spec-covered build output.
+  // Builds an envelope that inherits all field positions from the
+  // saved DocuSign template (DOCUSIGN_TEMPLATE_ID) and supplies a
+  // substituted document (the stamped engagement letter) plus the
+  // three live recipients keyed to the template's role names.
   async createEnvelope(
     documents: EnvelopeDocumentSpec[],
     signers:   EnvelopeRecipientSpec[],
     options:   { emailSubject: string; emailBlurb: string; caseId: string },
   ): Promise<string> {
+    if (!this.templateId) {
+      throw new Error(
+        'DocuSign template id not configured — set DOCUSIGN_TEMPLATE_ID in backend/.env',
+      );
+    }
     const apiClient = await this.makeAuthedApiClient();
     const envelopesApi = new docusign.EnvelopesApi(apiClient);
     const envelopeDefinition = buildEnvelopeDefinition(documents, signers, {
       emailSubject: options.emailSubject,
       emailBlurb:   options.emailBlurb,
+      templateId:   this.templateId,
     });
     this.logger.log(
-      `Creating envelope for case ${options.caseId} with ${signers.length} signers, ${documents.length} document(s)`,
+      `Creating envelope for case ${options.caseId} via template ${this.templateId} with ${signers.length} signers`,
     );
     const results = await envelopesApi.createEnvelope(this.accountId, {
       envelopeDefinition,
@@ -340,12 +366,11 @@ export class DocuSignService {
     };
   }
 
-  // PR-DOCUSIGN-1 step 5 piece 3 — authoritative per-recipient state
-  // for the multi-signer webhook handler. Option (b) re-sync: we
-  // don't trust the webhook body's shape, we ask DocuSign for the
-  // current Recipients structure and map it ourselves. The returned
-  // SDK object exposes .signers (Array<Signer>) plus other recipient
-  // categories (agents/editors/cc/etc.) that this PR doesn't use.
+  // Authoritative per-recipient state for the multi-signer webhook
+  // handler. Option (b) re-sync: we don't trust the webhook body's
+  // shape, we ask DocuSign for the current Recipients structure and
+  // map it ourselves. The returned SDK object exposes .signers
+  // (Array<Signer>) plus other recipient categories.
   async listRecipients(envelopeId: string): Promise<docusign.Recipients> {
     const apiClient = await this.makeAuthedApiClient();
     const envelopesApi = new docusign.EnvelopesApi(apiClient);
@@ -354,10 +379,10 @@ export class DocuSignService {
 
   // ─── Internals ─────────────────────────────────────────────────────
 
-  // D1 — per-call new ApiClient. The SDK's addDefaultHeader appends
-  // rather than replaces; a held client would accumulate stale
-  // Authorization headers across mint cycles. Per-call construction
-  // is a cheap object init (no network), so the cost is negligible.
+  // Per-call new ApiClient. The SDK's addDefaultHeader appends rather
+  // than replaces; a held client would accumulate stale Authorization
+  // headers across mint cycles. Per-call construction is a cheap
+  // object init (no network), so the cost is negligible.
   private async makeAuthedApiClient(): Promise<docusign.ApiClient> {
     const token = await this.getAccessToken();
     const client = new docusign.ApiClient();
@@ -387,6 +412,7 @@ export class DocuSignService {
       ['DOCUSIGN_PRIVATE_KEY_PATH', this.keyPath],
       ['DOCUSIGN_ACCOUNT_ID',       this.accountId],
       ['DOCUSIGN_BASE_URL',         this.baseUrl],
+      ['DOCUSIGN_TEMPLATE_ID',      this.templateId],
     ];
     return checks.filter(([, v]) => !v).map(([name]) => name);
   }
