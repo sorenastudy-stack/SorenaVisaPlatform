@@ -18,6 +18,11 @@ COPY prisma ./prisma/
 RUN npm ci --only=production
 RUN npx prisma generate
 COPY --from=builder /app/dist ./dist
+# Runtime static assets — engagement-letter PDF + Caladea TTF that
+# stampLiaIdentity() reads at every contract send, plus any other
+# fixtures under assets/. Without this COPY the container starts
+# cleanly but every contract send crashes with ENOENT at first request.
+COPY assets ./assets/
 COPY start.sh ./start.sh
 RUN chmod +x ./start.sh
 CMD ["./start.sh"]

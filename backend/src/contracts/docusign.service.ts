@@ -198,7 +198,13 @@ export class DocuSignService {
   private readonly integrationKey: string;
   private readonly userId:         string;
   private readonly oauthBase:      string;
+  // ONE OF the next two must be set: a filesystem path to the PEM
+  // (good for local dev where the key lives at backend/keys/) OR the
+  // raw PEM contents in an env var (the deployed-container path —
+  // Railway/Heroku/etc. don't have access to the gitignored key file).
+  // listMissingEnv() flags ONLY when both are absent.
   private readonly keyPath:        string;
+  private readonly inlinePemKey:   string;
   private readonly templateId:     string;
 
   // Lazy-loaded on first getAccessToken() call. Held as Buffer once
@@ -219,6 +225,7 @@ export class DocuSignService {
     this.userId         = process.env.DOCUSIGN_USER_ID          || '';
     this.oauthBase      = process.env.DOCUSIGN_OAUTH_BASE       || '';
     this.keyPath        = process.env.DOCUSIGN_PRIVATE_KEY_PATH || '';
+    this.inlinePemKey   = process.env.DOCUSIGN_PRIVATE_KEY      || '';
     this.templateId     = process.env.DOCUSIGN_TEMPLATE_ID      || '';
 
     const missing = this.listMissingEnv();
@@ -391,17 +398,42 @@ export class DocuSignService {
     return client;
   }
 
+  // Key resolution — file path FIRST (local dev), env-var PEM second
+  // (deployed containers where the gitignored key file isn't present).
+  // Both sources are normalised to a Buffer + cached; subsequent calls
+  // short-circuit. Throws ONLY when both sources are absent / unreadable
+  // — the listMissingEnv() guard already flags this at JWT-mint entry,
+  // so a thrown here means a misconfiguration that slipped through.
   private loadPrivateKey(): Buffer {
     if (this.privateKey !== null) return this.privateKey;
-    const resolved = path.resolve(this.keyPath);
-    if (!fs.existsSync(resolved)) {
-      throw new Error(
-        `DocuSign private key file not found at: ${resolved} ` +
-        `(DOCUSIGN_PRIVATE_KEY_PATH=${this.keyPath} resolved from cwd=${process.cwd()})`,
-      );
+
+    if (this.keyPath) {
+      const resolved = path.resolve(this.keyPath);
+      if (fs.existsSync(resolved)) {
+        this.privateKey = fs.readFileSync(resolved);
+        return this.privateKey;
+      }
+      // keyPath set but file missing — fall through to env var if any;
+      // if both absent, the error below surfaces both attempted sources.
     }
-    this.privateKey = fs.readFileSync(resolved);
-    return this.privateKey;
+
+    if (this.inlinePemKey) {
+      // Env-var-supplied PEM. Newlines may arrive escaped ("\n") when
+      // pasted into provider UIs that don't preserve real linefeeds;
+      // restore them so OpenSSL parses the PEM correctly.
+      const pem = this.inlinePemKey.includes('\\n')
+        ? this.inlinePemKey.replace(/\\n/g, '\n')
+        : this.inlinePemKey;
+      this.privateKey = Buffer.from(pem, 'utf8');
+      return this.privateKey;
+    }
+
+    throw new Error(
+      `DocuSign private key not available — set DOCUSIGN_PRIVATE_KEY_PATH ` +
+      `(to a readable PEM file) OR DOCUSIGN_PRIVATE_KEY (the PEM contents). ` +
+      `keyPath="${this.keyPath}" (cwd=${process.cwd()}); inline PEM env var ` +
+      `${this.inlinePemKey ? 'set' : 'unset'}.`,
+    );
   }
 
   private listMissingEnv(): string[] {
@@ -409,12 +441,16 @@ export class DocuSignService {
       ['DOCUSIGN_INTEGRATION_KEY',  this.integrationKey],
       ['DOCUSIGN_USER_ID',          this.userId],
       ['DOCUSIGN_OAUTH_BASE',       this.oauthBase],
-      ['DOCUSIGN_PRIVATE_KEY_PATH', this.keyPath],
       ['DOCUSIGN_ACCOUNT_ID',       this.accountId],
       ['DOCUSIGN_BASE_URL',         this.baseUrl],
       ['DOCUSIGN_TEMPLATE_ID',      this.templateId],
     ];
-    return checks.filter(([, v]) => !v).map(([name]) => name);
+    const missing = checks.filter(([, v]) => !v).map(([name]) => name);
+    // Either-or: at least one of the two key sources must be configured.
+    if (!this.keyPath && !this.inlinePemKey) {
+      missing.push('DOCUSIGN_PRIVATE_KEY_PATH or DOCUSIGN_PRIVATE_KEY');
+    }
+    return missing;
   }
 
   // Shape the DocuSign SDK's awkwardly-nested error into a readable
