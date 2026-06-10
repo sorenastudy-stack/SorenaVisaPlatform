@@ -363,7 +363,16 @@ model User {
   name             String
   email            String    @unique
   emailHash        String?   @unique
-  passwordHash     String
+  // Option C step 1 — passwordHash is now optional. Users created
+  // before Option C still have a bcrypt hash here. Users provisioned
+  // via Google OAuth or first-time magic-link sign-in won't have one.
+  // The login service must guard against null before calling
+  // bcrypt.compare.
+  passwordHash     String?
+  // Option C step 1 — Google "sub" claim from OAuth ID-token. Null
+  // until the user links Google. @unique prevents two app users from
+  // binding the same Google account.
+  googleId         String?   @unique
   role             UserRole  @default(SALES)
   canEditGlobalData Boolean  @default(false)
   isActive         Boolean   @default(true)
@@ -508,7 +517,40 @@ model User {
   // evidence.
   contractsSigned         ContractSigner[]
 
+  // Option C step 1 — magic-link tokens issued to this user for
+  // passwordless sign-in. Cascade on user delete (orphaned tokens
+  // are useless).
+  magicLinkTokens         MagicLinkToken[]
+
   @@map("users")
+}
+
+// ─── OPTION C AUTH — magic-link tokens (PR-OPTION-C step 1) ──────────────────
+//
+// One row per issued magic-link sign-in token. The TOKEN ITSELF is never
+// stored — only a server-side hash of it (SHA-256 / HMAC, picked by the
+// service layer). On consumption the row is marked `consumedAt = now()`
+// rather than deleted so we keep a brief audit trail of which token was
+// used when. The service layer rejects rows where either:
+//   - consumedAt is non-null (one-time-use enforcement), or
+//   - expiresAt <= now()
+//
+// Cascades on User delete: tokens have no value without their owner.
+// Indexed by userId for the "any active token for this user?" lookup
+// the rate limiter uses.
+
+model MagicLinkToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("magic_link_tokens")
 }
 
 // ─── ACQUISITION (existing — kept and extended) ───────────────────────────────
