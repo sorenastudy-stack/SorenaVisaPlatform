@@ -92,6 +92,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // Option C step 2 — passwordHash is now nullable. A Google-only
+    // user (provisioned via OAuth, no password ever set) has null
+    // here. Calling bcrypt.compare with null crashes the worker;
+    // clean 401 with a different message tells the user to use the
+    // Google button instead.
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('This account uses Google sign-in');
+    }
+
     // Verify password
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
 
