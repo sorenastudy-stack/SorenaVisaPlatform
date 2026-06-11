@@ -12,6 +12,9 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { GoogleAuthGuard } from './google-auth.guard';
 import type { ValidatedGoogleUser } from './google.strategy';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -20,6 +23,8 @@ export class AuthController {
     private readonly jwtService:  JwtService,
   ) {}
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'SUPER_ADMIN')
   @Post('register')
   async register(
     @Body('email') email: string,
