@@ -1,5 +1,9 @@
-import { Controller, Get, Post, Body, Query, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Headers, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { SendMessageDto } from './dto/send-message.dto';
 import { WhatsappService } from './whatsapp.service';
 
 @Controller('whatsapp')
@@ -26,8 +30,10 @@ export class WhatsappController {
     return this.whatsappService.handleInboundMessage(body, headers);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN')
   @Post('send')
-  sendMessage(@Body() body: { to: string; message: string }) {
-    return this.whatsappService.sendMessage(body.to, body.message);
+  sendMessage(@Body() dto: SendMessageDto) {
+    return this.whatsappService.sendMessage(dto.to, dto.message);
   }
 }
