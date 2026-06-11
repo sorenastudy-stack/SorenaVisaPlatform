@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest, Logger } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
@@ -92,6 +93,11 @@ export class PaymentsController {
   /**
    * Handle Stripe webhooks
    */
+  // Stripe retries failed deliveries with exponential backoff for ~3 days
+  // and eventually gives up; a 429 from the global ThrottlerGuard would
+  // risk losing payment events. Stripe-signature verification still
+  // protects this endpoint.
+  @SkipThrottle()
   @Post('webhook')
   async handleWebhook(
     @Req() req: RawBodyRequest<any>,

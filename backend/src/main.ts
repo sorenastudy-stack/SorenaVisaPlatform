@@ -34,6 +34,17 @@ async function bootstrap() {
     logger: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['error', 'warn', 'log'],
   });
 
+  // Trust the first proxy hop (Railway's edge). Without this, Express
+  // and the @nestjs/throttler IP-tracker can't see the real client IP
+  // — they read req.connection.remoteAddress (the proxy) or undefined,
+  // and the throttler ends up bucketing every request as a fresh
+  // "client" so per-route limits silently never fire. Calling .set()
+  // on the underlying Express instance via the Http adapter is the
+  // portable form that works whether or not we typed the app as
+  // NestExpressApplication.
+  (app.getHttpAdapter().getInstance() as { set: (key: string, value: unknown) => void })
+    .set('trust proxy', 1);
+
   app.use(helmet());
 
   const extraOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(s => s.trim()).map(s => s.trim());

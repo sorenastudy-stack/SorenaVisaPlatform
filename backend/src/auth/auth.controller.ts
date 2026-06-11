@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Logger,
   Post,
   Query,
@@ -9,7 +10,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtService } from '@nestjs/jwt';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -52,6 +53,10 @@ export class AuthController {
 
   // PR-OPTION-C step 2 — Google OAuth entry. The guard intercepts and
   // 302s the browser to Google's consent screen. The body never runs.
+  // Skip throttling — a user clicking "Continue with Google" twice
+  // (browser nav back/forward, retry after consent) shouldn't 429
+  // mid-flow. The OAuth round-trip itself rate-limits at Google's end.
+  @SkipThrottle()
   @Get('google')
   @UseGuards(GoogleAuthGuard)
   googleStart(): void {
@@ -68,6 +73,10 @@ export class AuthController {
   // Failure cases (unknown email, inactive, mismatch) are handled by
   // GoogleAuthGuard.canActivate → 302 to /login?error=not_authorized.
   // This handler only runs on success.
+  // Skip throttling — same reasoning as /auth/google: the callback
+  // arrives once per consent and a 429 mid-redirect would strand
+  // the user.
+  @SkipThrottle()
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   googleCallback(@Req() req: Request, @Res() res: Response): void {
@@ -103,6 +112,7 @@ export class AuthController {
   // mirrors the existing pattern on /acquisition/leads. This is on
   // TOP of the global 60/min ThrottlerModule default.
   @Post('magic-link/request')
+  @HttpCode(200)
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   async magicLinkRequest(
@@ -131,6 +141,11 @@ export class AuthController {
   // On any failure (bad/expired/used token, email mismatch, missing
   // or inactive user): 302 to /login?error=invalid_link. The browser
   // never sees a raw 4xx/5xx body, just a redirect.
+  // Skip throttling — same reasoning as /auth/google/callback: this
+  // is the email-click round-trip that completes login. A 429 here
+  // strands a legitimate user. Replay is already prevented by the
+  // one-time-consume token guard in MagicLinkService.verifyAndIssue.
+  @SkipThrottle()
   @Get('magic-link/verify')
   async magicLinkVerify(
     @Query('token') rawToken: string,

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AcquisitionModule } from './acquisition/acquisition.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { EmailModule } from './email/email.module';
@@ -112,6 +113,17 @@ import { WixIntegrationModule } from './wix-integration/wix-integration.module';
     // POST /webhooks/wix/payment (shared-secret authenticated),
     // staff CRUD at /staff/wix-payments/*.
     WixIntegrationModule,
+  ],
+  providers: [
+    // Apply the ThrottlerModule baseline (60/min/IP from `default`
+    // throttler above) to every route in the app. Routes that need
+    // a tighter limit override with `@Throttle({ default: { …} })`;
+    // routes that must NOT be throttled (webhooks, healthchecks,
+    // OAuth round-trips) opt out with `@SkipThrottle()`.
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

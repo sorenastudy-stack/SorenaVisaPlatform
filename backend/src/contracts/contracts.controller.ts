@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -28,6 +29,9 @@ export class ContractsController {
     return this.contractsService.getContract(caseId);
   }
 
+  // DocuSign Connect retries on 4xx/5xx; a 429 from the global
+  // ThrottlerGuard would back up envelope status sync.
+  @SkipThrottle()
   @Post('webhook')
   handleWebhook(@Body() body: any) {
     // DocuSign webhook payload contains envelopeId
