@@ -542,6 +542,12 @@ model User {
 model MagicLinkToken {
   id          String    @id @default(cuid())
   userId      String
+  // Lowercased target email captured at token-create time. Verify
+  // checks that the email arriving on the verify URL matches this
+  // field. Stored alongside userId so a future email change on the
+  // User row doesn't break in-flight tokens; the authoritative user
+  // lookup at verify time still uses userId (FK).
+  email       String
   tokenHash   String
   expiresAt   DateTime
   consumedAt  DateTime?
@@ -549,6 +555,13 @@ model MagicLinkToken {
 
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Primary lookup at verify time: SHA-256(rawToken) → row. UNIQUE
+  // because token collisions would be a security bug, not a data
+  // problem. The @@index is explicit per the build contract — the
+  // unique constraint already creates a usable index, so this is
+  // belt-and-braces.
+  @@unique([tokenHash])
+  @@index([tokenHash])
   @@index([userId])
   @@map("magic_link_tokens")
 }

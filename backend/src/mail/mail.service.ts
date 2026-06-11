@@ -4,6 +4,7 @@ import { Resend } from 'resend';
 import {
   wrapHtml,
   verificationEmailBody,
+  magicLinkLoginBody,
   welcomeEmailBody,
   admissionSubmittedToClientBody,
   admissionSubmittedToOwnerBody,
@@ -70,6 +71,20 @@ export class MailService implements OnModuleInit {
       to,
       subject: 'Verify your email — Sorena Visa',
       html: wrapHtml(verificationEmailBody(name, url), { heading: 'Verify your email' }),
+    });
+  }
+
+  // PR-OPTION-C step 3 — magic-link sign-in email. Caller (MagicLinkService)
+  // is responsible for building the FULL verify URL — it points at the
+  // backend's /auth/magic-link/verify route, not at this.frontendUrl. We
+  // accept the pre-built URL so the link target can include the raw
+  // token + email as query params without this service knowing the route
+  // shape.
+  async sendMagicLinkLogin(to: string, name: string, url: string): Promise<void> {
+    await this.send({
+      to,
+      subject: 'Your Sorena Visa login link',
+      html: wrapHtml(magicLinkLoginBody(name, url), { heading: 'Sign in to Sorena Visa' }),
     });
   }
 

@@ -108,6 +108,15 @@ export function verificationEmailBody(name: string, url: string): string {
   `;
 }
 
+export function magicLinkLoginBody(name: string, url: string): string {
+  return `
+    <p>Hi ${esc(name)},</p>
+    <p>Here's your sign-in link for Sorena Visa. Click the button below and you'll be signed straight in — no password needed.</p>
+    ${primaryButton('Sign in to Sorena Visa', url)}
+    <p style="color:${MUTED};font-size:13px;margin-top:24px;">This link expires in <strong>15 minutes</strong> and can be used <strong>once</strong>. If you didn't request a sign-in link, you can safely ignore this email — your account stays put.</p>
+  `;
+}
+
 export function welcomeEmailBody(name: string): string {
   return `
     <p>Welcome to Sorena Visa, ${esc(name)}.</p>

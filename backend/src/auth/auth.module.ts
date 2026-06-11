@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { GoogleStrategy } from './google.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
+import { MagicLinkService } from './magic-link.service';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
@@ -18,7 +19,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, GoogleAuthGuard],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, GoogleAuthGuard, MagicLinkService],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
