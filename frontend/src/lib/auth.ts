@@ -16,9 +16,13 @@ export async function getSession(): Promise<Session | null> {
   if (!token) return null;
 
   try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || 'fallback_secret',
-    );
+    // PR-AUDIT-2 — fail-fast if JWT_SECRET is missing. The literal
+    // 'fallback_secret' default that used to be here meant a missing
+    // Vercel env var produced a guessable verifier — removed so a
+    // misconfigured deploy throws instead of accepting forged tokens.
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) throw new Error('JWT_SECRET is not set');
+    const secret = new TextEncoder().encode(jwtSecret);
     const { payload } = await jwtVerify(token, secret);
     return {
       userId: (payload.sub as string) ?? '',

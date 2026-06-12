@@ -30,9 +30,12 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const secret = new TextEncoder().encode(
-      process.env.JWT_SECRET || 'fallback_secret',
-    );
+    // PR-AUDIT-2 — fail-fast if JWT_SECRET is missing. Edge runtime,
+    // so the throw propagates to the catch below and bounces the
+    // user to /login (no silent fallback to a guessable verifier).
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) throw new Error('JWT_SECRET is not set');
+    const secret = new TextEncoder().encode(jwtSecret);
     const { payload } = await jwtVerify(token, secret);
     const role = payload.role as string;
 
