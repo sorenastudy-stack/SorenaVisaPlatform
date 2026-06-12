@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Mail, Phone, Globe, Award, ExternalLink, UserCog,
-  Megaphone, AlertTriangle, Clock,
+  Megaphone, AlertTriangle, Clock, Briefcase,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { displayCountry } from '@/lib/country-codes';
@@ -42,6 +43,12 @@ interface LeadDetail {
   status: LeadStatus;
   createdAt: string;
   updatedAt: string;
+  // PR-CRM-CASE-CREATE — case-creation gate state for the action card.
+  // Mirrors the backend CasesService.createCase precondition exactly.
+  executionAllowed: boolean;
+  hardStopFlag: boolean;
+  hardStopReason: string | null;
+  caseId: string | null;
   assignedTo: { id: string; name: string; role: string } | null;
   attributedAgent: { id: string; fullName: string } | null;
   trackingLink: {
@@ -198,6 +205,13 @@ export default function StaffLeadDetailPage({
             assignees={assignees}
             onSaved={() => load()}
             leadId={lead.id}
+          />
+          <CreateCaseCard
+            leadId={lead.id}
+            caseId={lead.caseId}
+            executionAllowed={lead.executionAllowed}
+            hardStopFlag={lead.hardStopFlag}
+            hardStopReason={lead.hardStopReason}
           />
           <StatusHistoryCard history={lead.statusHistory} />
         </div>
@@ -382,6 +396,121 @@ function AssignmentCard({
         >
           {saving ? 'Saving…' : 'Reassign'}
         </button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── CreateCaseCard ───────────────────────────────────────────────
+//
+// PR-CRM-CASE-CREATE — convert a qualified lead into a Case. Four
+// mutually-exclusive states, prioritised in this order:
+//
+//   1. caseId is set            → "View case" (link to existing)
+//   2. hardStopFlag              → disabled + hardStopReason / generic
+//   3. !executionAllowed         → disabled + "not yet qualified"
+//   4. ready                     → active "Create case" → POST /cases
+//                                  → router.push('/staff/cases/:newId')
+//
+// Backend gate (`!lead.executionAllowed || lead.hardStopFlag`) is
+// mirrored exactly so the disabled state always matches what the
+// API would do — no surprise 400s. Errors from the POST are caught
+// and surfaced inline; the success path navigates away so we don't
+// reset `creating` (the component unmounts on push).
+
+function CreateCaseCard({
+  leadId, caseId, executionAllowed, hardStopFlag, hardStopReason,
+}: {
+  leadId: string;
+  caseId: string | null;
+  executionAllowed: boolean;
+  hardStopFlag: boolean;
+  hardStopReason: string | null;
+}) {
+  const router = useRouter();
+  const [creating, setCreating] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function create() {
+    setErr(null);
+    setCreating(true);
+    try {
+      const created = await api.post<{ id: string }>('/cases', { leadId });
+      router.refresh();
+      router.push(`/staff/cases/${created.id}`);
+      // Intentionally do NOT reset `creating` here — the component
+      // unmounts on navigation, and clearing the state would briefly
+      // flash the active button before the page transitions.
+    } catch (e: any) {
+      setErr(e?.message ?? 'Failed to create case');
+      setCreating(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <h2 className="text-sm font-bold text-[#1E3A5F] uppercase tracking-wide mb-3 inline-flex items-center gap-1">
+          <Briefcase size={13} /> Case
+        </h2>
+
+        {caseId ? (
+          <>
+            <p className="text-sm text-[#1E3A5F] mb-3">
+              A case has been created for this lead.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push(`/staff/cases/${caseId}`)}
+              className="w-full inline-flex items-center justify-center gap-1 px-4 py-2 rounded-lg bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#162d49]"
+            >
+              View case
+            </button>
+          </>
+        ) : hardStopFlag ? (
+          <>
+            <p className="text-sm text-red-700 mb-3">
+              {hardStopReason ?? 'This lead is blocked from case creation.'}
+            </p>
+            <button
+              type="button"
+              disabled
+              className="w-full inline-flex items-center justify-center gap-1 px-4 py-2 rounded-lg bg-[#1E3A5F] text-white text-sm font-bold opacity-50 cursor-not-allowed"
+            >
+              Create case
+            </button>
+          </>
+        ) : !executionAllowed ? (
+          <>
+            <p className="text-sm text-[#4A4A4A]/80 mb-3">
+              This lead hasn’t qualified for case creation yet.
+            </p>
+            <button
+              type="button"
+              disabled
+              className="w-full inline-flex items-center justify-center gap-1 px-4 py-2 rounded-lg bg-[#1E3A5F] text-white text-sm font-bold opacity-50 cursor-not-allowed"
+            >
+              Create case
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-[#1E3A5F] mb-3">
+              Ready to convert this lead into a case.
+            </p>
+            {err && (
+              <p className="mb-2 text-xs text-red-700">{err}</p>
+            )}
+            <button
+              type="button"
+              onClick={create}
+              disabled={creating}
+              className="w-full inline-flex items-center justify-center gap-1 px-4 py-2 rounded-lg bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#162d49] disabled:opacity-50"
+            >
+              {creating ? 'Creating…' : 'Create case'}
+            </button>
+          </>
+        )}
       </CardContent>
     </Card>
   );

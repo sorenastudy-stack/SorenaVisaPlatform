@@ -204,6 +204,18 @@ export class StaffLeadsService {
           take: 20,
           include: { changedBy: { select: { name: true } } },
         },
+        // PR-CRM-CASE-CREATE — surface the most recent Case for this
+        // lead so the staff detail page can render a View-vs-Create
+        // action card without a second round-trip. Schema declares
+        // Lead.cases as Case[] (0..N), and CasesService.createCase
+        // currently rejects duplicates, so in practice we'll see
+        // either 0 or 1 row — but order-by-desc + take:1 stays
+        // correct even if the duplicate guard is ever relaxed.
+        cases: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true },
+        },
       },
     });
     if (!lead) throw new NotFoundException('Lead not found');
@@ -241,6 +253,18 @@ export class StaffLeadsService {
       status: lead.leadStatus,
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
+
+      // PR-CRM-CASE-CREATE — gate inputs for the Create-Case action
+      // card. Sourced from the Lead row's own columns (NOT from
+      // scorecardSubmission — that's a snapshot at submission time and
+      // doesn't reflect override-panel changes). CasesService.createCase
+      // gates on `!lead.executionAllowed || lead.hardStopFlag` so the
+      // frontend can pre-check identically and avoid a guaranteed-400
+      // POST.
+      executionAllowed: lead.executionAllowed,
+      hardStopFlag: lead.hardStopFlag,
+      hardStopReason: lead.hardStopReason,
+      caseId: lead.cases[0]?.id ?? null,
 
       assignedTo: lead.owner
         ? { id: lead.owner.id, name: lead.owner.name, role: lead.owner.role }
