@@ -1,6 +1,14 @@
-import { Controller, Post, Get, Body } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { PublicService } from './public.service';
+import { SubmitIntakeDto } from './dto/submit-intake.dto';
 
 @Controller('public')
 export class PublicController {
@@ -11,8 +19,25 @@ export class PublicController {
     return { status: 'test-2026-04-13-0810' };
   }
 
+  // PR-AUDIT-4 — route-level ValidationPipe override. Global pipe
+  // (main.ts) sets forbidNonWhitelisted:true, which would 400 any
+  // unknown property and risk rejecting live lead traffic from
+  // Wix forms / marketing pages that send extra envelope fields
+  // (UTM params, formId, submittedAt, etc.). For an unauth
+  // lead-capture endpoint, dropping a real lead is worse than
+  // accepting unknown extras. We still validate known fields
+  // strictly (types, length caps) and whitelist:true drops the
+  // unknowns before they reach the service.
   @Post('intake')
-  async submitIntake(@Body() body: any) {
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: false,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  )
+  async submitIntake(@Body() body: SubmitIntakeDto) {
     return this.publicService.submitIntakeForm(body);
   }
 

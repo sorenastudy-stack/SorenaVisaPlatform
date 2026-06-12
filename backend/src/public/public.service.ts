@@ -18,12 +18,19 @@ export class PublicService {
 
   async submitIntakeForm(data: {
     fullName: string;
-    email: string;
+    // PR-AUDIT-4 — email/destination/preferredLevel relaxed to
+    // optional to match runtime behaviour: the `data.email ? upsert
+    // : create` branch tolerates a missing email, Contact
+    // .countryOfResidence + IntakeForm.preferredLevel are both
+    // nullable in the schema, and preferredLevel is declared on
+    // ScoringService.IntakeFormData but never actually read.
+    // Honest types — no call-site cast needed.
+    email?: string;
     phone?: string;
     whatsapp?: string;
-    destination: string;
+    destination?: string;
     nationality?: string;
-    preferredLevel: string;
+    preferredLevel?: string;
     preferredLanguage?: string;
     highestQualification?: string;
     fieldOfStudy?: string;
