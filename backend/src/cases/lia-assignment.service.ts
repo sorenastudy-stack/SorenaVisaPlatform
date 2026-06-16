@@ -252,6 +252,7 @@ export class LiaAssignmentService {
           newValue: {
             liaId: newLia?.id ?? null,
             liaName: newLia?.name ?? null,
+            reason: dto.reason,
             reasonLength: dto.reason.length,
           } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name ?? null,
@@ -359,6 +360,7 @@ export class LiaAssignmentService {
           newValue: {
             ownerId: newOwner?.id ?? null,
             ownerName: newOwner?.name ?? null,
+            reason: dto.reason,
             reasonLength: dto.reason.length,
           } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name ?? null,
@@ -438,6 +440,7 @@ export class LiaAssignmentService {
           newValue: {
             supportId: newSupport?.id ?? null,
             supportName: newSupport?.name ?? null,
+            reason: dto.reason,
             reasonLength: dto.reason.length,
           } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name ?? null,
@@ -516,6 +519,7 @@ export class LiaAssignmentService {
           newValue: {
             financeId: newFinance?.id ?? null,
             financeName: newFinance?.name ?? null,
+            reason: dto.reason,
             reasonLength: dto.reason.length,
           } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name ?? null,
