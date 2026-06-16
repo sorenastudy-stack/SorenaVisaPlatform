@@ -400,6 +400,10 @@ model User {
   cases            Case[]           @relation("CaseOwner")
   // PR-LIA-2: cases where this user is the assigned LIA.
   liaCases         Case[]           @relation("CaseLia")
+  // Option 1 step 4: cases where this user is the assigned
+  // Support or Finance staff (parallel to liaCases).
+  supportCases     Case[]           @relation("CaseSupport")
+  financeCases     Case[]           @relation("CaseFinance")
   auditLogs        AuditLog[]
   notesAuditLogs   ManagerNotesLog[]
   leadStatusChanges LeadStatusHistory[]
@@ -971,6 +975,11 @@ model Case {
   // productivity report for time-to-action / time-to-resolution
   // calculations and by the case-detail "Assigned N days ago" line.
   liaAssignedAt DateTime?
+  // Option 1 step 4: Support and Finance slot assignees on this case.
+  // Reassignable via PATCH /cases/:id/support and /cases/:id/finance.
+  // Both nullable + SetNull on user delete, mirroring liaId.
+  supportId   String?
+  financeId   String?
   // PR-LIA-7: INZ submission lifecycle. All five fields are co-managed
   // by the InzSubmissionService — they populate together when the LIA
   // submits, clear together on revert. The receipt file metadata is
@@ -998,6 +1007,11 @@ model Case {
   // survives an LIA being hard-deleted (PR-CONSULT-4 audit-snapshot
   // pattern handles attribution).
   lia          User?          @relation("CaseLia", fields: [liaId], references: [id], onDelete: SetNull)
+  // Option 1 step 4: Support and Finance slot assignees. SetNull on
+  // user delete so the case survives a hard-delete of either staff
+  // role, matching the lia relation's behaviour.
+  support      User?          @relation("CaseSupport", fields: [supportId], references: [id], onDelete: SetNull)
+  finance      User?          @relation("CaseFinance", fields: [financeId], references: [id], onDelete: SetNull)
   applications          Application[]
   contract              Contract?
   tickets               Ticket[]
@@ -1030,6 +1044,9 @@ model Case {
   @@index([leadId])
   @@index([stage])
   @@index([liaId])
+  // Option 1 step 4: support / finance slot lookups.
+  @@index([supportId])
+  @@index([financeId])
   // PR-LIA-7: fast lookup by INZ reference number (e.g. "find the case
   // that owns VRC-2026-NZL-12345"). Unique constraint deliberately
   // NOT enforced — duplicate references are LIA-error territory but
