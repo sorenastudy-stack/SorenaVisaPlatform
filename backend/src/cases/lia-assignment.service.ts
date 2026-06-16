@@ -48,6 +48,16 @@ interface ManualReassignOwnerDto {
   reason: string;
 }
 
+interface ManualReassignSupportDto {
+  supportId: string | null;
+  reason: string;
+}
+
+interface ManualReassignFinanceDto {
+  financeId: string | null;
+  reason: string;
+}
+
 interface AssignResult {
   status: 'assigned' | 'no_candidates' | 'already_assigned';
   liaId: string | null;
@@ -349,6 +359,163 @@ export class LiaAssignmentService {
           newValue: {
             ownerId: newOwner?.id ?? null,
             ownerName: newOwner?.name ?? null,
+            reasonLength: dto.reason.length,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+      return u;
+    });
+
+    return updated;
+  }
+
+  // ─── Support manual reassignment ──────────────────────────────────────
+  //
+  // Option 1 step 4b — mirror of reassignOwner() for the SUPPORT slot,
+  // which lives on Case.supportId (added in 4a migration). Same shape
+  // as reassignOwner: no timestamp column, no emails in v1.
+  async reassignSupport(
+    caseId: string,
+    dto: ManualReassignSupportDto,
+    actor: Actor,
+  ) {
+    const existing = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        supportId: true,
+        lead: { select: { contact: { select: { fullName: true } } } },
+        support: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (!existing) throw new NotFoundException('Case not found');
+
+    let newSupport: { id: string; name: string; email: string } | null = null;
+    if (dto.supportId) {
+      const target = await this.prisma.user.findUnique({
+        where: { id: dto.supportId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          staffActiveStatus: { select: { isActive: true } },
+        },
+      });
+      if (!target) throw new NotFoundException('Target user not found');
+      if (target.role !== 'SUPPORT') {
+        throw new BadRequestException('Target user is not a Support staff member');
+      }
+      if (!target.isActive) {
+        throw new BadRequestException('Target Support staff member is not active');
+      }
+      if (target.staffActiveStatus && target.staffActiveStatus.isActive === false) {
+        throw new BadRequestException('Target Support staff member is archived');
+      }
+      newSupport = { id: target.id, name: target.name, email: target.email };
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.case.update({
+        where: { id: caseId },
+        data:  { supportId: newSupport?.id ?? null },
+        include: { support: { select: { id: true, name: true, email: true } } },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.id,
+          action: 'MANUAL_REASSIGN',
+          eventType: 'SUPPORT_MANUAL_REASSIGNED',
+          entityType: 'CASE',
+          entityId: caseId,
+          oldValue: {
+            supportId: existing.supportId ?? null,
+            supportName: existing.support?.name ?? null,
+          } as Prisma.InputJsonValue,
+          newValue: {
+            supportId: newSupport?.id ?? null,
+            supportName: newSupport?.name ?? null,
+            reasonLength: dto.reason.length,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+      return u;
+    });
+
+    return updated;
+  }
+
+  // ─── Finance manual reassignment ──────────────────────────────────────
+  //
+  // Option 1 step 4b — mirror of reassignOwner() for the FINANCE slot,
+  // which lives on Case.financeId (added in 4a migration). Same shape.
+  async reassignFinance(
+    caseId: string,
+    dto: ManualReassignFinanceDto,
+    actor: Actor,
+  ) {
+    const existing = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        financeId: true,
+        lead: { select: { contact: { select: { fullName: true } } } },
+        finance: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (!existing) throw new NotFoundException('Case not found');
+
+    let newFinance: { id: string; name: string; email: string } | null = null;
+    if (dto.financeId) {
+      const target = await this.prisma.user.findUnique({
+        where: { id: dto.financeId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          staffActiveStatus: { select: { isActive: true } },
+        },
+      });
+      if (!target) throw new NotFoundException('Target user not found');
+      if (target.role !== 'FINANCE') {
+        throw new BadRequestException('Target user is not a Finance staff member');
+      }
+      if (!target.isActive) {
+        throw new BadRequestException('Target Finance staff member is not active');
+      }
+      if (target.staffActiveStatus && target.staffActiveStatus.isActive === false) {
+        throw new BadRequestException('Target Finance staff member is archived');
+      }
+      newFinance = { id: target.id, name: target.name, email: target.email };
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.case.update({
+        where: { id: caseId },
+        data:  { financeId: newFinance?.id ?? null },
+        include: { finance: { select: { id: true, name: true, email: true } } },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.id,
+          action: 'MANUAL_REASSIGN',
+          eventType: 'FINANCE_MANUAL_REASSIGNED',
+          entityType: 'CASE',
+          entityId: caseId,
+          oldValue: {
+            financeId: existing.financeId ?? null,
+            financeName: existing.finance?.name ?? null,
+          } as Prisma.InputJsonValue,
+          newValue: {
+            financeId: newFinance?.id ?? null,
+            financeName: newFinance?.name ?? null,
             reasonLength: dto.reason.length,
           } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name ?? null,

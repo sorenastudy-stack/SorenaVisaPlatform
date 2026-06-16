@@ -20,6 +20,8 @@ import { CaseListQueryDto } from './dto/case-list-filter.dto';
 import { OverrideRiskDto, ClearHardStopDto } from './dto/lia-actions.dto';
 import { ManualReassignLiaDto } from './dto/lia-assignment.dto';
 import { ManualReassignOwnerDto } from './dto/owner-assignment.dto';
+import { ManualReassignSupportDto } from './dto/support-assignment.dto';
+import { ManualReassignFinanceDto } from './dto/finance-assignment.dto';
 
 @Controller('cases')
 @UseGuards(JwtAuthGuard)
@@ -129,6 +131,48 @@ export class CasesController {
     return this.liaAssignments.reassignOwner(
       id,
       { ownerId: dto.ownerId ?? null, reason: dto.reason },
+      {
+        id: req.user?.userId ?? req.user?.id,
+        name: req.user?.name ?? null,
+        role: req.user?.role ?? null,
+      },
+    );
+  }
+
+  // Option 1 step 4b — Mirror of /lia for the SUPPORT slot, which
+  // lives on Case.supportId. Same guard set, same actor extraction.
+  @Patch(':id/support')
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'SUPER_ADMIN')
+  reassignSupport(
+    @Param('id') id: string,
+    @Body() dto: ManualReassignSupportDto,
+    @Req() req: any,
+  ) {
+    return this.liaAssignments.reassignSupport(
+      id,
+      { supportId: dto.supportId ?? null, reason: dto.reason },
+      {
+        id: req.user?.userId ?? req.user?.id,
+        name: req.user?.name ?? null,
+        role: req.user?.role ?? null,
+      },
+    );
+  }
+
+  // Option 1 step 4b — Mirror of /lia for the FINANCE slot, which
+  // lives on Case.financeId. Same guard set, same actor extraction.
+  @Patch(':id/finance')
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'SUPER_ADMIN')
+  reassignFinance(
+    @Param('id') id: string,
+    @Body() dto: ManualReassignFinanceDto,
+    @Req() req: any,
+  ) {
+    return this.liaAssignments.reassignFinance(
+      id,
+      { financeId: dto.financeId ?? null, reason: dto.reason },
       {
         id: req.user?.userId ?? req.user?.id,
         name: req.user?.name ?? null,

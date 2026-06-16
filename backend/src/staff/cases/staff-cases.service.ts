@@ -169,8 +169,10 @@ export class StaffCasesService {
             },
           },
         },
-        owner: { select: { id: true, name: true, role: true } },
-        lia:   { select: { id: true, name: true, role: true } },
+        owner:   { select: { id: true, name: true, role: true } },
+        lia:     { select: { id: true, name: true, role: true } },
+        support: { select: { id: true, name: true, role: true } },
+        finance: { select: { id: true, name: true, role: true } },
       },
     });
     if (!row) throw new NotFoundException('Case not found');
@@ -197,10 +199,10 @@ export class StaffCasesService {
         phone:     row.lead.contact.phone ?? null,
       },
       assignments: {
-        LIA:        row.lia   ? { id: row.lia.id,   name: row.lia.name,   role: row.lia.role   } : null,
-        CONSULTANT: row.owner ? { id: row.owner.id, name: row.owner.name, role: row.owner.role } : null,
-        SUPPORT:    null, // Case model has no SUPPORT column — permanently empty.
-        FINANCE:    null, // Case model has no FINANCE column — permanently empty.
+        LIA:        row.lia     ? { id: row.lia.id,     name: row.lia.name,     role: row.lia.role     } : null,
+        CONSULTANT: row.owner   ? { id: row.owner.id,   name: row.owner.name,   role: row.owner.role   } : null,
+        SUPPORT:    row.support ? { id: row.support.id, name: row.support.name, role: row.support.role } : null,
+        FINANCE:    row.finance ? { id: row.finance.id, name: row.finance.name, role: row.finance.role } : null,
       },
     };
   }
@@ -310,9 +312,9 @@ export class StaffCasesService {
   // CONSULTANT → users with role='CONSULTANT' counted via Case.ownerId.
   // Active-case count excludes COMPLETED/WITHDRAWN stages, matching
   // LiaAssignmentService.findActiveLias() in the cases module.
-  async listEligibleStaff(slot: 'LIA' | 'CONSULTANT') {
-    if (slot !== 'LIA' && slot !== 'CONSULTANT') {
-      throw new BadRequestException('slot must be LIA or CONSULTANT');
+  async listEligibleStaff(slot: 'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE') {
+    if (slot !== 'LIA' && slot !== 'CONSULTANT' && slot !== 'SUPPORT' && slot !== 'FINANCE') {
+      throw new BadRequestException('slot must be LIA, CONSULTANT, SUPPORT, or FINANCE');
     }
     if (slot === 'LIA') {
       const users = await this.prisma.user.findMany({
@@ -340,9 +342,61 @@ export class StaffCasesService {
         activeCaseCount: u.liaCases.length,
       }));
     }
+    if (slot === 'CONSULTANT') {
+      const users = await this.prisma.user.findMany({
+        where: {
+          role: 'CONSULTANT',
+          isActive: true,
+          OR: [
+            { staffActiveStatus: null },
+            { staffActiveStatus: { isActive: true } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          cases: {
+            where:  { stage: { notIn: ['COMPLETED', 'WITHDRAWN'] } },
+            select: { id: true },
+          },
+        },
+      });
+      return users.map((u) => ({
+        id:              u.id,
+        name:            u.name,
+        activeCaseCount: u.cases.length,
+      }));
+    }
+    if (slot === 'SUPPORT') {
+      const users = await this.prisma.user.findMany({
+        where: {
+          role: 'SUPPORT',
+          isActive: true,
+          OR: [
+            { staffActiveStatus: null },
+            { staffActiveStatus: { isActive: true } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          supportCases: {
+            where:  { stage: { notIn: ['COMPLETED', 'WITHDRAWN'] } },
+            select: { id: true },
+          },
+        },
+      });
+      return users.map((u) => ({
+        id:              u.id,
+        name:            u.name,
+        activeCaseCount: u.supportCases.length,
+      }));
+    }
     const users = await this.prisma.user.findMany({
       where: {
-        role: 'CONSULTANT',
+        role: 'FINANCE',
         isActive: true,
         OR: [
           { staffActiveStatus: null },
@@ -353,7 +407,7 @@ export class StaffCasesService {
       select: {
         id: true,
         name: true,
-        cases: {
+        financeCases: {
           where:  { stage: { notIn: ['COMPLETED', 'WITHDRAWN'] } },
           select: { id: true },
         },
@@ -362,7 +416,7 @@ export class StaffCasesService {
     return users.map((u) => ({
       id:              u.id,
       name:            u.name,
-      activeCaseCount: u.cases.length,
+      activeCaseCount: u.financeCases.length,
     }));
   }
 

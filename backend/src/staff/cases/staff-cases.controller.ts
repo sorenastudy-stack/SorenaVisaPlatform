@@ -33,11 +33,13 @@ export class StaffCasesController {
 
   // Option 1 step 3b — Reassign overlay candidate list. Declared
   // BEFORE @Get(':id') so 'eligible-staff' isn't matched as an id.
+  // Step 4b widened the accepted slots to all 4 (Case-side schema now
+  // has supportId + financeId columns).
   @Get('eligible-staff')
   @AdminTier()
   eligibleStaff(@Query('slot') slot: string) {
-    if (slot !== 'LIA' && slot !== 'CONSULTANT') {
-      throw new BadRequestException('slot must be LIA or CONSULTANT');
+    if (slot !== 'LIA' && slot !== 'CONSULTANT' && slot !== 'SUPPORT' && slot !== 'FINANCE') {
+      throw new BadRequestException('slot must be LIA, CONSULTANT, SUPPORT, or FINANCE');
     }
     return this.cases.listEligibleStaff(slot);
   }
