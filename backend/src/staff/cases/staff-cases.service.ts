@@ -47,88 +47,104 @@ export class StaffCasesService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ── List ──────────────────────────────────────────────────────────
+  // Option 1 step 1 — list reads the operational `Case` table (FK to
+  // Lead) so cases created from the lead-detail "Create Case" action
+  // show up. Detail / Activity / Reassign still query VisaCase below;
+  // those repoint in later steps.
   async listCases(caller: CallerCtx, query: ListCasesQuery) {
     const page     = Math.max(1, query.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
     const skip     = (page - 1) * pageSize;
 
-    // Visibility — non-admin staff are scoped to their own assignments.
-    const visibleCaseIds = await this.visibleCaseIds(caller);
-    if (visibleCaseIds !== 'all' && visibleCaseIds.length === 0) {
+    // Visibility against the cases table — column-based, not via
+    // visa_case_assignments. SUPPORT/FINANCE have no Case-side column
+    // and see nothing on this list (the operational Case model only
+    // tracks owner + lia).
+    const visibilityWhere = this.caseListVisibilityWhere(caller);
+    if (visibilityWhere === 'none') {
       return { items: [], total: 0, page, pageSize };
     }
 
-    // assignedToMe — narrow to cases where caller specifically holds
-    // an active assignment, even if they're admin-tier.
-    let scopedCaseIds: string[] | 'all' = visibleCaseIds;
+    const where: Record<string, unknown> = { ...visibilityWhere };
+
+    // assignedToMe — narrow to cases where caller personally holds
+    // the LIA or owner column. Redundant for LIA/CONSULTANT (already
+    // scoped) but meaningfully narrows admin-tier callers.
     if (query.assignedToMe) {
-      const mine = await this.casesAssignedTo(caller.userId);
-      if (scopedCaseIds === 'all') {
-        scopedCaseIds = mine;
-      } else {
-        scopedCaseIds = scopedCaseIds.filter((id) => mine.includes(id));
-      }
-      if (scopedCaseIds.length === 0) {
-        return { items: [], total: 0, page, pageSize };
-      }
+      const prior = Array.isArray(where.AND) ? (where.AND as unknown[]) : [];
+      where.AND = [
+        ...prior,
+        { OR: [{ liaId: caller.userId }, { ownerId: caller.userId }] },
+      ];
     }
 
-    // Search — substring match on User.name OR User.email of the
-    // case's client. Stored unencrypted on User (the existing User
-    // model uses plaintext name + email; encryption is on the
-    // VisaApplication identity columns, not on the user record).
-    const where: Record<string, unknown> = {};
-    if (scopedCaseIds !== 'all') {
-      where.id = { in: scopedCaseIds };
-    }
+    // The API field is `status` for frontend compatibility, but matches
+    // against the CaseStage enum column. `Case.status` is a vestigial
+    // free string ("active" / "APPLICATION_SUBMITTED"); stage is the
+    // real state machine (ADMISSION / VISA / INZ_SUBMITTED / …).
     if (query.status) {
-      where.status = query.status;
+      where.stage = query.status;
     }
+
+    // Search — substring match on the lead's contact name or email.
     if (query.q && query.q.trim().length > 0) {
       const term = query.q.trim();
-      where.client = {
-        OR: [
-          { name:  { contains: term, mode: 'insensitive' } },
-          { email: { contains: term, mode: 'insensitive' } },
-        ],
+      where.lead = {
+        contact: {
+          OR: [
+            { fullName: { contains: term, mode: 'insensitive' } },
+            { email:    { contains: term, mode: 'insensitive' } },
+          ],
+        },
       };
     }
 
     const [rows, total] = await this.prisma.$transaction([
-      this.prisma.visaCase.findMany({
+      this.prisma.case.findMany({
         where,
         orderBy: { updatedAt: 'desc' },
         skip,
         take: pageSize,
         include: {
-          client:      { select: { id: true, name: true, email: true } },
-          assignments: {
-            where:   { unassignedAt: null },
-            include: { staff: { select: { id: true, name: true } } },
+          lead: {
+            include: {
+              contact: { select: { fullName: true, email: true, userId: true } },
+            },
           },
+          owner: { select: { id: true, name: true } },
+          lia:   { select: { id: true, name: true } },
         },
       }),
-      this.prisma.visaCase.count({ where }),
+      this.prisma.case.count({ where }),
     ]);
 
-    const items: CaseListRow[] = rows.map((c) => {
-      const lia = c.assignments.find((a) => a.roleSlot === 'LIA');
-      const con = c.assignments.find((a) => a.roleSlot === 'CONSULTANT');
-      return {
-        id:           c.id,
-        studentId:    c.clientId,
-        studentName:  c.client?.name ?? '',
-        studentEmail: c.client?.email ?? '',
-        status:       c.status,
-        stage:        c.status, // VisaCase has no separate stage column.
-        createdAt:    c.createdAt,
-        updatedAt:    c.updatedAt,
-        assignedLia:        lia ? { id: lia.staff.id, name: lia.staff.name } : null,
-        assignedConsultant: con ? { id: con.staff.id, name: con.staff.name } : null,
-      };
-    });
+    const items: CaseListRow[] = rows.map((c) => ({
+      id:           c.id,
+      studentId:    c.lead.contact.userId ?? c.lead.contactId,
+      studentName:  c.lead.contact.fullName ?? '',
+      studentEmail: c.lead.contact.email ?? '',
+      status:       c.stage, // display stage in the status pill — Case.status is vestigial
+      stage:        c.stage,
+      createdAt:    c.createdAt,
+      updatedAt:    c.updatedAt,
+      assignedLia:        c.lia   ? { id: c.lia.id,   name: c.lia.name   } : null,
+      assignedConsultant: c.owner ? { id: c.owner.id, name: c.owner.name } : null,
+    }));
 
     return { items, total, page, pageSize };
+  }
+
+  // List-only visibility (does NOT replace assertVisible used by
+  // detail/activity, which still target VisaCase).
+  //   - admin tier               → {} (no scoping)
+  //   - LIA                      → { liaId:   caller.userId }
+  //   - CONSULTANT               → { ownerId: caller.userId }
+  //   - SUPPORT / FINANCE / else → 'none' (caller sees zero rows)
+  private caseListVisibilityWhere(caller: CallerCtx): Record<string, unknown> | 'none' {
+    if (ADMIN_TIER.includes(caller.role)) return {};
+    if (caller.role === 'LIA')        return { liaId:   caller.userId };
+    if (caller.role === 'CONSULTANT') return { ownerId: caller.userId };
+    return 'none';
   }
 
   // ── Detail ────────────────────────────────────────────────────────
