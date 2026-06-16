@@ -6,25 +6,33 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import type { RoleSlot } from './types';
 
-// Option 1 step 3b — Reassign overlay, rewired to the Case-side flow.
+// Option 1 step 3b/4c — Reassign overlay, Case-side flow for all 4 slots.
 //
 //   * Candidates come from GET /api/staff/cases/eligible-staff?slot=...
 //     (admin-only on the staff-cases controller). Returns users with
-//     role === slot, plus their open-case count on Case.liaId or
-//     Case.ownerId — no more visa_case_assignments lookups here.
-//   * Confirm writes to PATCH /cases/:id/lia for LIA or
-//     PATCH /cases/:id/owner for CONSULTANT (the Admission Specialist).
-//     Both routes require a reason string of 10..500 characters; the
-//     textarea below enforces the minimum client-side and the backend
-//     re-checks via class-validator.
-//   * SUPPORT and FINANCE are not reachable — the assignments panel
-//     hides the Reassign button for those slots (no Case-side column).
+//     role === slot, plus their open-case count on the matching Case
+//     column (liaId / ownerId / supportId / financeId).
+//   * Confirm writes to the slot's PATCH endpoint with the slot's body
+//     key — both encoded in SLOT_CONFIG below. All four routes require
+//     a reason string of 10..500 characters; the textarea below enforces
+//     the minimum client-side and the backend re-checks via class-validator.
 
 interface CaseEligibleStaff {
   id:              string;
   name:            string;
   activeCaseCount: number;
 }
+
+// Per-slot display label + PATCH endpoint + body field name. The
+// CONSULTANT slot is the "Admission Specialist" externally (display
+// relabel only — the code role string stays CONSULTANT and the body
+// key stays ownerId because Case.ownerId is the underlying column).
+const SLOT_CONFIG: Record<RoleSlot, { label: string; path: (id: string) => string; bodyKey: string }> = {
+  LIA:        { label: 'Immigration Adviser',  path: (id) => `/cases/${id}/lia`,     bodyKey: 'liaId'     },
+  CONSULTANT: { label: 'Admission Specialist', path: (id) => `/cases/${id}/owner`,   bodyKey: 'ownerId'   },
+  SUPPORT:    { label: 'Support',              path: (id) => `/cases/${id}/support`, bodyKey: 'supportId' },
+  FINANCE:    { label: 'Finance',              path: (id) => `/cases/${id}/finance`, bodyKey: 'financeId' },
+};
 
 const REASON_MIN = 10;
 
@@ -63,7 +71,7 @@ export function ReassignOverlay({
 
   if (!open) return null;
 
-  const slotDisplay = roleSlot === 'LIA' ? 'Immigration Adviser' : 'Admission Specialist';
+  const slotDisplay = SLOT_CONFIG[roleSlot].label;
   const reasonTrimmedLen = reason.trim().length;
   const reasonTooShort = reasonTrimmedLen < REASON_MIN;
   const canSubmit = !!selectedId && !reasonTooShort && !submitting;
@@ -75,17 +83,11 @@ export function ReassignOverlay({
       // The api helper hits `${API_URL}${path}` with no prefix — these
       // routes live under the operational /cases controller on the
       // backend, not under /api/staff.
-      if (roleSlot === 'LIA') {
-        await api.patch(`/cases/${caseId}/lia`, {
-          liaId:  selectedId,
-          reason: reason.trim(),
-        });
-      } else {
-        await api.patch(`/cases/${caseId}/owner`, {
-          ownerId: selectedId,
-          reason:  reason.trim(),
-        });
-      }
+      const { path, bodyKey } = SLOT_CONFIG[roleSlot];
+      await api.patch(path(caseId), {
+        [bodyKey]: selectedId,
+        reason:   reason.trim(),
+      });
       toast.success('Assignment updated');
       onDone();
       onClose();
