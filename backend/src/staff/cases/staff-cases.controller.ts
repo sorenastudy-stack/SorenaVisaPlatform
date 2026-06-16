@@ -1,7 +1,7 @@
-import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../roles/staff-roles.guard';
-import { StaffRoles, StaffRole } from '../roles/staff-roles.decorator';
+import { AdminTier, StaffRoles, StaffRole } from '../roles/staff-roles.decorator';
 import { StaffCasesService } from './staff-cases.service';
 import { StaffCasesListQueryDto } from './dto/staff-cases.dto';
 
@@ -29,6 +29,17 @@ export class StaffCasesController {
         pageSize:     query.pageSize,
       },
     );
+  }
+
+  // Option 1 step 3b — Reassign overlay candidate list. Declared
+  // BEFORE @Get(':id') so 'eligible-staff' isn't matched as an id.
+  @Get('eligible-staff')
+  @AdminTier()
+  eligibleStaff(@Query('slot') slot: string) {
+    if (slot !== 'LIA' && slot !== 'CONSULTANT') {
+      throw new BadRequestException('slot must be LIA or CONSULTANT');
+    }
+    return this.cases.listEligibleStaff(slot);
   }
 
   @Get(':id')

@@ -1,20 +1,32 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import type { RoleSlot, AvailableStaffRow } from './types';
+import type { RoleSlot } from './types';
 
-// PR-CONSULT-2 — Reassign overlay.
+// Option 1 step 3b — Reassign overlay, rewired to the Case-side flow.
 //
-// Inline modal (no shadcn Dialog primitive). Fetches the candidate
-// list from /api/staff/assignments/available-staff on open, shows
-// each candidate's current open-assignment count, and submits the
-// chosen one to /api/staff/assignments/manual-assign. On success
-// fires the parent `onDone` callback so it can refetch the case
-// detail (which re-pulls the assignments panel).
+//   * Candidates come from GET /api/staff/cases/eligible-staff?slot=...
+//     (admin-only on the staff-cases controller). Returns users with
+//     role === slot, plus their open-case count on Case.liaId or
+//     Case.ownerId — no more visa_case_assignments lookups here.
+//   * Confirm writes to PATCH /cases/:id/lia for LIA or
+//     PATCH /cases/:id/owner for CONSULTANT (the Admission Specialist).
+//     Both routes require a reason string of 10..500 characters; the
+//     textarea below enforces the minimum client-side and the backend
+//     re-checks via class-validator.
+//   * SUPPORT and FINANCE are not reachable — the assignments panel
+//     hides the Reassign button for those slots (no Case-side column).
+
+interface CaseEligibleStaff {
+  id:              string;
+  name:            string;
+  activeCaseCount: number;
+}
+
+const REASON_MIN = 10;
 
 export function ReassignOverlay({
   caseId,
@@ -29,9 +41,9 @@ export function ReassignOverlay({
   onClose:  () => void;
   onDone:   () => void;
 }) {
-  const t = useTranslations();
-  const [candidates, setCandidates] = useState<AvailableStaffRow[]>([]);
+  const [candidates, setCandidates] = useState<CaseEligibleStaff[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [reason, setReason] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,8 +53,9 @@ export function ReassignOverlay({
     setLoading(true);
     setError(null);
     setSelectedId('');
+    setReason('');
     api
-      .get<AvailableStaffRow[]>(`/api/staff/assignments/available-staff?roleSlot=${roleSlot}`)
+      .get<CaseEligibleStaff[]>(`/api/staff/cases/eligible-staff?slot=${roleSlot}`)
       .then((rows) => setCandidates(rows))
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load candidates'))
       .finally(() => setLoading(false));
@@ -50,15 +63,29 @@ export function ReassignOverlay({
 
   if (!open) return null;
 
+  const slotDisplay = roleSlot === 'LIA' ? 'Immigration Adviser' : 'Admission Specialist';
+  const reasonTrimmedLen = reason.trim().length;
+  const reasonTooShort = reasonTrimmedLen < REASON_MIN;
+  const canSubmit = !!selectedId && !reasonTooShort && !submitting;
+
   const handleSubmit = async () => {
-    if (!selectedId) return;
+    if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await api.post('/api/staff/assignments/manual-assign', {
-        caseId,
-        roleSlot,
-        staffId: selectedId,
-      });
+      // The api helper hits `${API_URL}${path}` with no prefix — these
+      // routes live under the operational /cases controller on the
+      // backend, not under /api/staff.
+      if (roleSlot === 'LIA') {
+        await api.patch(`/cases/${caseId}/lia`, {
+          liaId:  selectedId,
+          reason: reason.trim(),
+        });
+      } else {
+        await api.patch(`/cases/${caseId}/owner`, {
+          ownerId: selectedId,
+          reason:  reason.trim(),
+        });
+      }
       toast.success('Assignment updated');
       onDone();
       onClose();
@@ -78,7 +105,7 @@ export function ReassignOverlay({
       <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl p-6 max-h-[85vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-4">
           <h2 className="text-lg font-bold text-[#1e3a5f]">
-            {t('staff.cases.detail.reassignTitle', { role: roleSlot })}
+            Reassign {slotDisplay}
           </h2>
           <button
             onClick={onClose}
@@ -100,19 +127,19 @@ export function ReassignOverlay({
         )}
 
         {!loading && !error && (
-          <div className="space-y-2 mb-6">
+          <div className="space-y-2 mb-4">
             {candidates.length === 0 ? (
               <div className="text-sm text-gray-500 text-center py-4">
                 No eligible staff available for this slot.
               </div>
             ) : (
               candidates.map((c) => {
-                const active = selectedId === c.staffId;
+                const active = selectedId === c.id;
                 return (
                   <button
-                    key={c.staffId}
+                    key={c.id}
                     type="button"
-                    onClick={() => setSelectedId(c.staffId)}
+                    onClick={() => setSelectedId(c.id)}
                     className={[
                       'w-full text-left rounded-xl border px-4 py-3 flex items-center justify-between transition-colors min-h-[56px]',
                       active
@@ -120,9 +147,9 @@ export function ReassignOverlay({
                         : 'border-gray-200 hover:border-gray-300 bg-white',
                     ].join(' ')}
                   >
-                    <span className="font-medium text-gray-900">{c.name || c.staffId}</span>
+                    <span className="font-medium text-gray-900">{c.name || c.id}</span>
                     <span className="text-xs text-gray-500">
-                      {t('staff.cases.detail.openAssignments', { count: c.activeAssignmentCount })}
+                      {c.activeCaseCount} open
                     </span>
                   </button>
                 );
@@ -131,13 +158,30 @@ export function ReassignOverlay({
           </div>
         )}
 
+        <label className="block text-xs font-semibold text-[#1e3a5f]/80 mb-1">
+          Reason for reassignment <span className="text-rose-600">*</span>
+        </label>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+          disabled={submitting}
+          placeholder="Why is this case being reassigned? (recorded on the audit trail)"
+          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-[#1e3a5f] focus:outline-none focus:ring-2 focus:ring-[#E8B923]/40 disabled:opacity-50"
+        />
+        <div className={['text-xs mb-4 mt-1', reasonTooShort ? 'text-rose-600' : 'text-gray-400'].join(' ')}>
+          {reasonTooShort
+            ? `Need at least ${REASON_MIN - reasonTrimmedLen} more character${REASON_MIN - reasonTrimmedLen === 1 ? '' : 's'}`
+            : `${reasonTrimmedLen} characters`}
+        </div>
+
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={!selectedId || submitting}
+          disabled={!canSubmit}
           className="w-full rounded-xl bg-[#1e3a5f] text-white font-semibold py-3 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#162d4a] transition-colors min-h-[48px]"
         >
-          {submitting ? 'Saving…' : t('staff.cases.detail.reassignSubmit')}
+          {submitting ? 'Saving…' : 'Confirm reassignment'}
         </button>
       </div>
     </div>

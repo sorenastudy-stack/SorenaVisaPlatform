@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { summarizeAuditEntry } from '../../common/audit/audit.helper';
 import type { StaffRole } from '../roles/staff-roles.decorator';
@@ -301,6 +301,68 @@ export class StaffCasesService {
         oldValue:   r.oldValue,
         newValue:   r.newValue,
       }),
+    }));
+  }
+
+  // ── Eligible staff for reassignment ──────────────────────────────
+  // Option 1 step 3b — admin-only candidate list for the Reassign
+  // overlay. LIA → users with role='LIA' counted via Case.liaId.
+  // CONSULTANT → users with role='CONSULTANT' counted via Case.ownerId.
+  // Active-case count excludes COMPLETED/WITHDRAWN stages, matching
+  // LiaAssignmentService.findActiveLias() in the cases module.
+  async listEligibleStaff(slot: 'LIA' | 'CONSULTANT') {
+    if (slot !== 'LIA' && slot !== 'CONSULTANT') {
+      throw new BadRequestException('slot must be LIA or CONSULTANT');
+    }
+    if (slot === 'LIA') {
+      const users = await this.prisma.user.findMany({
+        where: {
+          role: 'LIA',
+          isActive: true,
+          OR: [
+            { staffActiveStatus: null },
+            { staffActiveStatus: { isActive: true } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          liaCases: {
+            where:  { stage: { notIn: ['COMPLETED', 'WITHDRAWN'] } },
+            select: { id: true },
+          },
+        },
+      });
+      return users.map((u) => ({
+        id:              u.id,
+        name:            u.name,
+        activeCaseCount: u.liaCases.length,
+      }));
+    }
+    const users = await this.prisma.user.findMany({
+      where: {
+        role: 'CONSULTANT',
+        isActive: true,
+        OR: [
+          { staffActiveStatus: null },
+          { staffActiveStatus: { isActive: true } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        cases: {
+          where:  { stage: { notIn: ['COMPLETED', 'WITHDRAWN'] } },
+          select: { id: true },
+        },
+      },
+    });
+    return users.map((u) => ({
+      id:              u.id,
+      name:            u.name,
+      activeCaseCount: u.cases.length,
     }));
   }
 

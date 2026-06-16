@@ -19,6 +19,7 @@ import { UpdateCaseDto } from './dto/update-case.dto';
 import { CaseListQueryDto } from './dto/case-list-filter.dto';
 import { OverrideRiskDto, ClearHardStopDto } from './dto/lia-actions.dto';
 import { ManualReassignLiaDto } from './dto/lia-assignment.dto';
+import { ManualReassignOwnerDto } from './dto/owner-assignment.dto';
 
 @Controller('cases')
 @UseGuards(JwtAuthGuard)
@@ -106,6 +107,28 @@ export class CasesController {
     return this.liaAssignments.manualReassign(
       id,
       { liaId: dto.liaId ?? null, reason: dto.reason },
+      {
+        id: req.user?.userId ?? req.user?.id,
+        name: req.user?.name ?? null,
+        role: req.user?.role ?? null,
+      },
+    );
+  }
+
+  // Option 1 step 3a — Mirror of /lia for the CONSULTANT ("Admission
+  // Specialist") slot, which lives on Case.ownerId. Same guard set,
+  // same actor extraction, same DTO shape (ownerId + reason).
+  @Patch(':id/owner')
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'SUPER_ADMIN')
+  reassignOwner(
+    @Param('id') id: string,
+    @Body() dto: ManualReassignOwnerDto,
+    @Req() req: any,
+  ) {
+    return this.liaAssignments.reassignOwner(
+      id,
+      { ownerId: dto.ownerId ?? null, reason: dto.reason },
       {
         id: req.user?.userId ?? req.user?.id,
         name: req.user?.name ?? null,

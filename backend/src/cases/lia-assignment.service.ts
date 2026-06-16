@@ -43,6 +43,11 @@ interface ManualReassignDto {
   reason: string;
 }
 
+interface ManualReassignOwnerDto {
+  ownerId: string | null;
+  reason: string;
+}
+
 interface AssignResult {
   status: 'assigned' | 'no_candidates' | 'already_assigned';
   liaId: string | null;
@@ -267,6 +272,91 @@ export class LiaAssignmentService {
           this.logger.error(`Failed to email released LIA: ${err?.message ?? err}`),
         );
     }
+
+    return updated;
+  }
+
+  // ─── Owner (Admission Specialist) manual reassignment ─────────────────
+  //
+  // Option 1 step 3a — mirror of manualReassign() for the CONSULTANT
+  // slot, which lives on Case.ownerId. No timestamp column (Case has
+  // no ownerAssignedAt) and no emails in v1 (the LIA email helpers
+  // hardcode "LIA" copy + an LIA-portal link; reusing them would be
+  // wrong, mirroring the templates is out of scope for this step).
+  async reassignOwner(
+    caseId: string,
+    dto: ManualReassignOwnerDto,
+    actor: Actor,
+  ) {
+    const existing = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        ownerId: true,
+        lead: { select: { contact: { select: { fullName: true } } } },
+        owner: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (!existing) throw new NotFoundException('Case not found');
+
+    let newOwner: { id: string; name: string; email: string } | null = null;
+    if (dto.ownerId) {
+      const target = await this.prisma.user.findUnique({
+        where: { id: dto.ownerId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          staffActiveStatus: { select: { isActive: true } },
+        },
+      });
+      if (!target) throw new NotFoundException('Target user not found');
+      if (target.role !== 'CONSULTANT') {
+        throw new BadRequestException('Target user is not an Admission Specialist');
+      }
+      if (!target.isActive) {
+        throw new BadRequestException('Target Admission Specialist is not active');
+      }
+      if (target.staffActiveStatus && target.staffActiveStatus.isActive === false) {
+        throw new BadRequestException('Target Admission Specialist is archived');
+      }
+      newOwner = { id: target.id, name: target.name, email: target.email };
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.case.update({
+        where: { id: caseId },
+        data: {
+          ownerId: newOwner?.id ?? null,
+        },
+        include: {
+          owner: { select: { id: true, name: true, email: true } },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.id,
+          action: 'MANUAL_REASSIGN',
+          eventType: 'OWNER_MANUAL_REASSIGNED',
+          entityType: 'CASE',
+          entityId: caseId,
+          oldValue: {
+            ownerId: existing.ownerId ?? null,
+            ownerName: existing.owner?.name ?? null,
+          } as Prisma.InputJsonValue,
+          newValue: {
+            ownerId: newOwner?.id ?? null,
+            ownerName: newOwner?.name ?? null,
+            reasonLength: dto.reason.length,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+      return u;
+    });
 
     return updated;
   }
