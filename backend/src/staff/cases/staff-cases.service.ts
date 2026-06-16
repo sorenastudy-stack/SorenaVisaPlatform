@@ -148,64 +148,102 @@ export class StaffCasesService {
   }
 
   // ── Detail ────────────────────────────────────────────────────────
+  // Option 1 step 2 — detail reads the operational `Case` table (FK to
+  // Lead → Contact). Activity still queries VisaCase via the original
+  // assertVisible() helper; step 4 repoints that path.
   async getCaseDetail(caller: CallerCtx, caseId: string) {
-    await this.assertVisible(caller, caseId);
-    const row = await this.prisma.visaCase.findUnique({
+    await this.assertVisibleCase(caller, caseId);
+    const row = await this.prisma.case.findUnique({
       where: { id: caseId },
       include: {
-        client: {
-          select: {
-            id: true, name: true, email: true,
+        lead: {
+          include: {
             contact: {
-              select: { preferredLanguage: true, phone: true },
+              select: {
+                fullName:          true,
+                email:             true,
+                phone:             true,
+                preferredLanguage: true,
+                userId:            true,
+              },
             },
           },
         },
-        assignments: {
-          where:   { unassignedAt: null },
-          include: { staff: { select: { id: true, name: true, role: true } } },
-        },
+        owner: { select: { id: true, name: true, role: true } },
+        lia:   { select: { id: true, name: true, role: true } },
       },
     });
     if (!row) throw new NotFoundException('Case not found');
 
-    const slot = (s: 'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE') => {
-      const r = row.assignments.find((a) => a.roleSlot === s);
-      return r ? {
-        id:   r.staff.id,
-        name: r.staff.name,
-        role: r.staff.role,
-      } : null;
-    };
-
-    // Split `name` into first/last on the first whitespace — matches
-    // the heuristic used by the student dashboard.
-    const fullName = row.client?.name ?? '';
+    // Split contact.fullName on first whitespace — matches the
+    // heuristic the visa-side detail used on User.name.
+    const fullName = row.lead.contact.fullName ?? '';
     const parts = fullName.trim().split(/\s+/);
     const firstName = parts.shift() ?? '';
     const lastName  = parts.join(' ');
 
     return {
       id:        row.id,
-      status:    row.status,
-      stage:     row.status,
+      status:    row.stage, // display stage in the status field — Case.status is vestigial
+      stage:     row.stage,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       student: {
-        id:        row.client?.id ?? '',
+        id:        row.lead.contact.userId ?? row.lead.contactId,
         firstName,
         lastName,
-        email:     row.client?.email ?? '',
-        locale:    row.client?.contact?.preferredLanguage ?? 'en',
-        phone:     row.client?.contact?.phone ?? null,
+        email:     row.lead.contact.email ?? '',
+        locale:    row.lead.contact.preferredLanguage ?? 'en',
+        phone:     row.lead.contact.phone ?? null,
       },
       assignments: {
-        LIA:        slot('LIA'),
-        CONSULTANT: slot('CONSULTANT'),
-        SUPPORT:    slot('SUPPORT'),
-        FINANCE:    slot('FINANCE'),
+        LIA:        row.lia   ? { id: row.lia.id,   name: row.lia.name,   role: row.lia.role   } : null,
+        CONSULTANT: row.owner ? { id: row.owner.id, name: row.owner.name, role: row.owner.role } : null,
+        SUPPORT:    null, // Case model has no SUPPORT column — permanently empty.
+        FINANCE:    null, // Case model has no FINANCE column — permanently empty.
       },
     };
+  }
+
+  // Detail-only visibility against the cases table. Preserves the
+  // existing assertVisible() contract:
+  //   - case missing OR caller's role has no claim → NotFoundException
+  //     (404, not 403, so non-admin callers can't probe which IDs exist)
+  //   - role outside the staff allow-list → ForbiddenException
+  // The original assertVisible() still targets VisaCase and is used by
+  // getCaseActivity() until step 4 repoints it.
+  private async assertVisibleCase(caller: CallerCtx, caseId: string) {
+    if (ADMIN_TIER.includes(caller.role)) {
+      const exists = await this.prisma.case.findUnique({
+        where:  { id: caseId },
+        select: { id: true },
+      });
+      if (!exists) throw new NotFoundException('Case not found');
+      return;
+    }
+    if (caller.role === 'LIA') {
+      const own = await this.prisma.case.findFirst({
+        where:  { id: caseId, liaId: caller.userId },
+        select: { id: true },
+      });
+      if (!own) throw new NotFoundException('Case not found');
+      return;
+    }
+    if (caller.role === 'CONSULTANT') {
+      const own = await this.prisma.case.findFirst({
+        where:  { id: caseId, ownerId: caller.userId },
+        select: { id: true },
+      });
+      if (!own) throw new NotFoundException('Case not found');
+      return;
+    }
+    if (caller.role === 'SUPPORT' || caller.role === 'FINANCE') {
+      // No Case-side claim possible — surface as 404 to match the
+      // non-leak behaviour of the existing assertVisible() rather
+      // than distinguishing "exists but not yours" from "doesn't exist".
+      throw new NotFoundException('Case not found');
+    }
+    throw new ForbiddenException('Role cannot access staff cases');
   }
 
   // ── Activity ──────────────────────────────────────────────────────
