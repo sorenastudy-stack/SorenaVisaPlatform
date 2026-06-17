@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CreatePaymentLinkDto } from './dto/create-payment-link.dto';
+import { CreateCaseConsultationLinkDto } from './dto/create-case-consultation-link.dto';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import Stripe from 'stripe';
 
@@ -44,6 +45,30 @@ export class PaymentsController {
   async createConsultationLink(@Body() dto: CreatePaymentLinkDto) {
     return this.paymentsService.createConsultationPaymentLink(
       dto.leadId,
+      dto.consultationType,
+    );
+  }
+
+  /**
+   * Case-keyed consultation link — staff Payments-tab convenience.
+   * Resolves leadId server-side from caseId and forwards to the same
+   * Stripe flow as POST /payments/consultation-link. The caseId is
+   * threaded into the Stripe link metadata so the post-payment webhook
+   * ties the resulting Payment row directly to the case (mirrors
+   * ACCOUNT_OPENING). Staff-only.
+   *
+   * NOTE: POST /payments/consultation-link still exists and is unchanged
+   * — other callers (lead-detail flows) keep using the leadId-keyed route.
+   */
+  @Post('case/:caseId/consultation-link')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  async createCaseConsultationLink(
+    @Param('caseId') caseId: string,
+    @Body() dto: CreateCaseConsultationLinkDto,
+  ) {
+    return this.paymentsService.createConsultationLinkForCase(
+      caseId,
       dto.consultationType,
     );
   }

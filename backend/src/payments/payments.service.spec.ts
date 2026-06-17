@@ -296,3 +296,97 @@ describe('PaymentsService.recordManualPayment', () => {
     expect(capturedPaymentArgs.data.currency).toBe('usd');
   });
 });
+
+// ─── createConsultationLinkForCase ──────────────────────────────────────
+//
+// The case-keyed convenience that resolves leadId server-side and then
+// delegates to the existing createConsultationPaymentLink chain. The
+// critical contract: caseId must reach stripeService as the 5th arg so
+// the Stripe link metadata carries it (the webhook keys off this).
+
+describe('PaymentsService.createConsultationLinkForCase', () => {
+  it('resolves leadId from caseId and delegates to stripe with caseId as the 5th arg', async () => {
+    const { service, stripe, findUnique } = makeService({
+      caseRow: { id: 'case-99', leadId: 'lead-from-case' },
+    });
+    stripe.createConsultationPaymentLink.mockResolvedValue({
+      url: 'https://buy.stripe.com/test_link_abc',
+    });
+
+    const result = await service.createConsultationLinkForCase(
+      'case-99',
+      'ADMISSION_CONSULTATION',
+    );
+
+    // case lookup uses the right id + selects only leadId
+    expect(findUnique).toHaveBeenCalledWith({
+      where:  { id: 'case-99' },
+      select: { leadId: true },
+    });
+
+    // stripe was called with the resolved leadId + caseId in the 5th slot,
+    // and the amount comes from CONSULTATION_AMOUNTS (ADMISSION = 50 NZD).
+    expect(stripe.createConsultationPaymentLink).toHaveBeenCalledTimes(1);
+    expect(stripe.createConsultationPaymentLink).toHaveBeenCalledWith(
+      'lead-from-case',
+      'ADMISSION_CONSULTATION',
+      50,
+      'nzd',
+      'case-99',
+    );
+
+    // Returned shape matches the existing public route (additive only).
+    expect(result).toEqual({
+      url:              'https://buy.stripe.com/test_link_abc',
+      free:             false,
+      consultationType: 'ADMISSION_CONSULTATION',
+    });
+  });
+
+  it('throws NotFoundException when the case does not exist (no stripe call)', async () => {
+    const { service, stripe } = makeService({ caseRow: null });
+
+    await expect(
+      service.createConsultationLinkForCase('case-missing', 'GAP_CLOSING'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(stripe.createConsultationPaymentLink).not.toHaveBeenCalled();
+  });
+
+  it('passes consultationType through unchanged (delegate must see what controller passed)', async () => {
+    const { service, stripe } = makeService({
+      caseRow: { id: 'case-7', leadId: 'lead-7' },
+    });
+    stripe.createConsultationPaymentLink.mockResolvedValue({
+      url: 'https://buy.stripe.com/test_link_xyz',
+    });
+
+    await service.createConsultationLinkForCase('case-7', 'LIA_CONSULTATION');
+
+    // 2nd positional arg is the consultationType, untouched.
+    const args = stripe.createConsultationPaymentLink.mock.calls[0];
+    expect(args[1]).toBe('LIA_CONSULTATION');
+  });
+
+  it('returns the FREE shape without calling stripe when consultationType is FREE_SESSION', async () => {
+    // FREE_SESSION maps to amount 0 in CONSULTATION_AMOUNTS — the existing
+    // createConsultationPaymentLink short-circuits before hitting stripe.
+    // We pass through the same chain so this case-keyed variant must
+    // preserve that behavior.
+    const { service, stripe } = makeService({
+      caseRow: { id: 'case-free', leadId: 'lead-free' },
+    });
+
+    const result = await service.createConsultationLinkForCase(
+      'case-free',
+      'FREE_SESSION',
+    );
+
+    expect(stripe.createConsultationPaymentLink).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      url:              null,
+      free:             true,
+      consultationType: 'FREE_SESSION',
+    });
+  });
+});

@@ -54,6 +54,39 @@ export class PaymentsService {
     return { url: paymentLink.url, free: false, consultationType };
   }
 
+  // ─── Case-keyed convenience: resolve leadId from caseId, then delegate ──
+  //
+  // The staff Payments tab on the case detail page already has caseId in
+  // scope but NOT leadId (the /api/staff/cases/:id response intentionally
+  // doesn't surface internal FKs). Rather than thread leadId through the
+  // frontend or extend the case-detail DTO, this method resolves leadId
+  // server-side and forwards to the existing createConsultationPaymentLink
+  // chain — same Stripe link metadata, same response shape.
+  //
+  // Passing caseId as the 5th arg matches how ACCOUNT_OPENING links are
+  // created today: the post-payment webhook reads `metadata.caseId` and
+  // can tie the resulting Payment row directly to the case (instead of
+  // only through the lead).
+  async createConsultationLinkForCase(
+    caseId: string,
+    consultationType: string,
+  ) {
+    const c = await this.prisma.case.findUnique({
+      where:  { id: caseId },
+      select: { leadId: true },
+    });
+    if (!c) {
+      throw new NotFoundException('Case not found');
+    }
+    return this.createConsultationPaymentLink(
+      c.leadId,
+      consultationType,
+      undefined,   // amount — fall back to CONSULTATION_AMOUNTS[type]
+      'nzd',
+      caseId,      // 5th arg threads caseId into the Stripe link metadata
+    );
+  }
+
   // ─── List payments for a case ────────────────────────────────────────
   //
   // Payment.caseId is nullable: only ACCOUNT_OPENING charges set it
