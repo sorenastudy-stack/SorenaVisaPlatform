@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, Profile, VerifyCallback } from 'passport-google-oauth20';
 import { PrismaService } from '../prisma/prisma.service';
+import { linkContactByEmail } from './contact-link.helper';
 
 /**
  * PR-OPTION-C step 2 — Google OAuth strategy, invite-only.
@@ -132,6 +133,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         data:  { lastLoginAt: new Date() },
       });
     }
+
+    // Client portal step 1 — link any orphaned Contact with this
+    // verified email to the resolved User. Idempotent; never
+    // overwrites an already-linked Contact; preserves invite-only.
+    // See contact-link.helper.ts for the full rationale.
+    await linkContactByEmail(this.prisma, email, user.id);
 
     return {
       id:    user.id,

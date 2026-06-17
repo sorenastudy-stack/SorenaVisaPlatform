@@ -52,7 +52,7 @@ describe('GoogleStrategy (PR-OPTION-C step 2)', () => {
       expect(update).not.toHaveBeenCalled();
     });
 
-    it('(b) known email, null googleId → links googleId + lastLoginAt + succeeds', async () => {
+    it('(b) known email, null googleId → links googleId + lastLoginAt + succeeds + links Contact', async () => {
       const userRow = {
         id:       'user-1',
         email:    'invited@example.com',
@@ -61,9 +61,13 @@ describe('GoogleStrategy (PR-OPTION-C step 2)', () => {
         isActive: true,
         googleId: null,
       };
-      const findFirst = jest.fn().mockResolvedValue(userRow);
-      const update    = jest.fn().mockResolvedValue({});
-      const strategy  = makeStrategy({ user: { findFirst, update } });
+      const findFirst        = jest.fn().mockResolvedValue(userRow);
+      const update           = jest.fn().mockResolvedValue({});
+      const contactUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+      const strategy         = makeStrategy({
+        user:    { findFirst, update },
+        contact: { updateMany: contactUpdateMany },
+      });
 
       const result = await strategy.verifyGoogleProfile(makeProfile());
 
@@ -78,6 +82,15 @@ describe('GoogleStrategy (PR-OPTION-C step 2)', () => {
       const data = update.mock.calls[0][0].data;
       expect(data.googleId).toBe('google-sub-123');
       expect(data.lastLoginAt).toBeInstanceOf(Date);
+
+      // Client portal step 1 — the Contact↔User link is attempted with
+      // the verified email and the resolved user id, AND the where
+      // clause restricts to unlinked Contacts (userId: null).
+      expect(contactUpdateMany).toHaveBeenCalledTimes(1);
+      const linkArgs = contactUpdateMany.mock.calls[0][0];
+      expect(linkArgs.where.email).toEqual({ equals: 'invited@example.com', mode: 'insensitive' });
+      expect(linkArgs.where.userId).toBeNull();
+      expect(linkArgs.data).toEqual({ userId: 'user-1' });
     });
 
     it('(c) known email, googleId set but mismatched → 401, no update', async () => {
@@ -118,7 +131,7 @@ describe('GoogleStrategy (PR-OPTION-C step 2)', () => {
       expect(update).not.toHaveBeenCalled();
     });
 
-    it('(e) returning Google user (same googleId) → bumps lastLoginAt only, succeeds', async () => {
+    it('(e) returning Google user (same googleId) → bumps lastLoginAt only, succeeds, retries Contact link', async () => {
       const findFirst = jest.fn().mockResolvedValue({
         id:       'user-4',
         email:    'invited@example.com',
@@ -127,8 +140,15 @@ describe('GoogleStrategy (PR-OPTION-C step 2)', () => {
         isActive: true,
         googleId: 'google-sub-123',
       });
-      const update   = jest.fn().mockResolvedValue({});
-      const strategy = makeStrategy({ user: { findFirst, update } });
+      const update            = jest.fn().mockResolvedValue({});
+      // Idempotency: on a returning user, the Contact is typically
+      // already linked → updateMany returns count 0. The call still
+      // fires; the where clause's userId-null guard makes it a no-op.
+      const contactUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
+      const strategy = makeStrategy({
+        user:    { findFirst, update },
+        contact: { updateMany: contactUpdateMany },
+      });
 
       const result = await strategy.verifyGoogleProfile(makeProfile());
 
@@ -138,6 +158,10 @@ describe('GoogleStrategy (PR-OPTION-C step 2)', () => {
       // No googleId in this update — only lastLoginAt.
       expect(data.googleId).toBeUndefined();
       expect(data.lastLoginAt).toBeInstanceOf(Date);
+
+      // Client portal step 1 — link attempt still happens (idempotent).
+      expect(contactUpdateMany).toHaveBeenCalledTimes(1);
+      expect(contactUpdateMany.mock.calls[0][0].data).toEqual({ userId: 'user-4' });
     });
 
     it('(f) Google profile missing verified email → 401', async () => {
