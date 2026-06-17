@@ -1471,6 +1471,7 @@
         "tabs": {
           "overview": "Overview",
           "documents": "Documents",
+          "payments": "Payments",
           "meetings": "Meetings",
           "tickets": "Tickets",
           "activity": "Activity"
@@ -1499,6 +1500,46 @@
           "deleteBody": "\"{name}\" will be permanently deleted. This cannot be undone.",
           "deleteCancel": "Cancel",
           "deleteConfirm": "Yes, remove it"
+        },
+        "payments": {
+          "heading": "Case payments",
+          "subheading": "Generate payment links and record manual payments for this case.",
+          "createLink": "Create payment link",
+          "recordManual": "Record manual payment",
+          "linkFormTitle": "Generate consultation link",
+          "linkFormHint": "Choose a consultation type. We'll create a Stripe checkout link you can send to the client.",
+          "consultationTypeLabel": "Consultation type",
+          "consultationType": {
+            "gapClosing": "Gap Closing",
+            "admission": "Admission Consultation ($50)",
+            "liaConsultation": "LIA Consultation ($150)",
+            "accountOpening": "Account Opening ($200)",
+            "freeSession": "Free Session"
+          },
+          "generate": "Generate",
+          "linkReady": "Link ready. Send this to the client.",
+          "copy": "Copy",
+          "copied": "Copied",
+          "done": "Done",
+          "freeSessionInfo": "This is a free session — no payment link needed.",
+          "linkFailed": "Couldn't create the payment link. Please try again.",
+          "manualFormTitle": "Record a manual payment",
+          "manualFormHint": "Use this for cash, wire transfer, or any payment received outside Stripe.",
+          "amountLabel": "Amount (e.g. 50.00)",
+          "currencyLabel": "Currency",
+          "noteLabel": "Note (optional)",
+          "notePlaceholder": "e.g. Wire received 17 Jun, ref ABC-123",
+          "cancel": "Cancel",
+          "save": "Save payment",
+          "manualSaved": "Manual payment recorded.",
+          "manualFailed": "Couldn't record that payment. Please try again.",
+          "manualInvalidAmount": "Please enter an amount greater than zero.",
+          "loading": "Loading payments…",
+          "empty": "No payments recorded for this case yet.",
+          "loadFailed": "Couldn't load payments. Please refresh.",
+          "badgeManual": "Manual",
+          "badgeStripe": "Stripe",
+          "close": "Close"
         }
       }
     },

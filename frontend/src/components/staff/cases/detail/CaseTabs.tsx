@@ -8,11 +8,12 @@ import { useTranslations } from 'next-intl';
 // tab state. The Documents / Meetings / Tickets tabs render a
 // placeholder until later PRs build them out.
 
-export type CaseTab = 'overview' | 'documents' | 'meetings' | 'tickets' | 'activity';
+export type CaseTab = 'overview' | 'documents' | 'payments' | 'meetings' | 'tickets' | 'activity';
 
 const TABS: { id: CaseTab; labelKey: string }[] = [
   { id: 'overview',  labelKey: 'staff.cases.detail.tabs.overview' },
   { id: 'documents', labelKey: 'staff.cases.detail.tabs.documents' },
+  { id: 'payments',  labelKey: 'staff.cases.detail.tabs.payments' },
   { id: 'meetings',  labelKey: 'staff.cases.detail.tabs.meetings' },
   { id: 'tickets',   labelKey: 'staff.cases.detail.tabs.tickets' },
   { id: 'activity',  labelKey: 'staff.cases.detail.tabs.activity' },
