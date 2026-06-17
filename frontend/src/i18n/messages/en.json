@@ -1627,5 +1627,48 @@
       "executionFailed": "Execution failed: {error}",
       "executed": "Approved and executed."
     }
+  },
+  "portal": {
+    "headerTitle": "My Case",
+    "signOut": "Sign out",
+    "case": {
+      "heading": "Your case",
+      "stage": {
+        "ADMISSION": "We're preparing your application",
+        "VISA": "Your visa application is in progress",
+        "INZ_SUBMITTED": "Your application has been submitted to Immigration New Zealand",
+        "COMPLETED": "Your case is complete",
+        "WITHDRAWN": "This case is closed",
+        "fallback": "Your case is in progress"
+      },
+      "team": {
+        "heading": "Your team",
+        "lia": "Immigration Adviser",
+        "consultant": "Admission Specialist",
+        "support": "Support",
+        "finance": "Finance"
+      },
+      "inz": {
+        "heading": "Your INZ reference",
+        "submittedOn": "Submitted {date}"
+      },
+      "documents": {
+        "cardHeading": "Your documents",
+        "cardBody": "Upload required documents and view what you've shared with us."
+      },
+      "noCase": {
+        "title": "Your case isn't set up yet",
+        "body": "Your adviser will be in touch as soon as your case is ready. We'll send you an email when it's started."
+      },
+      "loadError": {
+        "title": "We're having trouble loading your case",
+        "body": "Please refresh the page in a minute. If this keeps happening, contact support."
+      }
+    },
+    "documents": {
+      "heading": "Your documents",
+      "subheading": "Upload the documents we ask for, and see what we've received.",
+      "backLink": "Back to my case"
+    }
   }
 }

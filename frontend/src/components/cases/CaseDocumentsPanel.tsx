@@ -5,14 +5,19 @@ import { useTranslations } from 'next-intl';
 import { ExternalLink, FileText, Loader2, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { useStaff } from '@/contexts/StaffContext';
 
-// Documents step 4 — case-detail Documents tab (staff).
+// Shared Case Documents panel — used by the staff case-detail page AND
+// the client portal /portal/case/documents page. Both surfaces use the
+// SAME backend endpoints under /cases/:caseId/documents.
 //
-// Replaces the placeholder for the Documents tab. Talks to the R2-backed
-// /cases/:caseId/documents endpoints (steps 1-3): request-upload → raw
-// PUT to the R2 presigned URL → confirm. View → presigned GET in a new
-// tab. Delete → backend cascades to R2 then row, gated server-side.
+// Talks to the R2-backed flow (Documents steps 1-3): request-upload →
+// raw PUT to the R2 presigned URL → confirm. View → presigned GET in a
+// new tab. Delete → backend cascades to R2 then row, gated server-side.
+//
+// `canDelete` controls whether the Remove button + confirmation dialog
+// render. Staff pass true; clients pass false (the backend ALSO refuses
+// client deletes via the access helper, but hiding the button avoids
+// surfacing a useless 403).
 //
 // Note on the R2 PUT: it must NOT go through the `api` helper, which
 // injects our JWT + Content-Type: application/json. Cloudflare expects
@@ -63,9 +68,14 @@ function formatDate(iso: string): string {
   }
 }
 
-export function CaseDocumentsPanel({ caseId }: { caseId: string }) {
+export function CaseDocumentsPanel({
+  caseId,
+  canDelete,
+}: {
+  caseId:    string;
+  canDelete: boolean;
+}) {
   const t = useTranslations();
-  const { me } = useStaff();
   const [docs, setDocs] = useState<DocumentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState<{ name: string } | null>(null);
@@ -255,7 +265,7 @@ export function CaseDocumentsPanel({ caseId }: { caseId: string }) {
                   <ExternalLink size={14} />
                   {t('staff.cases.detail.documents.view')}
                 </button>
-                {me && (
+                {canDelete && (
                   <button
                     type="button"
                     onClick={() => setDeleting(d)}
