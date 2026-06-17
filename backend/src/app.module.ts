@@ -31,6 +31,7 @@ import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
 import { LegalNotesModule } from './legal-notes/legal-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
+import { DocumentsModule } from './documents/documents.module';
 import { InzDataModule } from './inz-data/inz-data.module';
 import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
 import { ImmigrationOfficersModule } from './immigration-officers/immigration-officers.module';
@@ -90,6 +91,9 @@ import { WixIntegrationModule } from './wix-integration/wix-integration.module';
     // PR-LIA-5: unified LIA view of client-uploaded documents on a
     // CRM Case, with download + internal-only review verdicts.
     CaseDocumentsModule,
+    // Documents step 3: R2-backed case attachments (separate from
+    // PR-LIA-5's read-side overlay above). Presigned uploads/downloads.
+    DocumentsModule,
     // PR-LIA-6: consolidated read-only INZ application data viewer.
     InzDataModule,
     // PR-LIA-9: daily 09:00 NZ cron + dashboard endpoint for visa
