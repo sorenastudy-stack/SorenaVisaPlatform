@@ -8,6 +8,7 @@ import { CaseAssignmentsPanel } from './CaseAssignmentsPanel';
 import { CaseTabs, type CaseTab } from './CaseTabs';
 import { CaseOverviewTab } from './CaseOverviewTab';
 import { CaseActivityTab } from './CaseActivityTab';
+import { CaseDocumentsPanel } from './CaseDocumentsPanel';
 import { PlaceholderPanel } from '@/components/staff/PlaceholderPanel';
 import type { CaseDetail } from './types';
 
@@ -66,7 +67,7 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
         <div className="pt-5">
           {tab === 'overview'  && <CaseOverviewTab data={data} />}
           {tab === 'activity'  && <CaseActivityTab caseId={data.id} />}
-          {tab === 'documents' && <PlaceholderPanel section={t('staff.cases.detail.tabs.documents')} />}
+          {tab === 'documents' && <CaseDocumentsPanel caseId={data.id} />}
           {tab === 'meetings'  && <PlaceholderPanel section={t('staff.cases.detail.tabs.meetings')} />}
           {tab === 'tickets'   && <PlaceholderPanel section={t('staff.cases.detail.tabs.tickets')} />}
         </div>

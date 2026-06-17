@@ -1477,6 +1477,28 @@
         },
         "activity": {
           "empty": "No activity yet."
+        },
+        "documents": {
+          "heading": "Case documents",
+          "subheading": "Upload, view, and manage attachments for this case.",
+          "uploadButton": "Upload document",
+          "uploading": "Uploading {name}…",
+          "invalidType": "Please choose a PDF, JPG, or PNG file.",
+          "tooLarge": "That file is too large. Please choose one under 15 MB.",
+          "uploaded": "Uploaded ✓",
+          "uploadFailed": "Upload didn't go through. Please try again.",
+          "loadFailed": "Couldn't load documents. Please refresh.",
+          "viewFailed": "Couldn't open the document. Please try again.",
+          "deleted": "Document removed.",
+          "deleteFailed": "Couldn't remove that document. Please try again.",
+          "view": "View",
+          "delete": "Remove",
+          "loading": "Loading documents…",
+          "empty": "No documents uploaded yet.",
+          "deleteTitle": "Remove this document?",
+          "deleteBody": "\"{name}\" will be permanently deleted. This cannot be undone.",
+          "deleteCancel": "Cancel",
+          "deleteConfirm": "Yes, remove it"
         }
       }
     },
