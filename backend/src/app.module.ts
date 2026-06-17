@@ -88,12 +88,20 @@ import { WixIntegrationModule } from './wix-integration/wix-integration.module';
     LegalNotesModule,
     // PR-LIA-4: direct LIA ↔ client messaging on CRM Cases.
     CaseMessagesModule,
-    // PR-LIA-5: unified LIA view of client-uploaded documents on a
-    // CRM Case, with download + internal-only review verdicts.
-    CaseDocumentsModule,
-    // Documents step 3: R2-backed case attachments (separate from
-    // PR-LIA-5's read-side overlay above). Presigned uploads/downloads.
+    // Documents step 3: R2-backed case attachments. Must be registered
+    // BEFORE CaseDocumentsModule because both controllers declare
+    // @Controller('cases') with @Get(':caseId/documents'); Express's
+    // first-match-wins ordering would otherwise route the GET to the
+    // PR-LIA-5 read-side overlay below (legacy admission/application/
+    // visa-supporting tables, no R2-backed Documents) and the new list
+    // endpoint would be unreachable.
     DocumentsModule,
+    // PR-LIA-5: unified LIA view of client-uploaded documents on a
+    // CRM Case, with download + internal-only review verdicts. The
+    // GET :caseId/documents route here is now shadowed by DocumentsModule
+    // above; the other 3 routes (review POST/DELETE, source-specific
+    // download-url) have distinct path segments and remain reachable.
+    CaseDocumentsModule,
     // PR-LIA-6: consolidated read-only INZ application data viewer.
     InzDataModule,
     // PR-LIA-9: daily 09:00 NZ cron + dashboard endpoint for visa
