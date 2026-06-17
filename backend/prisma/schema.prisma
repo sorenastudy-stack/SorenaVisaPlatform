@@ -404,6 +404,8 @@ model User {
   // Support or Finance staff (parallel to liaCases).
   supportCases     Case[]           @relation("CaseSupport")
   financeCases     Case[]           @relation("CaseFinance")
+  // Documents step 2: case attachments this user has uploaded.
+  uploadedDocuments Document[]      @relation("DocumentUploader")
   auditLogs        AuditLog[]
   notesAuditLogs   ManagerNotesLog[]
   leadStatusChanges LeadStatusHistory[]
@@ -1024,6 +1026,9 @@ model Case {
   // PR-LIA-5: LIA's internal-only review verdicts on this case's
   // client-uploaded documents.
   documentReviews       CaseDocumentReview[]
+  // Documents step 2: R2-backed case attachments. Sibling to the
+  // existing review-verdict surface above; uploads land here.
+  documents             Document[]            @relation("CaseDocuments")
   // PR-LIA-8: visa outcome (1:0..1). One row per case ever — issued
   // by the LIA after INZ decides on the submitted application. NULL
   // until the LIA records the outcome via POST /cases/:id/visa/issue
@@ -3732,4 +3737,49 @@ model WixPayment {
   @@index([paymentType, receivedAt])
   @@index([status])
   @@map("wix_payments")
+}
+
+// ─── DOCUMENTS (R2-backed case attachments) ───────────────────────────
+//
+// Documents step 2 — sibling to the existing PR-LIA-5 review surface
+// (AdmissionDocument / ApplicationDocument / VisaSupportingDocument +
+// CaseDocumentReview), NOT a replacement. The bytes live in Cloudflare
+// R2; this row holds the metadata + the opaque object key.
+//
+// Lifecycle: row is created PENDING when the backend issues a
+// presigned upload URL; the browser flips it to UPLOADED on the
+// confirm-upload callback, or to FAILED on abandon. The unique r2Key
+// prevents two rows pointing at the same object.
+//
+// Enum name note: the obvious `DocumentStatus` was already taken by
+// the legacy ApplicationDocument lifecycle (MISSING/UPLOADED/VERIFIED/
+// REJECTED) at line ~277. Renamed here to `DocumentUploadStatus` so
+// the two coexist without altering the legacy enum.
+
+enum DocumentUploadStatus {
+  PENDING
+  UPLOADED
+  FAILED
+}
+
+model Document {
+  id           String               @id @default(cuid())
+  caseId       String
+  uploaderId   String
+  r2Key        String               @unique
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  status       DocumentUploadStatus @default(PENDING)
+  category     String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  case     Case @relation("CaseDocuments",   fields: [caseId],     references: [id], onDelete: Cascade)
+  uploader User @relation("DocumentUploader", fields: [uploaderId], references: [id], onDelete: Restrict)
+
+  @@index([caseId])
+  @@index([uploaderId])
+  @@index([status])
+  @@map("documents")
 }
