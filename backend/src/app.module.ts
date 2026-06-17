@@ -32,6 +32,7 @@ import { LegalNotesModule } from './legal-notes/legal-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
 import { DocumentsModule } from './documents/documents.module';
+import { PortalModule } from './portal/portal.module';
 import { InzDataModule } from './inz-data/inz-data.module';
 import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
 import { ImmigrationOfficersModule } from './immigration-officers/immigration-officers.module';
@@ -88,6 +89,9 @@ import { WixIntegrationModule } from './wix-integration/wix-integration.module';
     LegalNotesModule,
     // PR-LIA-4: direct LIA ↔ client messaging on CRM Cases.
     CaseMessagesModule,
+    // Client portal step 2: client-only /portal/* surface, gated to
+    // roles LEAD + STUDENT. Single endpoint today (GET /portal/me/case).
+    PortalModule,
     // Documents step 3: R2-backed case attachments. Must be registered
     // BEFORE CaseDocumentsModule because both controllers declare
     // @Controller('cases') with @Get(':caseId/documents'); Express's
