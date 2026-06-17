@@ -3,9 +3,17 @@ import { getSession } from '@/lib/auth';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { PortalLayout } from '@/components/portal/PortalLayout';
 
+// Server-component role gate. Only STUDENT may enter /student/*.
+// LEAD users go to /portal/* (different surface — see ROLE_REDIRECT).
+// Staff users are redirected to /unauthorized rather than rendering
+// the student shell and watching every /students/me/* fetch 403.
+// Mirrors the /portal/layout.tsx pattern.
+const STUDENT_ROLES = new Set(['STUDENT']);
+
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect('/login?next=/student');
+  if (!STUDENT_ROLES.has(session.role)) redirect('/unauthorized');
 
   // correction 1: gate "Apply" nav item on case existence
   // GET returns 200 if contact+case exist (regardless of application state)
