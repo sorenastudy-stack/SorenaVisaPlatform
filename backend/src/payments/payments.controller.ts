@@ -8,6 +8,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CreatePaymentLinkDto } from './dto/create-payment-link.dto';
+import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import Stripe from 'stripe';
 
 @Controller('payments')
@@ -27,15 +31,54 @@ export class PaymentsController {
   ) {}
 
   /**
-   * Create a Stripe Payment Link for a consultation
+   * Create a Stripe Payment Link for a consultation.
+   *
+   * Now DTO-validated: leadId must be a non-empty string and
+   * consultationType must be one of the five known keys (see
+   * CONSULTATION_TYPES). The global ValidationPipe rejects malformed
+   * requests with 400 before the service runs — closes the audit
+   * gap noted in the Phase 6 doc.
    */
   @Post('consultation-link')
   @UseGuards(JwtAuthGuard)
-  async createConsultationLink(
-    @Body('leadId') leadId: string,
-    @Body('consultationType') consultationType: string,
+  async createConsultationLink(@Body() dto: CreatePaymentLinkDto) {
+    return this.paymentsService.createConsultationPaymentLink(
+      dto.leadId,
+      dto.consultationType,
+    );
+  }
+
+  /**
+   * List payments tied to a case — both directly (Payment.caseId) and
+   * indirectly through the lead (consultation/subscription rows where
+   * Payment.caseId is NULL but Payment.lead.cases includes this case).
+   * Staff-only.
+   */
+  @Get('case/:caseId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  async listPaymentsForCase(@Param('caseId') caseId: string) {
+    return this.paymentsService.listPaymentsForCase(caseId);
+  }
+
+  /**
+   * Record a manual (cash / wire / cheque) payment on a case. Writes
+   * one Payment row + one AuditLog row in a single transaction. Staff-only.
+   */
+  @Post('case/:caseId/manual')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  async recordManualPayment(
+    @Param('caseId') caseId: string,
+    @Body() dto: RecordManualPaymentDto,
+    @Req() req: any,
   ) {
-    return this.paymentsService.createConsultationPaymentLink(leadId, consultationType);
+    const actor = {
+      id:   req.user?.userId ?? req.user?.id,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    };
+    return this.paymentsService.recordManualPayment(caseId, dto, actor);
   }
 
   /**
