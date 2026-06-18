@@ -13,6 +13,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CreatePaymentLinkDto } from './dto/create-payment-link.dto';
 import { CreateCaseConsultationLinkDto } from './dto/create-case-consultation-link.dto';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
+import { VerifyPaymentDto } from './dto/verify-payment.dto';
+import { RejectPaymentDto } from './dto/reject-payment.dto';
 import Stripe from 'stripe';
 
 @Controller('payments')
@@ -104,6 +106,53 @@ export class PaymentsController {
       role: req.user?.role ?? null,
     };
     return this.paymentsService.recordManualPayment(caseId, dto, actor);
+  }
+
+  /**
+   * Phase 6.5 — finance verification: confirm a payment.
+   *
+   * Roles are intentionally NARROWER than the rest of the staff
+   * Payments tab: confirming a payment as real is a privileged
+   * finance action. SUPPORT / CONSULTANT / LIA can see the row but
+   * not approve it.
+   */
+  @Post(':paymentId/confirm')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'FINANCE')
+  async confirmPayment(
+    @Param('paymentId') paymentId: string,
+    @Body() dto: VerifyPaymentDto,
+    @Req() req: any,
+  ) {
+    const actor = {
+      id:   req.user?.userId ?? req.user?.id,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    };
+    return this.paymentsService.confirmPayment(paymentId, actor, dto.note);
+  }
+
+  /**
+   * Phase 6.5 — finance verification: reject a payment.
+   *
+   * Same narrow role list as confirm. The reason (dto.note) is
+   * REQUIRED at the DTO level AND re-checked in the service so the
+   * audit trail always has a `why`.
+   */
+  @Post(':paymentId/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'FINANCE')
+  async rejectPayment(
+    @Param('paymentId') paymentId: string,
+    @Body() dto: RejectPaymentDto,
+    @Req() req: any,
+  ) {
+    const actor = {
+      id:   req.user?.userId ?? req.user?.id,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    };
+    return this.paymentsService.rejectPayment(paymentId, actor, dto.note);
   }
 
   /**
@@ -235,6 +284,12 @@ export class PaymentsController {
           currency: paymentIntent.currency ?? 'nzd',
           status: 'succeeded',
           metadata: paymentIntent.metadata ?? {},
+          // Phase 6.5 — finance must still sign off on Stripe payments.
+          // Set explicitly (even though PENDING is the column default)
+          // so the intent is obvious to anyone reading this critical
+          // money path and so a future schema-default change doesn't
+          // silently flip this branch's behaviour.
+          verificationStatus: 'PENDING',
         },
       });
     } catch (err: any) {

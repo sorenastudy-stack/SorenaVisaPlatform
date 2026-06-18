@@ -163,6 +163,17 @@ enum PaymentStatus {
   REFUNDED
 }
 
+// Phase 6.5 — finance staff verification state for each Payment row.
+// Distinct from PaymentStatus (which tracks the Stripe/manual outcome):
+// a payment can be Stripe-`succeeded` AND verification-`PENDING` until
+// finance signs off. CONFIRMED = staff approved. REJECTED = staff
+// flagged it (wrong amount, bad receipt, suspected duplicate).
+enum PaymentVerificationStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
 enum TicketStatus {
   OPEN
   AWAITING_CLIENT
@@ -1871,6 +1882,23 @@ model Payment {
   status                String
   metadata              Json?
   createdAt             DateTime @default(now())
+
+  // Phase 6.5 — finance verification workflow.
+  //
+  // verifiedById is a plain nullable String with NO Prisma relation,
+  // following the existing CrmEvent.actorId convention — a relation
+  // would force a back-relation field on the User model, which Phase
+  // 6.5 explicitly avoids.
+  //
+  // receiptDocumentId stays nullable at the DB level even though the
+  // app REQUIRES a receipt for new manual payments: existing Stripe
+  // rows have no receipt, so a NOT NULL column would break them. The
+  // service layer enforces "receipt required when paymentType=manual".
+  verificationStatus PaymentVerificationStatus @default(PENDING)
+  verifiedById       String?
+  verifiedAt         DateTime?
+  verificationNote   String?
+  receiptDocumentId  String?
 
   lead Lead  @relation(fields: [leadId], references: [id])
   case Case? @relation(fields: [caseId], references: [id])

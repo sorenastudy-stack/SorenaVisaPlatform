@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { StripeService } from './stripe.service';
@@ -109,22 +114,55 @@ export class PaymentsService {
       },
       orderBy: { createdAt: 'desc' },
       select: {
-        id:          true,
-        amount:      true,
-        currency:    true,
-        status:      true,
-        paymentType: true,
-        createdAt:   true,
+        id:                 true,
+        amount:             true,
+        currency:           true,
+        status:             true,
+        paymentType:        true,
+        createdAt:          true,
+        // Phase 6.5 — finance verification fields.
+        verificationStatus: true,
+        verifiedById:       true,
+        verifiedAt:         true,
+        verificationNote:   true,
+        receiptDocumentId:  true,
       },
     });
+
+    // Phase 6.5 — batched name resolution for verifiedById.
+    //
+    // We chose plain-String/no-relation for verifiedById (CrmEvent.actorId
+    // convention — see schema comment), so Prisma can't `include` the
+    // verifying user. Instead: collect the distinct verifier ids in this
+    // result set and do ONE findMany to fetch their display names. This
+    // adds at most a single tiny query per case load, and only when at
+    // least one row has actually been verified. The frontend gets
+    // `verifiedByName` ready to render — no second round-trip.
+    const verifierIds = Array.from(
+      new Set(rows.map((r) => r.verifiedById).filter((v): v is string => !!v)),
+    );
+    const verifiers = verifierIds.length
+      ? await this.prisma.user.findMany({
+          where:  { id: { in: verifierIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const nameById = new Map(verifiers.map((u) => [u.id, u.name]));
+
     return rows.map((r) => ({
-      id:          r.id,
-      amount:      r.amount,
-      currency:    r.currency,
-      status:      r.status,
-      paymentType: r.paymentType,
-      createdAt:   r.createdAt,
-      isManual:    r.paymentType === 'manual',
+      id:                 r.id,
+      amount:             r.amount,
+      currency:           r.currency,
+      status:             r.status,
+      paymentType:        r.paymentType,
+      createdAt:          r.createdAt,
+      isManual:           r.paymentType === 'manual',
+      verificationStatus: r.verificationStatus,
+      verifiedById:       r.verifiedById,
+      verifiedByName:     r.verifiedById ? nameById.get(r.verifiedById) ?? null : null,
+      verifiedAt:         r.verifiedAt,
+      verificationNote:   r.verificationNote,
+      receiptDocumentId:  r.receiptDocumentId,
     }));
   }
 
@@ -155,6 +193,28 @@ export class PaymentsService {
       throw new NotFoundException('Case not found');
     }
 
+    // Phase 6.5 — receipt is required. Validate the document exists,
+    // belongs to THIS case (prevents a caller from attaching another
+    // case's document), and has actually been uploaded (status UPLOADED
+    // — not PENDING/FAILED, which represent half-finished upload state).
+    const receipt = await this.prisma.document.findUnique({
+      where:  { id: dto.receiptDocumentId },
+      select: { id: true, caseId: true, status: true },
+    });
+    if (!receipt) {
+      throw new NotFoundException('Receipt document not found');
+    }
+    if (receipt.caseId !== caseId) {
+      throw new BadRequestException(
+        'Receipt document does not belong to this case',
+      );
+    }
+    if (receipt.status !== 'UPLOADED') {
+      throw new BadRequestException(
+        'Receipt upload is not complete — please re-upload before recording the payment',
+      );
+    }
+
     const stripePaymentIntentId = `manual_${randomUUID()}`;
     const currency = (dto.currency ?? 'nzd').toLowerCase();
 
@@ -177,14 +237,22 @@ export class PaymentsService {
           currency,
           status:      'succeeded',
           metadata:    metadata as Prisma.InputJsonValue,
+          // Phase 6.5 — finance verification.
+          // PENDING is the column default; set explicitly so the intent
+          // is unambiguous on this critical money path. receiptDocumentId
+          // is validated above to belong to this case.
+          verificationStatus: 'PENDING',
+          receiptDocumentId:  receipt.id,
         },
         select: {
-          id:          true,
-          amount:      true,
-          currency:    true,
-          status:      true,
-          paymentType: true,
-          createdAt:   true,
+          id:                 true,
+          amount:             true,
+          currency:           true,
+          status:             true,
+          paymentType:        true,
+          createdAt:          true,
+          verificationStatus: true,
+          receiptDocumentId:  true,
         },
       });
 
@@ -200,11 +268,13 @@ export class PaymentsService {
           entityId:   payment.id,
           newValue: {
             caseId,
-            leadId:      c.leadId,
-            paymentType: 'manual',
-            amount:      dto.amount,
+            leadId:             c.leadId,
+            paymentType:        'manual',
+            amount:             dto.amount,
             currency,
-            hasNote:     !!dto.note,
+            hasNote:            !!dto.note,
+            receiptDocumentId:  receipt.id,
+            verificationStatus: 'PENDING',
           } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name,
           actorRoleSnapshot: actor.role,
@@ -215,13 +285,118 @@ export class PaymentsService {
     });
 
     return {
-      id:          created.id,
-      amount:      created.amount,
-      currency:    created.currency,
-      status:      created.status,
-      paymentType: created.paymentType,
-      createdAt:   created.createdAt,
-      isManual:    true,
+      id:                 created.id,
+      amount:             created.amount,
+      currency:           created.currency,
+      status:             created.status,
+      paymentType:        created.paymentType,
+      createdAt:          created.createdAt,
+      isManual:           true,
+      verificationStatus: created.verificationStatus,
+      receiptDocumentId:  created.receiptDocumentId,
     };
+  }
+
+  // ─── Finance verification: confirm + reject ──────────────────────────
+  //
+  // Both transitions are PENDING → CONFIRMED or PENDING → REJECTED. We
+  // refuse to re-verify an already-finalised row (409 Conflict) — a
+  // double-confirm or a confirm-after-reject is a workflow bug, not a
+  // legitimate operation. Audit row written in the same $transaction as
+  // the update.
+
+  async confirmPayment(
+    paymentId: string,
+    actor: PaymentActor,
+    note?: string,
+  ) {
+    return this.transitionVerification(
+      paymentId,
+      'CONFIRMED',
+      actor,
+      note?.trim() || null,
+    );
+  }
+
+  async rejectPayment(
+    paymentId: string,
+    actor: PaymentActor,
+    note: string,
+  ) {
+    const trimmed = (note ?? '').trim();
+    if (!trimmed) {
+      // Defence-in-depth — DTO already requires this, but a
+      // service-level guard means rejectPayment can't ever land a
+      // reason-less rejection (the audit story stays clean even if a
+      // future caller bypasses the DTO).
+      throw new BadRequestException('A rejection reason is required.');
+    }
+    return this.transitionVerification(paymentId, 'REJECTED', actor, trimmed);
+  }
+
+  private async transitionVerification(
+    paymentId: string,
+    next: 'CONFIRMED' | 'REJECTED',
+    actor: PaymentActor,
+    note: string | null,
+  ) {
+    const existing = await this.prisma.payment.findUnique({
+      where:  { id: paymentId },
+      select: { id: true, caseId: true, verificationStatus: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Payment not found');
+    }
+    if (existing.verificationStatus !== 'PENDING') {
+      throw new ConflictException(
+        `Payment is already ${existing.verificationStatus.toLowerCase()} — cannot re-verify`,
+      );
+    }
+
+    const verifiedAt = new Date();
+    const eventType =
+      next === 'CONFIRMED'
+        ? 'PAYMENT_VERIFICATION_CONFIRMED'
+        : 'PAYMENT_VERIFICATION_REJECTED';
+
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.payment.update({
+        where: { id: paymentId },
+        data: {
+          verificationStatus: next,
+          verifiedById:       actor.id,
+          verifiedAt,
+          verificationNote:   note,
+        },
+        select: {
+          id:                 true,
+          verificationStatus: true,
+          verifiedById:       true,
+          verifiedAt:         true,
+          verificationNote:   true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId:     actor.id,
+          action:     'UPDATE',
+          eventType,
+          entityType: 'PAYMENT',
+          entityId:   paymentId,
+          newValue: {
+            paymentId,
+            caseId:         existing.caseId,
+            previousStatus: 'PENDING',
+            newStatus:      next,
+            hasNote:        !!note,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name,
+          actorRoleSnapshot: actor.role,
+        },
+      });
+
+      return row;
+    });
   }
 }
