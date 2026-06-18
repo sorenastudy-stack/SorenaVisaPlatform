@@ -131,12 +131,19 @@ export class StripeService {
     this.assertConfigured();
     const amountCents = Math.round(amountNZD * 100);
 
+    // `stripe.prices.create` accepts an inline `product_data` whose schema is
+    // narrower than the one used by Checkout Sessions: it allows `name`,
+    // `id`, `active`, `metadata`, `statement_descriptor`, `tax_code`,
+    // `unit_label` — but NOT `description`. Passing description here
+    // surfaces "Received unknown parameter: product_data[description]"
+    // from the Stripe SDK. The customer-facing label is the product
+    // `name`, which already renders the friendly type (e.g. "Admission
+    // Consultation") on the hosted Payment Link page.
     const price = await this.stripe.prices.create({
       currency,
       unit_amount: amountCents,
       product_data: {
         name: consultationType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase()),
-        description: 'Sorena Visa Platform Consultation',
       },
     });
 
