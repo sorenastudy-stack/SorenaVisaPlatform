@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -97,6 +98,12 @@ export interface SendClientDigestResult {
   itemCount: number;
 }
 
+export interface DigestActor {
+  id:   string;
+  name: string | null;
+  role: string | null;
+}
+
 @Injectable()
 export class DigestService {
   private readonly logger = new Logger(DigestService.name);
@@ -163,6 +170,56 @@ export class DigestService {
 
     await this.notifications.sendWeeklyDigest(email, subject, html);
     return { sent: true, itemCount: items.length };
+  }
+
+  /**
+   * Manual staff-triggered send. Wraps sendClientDigest, then writes
+   * an audit row recording WHO triggered it, on WHICH case, with what
+   * window, and the outcome. Use this from the staff-only endpoint so
+   * manual sends are traceable distinct from the future cron path
+   * (which will get its own eventType DIGEST_SENT_CRON).
+   *
+   * Audit failure is best-effort: a row write error is logged and
+   * swallowed so a transient `audit_logs` write problem doesn't make
+   * the trigger response misreport the actual send result.
+   */
+  async triggerManualDigest(
+    caseId: string,
+    since:  Date,
+    until:  Date,
+    actor:  DigestActor,
+  ): Promise<SendClientDigestResult> {
+    const result = await this.sendClientDigest(caseId, since, until);
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId:            actor.id,
+          action:            'CREATE',
+          eventType:         'DIGEST_SENT_MANUAL',
+          entityType:        'CASE',
+          entityId:          caseId,
+          newValue: {
+            caseId,
+            sent:      result.sent,
+            reason:    result.reason ?? null,
+            itemCount: result.itemCount,
+            since:     since.toISOString(),
+            until:     until.toISOString(),
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name,
+          actorRoleSnapshot: actor.role,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Audit write failed for DIGEST_SENT_MANUAL on case ${caseId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    return result;
   }
 
   /**

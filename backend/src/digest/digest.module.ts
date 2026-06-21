@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { DigestController } from './digest.controller';
 import { DigestService } from './digest.service';
 
 // Phase 8 — weekly client digest module.
@@ -16,8 +17,9 @@ import { DigestService } from './digest.service';
 //   • NotificationsModule — SMTP transport for sendWeeklyDigest
 
 @Module({
-  imports:   [PrismaModule, CryptoModule, NotificationsModule],
-  providers: [DigestService],
-  exports:   [DigestService],
+  imports:     [PrismaModule, CryptoModule, NotificationsModule],
+  controllers: [DigestController],
+  providers:   [DigestService],
+  exports:     [DigestService],
 })
 export class DigestModule {}

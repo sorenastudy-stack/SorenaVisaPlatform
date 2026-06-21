@@ -846,3 +846,115 @@ describe('DigestService.sendClientDigest', () => {
     // injected dependency throws, sendClientDigest does not eat it.
   });
 });
+
+// ─── triggerManualDigest — manual trigger + audit row ──────────────────
+
+const STAFF_ACTOR_FIXTURE = { id: 'admin-1', name: 'Admin One', role: 'ADMIN' as string | null };
+
+// Extend the prisma mock with auditLog.create so the spec can observe
+// the audit write the triggerManualDigest path makes.
+function makeServiceForTrigger(opts: {
+  sendCaseRow?: { lead: { contact: { email: string | null; fullName: string | null } } | null } | null;
+  caseRow?:     CaseRow | null;
+  audit?:       AuditRow[];
+  auditCreate?: jest.Mock;
+}) {
+  const base = makeService({
+    sendCaseRow: opts.sendCaseRow,
+    caseRow:     opts.caseRow,
+    audit:       opts.audit ?? [],
+  });
+  // Attach auditLog.create — the gather path uses auditLog.findMany
+  // (set up by makeService); the trigger path additionally writes.
+  base.prisma.auditLog.create = opts.auditCreate ?? jest.fn().mockResolvedValue({ id: 'audit-1' });
+  return base;
+}
+
+describe('DigestService.triggerManualDigest', () => {
+
+  it('writes ONE audit row with DIGEST_SENT_MANUAL + actor snapshots + window + outcome (sent=true)', async () => {
+    const auditCreate = jest.fn().mockResolvedValue({ id: 'audit-1' });
+    const { service, notifications } = makeServiceForTrigger({
+      sendCaseRow: { lead: { contact: { email: 'client@example.com', fullName: 'Test Client' } } },
+      caseRow:     CASE_FIXTURE,
+      audit: [{
+        eventType: 'INZ_SUBMITTED',
+        entityType: 'CASE',
+        entityId: CASE_ID,
+        newValue: { inzApplicationNumber: 'INZ-1' },
+        actorRoleSnapshot: 'LIA',
+        createdAt: INSIDE_1,
+      }],
+      auditCreate,
+    });
+    const result = await service.triggerManualDigest(CASE_ID, SINCE, UNTIL, STAFF_ACTOR_FIXTURE);
+
+    expect(result).toEqual({ sent: true, itemCount: 1 });
+    expect(notifications.sendWeeklyDigest).toHaveBeenCalledTimes(1);
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+
+    const audit = auditCreate.mock.calls[0][0].data;
+    expect(audit.userId).toBe('admin-1');
+    expect(audit.action).toBe('CREATE');
+    expect(audit.eventType).toBe('DIGEST_SENT_MANUAL');
+    expect(audit.entityType).toBe('CASE');
+    expect(audit.entityId).toBe(CASE_ID);
+    expect(audit.actorNameSnapshot).toBe('Admin One');
+    expect(audit.actorRoleSnapshot).toBe('ADMIN');
+    expect(audit.newValue).toEqual({
+      caseId:    CASE_ID,
+      sent:      true,
+      reason:    null,
+      itemCount: 1,
+      since:     SINCE.toISOString(),
+      until:     UNTIL.toISOString(),
+    });
+  });
+
+  it('audit row also records skip outcomes (sent=false + reason)', async () => {
+    const auditCreate = jest.fn().mockResolvedValue({ id: 'audit-1' });
+    const { service, notifications } = makeServiceForTrigger({
+      sendCaseRow: { lead: { contact: { email: null, fullName: 'Test' } } },
+      auditCreate,
+    });
+    const result = await service.triggerManualDigest(CASE_ID, SINCE, UNTIL, STAFF_ACTOR_FIXTURE);
+
+    expect(result).toEqual({ sent: false, reason: 'no-email', itemCount: 0 });
+    expect(notifications.sendWeeklyDigest).not.toHaveBeenCalled();
+
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    const newValue = auditCreate.mock.calls[0][0].data.newValue;
+    expect(newValue.sent).toBe(false);
+    expect(newValue.reason).toBe('no-email');
+    expect(newValue.itemCount).toBe(0);
+  });
+
+  it('audit row also records case-not-found skip', async () => {
+    const auditCreate = jest.fn().mockResolvedValue({ id: 'audit-1' });
+    const { service } = makeServiceForTrigger({
+      sendCaseRow: null,
+      auditCreate,
+    });
+    const result = await service.triggerManualDigest('case-missing', SINCE, UNTIL, STAFF_ACTOR_FIXTURE);
+
+    expect(result).toEqual({ sent: false, reason: 'case-not-found', itemCount: 0 });
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    expect(auditCreate.mock.calls[0][0].data.entityId).toBe('case-missing');
+    expect(auditCreate.mock.calls[0][0].data.newValue.reason).toBe('case-not-found');
+  });
+
+  it('audit write failure does NOT break the response (best-effort, swallowed + logged)', async () => {
+    const auditCreate = jest.fn().mockRejectedValue(new Error('audit_logs table missing'));
+    const { service } = makeServiceForTrigger({
+      sendCaseRow: { lead: { contact: { email: 'client@example.com', fullName: 'Test' } } },
+      caseRow:     CASE_FIXTURE,
+      audit:       [],
+      auditCreate,
+    });
+    const result = await service.triggerManualDigest(CASE_ID, SINCE, UNTIL, STAFF_ACTOR_FIXTURE);
+    // Send result still surfaces correctly even though the audit write
+    // failed — the manual trigger response stays truthful.
+    expect(result).toEqual({ sent: true, itemCount: 0 });
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+  });
+});
