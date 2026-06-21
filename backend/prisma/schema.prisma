@@ -1760,6 +1760,15 @@ model AuditLog {
 
   @@index([userId])
   @@index([entityType])
+  // Phase 8 — weekly client digest. The digest gather query filters
+  // by `entityId = ? AND createdAt >= ? AND createdAt < ?` for Pass A
+  // (case-scoped events keyed on caseId) and `entityId IN (small list)
+  // AND createdAt range` for Pass B (PAYMENT / DOCUMENT / VisaMeeting /
+  // VisaSupportTicket events). entityId is highly selective per row
+  // (vs entityType which has a handful of distinct values), so a
+  // composite leading with entityId lets Postgres do an index seek per
+  // id then range-scan createdAt — much narrower than a type-led index.
+  @@index([entityId, createdAt])
   @@map("audit_logs")
 }
 

@@ -33,6 +33,7 @@ import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
 import { DocumentsModule } from './documents/documents.module';
 import { PortalModule } from './portal/portal.module';
+import { DigestModule } from './digest/digest.module';
 import { InzDataModule } from './inz-data/inz-data.module';
 import { VisaExpiryModule } from './visa-expiry/visa-expiry.module';
 import { ImmigrationOfficersModule } from './immigration-officers/immigration-officers.module';
@@ -92,6 +93,9 @@ import { WixIntegrationModule } from './wix-integration/wix-integration.module';
     // Client portal step 2: client-only /portal/* surface, gated to
     // roles LEAD + STUDENT. Single endpoint today (GET /portal/me/case).
     PortalModule,
+    // Phase 8: weekly client digest, data-gathering layer only. No
+    // consumers yet — cron + email composer land in later prompts.
+    DigestModule,
     // Documents step 3: R2-backed case attachments. Must be registered
     // BEFORE CaseDocumentsModule because both controllers declare
     // @Controller('cases') with @Get(':caseId/documents'); Express's
