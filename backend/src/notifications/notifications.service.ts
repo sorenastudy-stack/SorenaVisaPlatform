@@ -416,6 +416,15 @@ export class NotificationsService {
     await this.sendEmail(email, subject, html);
   }
 
+  // Phase 8 — weekly client digest. Thin pass-through: the digest
+  // module owns the HTML composition (template + per-event sentences)
+  // and hands the finished payload here. Routing through the same
+  // private `sendEmail` keeps the SMTP-config-missing fallback and
+  // the per-send success/failure log on the digest path too.
+  async sendWeeklyDigest(email: string, subject: string, html: string): Promise<void> {
+    await this.sendEmail(email, subject, html);
+  }
+
   private async sendEmail(to: string, subject: string, html: string): Promise<void> {
     if (!this.transporter) {
       this.logger.warn(`Email not sent to ${to}: SMTP configuration missing`);

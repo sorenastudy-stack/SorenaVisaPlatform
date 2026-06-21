@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { buildDigestEmail } from './digest.email';
 import type { DigestItem } from './digest.types';
 
 // Phase 8 — weekly client digest, data-gathering layer.
@@ -89,12 +91,79 @@ const STAFF_ROLES = new Set([
 // allow-list) and is therefore already invisible.
 const TICKET_TERMINAL_STATUSES = new Set(['RESOLVED', 'CLOSED']);
 
+export interface SendClientDigestResult {
+  sent:      boolean;
+  reason?:   'case-not-found' | 'no-email';
+  itemCount: number;
+}
+
 @Injectable()
 export class DigestService {
+  private readonly logger = new Logger(DigestService.name);
+
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly crypto: CryptoService,
+    private readonly prisma:        PrismaService,
+    private readonly crypto:        CryptoService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * Compose and send one weekly digest for one case.
+   *
+   * Flow:
+   *   1. Resolve the client's email + display name.
+   *   2. Gather the week's events.
+   *   3. Build the email (populated OR empty-week branch — both render).
+   *   4. Hand off to NotificationsService.sendWeeklyDigest.
+   *
+   * Returns a small result object so the future cron can log per-case
+   * outcomes. NEVER throws on missing case / missing email — those
+   * are normal sweep-time conditions, not errors. The underlying
+   * sendEmail itself swallows SMTP failures (log + return), so a
+   * down SMTP relay can't crash the cron mid-sweep either.
+   */
+  async sendClientDigest(
+    caseId: string,
+    since:  Date,
+    until:  Date,
+  ): Promise<SendClientDigestResult> {
+    const c = await this.prisma.case.findUnique({
+      where:  { id: caseId },
+      select: {
+        lead: {
+          select: {
+            contact: {
+              select: { email: true, fullName: true },
+            },
+          },
+        },
+      },
+    });
+    if (!c) {
+      this.logger.warn(`Digest skipped — case ${caseId} not found`);
+      return { sent: false, reason: 'case-not-found', itemCount: 0 };
+    }
+
+    const email    = c.lead?.contact?.email?.trim() ?? null;
+    const fullName = c.lead?.contact?.fullName ?? null;
+    if (!email) {
+      this.logger.warn(`Digest skipped — case ${caseId} contact has no email`);
+      return { sent: false, reason: 'no-email', itemCount: 0 };
+    }
+
+    const items = await this.gatherClientDigest(caseId, since, until);
+
+    // Portal URL convention matches the rest of NotificationsService:
+    // `${APP_URL}/<path>`, with the same in-code fallback. /portal/case
+    // is the LEAD/STUDENT landing page (Phase 7). The portal layout
+    // bounces unauthenticated visitors to /login?next=/portal/case, so
+    // this single URL works for both signed-in and signed-out states.
+    const portalUrl = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/portal/case`;
+    const { subject, html } = buildDigestEmail(fullName, items, portalUrl);
+
+    await this.notifications.sendWeeklyDigest(email, subject, html);
+    return { sent: true, itemCount: items.length };
+  }
 
   /**
    * Gather digest-worthy events for a single CRM case in [since, until).

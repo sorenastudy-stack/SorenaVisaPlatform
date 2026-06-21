@@ -37,17 +37,37 @@ interface AuditRow {
 
 function makeService(opts: {
   caseRow?:     CaseRow | null;
+  // For sendClientDigest only: the case.findUnique used by gather and
+  // by sendClientDigest read different field sets. If sendCaseRow is
+  // supplied, it overrides on the second call (sendClientDigest first
+  // reads { lead.contact.email/fullName }, then gather reads the
+  // nested userId chain). The mock returns sendCaseRow on the first
+  // call and caseRow on subsequent calls.
+  sendCaseRow?: { lead: { contact: { email: string | null; fullName: string | null } } | null } | null;
   payments?:    PaymentRow[];
   documents?:   DocumentRow[];
   meetings?:    MeetingRow[];
   tickets?:     TicketRow[];
   audit?:       AuditRow[];
-  // map of ticketId → decrypted subject
   ticketSubjects?: Record<string, string>;
 }) {
+  // The sendClientDigest method calls case.findUnique with a different
+  // projection than gatherClientDigest does. When sendCaseRow is set,
+  // the first call returns it (the send-path projection) and any
+  // subsequent calls return caseRow (the gather-path projection).
+  // When sendCaseRow is NOT set, every call returns caseRow — matching
+  // the original gather-only test behaviour.
+  let caseFindCall = 0;
   const prismaMock: any = {
     case: {
-      findUnique: jest.fn().mockResolvedValue(opts.caseRow ?? null),
+      findUnique: jest.fn(async () => {
+        if (opts.sendCaseRow !== undefined && caseFindCall === 0) {
+          caseFindCall++;
+          return opts.sendCaseRow;
+        }
+        caseFindCall++;
+        return opts.caseRow ?? null;
+      }),
     },
     payment: {
       findMany: jest.fn().mockResolvedValue(opts.payments ?? []),
@@ -90,15 +110,17 @@ function makeService(opts: {
 
   const cryptoMock: any = {
     decrypt: jest.fn((buf: Buffer) => {
-      // Mock subject buffers carry the ticket id as a string in the
-      // bytes; the test maps that to a friendly subject via the lookup.
       const id = buf.toString('utf8');
       return opts.ticketSubjects?.[id] ?? '';
     }),
   };
 
-  const service = new DigestService(prismaMock, cryptoMock);
-  return { service, prisma: prismaMock, crypto: cryptoMock };
+  const notificationsMock: any = {
+    sendWeeklyDigest: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const service = new DigestService(prismaMock, cryptoMock, notificationsMock);
+  return { service, prisma: prismaMock, crypto: cryptoMock, notifications: notificationsMock };
 }
 
 const SINCE = new Date('2026-06-15T00:00:00Z');
@@ -709,5 +731,118 @@ describe('DigestService.gatherClientDigest', () => {
     // Meetings + tickets passes were never queried — userId was null.
     expect(prisma.visaMeeting.findMany).not.toHaveBeenCalled();
     expect(prisma.visaSupportTicket.findMany).not.toHaveBeenCalled();
+  });
+});
+
+// ─── sendClientDigest — gather + build + send wiring ────────────────────
+
+describe('DigestService.sendClientDigest', () => {
+
+  it('skips with reason=case-not-found when the case does not exist', async () => {
+    const { service, notifications } = makeService({ sendCaseRow: null });
+    const result = await service.sendClientDigest('case-missing', SINCE, UNTIL);
+    expect(result).toEqual({ sent: false, reason: 'case-not-found', itemCount: 0 });
+    expect(notifications.sendWeeklyDigest).not.toHaveBeenCalled();
+  });
+
+  it('skips with reason=no-email when the contact has no email', async () => {
+    const { service, notifications } = makeService({
+      sendCaseRow: { lead: { contact: { email: null, fullName: 'Test Client' } } },
+    });
+    const result = await service.sendClientDigest(CASE_ID, SINCE, UNTIL);
+    expect(result).toEqual({ sent: false, reason: 'no-email', itemCount: 0 });
+    expect(notifications.sendWeeklyDigest).not.toHaveBeenCalled();
+  });
+
+  it('skips with reason=no-email when the email is empty / whitespace', async () => {
+    const { service, notifications } = makeService({
+      sendCaseRow: { lead: { contact: { email: '   ', fullName: 'Test Client' } } },
+    });
+    const result = await service.sendClientDigest(CASE_ID, SINCE, UNTIL);
+    expect(result).toEqual({ sent: false, reason: 'no-email', itemCount: 0 });
+    expect(notifications.sendWeeklyDigest).not.toHaveBeenCalled();
+  });
+
+  it('sends a populated email and returns { sent: true, itemCount: N }', async () => {
+    const { service, notifications } = makeService({
+      sendCaseRow: { lead: { contact: { email: 'client@example.com', fullName: 'Test Client' } } },
+      // gatherClientDigest's case.findUnique returns this on the second call
+      caseRow:     CASE_FIXTURE,
+      audit: [{
+        eventType: 'INZ_SUBMITTED',
+        entityType: 'CASE',
+        entityId: CASE_ID,
+        newValue: { inzApplicationNumber: 'INZ-WK' },
+        actorRoleSnapshot: 'LIA',
+        createdAt: INSIDE_1,
+      }, {
+        eventType: 'LIA_AUTO_ASSIGNED',
+        entityType: 'CASE',
+        entityId: CASE_ID,
+        newValue: { liaName: 'Mira Adviser' },
+        actorRoleSnapshot: 'SYSTEM',
+        createdAt: INSIDE_2,
+      }],
+    });
+    const result = await service.sendClientDigest(CASE_ID, SINCE, UNTIL);
+    expect(result).toEqual({ sent: true, itemCount: 2 });
+
+    expect(notifications.sendWeeklyDigest).toHaveBeenCalledTimes(1);
+    const [email, subject, html] = notifications.sendWeeklyDigest.mock.calls[0];
+    expect(email).toBe('client@example.com');
+    expect(subject).toBe('Your Sorena weekly update');
+    expect(html).toContain('Hi Test Client,');
+    expect(html).toContain('Your application was lodged with Immigration New Zealand. Reference: INZ-WK.');
+    expect(html).toContain('Mira Adviser is now your immigration adviser.');
+    expect(html).toContain('Log in to your portal');
+    expect(html).toContain('/portal/case');
+  });
+
+  it('sends the empty-week email when nothing happened and still returns { sent: true, itemCount: 0 }', async () => {
+    const { service, notifications } = makeService({
+      sendCaseRow: { lead: { contact: { email: 'client@example.com', fullName: 'Test Client' } } },
+      caseRow:     CASE_FIXTURE,
+      audit:       [],
+    });
+    const result = await service.sendClientDigest(CASE_ID, SINCE, UNTIL);
+    expect(result).toEqual({ sent: true, itemCount: 0 });
+
+    expect(notifications.sendWeeklyDigest).toHaveBeenCalledTimes(1);
+    const [, , html] = notifications.sendWeeklyDigest.mock.calls[0];
+    expect(html).toContain('There were no new updates on your application this week.');
+    expect(html).toContain('Your case is progressing');
+    // Still has the CTA — the empty-week email is NOT a dead end.
+    expect(html).toContain('Log in to your portal');
+    expect(html).toContain('The Sorena Visa Team');
+  });
+
+  it('falls back to "Hi there," when contact.fullName is null', async () => {
+    const { service, notifications } = makeService({
+      sendCaseRow: { lead: { contact: { email: 'anon@example.com', fullName: null } } },
+      caseRow:     CASE_FIXTURE,
+      audit:       [],
+    });
+    const result = await service.sendClientDigest(CASE_ID, SINCE, UNTIL);
+    expect(result.sent).toBe(true);
+
+    const [, , html] = notifications.sendWeeklyDigest.mock.calls[0];
+    expect(html).toContain('Hi there,');
+    expect(html).not.toMatch(/Hi (null|undefined)/i);
+  });
+
+  it('does NOT swallow notifications.sendWeeklyDigest throws (caller can log it)', async () => {
+    const { service, notifications } = makeService({
+      sendCaseRow: { lead: { contact: { email: 'client@example.com', fullName: 'Test' } } },
+      caseRow:     CASE_FIXTURE,
+      audit:       [],
+    });
+    notifications.sendWeeklyDigest.mockRejectedValueOnce(new Error('SMTP down'));
+    await expect(service.sendClientDigest(CASE_ID, SINCE, UNTIL)).rejects.toThrow('SMTP down');
+    // Note: the real NotificationsService.sendEmail wraps nodemailer
+    // in its own try/catch and never throws — so this rejection only
+    // surfaces if a future change makes it throw, OR if the SMTP
+    // config is missing entirely (where the underlying transport
+    // returns silently anyway). The test pins the contract: if the
+    // injected dependency throws, sendClientDigest does not eat it.
   });
 });
