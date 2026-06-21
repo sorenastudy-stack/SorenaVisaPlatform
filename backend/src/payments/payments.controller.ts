@@ -308,12 +308,19 @@ export class PaymentsController {
       // Mark consultation as paid - would need additional logic here
       const consultationType = paymentIntent.metadata.type as 'ADMISSION' | 'LIA';
 
-      // Send consultation confirmation email
+      // Send payment-received email (Phase 6 follow-up — no meeting
+      // date is available at this point in the flow; staff book the
+      // session out-of-band after the payment lands). Pass the
+      // amount, currency, and paymentIntent id so the email carries
+      // a real receipt + a reference the client can quote back to
+      // finance.
       await this.notificationsService.sendConsultationConfirmation(
         lead.contact.email,
         lead.contact.fullName,
-        'ASAP', // Placeholder - in real implementation, get actual date
+        paymentIntent.amount_received,
+        paymentIntent.currency ?? 'nzd',
         consultationType,
+        paymentIntent.id,
       );
 
       // Emit event

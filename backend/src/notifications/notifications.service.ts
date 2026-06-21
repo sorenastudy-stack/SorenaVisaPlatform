@@ -38,20 +38,45 @@ export class NotificationsService {
     await this.sendEmail(email, subject, html);
   }
 
-  async sendConsultationConfirmation(email: string, name: string, date: string, type: string): Promise<void> {
-    const subject = `Consultation Confirmed - ${type} Consultation`;
+  async sendConsultationConfirmation(
+    email: string,
+    name: string,
+    amount: number,
+    currency: string,
+    type: string,
+    paymentRef?: string,
+  ): Promise<void> {
+    // Phase 6 follow-up — payment-receipt rewrite.
+    //
+    // Was: "Your {type} consultation has been confirmed for: {date}",
+    // with `date` hardcoded by the only caller to the literal string
+    // 'ASAP'. Was also rendering broken HTML — the closing </strong>
+    // was split across blank lines.
+    //
+    // Now: honest payment-received copy. We do NOT promise a meeting
+    // time because nothing in this code path actually schedules one;
+    // staff book the session out-of-band after the payment lands.
+    //
+    // Amount is integer cents (matches the Phase 6 Payments tab's
+    // wire format). The display formatter mirrors the staff tab:
+    // `${currency.toUpperCase()} ${(amount / 100).toFixed(2)}` →
+    // e.g. "NZD 50.00". The optional paymentRef gives the client a
+    // paper-trail id to quote back to finance later — Phase 6.5
+    // verification keys off the same id.
+    const subject = `Payment received — ${type} consultation`;
+    const amountDisplay = `${currency.toUpperCase()} ${(amount / 100).toFixed(2)}`;
+    const referenceLine = paymentRef
+      ? `<p style="color: #6b7280; font-size: 0.9em; margin: 4px 0 0;">Reference: ${paymentRef}</p>`
+      : '';
+
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Consultation Confirmed</h2>
+        <h2>Payment received</h2>
         <p>Hi ${name},</p>
-        <p>Your ${type} consultation has been confirmed for:</p>
-        <p><strong>${date}</
-        
-        
-        
-        
-        strong></p>
-        <p>Please join the meeting on time. If you need to reschedule, contact us at least 24 hours in advance.</p>
+        <p>Thanks — we've received your payment for the ${type} consultation.</p>
+        <p>Amount: <strong>${amountDisplay}</strong></p>
+        ${referenceLine}
+        <p>Our team will be in touch shortly to book a time that works for you.</p>
         <p>Best regards,<br>The Sorena Visa Team</p>
       </div>
     `;
