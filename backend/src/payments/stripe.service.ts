@@ -155,9 +155,22 @@ export class StripeService {
     if (caseId) metadata.caseId = caseId;
     if (consultationType === 'ACCOUNT_OPENING') metadata.paymentType = 'ACCOUNT_OPENING';
 
+    // Stripe treats Payment Link metadata and PaymentIntent metadata as
+    // SEPARATE buckets. Top-level `metadata` stays on the Payment Link
+    // object; the PaymentIntent created when a customer pays inherits
+    // NOTHING from it. To make the webhook's `paymentIntent.metadata`
+    // carry `leadId` / `caseId` / `paymentType`, we must ALSO set the
+    // same fields under `payment_intent_data.metadata`. Without this,
+    // `handlePaymentSucceeded` hits `if (!paymentIntent.metadata?.leadId)
+    // return;` and silently no-ops — the webhook 200s, no Payment row
+    // is written, no Payment appears on the case. We keep top-level
+    // metadata too so the link stays searchable in the Stripe Dashboard.
     const paymentLink = await this.stripe.paymentLinks.create({
       line_items: [{ price: price.id, quantity: 1 }],
       metadata,
+      payment_intent_data: {
+        metadata,
+      },
       after_completion: {
         type: 'redirect',
         redirect: {
