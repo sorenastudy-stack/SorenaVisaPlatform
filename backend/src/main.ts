@@ -32,6 +32,17 @@ async function sweepPendingUploads() {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['error', 'warn', 'log'],
+    // Stripe webhook signature verification needs the EXACT raw request
+    // bytes — the moment Express's JSON body parser runs, the buffer
+    // is consumed and `stripe.webhooks.constructEvent` throws "No
+    // webhook payload was provided." This flag tells Nest's built-in
+    // body parser to ALSO stash the raw Buffer on `req.rawBody` (the
+    // parsed JSON is still available to `@Body()` on every other
+    // route — this does NOT disable parsing, it just preserves the
+    // raw bytes alongside). The payments controller's webhook handler
+    // reads `req.rawBody` via the `RawBodyRequest<...>` request type.
+    // Without this option, that field is always undefined.
+    rawBody: true,
   });
 
   // Trust the first proxy hop (Railway's edge). Without this, Express
