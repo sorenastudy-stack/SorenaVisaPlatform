@@ -40,10 +40,10 @@ export default function PaymentSuccessPage() {
           You can close this window any time.
         </p>
         <a
-          href="/"
+          href="/portal"
           className="text-sm text-sorena-navy/70 hover:text-sorena-navy underline"
         >
-          Return to Sorena Visa home
+          Go to my portal
         </a>
       </div>
     </div>
