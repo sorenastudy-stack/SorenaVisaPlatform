@@ -12,6 +12,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CreatePaymentLinkDto } from './dto/create-payment-link.dto';
 import { CreateCaseConsultationLinkDto } from './dto/create-case-consultation-link.dto';
+import { CreateCaseCustomLinkDto } from './dto/create-case-custom-link.dto';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { RejectPaymentDto } from './dto/reject-payment.dto';
@@ -72,6 +73,28 @@ export class PaymentsController {
     return this.paymentsService.createConsultationLinkForCase(
       caseId,
       dto.consultationType,
+    );
+  }
+
+  /**
+   * Case-keyed CUSTOM-amount payment link — staff Payments tab,
+   * sibling of consultation-link. Same role list, same case-keyed
+   * URL shape, same metadata propagation behavior (the staff UI
+   * needs an arbitrary-amount link for one-off invoices). The amount
+   * is integer cents on the wire — the frontend converts the
+   * dollar-typed input via EPSILON-safe Math.round before sending.
+   */
+  @Post('case/:caseId/custom-link')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  async createCaseCustomLink(
+    @Param('caseId') caseId: string,
+    @Body() dto: CreateCaseCustomLinkDto,
+  ) {
+    return this.paymentsService.createCustomLinkForCase(
+      caseId,
+      dto.amount,
+      (dto.currency ?? 'nzd').toLowerCase(),
     );
   }
 

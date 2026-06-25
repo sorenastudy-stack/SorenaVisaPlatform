@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Banknote, Check, ClipboardCopy, CreditCard, FileText, Link2, Loader2,
-  ShieldCheck, ShieldAlert, ShieldQuestion, ThumbsDown, ThumbsUp, X,
+  ShieldCheck, ShieldAlert, ShieldQuestion, ThumbsDown, ThumbsUp, Wallet, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
@@ -61,6 +61,12 @@ interface ConsultationLinkResult {
   consultationType: string;
 }
 
+interface CustomLinkResult {
+  url:      string;
+  amount:   number;   // integer cents (so the success state can re-display
+  currency: string;   // the formatted amount via the same formatAmount helper)
+}
+
 const CONSULTATION_TYPE_OPTIONS = [
   { value: 'GAP_CLOSING',            labelKey: 'gapClosing' },
   { value: 'ADMISSION_CONSULTATION', labelKey: 'admission' },
@@ -106,6 +112,18 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
   const [linkError,      setLinkError]      = useState<string | null>(null);
   const [linkResult,     setLinkResult]     = useState<ConsultationLinkResult | null>(null);
   const [linkCopied,     setLinkCopied]     = useState(false);
+
+  // Custom-amount link form — parallel sibling of the consultation-link
+  // form above. Same shape (open/inputs/submitting/error/result/copied),
+  // different inputs (raw dollar amount string + 3-letter currency) and
+  // a different backend endpoint.
+  const [customOpen,       setCustomOpen]       = useState(false);
+  const [customAmount,     setCustomAmount]     = useState('');
+  const [customCurrency,   setCustomCurrency]   = useState('NZD');
+  const [customSubmitting, setCustomSubmitting] = useState(false);
+  const [customError,      setCustomError]      = useState<string | null>(null);
+  const [customResult,     setCustomResult]     = useState<CustomLinkResult | null>(null);
+  const [customCopied,     setCustomCopied]     = useState(false);
 
   // Manual-payment form
   const [manualOpen,       setManualOpen]       = useState(false);
@@ -181,6 +199,82 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
       await navigator.clipboard.writeText(linkResult.url);
       setLinkCopied(true);
       window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // older browsers / blocked clipboard — URL field is still selectable
+    }
+  };
+
+  // ─── Custom-amount link form helpers ──────────────────────────────────
+  //
+  // Mirrors the consultation-link flow but converts the staff-typed
+  // dollar amount to integer cents before sending. The EPSILON nudge
+  // handles the IEEE-754 quirk where e.g. 1.005 * 100 evaluates to
+  // 100.4999… (same idiom the manual-payment form uses).
+  //
+  // Caps mirror the backend DTO: 1 ≤ amountCents ≤ 1,000,000 (=
+  // NZD 10,000.00). The frontend rejects out-of-range before any
+  // network call to keep the staff feedback inline + fast; the DTO
+  // is the authoritative cap.
+
+  const resetCustomForm = () => {
+    setCustomAmount('');
+    setCustomCurrency('NZD');
+    setCustomError(null);
+    setCustomResult(null);
+    setCustomCopied(false);
+  };
+
+  const closeCustomForm = () => {
+    setCustomOpen(false);
+    resetCustomForm();
+  };
+
+  const handleCreateCustom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomError(null);
+    setCustomResult(null);
+    setCustomCopied(false);
+
+    const amountFloat = Number.parseFloat(customAmount);
+    if (!Number.isFinite(amountFloat) || amountFloat <= 0) {
+      setCustomError(t('staff.cases.detail.payments.manualInvalidAmount'));
+      return;
+    }
+    const amountCents = Math.round((amountFloat + Number.EPSILON) * 100);
+    if (!Number.isInteger(amountCents) || amountCents <= 0) {
+      setCustomError(t('staff.cases.detail.payments.manualInvalidAmount'));
+      return;
+    }
+    if (amountCents > 1_000_000) {
+      setCustomError(t('staff.cases.detail.payments.customAmountTooLarge'));
+      return;
+    }
+
+    setCustomSubmitting(true);
+    try {
+      const result = await api.post<CustomLinkResult>(
+        `/payments/case/${caseId}/custom-link`,
+        {
+          amount:   amountCents,
+          currency: customCurrency.toLowerCase(),
+        },
+      );
+      setCustomResult(result);
+    } catch (err) {
+      setCustomError(
+        err instanceof Error ? err.message : t('staff.cases.detail.payments.customLinkFailed'),
+      );
+    } finally {
+      setCustomSubmitting(false);
+    }
+  };
+
+  const handleCopyCustom = async () => {
+    if (!customResult?.url) return;
+    try {
+      await navigator.clipboard.writeText(customResult.url);
+      setCustomCopied(true);
+      window.setTimeout(() => setCustomCopied(false), 2000);
     } catch {
       // older browsers / blocked clipboard — URL field is still selectable
     }
@@ -366,11 +460,18 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
   // ─── Header button state ─────────────────────────────────────────────
 
   const openLinkForm = () => {
+    closeCustomForm();
     closeManualForm();
     setLinkOpen(true);
   };
+  const openCustomForm = () => {
+    closeLinkForm();
+    closeManualForm();
+    setCustomOpen(true);
+  };
   const openManualForm = () => {
     closeLinkForm();
+    closeCustomForm();
     setManualOpen(true);
   };
 
@@ -396,6 +497,14 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
           >
             <Link2 size={16} />
             {t('staff.cases.detail.payments.createLink')}
+          </button>
+          <button
+            type="button"
+            onClick={customOpen ? closeCustomForm : openCustomForm}
+            className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-[#1e3a5f] text-white text-sm font-semibold hover:bg-[#162d4a] transition-colors min-h-[48px]"
+          >
+            <Wallet size={16} />
+            {t('staff.cases.detail.payments.createCustomLink')}
           </button>
           <button
             type="button"
@@ -523,6 +632,134 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
               <button
                 type="button"
                 onClick={closeLinkForm}
+                className="text-sm text-[#1e3a5f] font-medium hover:underline"
+              >
+                {t('staff.cases.detail.payments.done')}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Inline custom-amount link form */}
+      {customOpen && (
+        <div className="rounded-xl border border-gray-200 bg-[#faf8f3] p-4 mb-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1e3a5f]">
+                {t('staff.cases.detail.payments.customLinkFormTitle')}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {t('staff.cases.detail.payments.customLinkFormHint')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeCustomForm}
+              className="text-gray-400 hover:text-gray-700"
+              aria-label={t('staff.cases.detail.payments.close')}
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {!customResult && (
+            <form onSubmit={handleCreateCustom} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="custom-link-amount"
+                    className="block text-xs font-medium text-gray-700 mb-1"
+                  >
+                    {t('staff.cases.detail.payments.amountLabel')}
+                  </label>
+                  <input
+                    id="custom-link-amount"
+                    type="text"
+                    inputMode="decimal"
+                    value={customAmount}
+                    onChange={(e) => setCustomAmount(e.target.value)}
+                    placeholder="50.00"
+                    disabled={customSubmitting}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60 min-h-[48px]"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="custom-link-currency"
+                    className="block text-xs font-medium text-gray-700 mb-1"
+                  >
+                    {t('staff.cases.detail.payments.currencyLabel')}
+                  </label>
+                  <input
+                    id="custom-link-currency"
+                    type="text"
+                    value={customCurrency}
+                    onChange={(e) => setCustomCurrency(e.target.value.toUpperCase().slice(0, 3))}
+                    maxLength={3}
+                    disabled={customSubmitting}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 uppercase focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60 min-h-[48px]"
+                  />
+                </div>
+              </div>
+
+              {customError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {customError}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeCustomForm}
+                  disabled={customSubmitting}
+                  className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 min-h-[40px]"
+                >
+                  {t('staff.cases.detail.payments.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={customSubmitting}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1e3a5f] text-white text-sm font-semibold hover:bg-[#162d4a] disabled:opacity-60 min-h-[40px]"
+                >
+                  {customSubmitting && <Loader2 size={14} className="animate-spin" />}
+                  {t('staff.cases.detail.payments.generate')}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {customResult && (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-700">
+                {t('staff.cases.detail.payments.linkReady')}{' '}
+                <span className="font-semibold">
+                  {formatAmount(customResult.amount, customResult.currency)}
+                </span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={customResult.url}
+                  onFocus={(e) => e.target.select()}
+                  className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-700 font-mono min-h-[48px]"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyCustom}
+                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#c9a961] text-white text-sm font-semibold hover:bg-[#b8985a] transition-colors min-h-[48px]"
+                >
+                  {customCopied ? <Check size={14} /> : <ClipboardCopy size={14} />}
+                  {customCopied
+                    ? t('staff.cases.detail.payments.copied')
+                    : t('staff.cases.detail.payments.copy')}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={closeCustomForm}
                 className="text-sm text-[#1e3a5f] font-medium hover:underline"
               >
                 {t('staff.cases.detail.payments.done')}

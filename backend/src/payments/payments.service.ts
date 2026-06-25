@@ -92,6 +92,44 @@ export class PaymentsService {
     );
   }
 
+  // ─── Case-keyed custom-amount payment link ─────────────────────────────
+  //
+  // Parallel sibling of createConsultationLinkForCase, for when staff need
+  // to invoice an arbitrary amount that isn't one of the fixed
+  // consultation prices. Resolves leadId from caseId, then delegates to
+  // StripeService.createCustomAmountPaymentLink which uses inline
+  // line_items[].price_data instead of stripe.prices.create.
+  //
+  // The metadata propagation (top-level + payment_intent_data) is handled
+  // identically to the consultation path so the webhook records the
+  // resulting Payment row against this caseId.
+  async createCustomLinkForCase(
+    caseId:      string,
+    amountCents: number,
+    currency:    string = 'nzd',
+  ) {
+    const c = await this.prisma.case.findUnique({
+      where:  { id: caseId },
+      select: { leadId: true },
+    });
+    if (!c) {
+      throw new NotFoundException('Case not found');
+    }
+
+    const paymentLink = await this.stripeService.createCustomAmountPaymentLink(
+      c.leadId,
+      caseId,
+      amountCents,
+      currency,
+    );
+
+    return {
+      url:      paymentLink.url,
+      amount:   amountCents,
+      currency,
+    };
+  }
+
   // ─── List payments for a case ────────────────────────────────────────
   //
   // Payment.caseId is nullable: only ACCOUNT_OPENING charges set it

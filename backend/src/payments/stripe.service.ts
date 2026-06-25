@@ -183,6 +183,64 @@ export class StripeService {
   }
 
   /**
+   * Create a Stripe Payment Link for a CUSTOM amount on a case.
+   *
+   * Distinct from createConsultationPaymentLink in two ways:
+   *   1. Inline `line_items[].price_data` — no `prices.create` call.
+   *      Each custom-amount link is bespoke; persisting a Stripe Price
+   *      per send would just clutter the dashboard.
+   *   2. No `consultationType` discriminator on metadata — this isn't a
+   *      consultation, just a generic case-attached service payment.
+   *      `paymentType` is also deliberately omitted to mirror the
+   *      existing non-ACCOUNT_OPENING consultation flow.
+   *
+   * Same metadata propagation pattern as f751833 (the consultation
+   * flow fix): top-level `metadata` AND `payment_intent_data.metadata`
+   * both carry `{ leadId, caseId }` so the webhook handler reads them
+   * off `paymentIntent.metadata` and records the resulting Payment row
+   * against the correct case. Same after_completion redirect.
+   *
+   * Product name on the hosted Stripe page reads "Sorena Visa – Service
+   * Payment" (per the staff-spec for this flow) — the customer doesn't
+   * see the consultation-type-style label because there isn't one.
+   */
+  async createCustomAmountPaymentLink(
+    leadId:      string,
+    caseId:      string,
+    amountCents: number,
+    currency:    string = 'nzd',
+  ) {
+    this.assertConfigured();
+
+    const metadata: Record<string, string> = { leadId, caseId };
+
+    const paymentLink = await this.stripe.paymentLinks.create({
+      line_items: [{
+        price_data: {
+          currency,
+          unit_amount: amountCents,
+          product_data: {
+            name: 'Sorena Visa – Service Payment',
+          },
+        },
+        quantity: 1,
+      }],
+      metadata,
+      payment_intent_data: {
+        metadata,
+      },
+      after_completion: {
+        type: 'redirect',
+        redirect: {
+          url: `${process.env.FRONTEND_URL || 'https://sorenastudy.com'}/payment/success`,
+        },
+      },
+    });
+
+    return paymentLink;
+  }
+
+  /**
    * Construct and verify webhook event
    */
   constructWebhookEvent(payload: Buffer, signature: string) {

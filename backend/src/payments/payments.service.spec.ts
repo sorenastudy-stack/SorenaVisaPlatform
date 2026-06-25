@@ -549,6 +549,83 @@ describe('PaymentsService.createConsultationLinkForCase', () => {
   });
 });
 
+// ─── createCustomLinkForCase ────────────────────────────────────────────
+//
+// Parallel to createConsultationLinkForCase but for arbitrary amounts.
+// Same case→leadId resolution; delegates to a DIFFERENT stripe method
+// (createCustomAmountPaymentLink — inline price_data instead of a
+// pre-created Stripe Price).
+
+describe('PaymentsService.createCustomLinkForCase', () => {
+  it('resolves leadId from caseId and delegates to stripe.createCustomAmountPaymentLink with the right args', async () => {
+    const { service, stripe, caseFindUnique } = makeService({
+      caseRow: { id: 'case-99', leadId: 'lead-from-case' },
+    });
+    // Extend the stripe mock with the new method — makeService only
+    // wires createConsultationPaymentLink by default.
+    stripe.createCustomAmountPaymentLink = jest.fn().mockResolvedValue({
+      url: 'https://buy.stripe.com/test_custom_link',
+    });
+
+    const result = await service.createCustomLinkForCase(
+      'case-99',
+      7500,        // $75.00 NZD in integer cents
+      'nzd',
+    );
+
+    // Case lookup uses the right id + selects only leadId.
+    expect(caseFindUnique).toHaveBeenCalledWith({
+      where:  { id: 'case-99' },
+      select: { leadId: true },
+    });
+
+    // Stripe was called with (leadId, caseId, amountCents, currency).
+    expect(stripe.createCustomAmountPaymentLink).toHaveBeenCalledTimes(1);
+    expect(stripe.createCustomAmountPaymentLink).toHaveBeenCalledWith(
+      'lead-from-case',
+      'case-99',
+      7500,
+      'nzd',
+    );
+
+    // Returned shape includes the resolved URL + the amount/currency
+    // the caller passed in (so the frontend can echo them on success).
+    expect(result).toEqual({
+      url:      'https://buy.stripe.com/test_custom_link',
+      amount:   7500,
+      currency: 'nzd',
+    });
+  });
+
+  it('throws NotFoundException when the case does not exist (no stripe call)', async () => {
+    const { service, stripe } = makeService({ caseRow: null });
+    stripe.createCustomAmountPaymentLink = jest.fn();
+
+    await expect(
+      service.createCustomLinkForCase('case-missing', 5000),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(stripe.createCustomAmountPaymentLink).not.toHaveBeenCalled();
+  });
+
+  it('defaults currency to "nzd" when the caller omits it', async () => {
+    const { service, stripe } = makeService({
+      caseRow: { id: 'case-1', leadId: 'lead-1' },
+    });
+    stripe.createCustomAmountPaymentLink = jest.fn().mockResolvedValue({
+      url: 'https://buy.stripe.com/test_default_currency',
+    });
+
+    await service.createCustomLinkForCase('case-1', 5000);
+
+    expect(stripe.createCustomAmountPaymentLink).toHaveBeenCalledWith(
+      'lead-1',
+      'case-1',
+      5000,
+      'nzd',
+    );
+  });
+});
+
 // ─── confirmPayment ─────────────────────────────────────────────────────
 
 describe('PaymentsService.confirmPayment', () => {
