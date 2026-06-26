@@ -1,5 +1,25 @@
 # DNS Inventory & Email Migration Plan
 
+## ✅ MIGRATION STATUS: NAMESERVERS SWITCHED TO CLOUDFLARE — LIVE & VERIFIED (26 Jun 2026)
+
+The DNS migration from Wix nameservers to Cloudflare is COMPLETE and verified working.
+
+**What was done:**
+- Created a free Cloudflare account (login: sorenastudy@gmail.com) and added sorenavisa.com.
+- Rebuilt all DNS records in Cloudflare (website A records → Wix, www → Wix CDN, app → Railway, MX/SPF/DKIM/DMARC for email, all cPanel/webmail subdomains). All website/app/email records set to "DNS only" (grey cloud) — NOT proxied — because the site is Wix-hosted and the backend is Railway.
+- At the registrar, replaced nameservers ns12/ns13.wixdns.net with the Cloudflare nameservers: eloise.ns.cloudflare.com and rick.ns.cloudflare.com.
+- Cloudflare confirmed the domain is Active. SSL/TLS encryption mode is "Full".
+
+**Verified working after the switch:**
+- Website (sorenavisa.com and www) loads. ✅
+- Team email on @sorenavisa.com mailboxes sends AND receives in both directions (tested admission@ ↔ Gmail). ✅ MX/SPF/DKIM/DMARC all functioning.
+
+**Known follow-ups still pending:**
+- app.sorenavisa.com (Railway backend): CNAME verifies green; the _railway-verify.app TXT was still propagating at time of writing (Railway auto-rechecks). ALSO: the Railway custom-domain target port was corrected from 8080 → 3000 to match the running app. Confirm app.sorenavisa.com loads once Railway shows the domain verified.
+- Resend (transactional email sending) NOT yet set up — this is the next task. SPF in Cloudflare must be EXTENDED (add Resend's include:, do not replace the existing SPF) and Resend's DKIM/verification records added in Cloudflare before EMAIL_FROM is switched to noreply@sorenavisa.com and the platform email code is pointed at Resend.
+
+**Registrar note:** the registrar's local "DNS Settings" box still shows old Wix records (A → 23.236.62.147, CNAME → www144.wixdns.net). These are now DEAD/ignored — Cloudflare is authoritative. Leave them alone.
+
 _Inventory captured: 25 Jun 2026. Status: inventory complete, no DNS changes made yet._
 
 ## Goal
