@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Prisma, VisaExpiryReminderRecipient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 
 // PR-LIA-9 — Visa expiry reminder sweep.
 //
@@ -46,7 +46,7 @@ export class VisaExpiryService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   // ─── Cron entrypoint ───────────────────────────────────────────────────
@@ -313,7 +313,7 @@ export class VisaExpiryService {
         return { recordedUserIds: [], allSucceeded: false, errorMessage: 'no-lia-on-case' };
       }
       const ok = await this.safeSend(() =>
-        this.notifications.sendVisaExpiryReminderToLia(
+        this.mail.sendVisaExpiryReminderToLia(
           liaEmail,
           liaName ?? 'there',
           clientName,
@@ -337,7 +337,7 @@ export class VisaExpiryService {
         return { recordedUserIds: [], allSucceeded: false, errorMessage: 'no-client-email' };
       }
       const ok = await this.safeSend(() =>
-        this.notifications.sendVisaExpiryReminderToClient(
+        this.mail.sendVisaExpiryReminderToClient(
           clientEmail,
           clientName,
           visaEnd,
@@ -360,7 +360,7 @@ export class VisaExpiryService {
     const succeeded: string[] = [];
     for (const o of owners) {
       const ok = await this.safeSend(() =>
-        this.notifications.sendVisaExpiryReminderToOwner(
+        this.mail.sendVisaExpiryReminderToOwner(
           o.email,
           o.name,
           clientName,

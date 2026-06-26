@@ -157,26 +157,60 @@ export function newLiaAssignmentBody(liaName: string, caseId: string, clientName
   `;
 }
 
-export function liaAssignmentReleasedBody(liaName: string, caseId: string): string {
+// EMAIL-MIGRATION (NotificationsService → MailService): the `clientName`
+// arg is optional. When provided, the email names the client; otherwise
+// it falls back to the generic "another LIA" copy MailService shipped
+// with. Preserves the older Resend behaviour AND the NotificationsService
+// behaviour at the same time.
+export function liaAssignmentReleasedBody(
+  liaName:    string,
+  caseId:     string,
+  clientName?: string,
+): string {
+  const subject = clientName ? `<strong>${esc(clientName)}</strong>'s case` : 'The case';
   return `
     <p>Hi ${esc(liaName)},</p>
-    <p>The case <code style="font-family:Menlo,Consolas,monospace;font-size:13px;color:${NAVY};">${esc(caseId.slice(0, 8))}</code> has been reassigned to another LIA. You no longer need to action it.</p>
+    <p>${subject} <code style="font-family:Menlo,Consolas,monospace;font-size:13px;color:${NAVY};">${esc(caseId.slice(0, 8))}</code> has been reassigned to another LIA. You no longer need to action it.</p>
   `;
 }
 
-export function inzSubmittedToClientBody(name: string, link: string): string {
+// EMAIL-MIGRATION: optional `inzApplicationNumber`. The Phase LIA-7 INZ
+// submission flow already passes one through — porting it here so the
+// reference is visible in-email (matches the old NotificationsService
+// copy and helps clients who quote the number on calls).
+export function inzSubmittedToClientBody(
+  name:                  string,
+  link:                  string,
+  inzApplicationNumber?: string,
+): string {
+  const refLine = inzApplicationNumber
+    ? `<p>Your INZ reference number is <strong>${esc(inzApplicationNumber)}</strong>.</p>`
+    : '';
   return `
     <p>Hi ${esc(name)},</p>
     <p>Good news — your visa application has been lodged with <strong>Immigration New Zealand</strong>.</p>
+    ${refLine}
     <p>INZ will process your application from here. We'll let you know the moment there's any news, or if they need anything additional from you. In the meantime there's nothing you need to do.</p>
     ${primaryButton('View your case', link)}
   `;
 }
 
-export function visaIssuedToClientBody(name: string, link: string): string {
+// EMAIL-MIGRATION: optional visa validity dates (start/end). The Phase
+// LIA-8 visa-issued flow already passes them through — porting the
+// validity-period line so clients see the dates inline.
+export function visaIssuedToClientBody(
+  name:           string,
+  link:           string,
+  visaStartDate?: string | null,
+  visaEndDate?:   string | null,
+): string {
+  const validityLine = visaStartDate && visaEndDate
+    ? `<p>Your visa is valid from <strong>${esc(visaStartDate)}</strong> to <strong>${esc(visaEndDate)}</strong>.</p>`
+    : '';
   return `
     <p>Hi ${esc(name)},</p>
     <p><strong>Congratulations — your visa has been issued!</strong></p>
+    ${validityLine}
     <p>Immigration New Zealand has approved your application. Your case advisor will share the visa document with you separately and walk you through the next steps for travel and arrival.</p>
     ${primaryButton('Open your case', link)}
     <p>We're delighted to have helped you reach this milestone, and we're here for everything that comes next.</p>
@@ -244,5 +278,30 @@ export function ticketReplyNotificationBody(clientName: string, link: string): s
     <p>You have a new reply on your support ticket.</p>
     <p>For security, the reply itself stays inside your portal. Open the ticket to read and respond:</p>
     ${primaryButton('View your ticket', link)}
+  `;
+}
+
+// EMAIL-MIGRATION (NotificationsService → MailService): payment receipt
+// emailed when Stripe reports payment_intent.succeeded for a consultation
+// charge. Ported verbatim from notifications.service.ts:41-85 (the
+// post-bugfix "Payment received" copy — NOT the older broken
+// "Consultation Confirmed for ASAP" version). Amount is integer cents
+// from the Stripe PaymentIntent (`amount_received`), formatted via the
+// same convention the staff Payments tab uses ("NZD 50.00").
+export function consultationConfirmationBody(
+  name:           string,
+  amountDisplay:  string,
+  type:           string,
+  paymentRef?:    string,
+): string {
+  const refLine = paymentRef
+    ? `<p style="color:${MUTED};font-size:13px;margin-top:4px;">Reference: <code style="font-family:Menlo,Consolas,monospace;font-size:13px;">${esc(paymentRef)}</code></p>`
+    : '';
+  return `
+    <p>Hi ${esc(name)},</p>
+    <p>Thanks — we've received your payment for the <strong>${esc(type)}</strong> consultation.</p>
+    <p>Amount: <strong>${esc(amountDisplay)}</strong></p>
+    ${refLine}
+    <p>Our team will be in touch shortly to book a time that works for you.</p>
   `;
 }

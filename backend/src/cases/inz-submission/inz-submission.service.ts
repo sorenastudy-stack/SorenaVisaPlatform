@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
-import { NotificationsService } from '../../notifications/notifications.service';
+import { MailService } from '../../mail/mail.service';
 import {
   EditInzSubmissionDto,
   RevertInzSubmissionDto,
@@ -54,7 +54,7 @@ export class InzSubmissionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
-    private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   // ─── Submit ────────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ export class InzSubmissionService {
     const clientEmail = updated.lead?.contact?.email ?? null;
     const clientName = updated.lead?.contact?.fullName ?? null;
     if (clientEmail) {
-      this.notifications
+      this.mail
         .sendInzSubmittedToClient(
           clientEmail,
           clientName ?? 'there',

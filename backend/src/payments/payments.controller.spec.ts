@@ -23,7 +23,7 @@ import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EventsService } from '../events/events.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import {
   seedFixture,
@@ -62,7 +62,7 @@ describe('PaymentsController.handlePaymentSucceeded (PR-LIA-AUTO-ASSIGN Phase 7)
     // notifications stub so we don't try to send real email.
     const liaAssignments = new LiaAssignmentService(
       prisma as unknown as PrismaService,
-      notificationsStub as unknown as NotificationsService,
+      notificationsStub as unknown as MailService,
     );
 
     const moduleRef = await Test.createTestingModule({
@@ -74,7 +74,7 @@ describe('PaymentsController.handlePaymentSucceeded (PR-LIA-AUTO-ASSIGN Phase 7)
         { provide: StripeService,         useValue: {} /* handler never touches Stripe SDK */ },
         { provide: PaymentsService,       useValue: {} /* unused on this path */ },
         { provide: SubscriptionsService,  useValue: subscriptionsStub },
-        { provide: NotificationsService,  useValue: notificationsStub },
+        { provide: MailService,  useValue: notificationsStub },
       ],
     }).compile();
 

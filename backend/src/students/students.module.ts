@@ -10,13 +10,13 @@ import { TicketsModule } from './tickets/tickets.module';
 import { MeetingsModule } from './meetings/meetings.module';
 import { ChatbotModule } from './chatbot/chatbot.module';
 import { PrismaModule } from '../prisma/prisma.module';
-import { EmailModule } from '../email/email.module';
+import { MailModule } from '../mail/mail.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
 
 @Module({
   imports: [
     PrismaModule,
-    EmailModule,
+    MailModule,
     CryptoModule,
     DashboardModule,
     TicketsModule,

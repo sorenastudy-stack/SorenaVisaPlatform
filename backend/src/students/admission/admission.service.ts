@@ -8,7 +8,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
-import { EmailService } from '../../email/email.service';
+import { MailService } from '../../mail/mail.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { encryptPiiFields, decryptPiiFields } from './admission-encryption.util';
@@ -357,7 +357,7 @@ function validateRequiredFields(application: any, role: string): string[] {
 export class AdmissionService {
   constructor(
     private prisma: PrismaService,
-    private emailService: EmailService,
+    private mail: MailService,
     private crypto: CryptoService,
   ) {}
 
@@ -1215,7 +1215,7 @@ export class AdmissionService {
 
     // Post-commit side effects — failures are non-fatal
     try {
-      await this.emailService.sendEmail({
+      await this.mail.sendEmail({
         to: contact.email,
         subject: 'Your Sorena application has been submitted',
         html: `<p>Hi ${contact.fullName},</p>
@@ -1234,7 +1234,7 @@ export class AdmissionService {
           select: { id: true, email: true, name: true },
         });
         if (owner) {
-          await this.emailService.sendEmail({
+          await this.mail.sendEmail({
             to: owner.email,
             subject: `New application submitted: ${contact.fullName}`,
             html: `<p>Hi ${owner.name},</p>

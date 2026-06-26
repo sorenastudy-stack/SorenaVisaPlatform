@@ -18,6 +18,7 @@ import {
   visaExpiryReminderToClientBody,
   visaExpiryReminderToOwnerBody,
   ticketReplyNotificationBody,
+  consultationConfirmationBody,
 } from './mail.templates';
 
 // PR-EMAIL-1 — Unified Resend-based email service.
@@ -146,30 +147,37 @@ export class MailService implements OnModuleInit {
     });
   }
 
+  // EMAIL-MIGRATION: optional `clientName` matches what the LIA-assignment
+  // service has been passing through NotificationsService all along.
   async sendLiaAssignmentReleased(
-    to: string,
-    liaName: string,
-    caseId: string,
+    to:          string,
+    liaName:     string,
+    caseId:      string,
+    clientName?: string,
   ): Promise<void> {
+    const subject = clientName ? `Case reassigned: ${clientName}` : 'Case reassigned';
     await this.send({
       to,
-      subject: 'Case reassigned',
-      html: wrapHtml(liaAssignmentReleasedBody(liaName, caseId), {
+      subject,
+      html: wrapHtml(liaAssignmentReleasedBody(liaName, caseId, clientName), {
         heading: 'Case reassigned',
       }),
     });
   }
 
+  // EMAIL-MIGRATION: optional `inzApplicationNumber` — the Phase LIA-7
+  // submission service already passes one through to its old transport.
   async sendInzSubmittedToClient(
-    to: string,
-    name: string,
-    caseId: string,
+    to:                    string,
+    name:                  string,
+    caseId:                string,
+    inzApplicationNumber?: string,
   ): Promise<void> {
     const link = `${this.frontendUrl}/student/case`;
     await this.send({
       to,
       subject: 'Your visa application has been submitted to Immigration NZ',
-      html: wrapHtml(inzSubmittedToClientBody(name, link), {
+      html: wrapHtml(inzSubmittedToClientBody(name, link, inzApplicationNumber), {
         heading: 'Submitted to Immigration New Zealand',
       }),
     });
@@ -178,18 +186,31 @@ export class MailService implements OnModuleInit {
     void caseId;
   }
 
+  // EMAIL-MIGRATION: optional visa validity dates passed through from
+  // the Phase LIA-8 visa.service.ts visa-issued path. Accepts either
+  // Date or pre-formatted ISO date string — visa.service.ts has Date
+  // objects in scope from the DTO. We format to YYYY-MM-DD here so
+  // the template body stays string-only.
   async sendVisaIssuedToClient(
-    to: string,
-    name: string,
-    caseId: string,
+    to:             string,
+    name:           string,
+    caseId:         string,
+    visaStartDate?: Date | string | null,
+    visaEndDate?:   Date | string | null,
   ): Promise<void> {
     const link = `${this.frontendUrl}/student/case`;
+    const formatDate = (d: Date | string | null | undefined): string | null => {
+      if (!d) return null;
+      if (d instanceof Date) return d.toISOString().slice(0, 10);
+      return d;
+    };
     await this.send({
       to,
       subject: 'Your visa has been issued',
-      html: wrapHtml(visaIssuedToClientBody(name, link), {
-        heading: 'Your visa is approved',
-      }),
+      html: wrapHtml(
+        visaIssuedToClientBody(name, link, formatDate(visaStartDate), formatDate(visaEndDate)),
+        { heading: 'Your visa is approved' },
+      ),
     });
     void caseId;
   }
@@ -270,6 +291,78 @@ export class MailService implements OnModuleInit {
         { heading: 'Renewal opportunity' },
       ),
     });
+  }
+
+  // EMAIL-MIGRATION (NotificationsService → MailService) — payment
+  // receipt sent when Stripe reports payment_intent.succeeded for a
+  // consultation. Ported from the post-bugfix
+  // NotificationsService.sendConsultationConfirmation
+  // (subject + body match exactly; only the transport changes).
+  //
+  // Amount is integer cents; we format it the same way the staff
+  // Payments tab does — "NZD 50.00" — so receipts and the tab agree.
+  async sendConsultationConfirmation(
+    to:          string,
+    name:        string,
+    amount:      number,
+    currency:    string,
+    type:        string,
+    paymentRef?: string,
+  ): Promise<void> {
+    const amountDisplay = `${currency.toUpperCase()} ${(amount / 100).toFixed(2)}`;
+    await this.send({
+      to,
+      subject: `Payment received — ${type} consultation`,
+      html: wrapHtml(
+        consultationConfirmationBody(name, amountDisplay, type, paymentRef),
+        { heading: 'Payment received' },
+      ),
+    });
+  }
+
+  // EMAIL-MIGRATION: thin pass-through used by the Friday client digest
+  // (digest.service.ts). The digest module owns its own HTML composition
+  // — render per-event sentences, build the populated/empty branch — so
+  // this method takes a finished subject+html. Mirrors the same shape
+  // NotificationsService.sendWeeklyDigest had so the digest call site
+  // is a one-line swap.
+  //
+  // We do NOT swallow Resend failures here even though the rest of
+  // MailService.send does — the digest layer wants to know whether the
+  // send succeeded so its `{ sent }` result is truthful. Calls
+  // `client.emails.send` directly rather than `this.send`, mirroring the
+  // pattern the old NotificationsService.sendWeeklyDigest established.
+  async sendWeeklyDigest(to: string, subject: string, html: string): Promise<void> {
+    if (!this.enabled || !this.client) {
+      this.logger.warn(`Digest email not sent to ${to}: Resend not configured`);
+      throw new Error('Resend is not configured');
+    }
+    try {
+      const res = await this.client.emails.send({
+        from: this.from,
+        to,
+        subject,
+        html,
+      });
+      if (res.error) {
+        this.logger.error(`Resend digest send failed to=${to}: ${res.error.message}`);
+        throw new Error(res.error.message);
+      }
+      this.logger.log(`Digest email sent to=${to} id=${res.data?.id ?? '?'}`);
+    } catch (err: any) {
+      this.logger.error(`Resend digest exception to=${to}: ${err?.message ?? err}`);
+      throw err;
+    }
+  }
+
+  // EMAIL-MIGRATION: generic public sendEmail for callers that build
+  // their own subject + HTML (the admission flow does this — see
+  // students/admission/admission.service.ts). Same signature as
+  // EmailService.sendEmail, so call sites need only a field-rename.
+  // Routes through the standard `send` path so the [MAIL MOCK] fallback
+  // and the failure-swallow contract are preserved.
+  async sendEmail(args: { to: string; subject: string; html: string }): Promise<void> {
+    await this.send(args);
   }
 
   // PR-SUPPORT-1 follow-up — notification only. Body of the reply

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { MailModule } from '../mail/mail.module';
 import { DigestController } from './digest.controller';
 import { DigestService } from './digest.service';
 
@@ -14,10 +14,10 @@ import { DigestService } from './digest.service';
 // Imports:
 //   • PrismaModule — gather queries + case→contact resolution
 //   • CryptoModule — VisaSupportTicket subject decryption
-//   • NotificationsModule — SMTP transport for sendWeeklyDigest
+//   • MailModule — SMTP transport for sendWeeklyDigest
 
 @Module({
-  imports:     [PrismaModule, CryptoModule, NotificationsModule],
+  imports:     [PrismaModule, CryptoModule, MailModule],
   controllers: [DigestController],
   providers:   [DigestService],
   exports:     [DigestService],

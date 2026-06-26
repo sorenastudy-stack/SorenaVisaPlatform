@@ -24,7 +24,7 @@ import {
   TEMPLATE_ROLE_DIRECTOR,
 } from './docusign.service';
 import { CreateContractDto } from './dto/create-contract.dto';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { docusignToContractStatus } from './contract-status';
 import { stampLiaIdentity } from './engagement-letter-stamp';
@@ -69,7 +69,7 @@ export class ContractsService {
   constructor(
     private prisma: PrismaService,
     private docuSignService: DocuSignService,
-    private notificationsService: NotificationsService,
+    private mail: MailService,
     // PR-LIA-2 — auto-assign an LIA the moment the client signs.
     // The injection is one-directional (Contracts -> Cases-side
     // LiaAssignmentService); no circular import risk.

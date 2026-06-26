@@ -10,7 +10,7 @@ import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadStatusDto, isValidTransition } from './dto/update-lead-status.dto';
 import { UpdateLeadNotesDto } from './dto/update-lead-notes.dto';
@@ -22,7 +22,7 @@ export class LeadsService {
   constructor(
     private prisma: PrismaService,
     private eventsService: EventsService,
-    private notificationsService: NotificationsService,
+    private mail: MailService,
   ) {}
 
   async create(dto: CreateLeadDto) {
@@ -205,7 +205,7 @@ export class LeadsService {
 
     // Send welcome email — failure is non-fatal
     try {
-      await this.notificationsService.sendWelcomeEmail(
+      await this.mail.sendWelcomeEmail(
         freshContact.email,
         freshContact.fullName,
       );

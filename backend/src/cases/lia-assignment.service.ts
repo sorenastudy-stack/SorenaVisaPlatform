@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 
 // PR-LIA-2 — LIA auto-assignment + manual reassignment.
 //
@@ -70,7 +70,7 @@ export class LiaAssignmentService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   // ─── Roster ────────────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ export class LiaAssignmentService {
     });
 
     // Best-effort email — fire-and-forget; never blocks the caller.
-    this.notifications
+    this.mail
       .sendNewLiaAssignment(
         pick.email,
         pick.name,
@@ -265,14 +265,14 @@ export class LiaAssignmentService {
     const clientName = existing.lead?.contact?.fullName ?? 'A client';
 
     if (newLia) {
-      this.notifications
+      this.mail
         .sendNewLiaAssignment(newLia.email, newLia.name, caseId, clientName)
         .catch((err) =>
           this.logger.error(`Failed to email new LIA on reassignment: ${err?.message ?? err}`),
         );
     }
     if (existing.lia && existing.lia.id !== newLia?.id) {
-      this.notifications
+      this.mail
         .sendLiaAssignmentReleased(
           existing.lia.email,
           existing.lia.name,

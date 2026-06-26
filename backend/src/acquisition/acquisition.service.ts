@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { EmailService } from '../email/email.service';
+import { MailService } from '../mail/mail.service';
 import { CreateVisitorDto } from './dto/create-visitor.dto';
 import { CreateEventDto } from './dto/create-event.dto';
 import { CreateLeadDto } from './dto/create-lead.dto';
@@ -20,7 +20,7 @@ export class AcquisitionService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly emailService: EmailService,
+    private readonly mail: MailService,
   ) {}
 
   async createVisitor(dto: CreateVisitorDto, ipAddress: string) {
@@ -188,7 +188,7 @@ export class AcquisitionService {
       const email = normalizedEmail;
       const name = dto.fullName.trim();
       setImmediate(() => {
-        this.emailService
+        this.mail
           .sendVerificationEmail(email, name, token)
           .catch((err) => this.logger.error('Email send failed', err?.message));
       });

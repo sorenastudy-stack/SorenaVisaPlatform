@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
-import { NotificationsService } from '../../notifications/notifications.service';
+import { MailService } from '../../mail/mail.service';
 import {
   DeclineVisaDto,
   EditVisaDto,
@@ -59,7 +59,7 @@ export class VisaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
-    private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   // ─── Issue (APPROVED) ──────────────────────────────────────────────────
@@ -211,7 +211,7 @@ export class VisaService {
     const clientEmail = existing.lead?.contact?.email ?? null;
     const clientName = existing.lead?.contact?.fullName ?? 'there';
     if (clientEmail) {
-      this.notifications
+      this.mail
         .sendVisaIssuedToClient(
           clientEmail,
           clientName,
@@ -330,7 +330,7 @@ export class VisaService {
     const clientEmail = existing.lead?.contact?.email ?? null;
     const clientName = existing.lead?.contact?.fullName ?? 'there';
     if (clientEmail) {
-      this.notifications
+      this.mail
         .sendVisaDeclinedToClient(clientEmail, clientName, caseId)
         .catch((err) =>
           this.logger.error(

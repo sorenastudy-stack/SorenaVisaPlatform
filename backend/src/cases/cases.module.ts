@@ -14,10 +14,10 @@ import { CaseFileNoteController } from './case-file-note/case-file-note.controll
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
 import { CryptoModule } from '../common/crypto/crypto.module';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [PrismaModule, CryptoModule, NotificationsModule],
+  imports: [PrismaModule, CryptoModule, MailModule],
   controllers: [
     CasesController,
     LiaRosterController,

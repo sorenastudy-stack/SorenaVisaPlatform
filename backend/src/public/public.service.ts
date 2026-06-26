@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { HighRiskEngineService } from '../scoring/high-risk-engine.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 import { LeadStatus, RecommendedRoute, ReviewStatus } from '@prisma/client';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class PublicService {
     private eventsService: EventsService,
     private scoringService: ScoringService,
     private riskEngine: HighRiskEngineService,
-    private notificationsService: NotificationsService,
+    private mail: MailService,
   ) {}
 
   async submitIntakeForm(data: {
@@ -207,7 +207,7 @@ export class PublicService {
     });
 
     // Send welcome email asynchronously (don't block on failure)
-    this.notificationsService.sendWelcomeEmail(data.email, data.fullName).catch(error => {
+    this.mail.sendWelcomeEmail(data.email, data.fullName).catch(error => {
       console.error('[INTAKE] Welcome email failed, but proceeding:', error);
     });
 

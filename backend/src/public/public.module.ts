@@ -5,10 +5,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { HighRiskEngineService } from '../scoring/high-risk-engine.service';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule],
+  imports: [PrismaModule, MailModule],
   controllers: [PublicController],
   providers: [PublicService, EventsService, ScoringService, HighRiskEngineService],
 })

@@ -5,7 +5,7 @@ import { PaymentsService } from './payments.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EventsService } from '../events/events.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -28,7 +28,7 @@ export class PaymentsController {
     private subscriptionsService: SubscriptionsService,
     private eventsService: EventsService,
     private prisma: PrismaService,
-    private notificationsService: NotificationsService,
+    private mail: MailService,
     // PR-LIA-AUTO-ASSIGN — auto-assign an LIA when the $200 ACCOUNT_OPENING
     // charge succeeds and the matching case has a signed contract.
     private liaAssignments: LiaAssignmentService,
@@ -337,7 +337,7 @@ export class PaymentsController {
       // amount, currency, and paymentIntent id so the email carries
       // a real receipt + a reference the client can quote back to
       // finance.
-      await this.notificationsService.sendConsultationConfirmation(
+      await this.mail.sendConsultationConfirmation(
         lead.contact.email,
         lead.contact.fullName,
         paymentIntent.amount_received,

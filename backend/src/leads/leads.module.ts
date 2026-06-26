@@ -3,7 +3,7 @@ import { LeadsService } from './leads.service';
 import { LeadsController } from './leads.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { MailModule } from '../mail/mail.module';
 import { StaffLeadsService } from './staff-leads.service';
 import { StaffLeadsController } from './staff-leads.controller';
 
@@ -14,7 +14,7 @@ import { StaffLeadsController } from './staff-leads.controller';
 // preserved untouched.
 
 @Module({
-  imports: [PrismaModule, NotificationsModule],
+  imports: [PrismaModule, MailModule],
   controllers: [LeadsController, StaffLeadsController],
   providers: [LeadsService, EventsService, StaffLeadsService],
   exports: [LeadsService, StaffLeadsService],
