@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
 import { buildDigestEmail } from './digest.email';
 import type { DigestItem } from './digest.types';
 
@@ -111,7 +111,7 @@ export class DigestService {
   constructor(
     private readonly prisma:        PrismaService,
     private readonly crypto:        CryptoService,
-    private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   /**
@@ -168,7 +168,7 @@ export class DigestService {
     const portalUrl = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/portal/case`;
     const { subject, html } = buildDigestEmail(fullName, items, portalUrl);
 
-    await this.notifications.sendWeeklyDigest(email, subject, html);
+    await this.mail.sendWeeklyDigest(email, subject, html);
     return { sent: true, itemCount: items.length };
   }
 
