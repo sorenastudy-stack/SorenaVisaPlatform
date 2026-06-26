@@ -45,9 +45,12 @@ export function wrapHtml(bodyHtml: string, opts: WrapOpts = {}): string {
             <td style="background:${NAVY};padding:24px 32px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
-                  <td>
+                  <td align="left" valign="middle" style="vertical-align:middle;">
                     <div style="color:#FFFFFF;font-size:18px;font-weight:800;letter-spacing:0.5px;">Sorena Visa</div>
                     <div style="color:${GOLD};font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;">Education &amp; Immigration</div>
+                  </td>
+                  <td align="right" valign="middle" width="40" style="vertical-align:middle;width:40px;">
+                    <img src="https://app.sorenavisa.com/sorena_logo_white.png" alt="Sorena Visa" width="40" height="40" border="0" style="display:block;border:0;outline:none;text-decoration:none;height:40px;width:40px;" />
                   </td>
                 </tr>
               </table>
