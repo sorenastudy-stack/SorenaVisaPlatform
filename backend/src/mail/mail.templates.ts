@@ -50,7 +50,7 @@ export function wrapHtml(bodyHtml: string, opts: WrapOpts = {}): string {
                     <div style="color:${GOLD};font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;">Education &amp; Immigration</div>
                   </td>
                   <td align="right" valign="middle" width="40" style="vertical-align:middle;width:40px;">
-                    <img src="https://app.sorenavisa.com/sorena_logo_white.png" alt="Sorena Visa" width="40" height="40" border="0" style="display:block;border:0;outline:none;text-decoration:none;height:40px;width:40px;" />
+                    <img src="https://sorena-visa-platform-aawd.vercel.app/sorena_logo_white.png" alt="Sorena Visa" width="140" height="140" border="0" style="display:block;border:0;outline:none;text-decoration:none;height:140px;width:140px;" />
                   </td>
                 </tr>
               </table>
