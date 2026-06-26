@@ -281,27 +281,27 @@ export function ticketReplyNotificationBody(clientName: string, link: string): s
   `;
 }
 
-// EMAIL-MIGRATION (NotificationsService → MailService): payment receipt
-// emailed when Stripe reports payment_intent.succeeded for a consultation
-// charge. Ported verbatim from notifications.service.ts:41-85 (the
-// post-bugfix "Payment received" copy — NOT the older broken
-// "Consultation Confirmed for ASAP" version). Amount is integer cents
-// from the Stripe PaymentIntent (`amount_received`), formatted via the
-// same convention the staff Payments tab uses ("NZD 50.00").
+// PR-PAYMENTS-RECEIPT — generic payment receipt. Rendered when Stripe
+// reports payment_intent.succeeded for any consultation-flow charge
+// (case-keyed consultation links, custom-amount links — anything the
+// webhook routes through the receipt branch). Copy is intentionally
+// type-agnostic so it reads correctly for a $50 ADMISSION consultation,
+// a $200 ACCOUNT_OPENING, a custom $300 deposit, or a document fee.
+// Amount is integer cents from `paymentIntent.amount_received`,
+// formatted the same way the staff Payments tab does ("NZD 50.00").
 export function consultationConfirmationBody(
-  name:           string,
-  amountDisplay:  string,
-  type:           string,
-  paymentRef?:    string,
+  name:          string,
+  amountDisplay: string,
+  paymentRef?:   string,
 ): string {
   const refLine = paymentRef
     ? `<p style="color:${MUTED};font-size:13px;margin-top:4px;">Reference: <code style="font-family:Menlo,Consolas,monospace;font-size:13px;">${esc(paymentRef)}</code></p>`
     : '';
   return `
     <p>Hi ${esc(name)},</p>
-    <p>Thanks — we've received your payment for the <strong>${esc(type)}</strong> consultation.</p>
+    <p>Thanks — we've received your payment.</p>
     <p>Amount: <strong>${esc(amountDisplay)}</strong></p>
     ${refLine}
-    <p>Our team will be in touch shortly to book a time that works for you.</p>
+    <p>Our team will be in touch shortly.</p>
   `;
 }

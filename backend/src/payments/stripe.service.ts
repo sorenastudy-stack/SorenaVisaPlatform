@@ -153,7 +153,18 @@ export class StripeService {
     // branches into the new auto-assign path.
     const metadata: Record<string, string> = { leadId, consultationType };
     if (caseId) metadata.caseId = caseId;
-    if (consultationType === 'ACCOUNT_OPENING') metadata.paymentType = 'ACCOUNT_OPENING';
+    if (consultationType === 'ACCOUNT_OPENING') {
+      metadata.paymentType = 'ACCOUNT_OPENING';
+    } else {
+      // PR-PAYMENTS-RECEIPT — non-ACCOUNT_OPENING consultation links now
+      // carry the discriminator the webhook reads to route into the
+      // payment-received-email branch. Before this, only the legacy
+      // /consultation/checkout Checkout Session set paymentType =
+      // 'consultation'; the real, in-use Payment Links left it
+      // undefined and fell through to the subscription branch.
+      metadata.paymentType = 'consultation';
+      metadata.type = consultationType;
+    }
 
     // Stripe treats Payment Link metadata and PaymentIntent metadata as
     // SEPARATE buckets. Top-level `metadata` stays on the Payment Link
@@ -212,7 +223,17 @@ export class StripeService {
   ) {
     this.assertConfigured();
 
-    const metadata: Record<string, string> = { leadId, caseId };
+    // PR-PAYMENTS-RECEIPT — tag the custom-amount link with the same
+    // discriminator the consultation flow uses, so the webhook handler
+    // routes a successful payment into the receipt-email branch. The
+    // generic 'CUSTOM_AMOUNT' type is recorded but no longer surfaces
+    // in the client email (the receipt copy is type-agnostic).
+    const metadata: Record<string, string> = {
+      leadId,
+      caseId,
+      paymentType: 'consultation',
+      type:        'CUSTOM_AMOUNT',
+    };
 
     const paymentLink = await this.stripe.paymentLinks.create({
       line_items: [{

@@ -309,12 +309,19 @@ export class MailService implements OnModuleInit {
     type:        string,
     paymentRef?: string,
   ): Promise<void> {
+    // PR-PAYMENTS-RECEIPT — generic receipt copy: subject + body no
+    // longer name the payment "type". The `type` arg stays on the
+    // signature so the webhook caller (and the future staff Payments
+    // tab) don't change shape, but it's not shown to the client. The
+    // receipt now reads correctly for ANY paymentType === 'consultation'
+    // success — consultations, deposits, custom-amount charges.
+    void type;
     const amountDisplay = `${currency.toUpperCase()} ${(amount / 100).toFixed(2)}`;
     await this.send({
       to,
-      subject: `Payment received — ${type} consultation`,
+      subject: 'Payment received — Sorena Visa',
       html: wrapHtml(
-        consultationConfirmationBody(name, amountDisplay, type, paymentRef),
+        consultationConfirmationBody(name, amountDisplay, paymentRef),
         { heading: 'Payment received' },
       ),
     });
