@@ -158,7 +158,7 @@ function ClientMessageBubble({ message }: { message: CaseMessage }) {
       <div
         className={`max-w-[85%] rounded-xl p-4 ${
           isOwn
-            ? 'bg-[#E8B923]/10 border border-[#E8B923]/30'
+            ? 'bg-[#F3CE49]/10 border border-[#F3CE49]/30'
             : 'bg-white border border-gray-200'
         }`}
       >

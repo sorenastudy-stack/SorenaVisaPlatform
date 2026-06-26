@@ -142,7 +142,7 @@ export default function StaffTicketDetailPage({
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-start gap-2">
-                <Inbox size={20} className="text-[#E8B923] mt-1 flex-shrink-0" />
+                <Inbox size={20} className="text-[#b8941f] mt-1 flex-shrink-0" />
                 <span className="break-words">{ticket.subject}</span>
               </h1>
               <div className="mt-2 flex items-center gap-3 flex-wrap text-sm text-[#4A4A4A]/70">
@@ -243,7 +243,7 @@ function BackLink() {
   return (
     <Link
       href="/staff/tickets"
-      className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] font-medium mb-4"
+      className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] font-medium mb-4"
     >
       <ArrowLeft size={14} /> Back to tickets
     </Link>
@@ -437,7 +437,7 @@ function ReplyCard({
             'w-full rounded-lg border px-3 py-2 text-sm focus:outline-none',
             isInternalNote
               ? 'border-amber-300 bg-amber-50 focus:border-amber-400'
-              : 'border-gray-300 focus:border-[#E8B923]',
+              : 'border-gray-300 focus:border-[#F3CE49]',
           ].join(' ')}
         />
         <div className="mt-2 flex items-center justify-between flex-wrap gap-3">

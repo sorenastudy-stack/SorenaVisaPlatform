@@ -41,7 +41,7 @@ export function InfoTip({ entry, iconSize = 14 }: InfoTipProps) {
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
         aria-label={`More info about ${entry.term}`}
-        className="inline-flex items-center justify-center text-[#1E3A5F]/40 hover:text-[#E8B923] transition-colors focus:outline-none focus:text-[#E8B923]"
+        className="inline-flex items-center justify-center text-[#1E3A5F]/40 hover:text-[#b8941f] transition-colors focus:outline-none focus:text-[#b8941f]"
       >
         <Info size={iconSize} />
       </button>
@@ -54,7 +54,7 @@ export function InfoTip({ entry, iconSize = 14 }: InfoTipProps) {
             isRtl ? 'right-0' : 'left-0'
           } w-64 px-3 py-2 rounded-lg bg-[#1E3A5F] text-white text-xs leading-relaxed shadow-lg pointer-events-none`}
         >
-          <span className="block font-semibold mb-1 text-[#E8B923]">
+          <span className="block font-semibold mb-1 text-[#b8941f]">
             {entry.term}
           </span>
           {text}

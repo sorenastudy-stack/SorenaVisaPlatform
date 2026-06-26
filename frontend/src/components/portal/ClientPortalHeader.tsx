@@ -30,7 +30,7 @@ export function ClientPortalHeader() {
           <span className="text-lg font-bold tracking-wide">
             Sorena
           </span>
-          <span className="text-xs text-[#c9a961] uppercase tracking-widest hidden sm:inline">
+          <span className="text-xs text-[#b8941f] uppercase tracking-widest hidden sm:inline">
             {t('portal.headerTitle')}
           </span>
         </Link>

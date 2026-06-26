@@ -56,7 +56,7 @@ interface LeadDetail {
 
 const statusStyles: Record<string, string> = {
   NEW: 'bg-[#FAF8F3] text-[#1E3A5F] border-[#1E3A5F]/20',
-  QUALIFIED: 'bg-[#E8B923]/10 text-[#1E3A5F] border-[#E8B923]/40',
+  QUALIFIED: 'bg-[#F3CE49]/10 text-[#1E3A5F] border-[#F3CE49]/40',
   CONTACTED: 'bg-blue-50 text-blue-700 border-blue-200',
   NURTURE: 'bg-purple-50 text-purple-700 border-purple-200',
   CONVERTED: 'bg-green-50 text-green-700 border-green-200',
@@ -82,7 +82,7 @@ function ScoreRow({ label, value }: { label: string; value: number | null }) {
       </div>
       <div className="h-2 bg-[#FAF8F3] rounded-full overflow-hidden">
         <div
-          className="h-full bg-[#E8B923] transition-all"
+          className="h-full bg-[#F3CE49] transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -182,13 +182,13 @@ export default async function LeadDetailPage({
           <CardContent className="space-y-3 text-sm">
             {lead.contact.email && (
               <div className="flex items-center gap-2 text-[#4A4A4A]">
-                <Mail size={14} className="text-[#E8B923] flex-shrink-0" />
+                <Mail size={14} className="text-[#b8941f] flex-shrink-0" />
                 <span className="truncate">{lead.contact.email}</span>
               </div>
             )}
             {lead.contact.phone && (
               <div className="flex items-center gap-2 text-[#4A4A4A]">
-                <Phone size={14} className="text-[#E8B923] flex-shrink-0" />
+                <Phone size={14} className="text-[#b8941f] flex-shrink-0" />
                 <span>{lead.contact.phone}</span>
               </div>
             )}
@@ -200,7 +200,7 @@ export default async function LeadDetailPage({
             )}
             {lead.contact.countryOfResidence && (
               <div className="flex items-center gap-2 text-[#4A4A4A]">
-                <Globe size={14} className="text-[#E8B923] flex-shrink-0" />
+                <Globe size={14} className="text-[#b8941f] flex-shrink-0" />
                 <span>
                   {displayCountry(lead.contact.countryOfResidence) ?? lead.contact.countryOfResidence}
                   {lead.contact.nationality &&
@@ -223,7 +223,7 @@ export default async function LeadDetailPage({
             <CardTitle className="flex items-center justify-between text-[#1E3A5F]">
               <span>Scoring</span>
               {lead.scoreBand && (
-                <span className="text-xs font-medium bg-[#E8B923]/10 text-[#1E3A5F] border border-[#E8B923]/40 px-2 py-0.5 rounded-full">
+                <span className="text-xs font-medium bg-[#F3CE49]/10 text-[#1E3A5F] border border-[#F3CE49]/40 px-2 py-0.5 rounded-full">
                   Band: {lead.scoreBand}
                 </span>
               )}
@@ -252,7 +252,7 @@ export default async function LeadDetailPage({
         <Card className="mb-4">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-[#1E3A5F]">
-              <Sparkles size={16} className="text-[#E8B923]" />
+              <Sparkles size={16} className="text-[#b8941f]" />
               AI Summary
             </CardTitle>
           </CardHeader>

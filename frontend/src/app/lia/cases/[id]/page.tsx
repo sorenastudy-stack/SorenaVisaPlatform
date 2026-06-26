@@ -228,7 +228,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
   if (errorMsg || !caseData) {
     return (
       <div className="max-w-3xl">
-        <Link href="/lia/cases" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] mb-4">
+        <Link href="/lia/cases" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] mb-4">
           <ArrowLeft size={14} /> Back to cases
         </Link>
         <Card className="border-red-200 bg-red-50">
@@ -243,7 +243,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
 
   return (
     <div className="max-w-7xl">
-      <Link href="/lia/cases" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] mb-4">
+      <Link href="/lia/cases" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] mb-4">
         <ArrowLeft size={14} /> Back to cases
       </Link>
 
@@ -271,14 +271,14 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
             {/* PR-LIA-12: chronological master log for this case. */}
             <Link
               href={`/lia/cases/${caseData.id}/file-note`}
-              className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-[#E8B923]/40 text-[#1E3A5F] text-sm font-semibold hover:border-[#E8B923] hover:text-[#E8B923] transition-colors"
+              className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-[#F3CE49]/40 text-[#1E3A5F] text-sm font-semibold hover:border-[#F3CE49] hover:text-[#b8941f] transition-colors"
             >
               <ScrollText size={16} /> View Case File Note
             </Link>
             {/* PR-LIA-6: consolidated INZ data viewer entry point. */}
             <Link
               href={`/lia/cases/${caseData.id}/inz-data`}
-              className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#E8B923] hover:text-[#1E3A5F] transition-colors"
+              className="min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#F3CE49] hover:text-[#1E3A5F] transition-colors"
             >
               <FileText size={16} /> View INZ application data →
             </Link>
@@ -461,7 +461,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
         <CardContent>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h2 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2">
-              <Files size={18} className="text-[#E8B923]" />
+              <Files size={18} className="text-[#b8941f]" />
               All client documents
             </h2>
             <span className="text-xs text-[#4A4A4A]/60">
@@ -586,7 +586,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
       <Card className="mb-6">
         <CardContent>
           <div className="flex items-center gap-2 mb-4">
-            <MessageSquare size={18} className="text-[#E8B923]" />
+            <MessageSquare size={18} className="text-[#b8941f]" />
             <h2 className="text-lg font-bold text-[#1E3A5F]">Messages to client</h2>
           </div>
 
@@ -612,7 +612,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
       <Card>
         <CardContent>
           <div className="flex items-center gap-2 mb-4">
-            <Scale size={18} className="text-[#E8B923]" />
+            <Scale size={18} className="text-[#b8941f]" />
             <h2 className="text-lg font-bold text-[#1E3A5F]">Legal notes &amp; decisions</h2>
           </div>
 
@@ -720,7 +720,7 @@ function MessageBubble({ message }: { message: CaseMessage }) {
       <div
         className={`max-w-[85%] rounded-xl p-4 ${
           isLia
-            ? 'bg-[#E8B923]/10 border border-[#E8B923]/30'
+            ? 'bg-[#F3CE49]/10 border border-[#F3CE49]/30'
             : 'bg-white border border-gray-200'
         }`}
       >
@@ -773,7 +773,7 @@ function InzSubmissionPanel({ caseData }: { caseData: CaseDetail }) {
   const submitted = !!caseData.inzSubmittedAt && !!caseData.inzApplicationNumber;
   if (caseData.stage === 'VISA' && !submitted) {
     return (
-      <div className="mb-6 rounded-xl border-2 border-[#E8B923]/40 bg-[#E8B923]/5 p-5 flex items-center gap-4 flex-wrap">
+      <div className="mb-6 rounded-xl border-2 border-[#F3CE49]/40 bg-[#F3CE49]/5 p-5 flex items-center gap-4 flex-wrap">
         <div className="flex-1 min-w-0">
           <h2 className="text-base font-bold text-[#1E3A5F]">Ready to submit to Immigration NZ?</h2>
           <p className="text-sm text-[#4A4A4A] mt-1">
@@ -793,11 +793,11 @@ function InzSubmissionPanel({ caseData }: { caseData: CaseDetail }) {
       ),
     );
     return (
-      <section className="mb-6 rounded-xl border border-[#E8B923]/40 bg-white p-5">
+      <section className="mb-6 rounded-xl border border-[#F3CE49]/40 bg-white p-5">
         <div className="flex items-center gap-2 flex-wrap mb-4">
           <CheckCircle2 size={18} className="text-emerald-600" />
           <h2 className="text-base font-bold text-[#1E3A5F]">INZ Submission</h2>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-[#E8B923]/20 text-[#1E3A5F] border border-[#E8B923]/40 ml-1">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-[#F3CE49]/20 text-[#1E3A5F] border border-[#F3CE49]/40 ml-1">
             SUBMITTED
           </span>
           <span className="ml-auto text-xs text-[#4A4A4A]/60">{daysAtInz} day{daysAtInz === 1 ? '' : 's'} at INZ</span>
@@ -920,7 +920,7 @@ function ReviewingOfficerPanel({
           <div className="text-xs font-semibold uppercase tracking-wider text-[#4A4A4A]/60 mb-1">Officer</div>
           <Link
             href={`/lia/officers/${linkage.officerId}`}
-            className="text-sm font-bold text-[#1E3A5F] hover:text-[#E8B923] inline-flex items-center gap-1"
+            className="text-sm font-bold text-[#1E3A5F] hover:text-[#b8941f] inline-flex items-center gap-1"
           >
             View officer profile →
           </Link>

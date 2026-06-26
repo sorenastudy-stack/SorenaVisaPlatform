@@ -53,7 +53,7 @@ export function LeadStatusHistory({ history }: Props) {
     return (
       <div className="rounded-2xl border border-[#1E3A5F]/10 bg-white p-6">
         <div className="flex items-center gap-2 mb-3">
-          <Clock size={16} className="text-[#E8B923]" />
+          <Clock size={16} className="text-[#b8941f]" />
           <h3 className="text-sm font-semibold text-[#1E3A5F]">Status History</h3>
         </div>
         <p className="text-sm text-[#4A4A4A]/60">No status changes yet.</p>
@@ -64,7 +64,7 @@ export function LeadStatusHistory({ history }: Props) {
   return (
     <div className="rounded-2xl border border-[#1E3A5F]/10 bg-white p-6">
       <div className="flex items-center gap-2 mb-4">
-        <Clock size={16} className="text-[#E8B923]" />
+        <Clock size={16} className="text-[#b8941f]" />
         <h3 className="text-sm font-semibold text-[#1E3A5F]">
           Status History <span className="text-[#4A4A4A]/50 font-normal">({history.length})</span>
         </h3>
@@ -82,7 +82,7 @@ export function LeadStatusHistory({ history }: Props) {
                     ? 'bg-orange-500'
                     : entry.isUndo
                     ? 'bg-blue-500'
-                    : 'bg-[#E8B923]'
+                    : 'bg-[#F3CE49]'
                 }`}
                 aria-hidden="true"
               />

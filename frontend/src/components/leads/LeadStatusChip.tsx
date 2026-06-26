@@ -16,7 +16,7 @@ const STYLES: Record<LeadStatus, string> = {
   INTAKE_STARTED:   'bg-sky-50 text-sky-700 border-sky-200',
   INTAKE_COMPLETED: 'bg-cyan-50 text-cyan-700 border-cyan-200',
   SCORING_DONE:     'bg-indigo-50 text-indigo-700 border-indigo-200',
-  QUALIFIED:        'bg-[#E8B923]/10 text-[#1E3A5F] border-[#E8B923]/40',
+  QUALIFIED:        'bg-[#F3CE49]/10 text-[#1E3A5F] border-[#F3CE49]/40',
   NURTURE:          'bg-purple-50 text-purple-700 border-purple-200',
   EXECUTING:        'bg-amber-50 text-amber-800 border-amber-200',
   CLOSED_WON:       'bg-emerald-100 text-emerald-800 border-emerald-200',

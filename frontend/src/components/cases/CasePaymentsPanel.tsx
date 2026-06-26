@@ -553,7 +553,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                   value={linkType}
                   onChange={(e) => setLinkType(e.target.value)}
                   disabled={linkSubmitting}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60 min-h-[48px]"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40 disabled:opacity-60 min-h-[48px]"
                 >
                   {CONSULTATION_TYPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -606,7 +606,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                 <button
                   type="button"
                   onClick={handleCopyLink}
-                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#c9a961] text-white text-sm font-semibold hover:bg-[#b8985a] transition-colors min-h-[48px]"
+                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#F3CE49] text-white text-sm font-semibold hover:bg-[#b8985a] transition-colors min-h-[48px]"
                 >
                   {linkCopied ? <Check size={14} /> : <ClipboardCopy size={14} />}
                   {linkCopied
@@ -626,7 +626,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
 
           {linkResult && linkResult.free && (
             <div className="space-y-3">
-              <div className="rounded-xl border border-[#c9a961]/30 bg-[#c9a961]/10 px-4 py-3 text-sm text-[#1e3a5f]">
+              <div className="rounded-xl border border-[#F3CE49]/30 bg-[#F3CE49]/10 px-4 py-3 text-sm text-[#1e3a5f]">
                 {t('staff.cases.detail.payments.freeSessionInfo')}
               </div>
               <button
@@ -681,7 +681,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                     onChange={(e) => setCustomAmount(e.target.value)}
                     placeholder="50.00"
                     disabled={customSubmitting}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60 min-h-[48px]"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40 disabled:opacity-60 min-h-[48px]"
                   />
                 </div>
                 <div>
@@ -698,7 +698,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                     onChange={(e) => setCustomCurrency(e.target.value.toUpperCase().slice(0, 3))}
                     maxLength={3}
                     disabled={customSubmitting}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 uppercase focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60 min-h-[48px]"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 uppercase focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40 disabled:opacity-60 min-h-[48px]"
                   />
                 </div>
               </div>
@@ -749,7 +749,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                 <button
                   type="button"
                   onClick={handleCopyCustom}
-                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#c9a961] text-white text-sm font-semibold hover:bg-[#b8985a] transition-colors min-h-[48px]"
+                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#F3CE49] text-white text-sm font-semibold hover:bg-[#b8985a] transition-colors min-h-[48px]"
                 >
                   {customCopied ? <Check size={14} /> : <ClipboardCopy size={14} />}
                   {customCopied
@@ -808,7 +808,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                   onChange={(e) => setManualAmount(e.target.value)}
                   placeholder="50.00"
                   disabled={manualProgress !== 'idle'}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60 min-h-[48px]"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40 disabled:opacity-60 min-h-[48px]"
                 />
               </div>
               <div>
@@ -825,7 +825,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                   onChange={(e) => setManualCurrency(e.target.value.toUpperCase().slice(0, 3))}
                   maxLength={3}
                   disabled={manualProgress !== 'idle'}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 uppercase focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60 min-h-[48px]"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm text-gray-900 uppercase focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40 disabled:opacity-60 min-h-[48px]"
                 />
               </div>
             </div>
@@ -888,7 +888,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                 rows={2}
                 maxLength={500}
                 disabled={manualProgress !== 'idle'}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40 disabled:opacity-60"
               />
             </div>
 
@@ -939,7 +939,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
 
       {payments !== null && payments.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-200 bg-[#faf8f3] p-8 text-center">
-          <CreditCard size={28} className="mx-auto text-[#c9a961] mb-2" />
+          <CreditCard size={28} className="mx-auto text-[#b8941f] mb-2" />
           <p className="text-sm text-gray-500">
             {t('staff.cases.detail.payments.empty')}
           </p>
@@ -1030,7 +1030,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                       )}
                       {/* Source badge */}
                       {p.isManual ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[#c9a961]/15 text-[#8b7338]">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-[#F3CE49]/15 text-[#8b7338]">
                           {t('staff.cases.detail.payments.badgeManual')}
                         </span>
                       ) : (
@@ -1089,7 +1089,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                         maxLength={500}
                         disabled={rejectSubmitting}
                         autoFocus
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40 disabled:opacity-60"
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40 disabled:opacity-60"
                       />
                     </div>
 

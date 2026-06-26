@@ -13,7 +13,7 @@ export default function StaffMarketingPage() {
     <div className="max-w-5xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-          <Megaphone size={22} className="text-[#E8B923]" />
+          <Megaphone size={22} className="text-[#b8941f]" />
           Marketing
         </h1>
         <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -26,7 +26,7 @@ export default function StaffMarketingPage() {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent>
               <div className="flex items-start gap-3">
-                <Users size={20} className="text-[#E8B923] mt-1" />
+                <Users size={20} className="text-[#b8941f] mt-1" />
                 <div className="flex-1">
                   <div className="font-bold text-[#1E3A5F] mb-1">Affiliate agents</div>
                   <p className="text-sm text-[#4A4A4A]/70">
@@ -45,7 +45,7 @@ export default function StaffMarketingPage() {
           <Card className="hover:shadow-md transition-shadow">
             <CardContent>
               <div className="flex items-start gap-3">
-                <Link2 size={20} className="text-[#E8B923] mt-1" />
+                <Link2 size={20} className="text-[#b8941f] mt-1" />
                 <div className="flex-1">
                   <div className="font-bold text-[#1E3A5F] mb-1">Tracking links</div>
                   <p className="text-sm text-[#4A4A4A]/70">

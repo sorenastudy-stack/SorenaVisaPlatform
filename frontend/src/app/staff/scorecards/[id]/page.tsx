@@ -87,7 +87,7 @@ export default async function ScorecardDetailPage({ params }: { params: { id: st
   if (errorMsg || !data) {
     return (
       <div className="max-w-4xl">
-        <Link href="/staff/scorecards" className="text-sm text-[#1E3A5F] hover:text-[#E8B923]">← Back to scorecards</Link>
+        <Link href="/staff/scorecards" className="text-sm text-[#1E3A5F] hover:text-[#b8941f]">← Back to scorecards</Link>
         <Card className="border-red-200 bg-red-50 mt-4">
           <CardContent className="py-4 text-sm text-red-800">{errorMsg ?? 'Scorecard unavailable.'}</CardContent>
         </Card>
@@ -99,14 +99,14 @@ export default async function ScorecardDetailPage({ params }: { params: { id: st
 
   return (
     <div className="max-w-5xl">
-      <Link href="/staff/scorecards" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] mb-4">
+      <Link href="/staff/scorecards" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] mb-4">
         ← Back to scorecards
       </Link>
 
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <ClipboardList size={22} className="text-[#E8B923]" />
+            <ClipboardList size={22} className="text-[#b8941f]" />
             {applicantName}
           </h1>
           <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -156,7 +156,7 @@ export default async function ScorecardDetailPage({ params }: { params: { id: st
                     <span className="font-mono text-[#4A4A4A]">{score} / {meta.max} ({pct}%)</span>
                   </div>
                   <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-[#E8B923]" style={{ width: `${pct}%` }} />
+                    <div className="h-full bg-[#F3CE49]" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );
@@ -237,7 +237,7 @@ export default async function ScorecardDetailPage({ params }: { params: { id: st
       </Card>
 
       {/* Next action */}
-      <Card className="mb-6 border-[#E8B923]/40 bg-[#E8B923]/5">
+      <Card className="mb-6 border-[#F3CE49]/40 bg-[#F3CE49]/5">
         <CardContent>
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#1E3A5F]/70 mb-2">Next best action</h2>
           {data.nextActionContent ? (
@@ -279,7 +279,7 @@ export default async function ScorecardDetailPage({ params }: { params: { id: st
             </div>
             <Link
               href={`/sales/leads/${data.lead.id}`}
-              className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923] mt-2"
+              className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f] mt-2"
             >
               Open lead <ArrowRight size={12} />
             </Link>

@@ -53,7 +53,7 @@ export function ReplyComposer() {
           type="button"
           onClick={handleSend}
           disabled={!canSend}
-          className="min-h-[48px] inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#E8B923] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+          className="min-h-[48px] inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#F3CE49] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
         >
           <Send size={14} />
           {submitting ? 'Sending…' : 'Send'}

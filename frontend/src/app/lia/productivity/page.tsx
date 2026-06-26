@@ -57,7 +57,7 @@ export default async function LiaProductivityPage() {
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <BarChart3 size={22} className="text-[#E8B923]" />
+            <BarChart3 size={22} className="text-[#b8941f]" />
             LIA Productivity
           </h1>
           <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -87,7 +87,7 @@ export default async function LiaProductivityPage() {
             </p>
             <Link
               href="/staff/users"
-              className="inline-flex items-center gap-1 text-sm font-semibold text-[#1E3A5F] hover:text-[#E8B923]"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-[#1E3A5F] hover:text-[#b8941f]"
             >
               Go to Staff Users →
             </Link>

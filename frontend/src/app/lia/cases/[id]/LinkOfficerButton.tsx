@@ -95,7 +95,7 @@ export function LinkOfficerButton({ caseId }: { caseId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg bg-[#1E3A5F] text-white text-xs font-bold px-3 py-2 hover:bg-[#E8B923] hover:text-[#1E3A5F] transition-colors"
+        className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg bg-[#1E3A5F] text-white text-xs font-bold px-3 py-2 hover:bg-[#F3CE49] hover:text-[#1E3A5F] transition-colors"
       >
         <UserSquare2 size={12} />
         Link reviewing officer
@@ -141,7 +141,7 @@ export function LinkOfficerButton({ caseId }: { caseId: string }) {
                 {search.trim().length > 0 && !loading && results.length === 0 && (
                   <div className="text-sm text-[#4A4A4A]/70 bg-[#FAF8F3] border border-gray-200 rounded-lg p-3 mb-2">
                     No officers match "{search.trim()}".{' '}
-                    <Link href="/lia/officers" className="underline font-semibold text-[#1E3A5F] hover:text-[#E8B923]">
+                    <Link href="/lia/officers" className="underline font-semibold text-[#1E3A5F] hover:text-[#b8941f]">
                       <Plus size={11} className="inline" /> Create a new officer
                     </Link>
                   </div>
@@ -209,7 +209,7 @@ export function LinkOfficerButton({ caseId }: { caseId: string }) {
                 Cancel
               </button>
               {selected && (
-                <button type="button" onClick={handleSubmit} disabled={submitting} className="min-h-[44px] px-5 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#E8B923] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
+                <button type="button" onClick={handleSubmit} disabled={submitting} className="min-h-[44px] px-5 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#F3CE49] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
                   {submitting ? 'Linking…' : 'Link officer'}
                 </button>
               )}

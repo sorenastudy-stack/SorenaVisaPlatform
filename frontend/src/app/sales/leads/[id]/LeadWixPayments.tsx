@@ -57,7 +57,7 @@ export function LeadWixPayments({ leadId }: { leadId: string }) {
     return (
       <div className="bg-sorena-cream rounded-xl shadow-sm border border-gray-100 p-6">
         <h3 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2 mb-2">
-          <CreditCard size={18} className="text-[#E8B923]" /> Wix payments
+          <CreditCard size={18} className="text-[#b8941f]" /> Wix payments
         </h3>
         <p className="text-sm text-[#4A4A4A]/60">Loading…</p>
       </div>
@@ -68,12 +68,12 @@ export function LeadWixPayments({ leadId }: { leadId: string }) {
     <div className="bg-sorena-cream rounded-xl shadow-sm border border-gray-100 p-6">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2">
-          <CreditCard size={18} className="text-[#E8B923]" /> Wix payments
+          <CreditCard size={18} className="text-[#b8941f]" /> Wix payments
         </h3>
         {rows.length > 0 && (
           <Link
             href="/staff/wix-payments"
-            className="text-xs text-[#1E3A5F] hover:text-[#E8B923] font-medium inline-flex items-center gap-1"
+            className="text-xs text-[#1E3A5F] hover:text-[#b8941f] font-medium inline-flex items-center gap-1"
           >
             All payments <ExternalLink size={11} />
           </Link>
@@ -100,7 +100,7 @@ export function LeadWixPayments({ leadId }: { leadId: string }) {
                 </span>
                 <Link
                   href={`/staff/wix-payments/${r.id}`}
-                  className="text-xs text-[#1E3A5F] hover:text-[#E8B923] font-medium"
+                  className="text-xs text-[#1E3A5F] hover:text-[#b8941f] font-medium"
                 >
                   View
                 </Link>

@@ -231,7 +231,7 @@ export function CaseDocumentsPanel({
 
       {docs !== null && docs.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-200 bg-[#faf8f3] p-8 text-center">
-          <FileText size={28} className="mx-auto text-[#c9a961] mb-2" />
+          <FileText size={28} className="mx-auto text-[#b8941f] mb-2" />
           <p className="text-sm text-gray-500">
             {t('staff.cases.detail.documents.empty')}
           </p>

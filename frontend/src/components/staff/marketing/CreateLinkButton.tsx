@@ -106,7 +106,7 @@ export function CreateLinkButton({ agents }: { agents: AgentMini[] }) {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#E8B923] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f] disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#F3CE49] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f] disabled:opacity-60"
               >
                 {submitting && <Loader2 size={12} className="animate-spin" />}
                 Create
@@ -130,7 +130,7 @@ function FieldText({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-[#1E3A5F] focus:outline-none focus:ring-2 focus:ring-[#E8B923]/40"
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-[#1E3A5F] focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40"
       />
     </div>
   );
@@ -145,7 +145,7 @@ function FieldSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-[#1E3A5F] focus:outline-none focus:ring-2 focus:ring-[#E8B923]/40"
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-[#1E3A5F] focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>

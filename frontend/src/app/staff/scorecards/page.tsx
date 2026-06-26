@@ -49,13 +49,13 @@ export default async function ScorecardsListPage({
 
   return (
     <div className="max-w-7xl">
-      <Link href="/staff" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] mb-4">
+      <Link href="/staff" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] mb-4">
         ← Back to staff
       </Link>
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-          <ClipboardList size={22} className="text-[#E8B923]" />
+          <ClipboardList size={22} className="text-[#b8941f]" />
           Scorecard Submissions
           <span className="text-sm font-medium text-[#4A4A4A]/60 ml-1">{filtered.length}</span>
         </h1>
@@ -127,7 +127,7 @@ export default async function ScorecardsListPage({
                           : <span className="text-xs text-[#4A4A4A]/60">0</span>}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Link href={`/staff/scorecards/${r.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]">
+                        <Link href={`/staff/scorecards/${r.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]">
                           View <ArrowRight size={12} />
                         </Link>
                       </td>

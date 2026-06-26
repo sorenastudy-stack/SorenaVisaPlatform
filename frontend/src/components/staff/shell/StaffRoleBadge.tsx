@@ -15,7 +15,7 @@ import type { StaffRole } from '@/contexts/StaffContext';
 // both work without a hardcoded English fallback.
 
 const STYLES: Record<StaffRole, string> = {
-  OWNER:       'bg-[#c9a961] text-[#1e3a5f]',
+  OWNER:       'bg-[#F3CE49] text-[#1e3a5f]',
   SUPER_ADMIN: 'bg-[#1e3a5f] text-[#faf8f3]',
   ADMIN:       'bg-slate-700 text-white',
   LIA:         'bg-gray-100 text-gray-800',

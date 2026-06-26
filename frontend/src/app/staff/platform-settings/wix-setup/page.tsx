@@ -22,13 +22,13 @@ export default function WixSetupPage() {
     <div className="max-w-3xl">
       <Link
         href="/staff/platform-settings"
-        className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] font-medium mb-4"
+        className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] font-medium mb-4"
       >
         <ArrowLeft size={14} /> Back to platform settings
       </Link>
 
       <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2 mb-1">
-        <Settings size={22} className="text-[#E8B923]" />
+        <Settings size={22} className="text-[#b8941f]" />
         Connect Wix Automations
       </h1>
       <p className="text-sm text-[#4A4A4A]/70 mb-6">
@@ -39,7 +39,7 @@ export default function WixSetupPage() {
       <Card className="mb-4">
         <CardContent>
           <h2 className="text-base font-bold text-[#1E3A5F] flex items-center gap-2 mb-3">
-            <Zap size={18} className="text-[#E8B923]" /> 1. Create the Wix Automation
+            <Zap size={18} className="text-[#b8941f]" /> 1. Create the Wix Automation
           </h2>
           <ol className="list-decimal list-inside space-y-2 text-sm text-[#4A4A4A] leading-relaxed">
             <li>Open the Wix Dashboard and go to <strong>Automations → Create automation</strong>.</li>
@@ -52,7 +52,7 @@ export default function WixSetupPage() {
       <Card className="mb-4">
         <CardContent>
           <h2 className="text-base font-bold text-[#1E3A5F] flex items-center gap-2 mb-3">
-            <Network size={18} className="text-[#E8B923]" /> 2. Action: send HTTP POST
+            <Network size={18} className="text-[#b8941f]" /> 2. Action: send HTTP POST
           </h2>
           <ol className="list-decimal list-inside space-y-2 text-sm text-[#4A4A4A] leading-relaxed">
             <li>Action type: <strong>Send HTTP request</strong> (or <em>Webhook</em> depending on your Wix plan).</li>
@@ -70,7 +70,7 @@ export default function WixSetupPage() {
       <Card className="mb-4">
         <CardContent>
           <h2 className="text-base font-bold text-[#1E3A5F] flex items-center gap-2 mb-3">
-            <Key size={18} className="text-[#E8B923]" /> 3. Add the shared-secret header
+            <Key size={18} className="text-[#b8941f]" /> 3. Add the shared-secret header
           </h2>
           <ol className="list-decimal list-inside space-y-2 text-sm text-[#4A4A4A] leading-relaxed">
             <li>Under <strong>Headers</strong>, add a new header:

@@ -81,11 +81,11 @@ export default function ScorecardLandingPage() {
           </Link>
 
           {/* Slogan — gold italic, tracking-wide, generous breathing room */}
-          <div className="text-[#E8B923] text-sm sm:text-base italic font-medium tracking-wide my-3">
+          <div className="text-[#F3CE49] text-sm sm:text-base italic font-medium tracking-wide my-3">
             From assessment to arrival.
           </div>
 
-          <div className="text-[#E8B923] text-xs font-bold uppercase tracking-[0.18em] mb-4 mt-8">
+          <div className="text-[#F3CE49] text-xs font-bold uppercase tracking-[0.18em] mb-4 mt-8">
             {LANDING_STRINGS.heroTagline}
           </div>
 
@@ -100,20 +100,20 @@ export default function ScorecardLandingPage() {
           <button
             onClick={() => router.push('/scorecard')}
             style={{ minHeight: 64 }}
-            className="inline-flex items-center gap-2 px-10 py-4 bg-[#E8B923] text-[#1E3A5F] font-bold text-base sm:text-lg rounded-2xl hover:bg-[#d4a91f] transition-colors shadow-2xl shadow-black/30"
+            className="inline-flex items-center gap-2 px-10 py-4 bg-[#F3CE49] text-[#1E3A5F] font-bold text-base sm:text-lg rounded-2xl hover:bg-[#d4a91f] transition-colors shadow-2xl shadow-black/30"
           >
             {LANDING_STRINGS.heroCta}
           </button>
 
           <div className="mt-6 text-sm text-white/70">
             {LANDING_STRINGS.signinHint}{' '}
-            <Link href="/login?returnTo=/scorecard" className="font-semibold text-white hover:text-[#E8B923] underline-offset-4 hover:underline">
+            <Link href="/login?returnTo=/scorecard" className="font-semibold text-white hover:text-[#F3CE49] underline-offset-4 hover:underline">
               {LANDING_STRINGS.signinLink}
             </Link>
           </div>
 
           <div className="mt-8 inline-flex items-center gap-2 text-xs text-white/60">
-            <ShieldCheck size={14} className="text-[#E8B923]" />
+            <ShieldCheck size={14} className="text-[#F3CE49]" />
             {LANDING_STRINGS.trustAuthorizedAgent}
           </div>
         </div>
@@ -127,17 +127,17 @@ export default function ScorecardLandingPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <FeatureCard
-              icon={<Compass size={28} className="text-[#E8B923]" />}
+              icon={<Compass size={28} className="text-[#b8941f]" />}
               title="Your readiness score"
               body="Out of 100, with a personalised band classification."
             />
             <FeatureCard
-              icon={<Target size={28} className="text-[#E8B923]" />}
+              icon={<Target size={28} className="text-[#b8941f]" />}
               title="Your next best step"
               body="Concrete action: nurture pathway, gap-closing session, or full account opening."
             />
             <FeatureCard
-              icon={<Globe size={28} className="text-[#E8B923]" />}
+              icon={<Globe size={28} className="text-[#b8941f]" />}
               title="Country eligibility"
               body="Find out if you qualify for New Zealand, Malaysia, or both."
             />
@@ -153,17 +153,17 @@ export default function ScorecardLandingPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <FeatureCard
-              icon={<ShieldCheck size={28} className="text-[#E8B923]" />}
+              icon={<ShieldCheck size={28} className="text-[#b8941f]" />}
               title="Authorised agent"
               body="Officially partnered with NZ and Malaysian universities."
             />
             <FeatureCard
-              icon={<Banknote size={28} className="text-[#E8B923]" />}
+              icon={<Banknote size={28} className="text-[#b8941f]" />}
               title="Zero service fees on enrolment"
               body="Universities pay our commission — you only cover government and platform fees."
             />
             <FeatureCard
-              icon={<Clock size={28} className="text-[#E8B923]" />}
+              icon={<Clock size={28} className="text-[#b8941f]" />}
               title="Fast turnaround"
               body="Receive your assessment results immediately upon submission."
             />
@@ -206,9 +206,9 @@ export default function ScorecardLandingPage() {
             © 2026 Sorena Visa · Education &amp; Immigration · New Zealand
           </div>
           <div className="flex items-center gap-4 text-xs text-white/70">
-            <a href="#" className="hover:text-[#E8B923]">Terms</a>
-            <a href="#" className="hover:text-[#E8B923]">Privacy</a>
-            <a href="#" className="hover:text-[#E8B923]">Contact</a>
+            <a href="#" className="hover:text-[#F3CE49]">Terms</a>
+            <a href="#" className="hover:text-[#F3CE49]">Privacy</a>
+            <a href="#" className="hover:text-[#F3CE49]">Contact</a>
           </div>
         </div>
       </footer>
@@ -231,7 +231,7 @@ function FeatureCard({
 function Step({ n, title, body }: { n: number; title: string; body: string }) {
   return (
     <li className="flex items-start gap-4">
-      <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[#E8B923] text-[#1E3A5F] font-extrabold text-lg flex-shrink-0">
+      <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[#F3CE49] text-[#1E3A5F] font-extrabold text-lg flex-shrink-0">
         {n}
       </span>
       <div className="pt-1">

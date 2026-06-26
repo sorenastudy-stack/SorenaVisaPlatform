@@ -53,7 +53,7 @@ export function DecisionsOverTimeChart({ data }: { data: MonthBucket[] }) {
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar dataKey="approved" stackId="a" fill="#059669" name="Approved" />
           <Bar dataKey="declined" stackId="a" fill="#C0392B" name="Declined" />
-          <Bar dataKey="pending"  stackId="a" fill="#E8B923" name="Pending" />
+          <Bar dataKey="pending"  stackId="a" fill="#F3CE49" name="Pending" />
         </BarChart>
       </ResponsiveContainer>
     </div>

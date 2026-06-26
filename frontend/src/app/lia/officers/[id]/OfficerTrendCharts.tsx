@@ -93,7 +93,7 @@ export function OfficerTrendCharts({ officerId }: { officerId: string }) {
     <div>
       <div className="flex items-center gap-2 flex-wrap mb-4">
         <h2 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2">
-          <TrendingUp size={18} className="text-[#E8B923]" />
+          <TrendingUp size={18} className="text-[#b8941f]" />
           Decision Trends
         </h2>
         <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ml-2 ${daysBadgeTone}`}>

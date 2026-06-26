@@ -86,9 +86,9 @@ export function LeadProgressTimeline({ currentStatus, history }: Props) {
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-colors ${
                       state === 'done'
-                        ? 'bg-[#E8B923] border-[#E8B923] text-white'
+                        ? 'bg-[#F3CE49] border-[#F3CE49] text-white'
                         : state === 'current'
-                        ? 'bg-[#1E3A5F] border-[#1E3A5F] text-white ring-4 ring-[#E8B923]/30'
+                        ? 'bg-[#1E3A5F] border-[#1E3A5F] text-white ring-4 ring-[#F3CE49]/30'
                         : 'bg-white border-[#1E3A5F]/20 text-[#1E3A5F]/40'
                     }`}
                   >
@@ -120,7 +120,7 @@ export function LeadProgressTimeline({ currentStatus, history }: Props) {
                     className={`h-0.5 w-10 sm:w-16 -mt-5 transition-colors ${
                       stepState(MAIN_PATH[i + 1], i + 1) === 'done' ||
                       MAIN_PATH[i + 1] === currentStatus
-                        ? 'bg-[#E8B923]'
+                        ? 'bg-[#F3CE49]'
                         : 'bg-[#1E3A5F]/15'
                     }`}
                   />
@@ -143,7 +143,7 @@ export function LeadProgressTimeline({ currentStatus, history }: Props) {
                 key={status}
                 className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs font-medium transition-all ${
                   active
-                    ? 'ring-2 ring-[#E8B923]/40 ' + branchToneStyles[tone]
+                    ? 'ring-2 ring-[#F3CE49]/40 ' + branchToneStyles[tone]
                     : `${branchToneStyles[tone]} opacity-50`
                 }`}
               >

@@ -36,14 +36,14 @@ export default async function AgentsListPage({
 
   return (
     <div className="max-w-5xl">
-      <Link href="/staff/marketing" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] mb-4">
+      <Link href="/staff/marketing" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] mb-4">
         ← Back to marketing
       </Link>
 
       <div className="flex items-start justify-between gap-3 flex-wrap mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <Users size={22} className="text-[#E8B923]" />
+            <Users size={22} className="text-[#b8941f]" />
             Affiliate agents
             <span className="text-sm font-medium text-[#4A4A4A]/60 ml-1">{rows.length}</span>
           </h1>
@@ -98,7 +98,7 @@ export default async function AgentsListPage({
                       <td className="px-4 py-3 font-mono text-[#1E3A5F]">{r.activeLinkCount}</td>
                       <td className="px-4 py-3 font-mono text-[#1E3A5F]">{r.totalLeadCount}</td>
                       <td className="px-4 py-3 text-right">
-                        <Link href={`/staff/marketing/agents/${r.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]">
+                        <Link href={`/staff/marketing/agents/${r.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]">
                           View <ArrowRight size={12} />
                         </Link>
                       </td>

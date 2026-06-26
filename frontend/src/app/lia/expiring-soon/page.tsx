@@ -71,7 +71,7 @@ export default async function ExpiringSoonPage({
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <Clock size={22} className="text-[#E8B923]" />
+            <Clock size={22} className="text-[#b8941f]" />
             Expiring Soon
           </h1>
           <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -154,7 +154,7 @@ export default async function ExpiringSoonPage({
                           <ReminderPills sent={r.remindersSent} />
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Link href={`/lia/cases/${r.caseId}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]">
+                          <Link href={`/lia/cases/${r.caseId}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]">
                             Open <ArrowRight size={14} />
                           </Link>
                         </td>

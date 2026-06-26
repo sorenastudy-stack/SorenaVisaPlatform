@@ -23,7 +23,7 @@ interface StageRow {
 const STAGE_COLORS: Record<string, string> = {
   ADMISSION:     '#3B82F6',  // blue-500
   VISA:          '#8B5CF6',  // violet-500
-  INZ_SUBMITTED: '#E8B923',  // sorena gold
+  INZ_SUBMITTED: '#F3CE49',  // sorena gold
   COMPLETED:     '#059669',  // emerald-600
   WITHDRAWN:     '#6B7280',  // gray-500
 };

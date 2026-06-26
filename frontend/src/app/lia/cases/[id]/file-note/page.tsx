@@ -139,7 +139,7 @@ export default async function CaseFileNotePage({ params }: { params: { id: strin
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <ScrollText size={22} className="text-[#E8B923]" />
+            <ScrollText size={22} className="text-[#b8941f]" />
             Case File Note
           </h1>
           <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -200,7 +200,7 @@ export default async function CaseFileNotePage({ params }: { params: { id: strin
       <Card>
         <CardContent>
           <div className="flex items-center gap-2 mb-4">
-            <Clock size={18} className="text-[#E8B923]" />
+            <Clock size={18} className="text-[#b8941f]" />
             <h2 className="text-lg font-bold text-[#1E3A5F]">Timeline</h2>
             <span className="text-sm font-medium text-[#4A4A4A]/60 ml-1">{data.events.length}</span>
           </div>
@@ -238,7 +238,7 @@ function Row({ icon, label, value }: { icon: React.ReactNode; label: string; val
 function CountTile({ label, value, tone = 'navy' }: { label: string; value: number; tone?: 'navy' | 'gold' }) {
   const tones = {
     navy: 'bg-[#1E3A5F]/5 text-[#1E3A5F]',
-    gold: 'bg-[#E8B923]/20 text-[#1E3A5F]',
+    gold: 'bg-[#F3CE49]/20 text-[#1E3A5F]',
   };
   return (
     <div className={`rounded-xl p-3 ${tones[tone]}`}>
@@ -261,7 +261,7 @@ function dotColor(type: TimelineEvent['type']): string {
     type === 'RISK_OVERRIDDEN' ||
     type === 'HARD_STOP_CLEARED'
   ) {
-    return 'bg-[#E8B923]';
+    return 'bg-[#F3CE49]';
   }
   // Client communication → emerald
   if (type === 'CLIENT_MESSAGE' || type === 'TICKET_OPENED' || type === 'TICKET_MESSAGE') {

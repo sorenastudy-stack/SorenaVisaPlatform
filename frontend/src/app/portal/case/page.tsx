@@ -57,8 +57,8 @@ export default async function MyCasePage() {
   if (notFound) {
     return (
       <section className="rounded-2xl bg-white border border-gray-200 p-8 md:p-12 text-center">
-        <div className="mx-auto mb-5 w-14 h-14 rounded-full bg-[#c9a961]/15 flex items-center justify-center">
-          <Sparkles size={24} className="text-[#c9a961]" />
+        <div className="mx-auto mb-5 w-14 h-14 rounded-full bg-[#F3CE49]/15 flex items-center justify-center">
+          <Sparkles size={24} className="text-[#b8941f]" />
         </div>
         <h1 className="text-xl md:text-2xl font-bold text-[#1e3a5f] mb-2">
           {t('portal.case.noCase.title')}
@@ -102,9 +102,9 @@ export default async function MyCasePage() {
     <div className="space-y-6">
       {/* ── Status hero ──────────────────────────────────────────────── */}
       <section className="relative overflow-hidden rounded-3xl bg-[#1e3a5f] text-white px-6 py-8 md:px-10 md:py-12">
-        <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-[#c9a961]/15 blur-3xl" aria-hidden />
+        <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-[#F3CE49]/15 blur-3xl" aria-hidden />
         <div className="relative">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[#c9a961] font-semibold mb-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#b8941f] font-semibold mb-3">
             {t('portal.case.heading')}
           </p>
           <h1 className="text-2xl md:text-3xl font-bold leading-tight max-w-2xl">
@@ -117,7 +117,7 @@ export default async function MyCasePage() {
       {team.length > 0 && (
         <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Users size={16} className="text-[#c9a961]" />
+            <Users size={16} className="text-[#b8941f]" />
             <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">
               {t('portal.case.team.heading')}
             </h2>
@@ -135,7 +135,7 @@ export default async function MyCasePage() {
 
       {/* ── INZ reference (only if present) ──────────────────────────── */}
       {caseData.inzApplicationNumber && (
-        <section className="rounded-2xl bg-[#faf8f3] border border-[#c9a961]/30 p-5 md:p-6">
+        <section className="rounded-2xl bg-[#faf8f3] border border-[#F3CE49]/30 p-5 md:p-6">
           <p className="text-xs uppercase tracking-wide text-[#1e3a5f]/60 font-semibold mb-1">
             {t('portal.case.inz.heading')}
           </p>

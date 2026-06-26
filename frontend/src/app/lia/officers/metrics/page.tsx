@@ -151,7 +151,7 @@ export default async function OfficerMetricsPage({
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <BarChart3 size={22} className="text-[#E8B923]" />
+            <BarChart3 size={22} className="text-[#b8941f]" />
             Officer Metrics
           </h1>
           <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -202,7 +202,7 @@ export default async function OfficerMetricsPage({
       <Card className="mb-6">
         <CardContent>
           <h2 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2 mb-4">
-            <Activity size={18} className="text-[#E8B923]" />
+            <Activity size={18} className="text-[#b8941f]" />
             Decisions over time
           </h2>
           <DecisionsOverTimeChart data={metrics.decisionsOverTime} />
@@ -214,7 +214,7 @@ export default async function OfficerMetricsPage({
         <Card>
           <CardContent>
             <h2 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2 mb-4">
-              <TrendingUp size={18} className="text-[#E8B923]" />
+              <TrendingUp size={18} className="text-[#b8941f]" />
               Top 10 by activity — approval rate
             </h2>
             {metrics.approvalRateLeaderboard.length === 0 ? (
@@ -237,7 +237,7 @@ export default async function OfficerMetricsPage({
                     {metrics.approvalRateLeaderboard.map((o) => (
                       <tr key={o.officerId} className="hover:bg-[#FAF8F3]/50">
                         <td className="px-3 py-2">
-                          <Link href={`/lia/officers/${o.officerId}`} className="font-semibold text-[#1E3A5F] hover:text-[#E8B923]">
+                          <Link href={`/lia/officers/${o.officerId}`} className="font-semibold text-[#1E3A5F] hover:text-[#b8941f]">
                             {o.fullName}
                           </Link>
                         </td>
@@ -258,7 +258,7 @@ export default async function OfficerMetricsPage({
         <Card>
           <CardContent>
             <h2 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2 mb-4">
-              <TrendingUp size={18} className="text-[#E8B923]" />
+              <TrendingUp size={18} className="text-[#b8941f]" />
               Top countries by case volume
             </h2>
             <TopCountriesChart data={metrics.topCountries} />
@@ -270,7 +270,7 @@ export default async function OfficerMetricsPage({
       <Card className="mb-6">
         <CardContent>
           <h2 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2 mb-4">
-            <Activity size={18} className="text-[#E8B923]" />
+            <Activity size={18} className="text-[#b8941f]" />
             Case stages at link time
           </h2>
           <CaseStagePieChart data={metrics.caseStageDistribution} />
@@ -284,7 +284,7 @@ export default async function OfficerMetricsPage({
             <details open>
               <summary className="cursor-pointer">
                 <span className="text-lg font-bold text-[#1E3A5F] inline-flex items-center gap-2">
-                  <AlertTriangle size={18} className="text-[#E8B923]" />
+                  <AlertTriangle size={18} className="text-[#b8941f]" />
                   Outliers
                 </span>
                 <span className="text-xs text-[#4A4A4A]/60 ml-2">
@@ -355,7 +355,7 @@ function StatTile({ label, value, tone }: {
 }) {
   const tones = {
     navy: 'bg-[#1E3A5F]/5 text-[#1E3A5F]',
-    gold: 'bg-[#E8B923]/20 text-[#1E3A5F]',
+    gold: 'bg-[#F3CE49]/20 text-[#1E3A5F]',
     blue: 'bg-blue-50 text-blue-800',
     emerald: 'bg-emerald-50 text-emerald-800',
     red: 'bg-red-50 text-red-800',
@@ -378,7 +378,7 @@ function OutlierCard({ title, icon, tone, rows }: {
     red: 'border-red-200 bg-red-50/40',
     amber: 'border-amber-200 bg-amber-50/40',
     emerald: 'border-emerald-200 bg-emerald-50/40',
-    gold: 'border-[#E8B923]/40 bg-[#E8B923]/10',
+    gold: 'border-[#F3CE49]/40 bg-[#F3CE49]/10',
   };
   const iconTones = {
     red: 'text-red-700',
@@ -399,7 +399,7 @@ function OutlierCard({ title, icon, tone, rows }: {
           {rows.map((r) => (
             <li key={r.id} className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <Link href={`/lia/officers/${r.id}`} className="font-semibold text-[#1E3A5F] hover:text-[#E8B923] truncate block text-sm">
+                <Link href={`/lia/officers/${r.id}`} className="font-semibold text-[#1E3A5F] hover:text-[#b8941f] truncate block text-sm">
                   {r.name}
                 </Link>
                 <span className="text-[11px] text-[#4A4A4A]/60">{r.sub}</span>

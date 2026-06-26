@@ -169,7 +169,7 @@ export function ReassignOverlay({
           rows={3}
           disabled={submitting}
           placeholder="Why is this case being reassigned? (recorded on the audit trail)"
-          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-[#1e3a5f] focus:outline-none focus:ring-2 focus:ring-[#E8B923]/40 disabled:opacity-50"
+          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-[#1e3a5f] focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40 disabled:opacity-50"
         />
         <div className={['text-xs mb-4 mt-1', reasonTooShort ? 'text-rose-600' : 'text-gray-400'].join(' ')}>
           {reasonTooShort

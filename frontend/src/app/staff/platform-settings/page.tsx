@@ -98,7 +98,7 @@ export default function PlatformSettingsPage() {
     <div className="max-w-5xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-          <Settings size={22} className="text-[#E8B923]" />
+          <Settings size={22} className="text-[#b8941f]" />
           Platform settings
         </h1>
         <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -150,7 +150,7 @@ export default function PlatformSettingsPage() {
                 );
               }
               return (
-                <li key={key} className="rounded-xl border border-gray-200 p-4 hover:border-[#E8B923]/50 transition-colors">
+                <li key={key} className="rounded-xl border border-gray-200 p-4 hover:border-[#F3CE49]/50 transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-[#1E3A5F] mb-1">{meta.title}</div>
@@ -167,7 +167,7 @@ export default function PlatformSettingsPage() {
                           href={s.value}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[#1E3A5F] hover:text-[#E8B923] font-medium"
+                          className="inline-flex items-center gap-1 text-[#1E3A5F] hover:text-[#b8941f] font-medium"
                         >
                           Open <ExternalLink size={11} />
                         </a>
@@ -231,7 +231,7 @@ export default function PlatformSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setRegenOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#E8B923] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f]"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#F3CE49] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f]"
                 >
                   <RefreshCcw size={13} /> Regenerate
                 </button>
@@ -248,7 +248,7 @@ export default function PlatformSettingsPage() {
           <div className="mt-5 pt-4 border-t border-gray-100 text-sm">
             <Link
               href="/staff/platform-settings/wix-setup"
-              className="inline-flex items-center gap-1 text-[#1E3A5F] hover:text-[#E8B923] font-medium"
+              className="inline-flex items-center gap-1 text-[#1E3A5F] hover:text-[#b8941f] font-medium"
             >
               How to connect Wix Automations → <ExternalLink size={12} />
             </Link>
@@ -351,7 +351,7 @@ function EditUrlModal({
           type="url"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#E8B923] focus:ring-1 focus:ring-[#E8B923]"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#F3CE49] focus:ring-1 focus:ring-[#F3CE49]"
           placeholder="https://..."
         />
         {!isUrl && value.length > 0 && (
@@ -456,7 +456,7 @@ function NewSecretModal({ secret, onClose }: { secret: string; onClose: () => vo
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
             }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#E8B923] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f]"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#F3CE49] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f]"
           >
             {copied
               ? <><Check size={13} /> Copied</>

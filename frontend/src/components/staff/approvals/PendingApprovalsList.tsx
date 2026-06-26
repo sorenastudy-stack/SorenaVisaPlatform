@@ -130,7 +130,7 @@ export function PendingApprovalsList() {
                 <button
                   type="button"
                   onClick={() => setDecision({ request: r, mode: 'approve' })}
-                  className="flex-1 rounded-xl bg-[#c9a961] text-[#1e3a5f] font-semibold py-3 hover:brightness-95 transition-all min-h-[48px]"
+                  className="flex-1 rounded-xl bg-[#F3CE49] text-[#1e3a5f] font-semibold py-3 hover:brightness-95 transition-all min-h-[48px]"
                 >
                   {t('staff.approvals.approve')}
                 </button>

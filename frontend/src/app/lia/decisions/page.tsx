@@ -139,7 +139,7 @@ export default async function LiaDecisionsPage({ searchParams }: { searchParams:
                         </p>
                       )}
                     </div>
-                    <Link href={`/lia/cases/${d.caseId}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]">
+                    <Link href={`/lia/cases/${d.caseId}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]">
                       Open case <ArrowRight size={14} />
                     </Link>
                   </div>

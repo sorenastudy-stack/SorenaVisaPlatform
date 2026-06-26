@@ -175,7 +175,7 @@ export default async function OfficerDetailPage({ params }: { params: { id: stri
         <CardContent>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h2 className="text-lg font-bold text-[#1E3A5F] flex items-center gap-2">
-              <MessageSquare size={18} className="text-[#E8B923]" />
+              <MessageSquare size={18} className="text-[#b8941f]" />
               Observations
               <span className="text-sm font-medium text-[#4A4A4A]/60 ml-1">{observations.length}</span>
             </h2>
@@ -194,7 +194,7 @@ export default async function OfficerDetailPage({ params }: { params: { id: stri
                     <span className="text-sm font-semibold text-[#1E3A5F]">{o.authorName ?? 'Unknown'}</span>
                     <span className="text-xs text-[#4A4A4A]/60">· {formatRelative(o.createdAt)}</span>
                     {o.authorId === myId && (
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#E8B923] ml-1">You</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#b8941f] ml-1">You</span>
                     )}
                     <div className="ml-auto">
                       {o.authorId === myId && (
@@ -229,7 +229,7 @@ export default async function OfficerDetailPage({ params }: { params: { id: stri
       <Card>
         <CardContent>
           <div className="flex items-center gap-2 mb-4">
-            <Briefcase size={18} className="text-[#E8B923]" />
+            <Briefcase size={18} className="text-[#b8941f]" />
             <h2 className="text-lg font-bold text-[#1E3A5F]">Linked cases</h2>
             <span className="text-sm font-medium text-[#4A4A4A]/60 ml-1">{linkages.length}</span>
           </div>
@@ -268,7 +268,7 @@ export default async function OfficerDetailPage({ params }: { params: { id: stri
                           </span>
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <Link href={`/lia/cases/${l.caseId}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]">
+                          <Link href={`/lia/cases/${l.caseId}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]">
                             View case <ArrowRight size={12} />
                           </Link>
                         </td>
@@ -309,7 +309,7 @@ function StatTile({ label, value, tone }: { label: string; value: number; tone: 
     navy: 'bg-[#1E3A5F]/5 text-[#1E3A5F]',
     emerald: 'bg-emerald-50 text-emerald-800',
     red: 'bg-red-50 text-red-800',
-    gold: 'bg-[#E8B923]/20 text-[#1E3A5F]',
+    gold: 'bg-[#F3CE49]/20 text-[#1E3A5F]',
   };
   return (
     <div className={`rounded-lg p-3 ${tones[tone]}`}>

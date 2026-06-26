@@ -107,7 +107,7 @@ export default async function LiaDashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-[#1E3A5F]">Recent escalations</h2>
             {recentEscalations.length > 0 && (
-              <Link href="/lia/cases?risk=escalated" className="text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]">
+              <Link href="/lia/cases?risk=escalated" className="text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]">
                 View all →
               </Link>
             )}
@@ -141,7 +141,7 @@ export default async function LiaDashboardPage() {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${riskStyles(c.riskLevel)}`}>
                       {riskLabel(c.riskLevel)}
                     </span>
-                    <Link href={`/lia/cases/${c.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]">
+                    <Link href={`/lia/cases/${c.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]">
                       Review <ArrowRight size={14} />
                     </Link>
                   </div>
@@ -182,7 +182,7 @@ function StatCard({ href, label, value, icon, tone }: {
     amber: 'text-[#D97706] bg-amber-50',
     orange: 'text-orange-700 bg-orange-50',
     navy: 'text-[#1E3A5F] bg-[#1E3A5F]/10',
-    gold: 'text-[#1E3A5F] bg-[#E8B923]/20',
+    gold: 'text-[#1E3A5F] bg-[#F3CE49]/20',
   };
   return (
     <Link href={href} className="block rounded-xl border border-gray-100 bg-white p-5 hover:shadow-md transition-shadow">
@@ -214,7 +214,7 @@ function BreakdownTile({ label, value, tone }: {
 
 function QuickLink({ href, label }: { href: string; label: string }) {
   return (
-    <Link href={href} className="flex items-center justify-between rounded-xl border border-gray-100 bg-white p-4 hover:border-[#E8B923] hover:shadow-sm transition-all">
+    <Link href={href} className="flex items-center justify-between rounded-xl border border-gray-100 bg-white p-4 hover:border-[#F3CE49] hover:shadow-sm transition-all">
       <span className="text-sm font-semibold text-[#1E3A5F]">{label}</span>
       <ArrowRight size={16} className="text-[#1E3A5F]/50" />
     </Link>

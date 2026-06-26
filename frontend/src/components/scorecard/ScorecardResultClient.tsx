@@ -136,7 +136,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 md:p-8 mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <Award size={24} className="text-[#E8B923]" />
+            <Award size={24} className="text-[#b8941f]" />
             <h1 className="text-2xl md:text-3xl font-extrabold text-[#1E3A5F]">
               {RESULT_STRINGS.headerTitle}
             </h1>
@@ -194,9 +194,9 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         </div>
 
         {/* Next best action */}
-        <div className="bg-white rounded-2xl shadow-md border-2 border-[#E8B923]/50 p-6 md:p-8 mb-6">
+        <div className="bg-white rounded-2xl shadow-md border-2 border-[#F3CE49]/50 p-6 md:p-8 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={18} className="text-[#E8B923]" />
+            <Sparkles size={18} className="text-[#b8941f]" />
             <h2 className="text-lg font-bold text-[#1E3A5F]">
               {RESULT_STRINGS.nextActionTitle}
             </h2>
@@ -230,7 +230,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
 
           {/* Scenario A — Bands 1-2 (any HS state): nurture only, no buttons */}
           {scenario === 'A' && (
-            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
+            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
               <div className="inline-flex items-center gap-2 mb-2">
                 <BookOpen size={16} className="text-[#1E3A5F]" />
                 <span className="text-sm font-semibold text-[#1E3A5F]">
@@ -245,7 +245,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
 
           {/* Scenario B — Band 3, no hard stop: Gap-Closing Session */}
           {scenario === 'B' && (
-            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
+            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
               <WhyThisMatters text={WHY_GAP_CLOSING} />
               <PrimaryBookingButton
                 icon={<CreditCard size={18} />}
@@ -262,7 +262,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
 
           {/* Scenario C — Band 3 WITH hard stop: LIA replaces Gap-Closing */}
           {scenario === 'C' && (
-            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
+            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
               <WhyThisMatters text={WHY_LIA_BAND_3} />
               <LiaConsultationButton
                 onClick={() => handleBookingNavigate(bookingUrls.LIA_CONSULTATION)}
@@ -277,7 +277,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
 
           {/* Scenario D — Bands 4-6, no hard stop: Free 15-min */}
           {scenario === 'D' && (
-            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
+            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
               <WhyThisMatters text={WHY_FREE_15MIN} />
               <PrimaryBookingButton
                 icon={<Calendar size={18} />}
@@ -294,7 +294,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
 
           {/* Scenario F — Bands 1-2 WITH hard stop: LIA only (override Table 12) */}
           {scenario === 'F' && (
-            <div className="mt-4 pt-4 border-t border-[#E8B923]/30">
+            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
               <WhyThisMatters text={WHY_LIA_LOW_BAND} />
               <LiaConsultationButton
                 onClick={() => handleBookingNavigate(bookingUrls.LIA_CONSULTATION)}
@@ -309,7 +309,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
 
           {/* Scenario E — Bands 4-6 WITH hard stop: LIA primary + Free 15-min secondary */}
           {scenario === 'E' && (
-            <div className="mt-4 pt-4 border-t border-[#E8B923]/30 space-y-6">
+            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30 space-y-6">
               <div>
                 <WhyThisMatters text={WHY_LIA_HIGH_BAND} />
                 <LiaConsultationButton
@@ -374,7 +374,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                     </span>
                   </div>
                   <div className="w-full h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-[#E8B923]" style={{ width: `${pct}%` }} />
+                    <div className="h-full bg-[#F3CE49]" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );
@@ -447,7 +447,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             <button
               type="button"
               onClick={() => setOpenAnswerLog((o) => !o)}
-              className="text-sm font-semibold text-[#1E3A5F] hover:text-[#E8B923] inline-flex items-center gap-1"
+              className="text-sm font-semibold text-[#1E3A5F] hover:text-[#b8941f] inline-flex items-center gap-1"
             >
               {openAnswerLog ? '▾' : '▸'} {RESULT_STRINGS.fullAnswerLog}
             </button>
@@ -472,7 +472,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
           />
           <Link
             href="/student/dashboard"
-            className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]"
+            className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]"
           >
             {RESULT_STRINGS.backToDashboard} <ArrowRight size={14} />
           </Link>
@@ -500,7 +500,7 @@ function PrimaryBookingButton({
       type="button"
       onClick={onClick}
       style={{ minHeight: 56 }}
-      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#E8B923] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md"
+      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#F3CE49] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md"
     >
       {icon}
       {label} →

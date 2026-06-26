@@ -25,7 +25,7 @@ export function CopyShortUrl({ shortUrl, shortCode }: { shortUrl: string; shortC
       type="button"
       onClick={handleCopy}
       title={shortUrl}
-      className="inline-flex items-center gap-1.5 hover:text-[#E8B923]"
+      className="inline-flex items-center gap-1.5 hover:text-[#b8941f]"
     >
       <span>{shortCode}</span>
       {copied ? <Check size={11} className="text-emerald-600" /> : <Copy size={11} />}

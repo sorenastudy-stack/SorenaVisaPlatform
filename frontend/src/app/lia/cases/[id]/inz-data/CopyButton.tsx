@@ -61,7 +61,7 @@ export function CopyButton({
         type="button"
         onClick={handle}
         aria-label={ariaLabel ?? 'Copy value'}
-        className="inline-flex items-center justify-center w-6 h-6 rounded text-[#1E3A5F]/60 hover:text-[#E8B923] hover:bg-[#FAF8F3] transition-colors"
+        className="inline-flex items-center justify-center w-6 h-6 rounded text-[#1E3A5F]/60 hover:text-[#b8941f] hover:bg-[#FAF8F3] transition-colors"
         title={copied ? 'Copied' : 'Copy'}
       >
         {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
@@ -74,7 +74,7 @@ export function CopyButton({
       <button
         type="button"
         onClick={handle}
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-[#1E3A5F] bg-white border border-gray-200 hover:border-[#E8B923] hover:text-[#E8B923] transition-colors"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-[#1E3A5F] bg-white border border-gray-200 hover:border-[#F3CE49] hover:text-[#b8941f] transition-colors"
       >
         {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
         {copied ? 'Copied' : label ?? 'Copy entry'}
@@ -87,7 +87,7 @@ export function CopyButton({
     <button
       type="button"
       onClick={handle}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#1E3A5F] bg-white border border-gray-200 hover:border-[#E8B923] hover:text-[#E8B923] transition-colors"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#1E3A5F] bg-white border border-gray-200 hover:border-[#F3CE49] hover:text-[#b8941f] transition-colors"
     >
       {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
       {copied ? 'Copied' : label ?? 'Copy section'}

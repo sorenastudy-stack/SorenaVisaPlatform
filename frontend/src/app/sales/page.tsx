@@ -44,10 +44,10 @@ export default async function SalesDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <Link href="/sales/leads">
-          <Card className="hover:border-[#E8B923] transition-colors cursor-pointer">
+          <Card className="hover:border-[#F3CE49] transition-colors cursor-pointer">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-[#1E3A5F]">
-                <Users size={18} className="text-[#E8B923]" />
+                <Users size={18} className="text-[#b8941f]" />
                 Total Leads
               </CardTitle>
             </CardHeader>
@@ -63,7 +63,7 @@ export default async function SalesDashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-[#1E3A5F]">
-              <Calendar size={18} className="text-[#E8B923]" />
+              <Calendar size={18} className="text-[#b8941f]" />
               New Today
             </CardTitle>
           </CardHeader>
@@ -78,7 +78,7 @@ export default async function SalesDashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-[#1E3A5F]">
-              <Flame size={18} className="text-[#E8B923]" />
+              <Flame size={18} className="text-[#b8941f]" />
               Hot Band
             </CardTitle>
           </CardHeader>

@@ -103,7 +103,7 @@ export default function WixPaymentsPage() {
       <div className="mb-6 flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <CreditCard size={22} className="text-[#E8B923]" />
+            <CreditCard size={22} className="text-[#b8941f]" />
             Wix payments
           </h1>
           <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -205,7 +205,7 @@ export default function WixPaymentsPage() {
               </p>
               <Link
                 href="/staff/platform-settings/wix-setup"
-                className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] font-medium mt-3"
+                className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] font-medium mt-3"
               >
                 Open the setup guide <ExternalLink size={11} />
               </Link>
@@ -250,7 +250,7 @@ export default function WixPaymentsPage() {
                           {r.matchedLeadId ? (
                             <Link
                               href={`/sales/leads/${r.matchedLeadId}`}
-                              className="text-[#1E3A5F] hover:text-[#E8B923] underline font-medium"
+                              className="text-[#1E3A5F] hover:text-[#b8941f] underline font-medium"
                             >
                               {r.matchedLeadName ?? 'View'}
                             </Link>
@@ -266,7 +266,7 @@ export default function WixPaymentsPage() {
                         <td className="py-2.5">
                           <Link
                             href={`/staff/wix-payments/${r.id}`}
-                            className="text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]"
+                            className="text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]"
                           >
                             View
                           </Link>

@@ -5,10 +5,13 @@
 @tailwind utilities;
 
 :root {
-  --sorena-navy:  #1e3a5f;
-  --sorena-gold:  #c9a961;
-  --sorena-cream: #faf8f3;
-  --sorena-text:  #3d3d3d;
+  --sorena-navy:   #1e3a5f;
+  --sorena-gold:   #F3CE49;
+  --sorena-jade:   #15a86b;
+  --sorena-clay:   #c2683f;
+  --sorena-danger: #c0392b;
+  --sorena-cream:  #faf8f3;
+  --sorena-text:   #3d3d3d;
 }
 
 html {

@@ -64,7 +64,7 @@ export function ExportFileNoteButtons({
   };
 
   return (
-    <div className="rounded-xl border border-[#E8B923]/40 bg-[#E8B923]/10 p-4">
+    <div className="rounded-xl border border-[#F3CE49]/40 bg-[#F3CE49]/10 p-4">
       <h3 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F] mb-2">
         Export (Owner-only)
       </h3>
@@ -73,7 +73,7 @@ export function ExportFileNoteButtons({
           type="button"
           onClick={() => handleDownload('md')}
           disabled={pending !== null}
-          className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg bg-[#1E3A5F] text-white text-xs font-bold px-3 py-2 hover:bg-[#E8B923] hover:text-[#1E3A5F] transition-colors disabled:opacity-50"
+          className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg bg-[#1E3A5F] text-white text-xs font-bold px-3 py-2 hover:bg-[#F3CE49] hover:text-[#1E3A5F] transition-colors disabled:opacity-50"
         >
           <FileDown size={12} />
           {pending === 'md' ? 'Exporting…' : 'Export as Markdown'}
@@ -82,7 +82,7 @@ export function ExportFileNoteButtons({
           type="button"
           onClick={() => handleDownload('txt')}
           disabled={pending !== null}
-          className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg bg-white border border-[#1E3A5F]/30 text-[#1E3A5F] text-xs font-bold px-3 py-2 hover:border-[#E8B923] hover:text-[#E8B923] transition-colors disabled:opacity-50"
+          className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg bg-white border border-[#1E3A5F]/30 text-[#1E3A5F] text-xs font-bold px-3 py-2 hover:border-[#F3CE49] hover:text-[#b8941f] transition-colors disabled:opacity-50"
         >
           <FileText size={12} />
           {pending === 'txt' ? 'Exporting…' : 'Export as Text'}

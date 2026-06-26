@@ -108,7 +108,7 @@ export default async function OfficersIndexPage({
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <UserSquare2 size={22} className="text-[#E8B923]" />
+            <UserSquare2 size={22} className="text-[#b8941f]" />
             Immigration Officers
             <span className="text-sm font-medium text-[#4A4A4A]/60 ml-1">
               {result ? result.total : 0}
@@ -122,7 +122,7 @@ export default async function OfficersIndexPage({
           {canSeeMetrics && (
             <Link
               href="/lia/officers/metrics"
-              className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-white border border-[#1E3A5F]/30 text-[#1E3A5F] text-sm font-semibold px-4 py-2 hover:border-[#E8B923] hover:text-[#E8B923] transition-colors"
+              className="min-h-[44px] inline-flex items-center gap-2 rounded-xl bg-white border border-[#1E3A5F]/30 text-[#1E3A5F] text-sm font-semibold px-4 py-2 hover:border-[#F3CE49] hover:text-[#b8941f] transition-colors"
             >
               <BarChart3 size={16} />
               View metrics →
@@ -217,7 +217,7 @@ export default async function OfficersIndexPage({
               <Link
                 key={o.id}
                 href={`/lia/officers/${o.id}`}
-                className="block rounded-xl border border-gray-100 bg-white p-5 hover:shadow-md hover:border-[#E8B923] transition-all"
+                className="block rounded-xl border border-gray-100 bg-white p-5 hover:shadow-md hover:border-[#F3CE49] transition-all"
               >
                 <div className="flex items-start gap-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-[#1E3A5F]/10 flex items-center justify-center flex-shrink-0">
@@ -242,7 +242,7 @@ export default async function OfficersIndexPage({
 
                 <div className="flex items-center justify-between text-xs text-[#4A4A4A]/60">
                   <span>{o.observationCount} observation{o.observationCount === 1 ? '' : 's'}</span>
-                  <span className="text-[#1E3A5F] font-semibold inline-flex items-center gap-1 group-hover:text-[#E8B923]">
+                  <span className="text-[#1E3A5F] font-semibold inline-flex items-center gap-1 group-hover:text-[#b8941f]">
                     View profile <ArrowRight size={12} />
                   </span>
                 </div>

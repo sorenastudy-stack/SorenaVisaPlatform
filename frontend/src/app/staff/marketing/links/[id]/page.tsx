@@ -55,14 +55,14 @@ export default async function LinkDetailPage({
 
   return (
     <div className="max-w-5xl">
-      <Link href="/staff/marketing/links" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] mb-4">
+      <Link href="/staff/marketing/links" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] mb-4">
         ← Back to links
       </Link>
 
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <Link2 size={22} className="text-[#E8B923]" />
+            <Link2 size={22} className="text-[#b8941f]" />
             <CopyShortUrl shortUrl={data.shortUrl} shortCode={data.shortCode} />
             <span className="text-sm font-medium text-[#4A4A4A]/70">{data.channel}</span>
             {data.status === 'ARCHIVED' && (

@@ -144,7 +144,7 @@ export function FulfilRequestButton({
                       type="button"
                       onClick={() => pick(d.id)}
                       disabled={!!submittingId}
-                      className="min-h-[44px] px-3 py-2 rounded-lg bg-[#1E3A5F] text-white text-xs font-semibold hover:bg-[#E8B923] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                      className="min-h-[44px] px-3 py-2 rounded-lg bg-[#1E3A5F] text-white text-xs font-semibold hover:bg-[#F3CE49] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center gap-1"
                     >
                       {submittingId === d.id ? '…' : (
                         <>
@@ -159,7 +159,7 @@ export function FulfilRequestButton({
 
             <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-[#4A4A4A]/70">
               Need to upload a different file?{' '}
-              <Link href="/student/documents" className="font-semibold text-[#1E3A5F] hover:text-[#E8B923]">
+              <Link href="/student/documents" className="font-semibold text-[#1E3A5F] hover:text-[#b8941f]">
                 Open Visa Section →
               </Link>
             </div>

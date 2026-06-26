@@ -52,7 +52,7 @@ export function RunReminderSweepButton({ candidateCount }: { candidateCount: num
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg border border-[#E8B923]/40 bg-[#E8B923]/10 text-[#1E3A5F] text-xs font-semibold px-3 py-2 hover:border-[#E8B923] transition-colors"
+        className="min-h-[40px] inline-flex items-center gap-1.5 rounded-lg border border-[#F3CE49]/40 bg-[#F3CE49]/10 text-[#1E3A5F] text-xs font-semibold px-3 py-2 hover:border-[#F3CE49] transition-colors"
       >
         <Zap size={12} />
         Run reminders now
@@ -64,7 +64,7 @@ export function RunReminderSweepButton({ candidateCount }: { candidateCount: num
           <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-[#E8B923]/20 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-[#F3CE49]/20 flex items-center justify-center flex-shrink-0">
                   <AlertTriangle size={18} className="text-[#1E3A5F]" />
                 </div>
                 <h2 className="text-lg font-bold text-[#1E3A5F]">Run reminder sweep</h2>
@@ -91,7 +91,7 @@ export function RunReminderSweepButton({ candidateCount }: { candidateCount: num
                   <button type="button" onClick={close} disabled={submitting} className="min-h-[44px] px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-[#4A4A4A] hover:bg-gray-50">
                     Cancel
                   </button>
-                  <button type="button" onClick={handleSubmit} disabled={submitting} className="min-h-[44px] px-5 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#E8B923] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
+                  <button type="button" onClick={handleSubmit} disabled={submitting} className="min-h-[44px] px-5 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#F3CE49] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
                     {submitting ? 'Running…' : 'Run sweep'}
                   </button>
                 </div>
@@ -118,7 +118,7 @@ export function RunReminderSweepButton({ candidateCount }: { candidateCount: num
                   </div>
                 </dl>
                 <div className="flex items-center justify-end">
-                  <button type="button" onClick={close} className="min-h-[44px] px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#E8B923] hover:text-[#1E3A5F]">
+                  <button type="button" onClick={close} className="min-h-[44px] px-4 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#F3CE49] hover:text-[#1E3A5F]">
                     Close
                   </button>
                 </div>

@@ -90,7 +90,7 @@ export function StaffSidebar() {
         <img src="/brand/logo-mark-white.jpg" alt="Sorena" className="h-8 w-8" />
         <div className="leading-tight">
           <div className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</div>
-          <div className="text-[#c9a961] text-[10px] font-bold uppercase tracking-wider">
+          <div className="text-[#b8941f] text-[10px] font-bold uppercase tracking-wider">
             Staff Portal
           </div>
         </div>
@@ -113,7 +113,7 @@ export function StaffSidebar() {
               {active && (
                 <span
                   aria-hidden
-                  className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-[#c9a961]"
+                  className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-[#F3CE49]"
                 />
               )}
               {item.icon}

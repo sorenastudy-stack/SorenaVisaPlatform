@@ -88,7 +88,7 @@ function TabButton({
       className={[
         'px-4 py-3 text-sm font-semibold border-b-2 -mb-px transition-colors min-h-[48px]',
         active
-          ? 'border-[#c9a961] text-[#1e3a5f]'
+          ? 'border-[#F3CE49] text-[#1e3a5f]'
           : 'border-transparent text-gray-500 hover:text-[#1e3a5f]',
       ].join(' ')}
     >

@@ -87,7 +87,7 @@ export default function WixPaymentDetailPage({
       <div>
         <Link
           href="/staff/wix-payments"
-          className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] font-medium mb-4"
+          className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] font-medium mb-4"
         >
           <ArrowLeft size={14} /> Back to payments
         </Link>
@@ -102,7 +102,7 @@ export default function WixPaymentDetailPage({
     <div className="max-w-4xl">
       <Link
         href="/staff/wix-payments"
-        className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#E8B923] font-medium mb-4"
+        className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] font-medium mb-4"
       >
         <ArrowLeft size={14} /> Back to payments
       </Link>
@@ -113,7 +113,7 @@ export default function WixPaymentDetailPage({
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div>
               <h1 className="text-xl font-bold text-[#1E3A5F] flex items-center gap-2 mb-1">
-                <CreditCard size={20} className="text-[#E8B923]" />
+                <CreditCard size={20} className="text-[#b8941f]" />
                 {TYPE_LABEL[row.paymentType]}
               </h1>
               <p className="text-xs text-[#4A4A4A]/60 font-mono">{row.wixPaymentId}</p>
@@ -138,7 +138,7 @@ export default function WixPaymentDetailPage({
         <Card>
           <CardContent>
             <h2 className="text-base font-bold text-[#1E3A5F] flex items-center gap-2 mb-3">
-              <User size={16} className="text-[#E8B923]" /> Customer
+              <User size={16} className="text-[#b8941f]" /> Customer
             </h2>
             <dl className="text-sm space-y-2">
               <DRow icon={<User size={13} />} label="Name" value={row.customerName} />
@@ -152,7 +152,7 @@ export default function WixPaymentDetailPage({
         <Card>
           <CardContent>
             <h2 className="text-base font-bold text-[#1E3A5F] flex items-center gap-2 mb-3">
-              <Calendar size={16} className="text-[#E8B923]" /> Booking
+              <Calendar size={16} className="text-[#b8941f]" /> Booking
             </h2>
             {row.bookingStart || row.bookingEnd || row.wixBookingId || row.bookingLocation ? (
               <dl className="text-sm space-y-2">
@@ -181,7 +181,7 @@ export default function WixPaymentDetailPage({
                   <div className="text-xs uppercase tracking-wide text-[#4A4A4A]/70 mb-1">Lead</div>
                   <Link
                     href={`/sales/leads/${row.matchedLeadId}`}
-                    className="text-[#1E3A5F] hover:text-[#E8B923] underline font-medium"
+                    className="text-[#1E3A5F] hover:text-[#b8941f] underline font-medium"
                   >
                     {row.matchedLeadName ?? 'View lead'}
                   </Link>
@@ -212,7 +212,7 @@ export default function WixPaymentDetailPage({
           <button
             type="button"
             onClick={() => setShowRaw((v) => !v)}
-            className="text-sm font-bold text-[#1E3A5F] hover:text-[#E8B923] inline-flex items-center gap-1.5"
+            className="text-sm font-bold text-[#1E3A5F] hover:text-[#b8941f] inline-flex items-center gap-1.5"
           >
             <Code2 size={14} />
             {showRaw ? '▾' : '▸'} Raw Wix payload

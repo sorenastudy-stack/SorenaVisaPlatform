@@ -10,11 +10,14 @@ module.exports = {
         teal: '#0d7a6e',
         'teal-light': '#12a693',
         'off-white': '#f4f7f6',
-        // design system tokens
-        'sorena-navy':  '#1e3a5f',
-        'sorena-gold':  '#E8B923',
-        'sorena-cream': '#faf8f3',
-        'sorena-text':  '#3d3d3d',
+        // design system tokens — final Sorena palette
+        'sorena-navy':   '#1e3a5f',
+        'sorena-gold':   '#F3CE49',
+        'sorena-jade':   '#15a86b',
+        'sorena-clay':   '#c2683f',
+        'sorena-danger': '#c0392b',
+        'sorena-cream':  '#faf8f3',
+        'sorena-text':   '#3d3d3d',
       },
       fontFamily: {
         sans:      ['Inter', 'system-ui', 'sans-serif'],

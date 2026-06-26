@@ -43,10 +43,10 @@ export function StudentHeader({
             <img
               src={photoUrl}
               alt={name}
-              className="w-14 h-14 rounded-full object-cover border-2 border-[#E8B923]/40 shadow-sm"
+              className="w-14 h-14 rounded-full object-cover border-2 border-[#F3CE49]/40 shadow-sm"
             />
           ) : (
-            <div className="w-14 h-14 rounded-full flex items-center justify-center text-base font-bold bg-[#1E3A5F] text-white border-2 border-[#E8B923]/40 shadow-sm">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center text-base font-bold bg-[#1E3A5F] text-white border-2 border-[#F3CE49]/40 shadow-sm">
               {getInitials(name) || '?'}
             </div>
           )}

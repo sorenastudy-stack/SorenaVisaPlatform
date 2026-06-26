@@ -210,7 +210,7 @@ export default async function LiaDocumentsPage({ searchParams }: { searchParams:
                         </td>
                         <td className="px-4 py-3 text-[#4A4A4A]/80 text-xs">{formatRelative(d.updatedAt)}</td>
                         <td className="px-4 py-3 text-right">
-                          <Link href={`/lia/cases/${d.caseId}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#E8B923]">
+                          <Link href={`/lia/cases/${d.caseId}`} className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]">
                             Open case <ArrowRight size={14} />
                           </Link>
                         </td>
