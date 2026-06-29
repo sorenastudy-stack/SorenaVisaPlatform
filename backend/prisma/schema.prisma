@@ -145,6 +145,12 @@ enum SubscriptionStatus {
 enum ConsultationType {
   ADMISSION
   LIA
+  // PR-BOOKING-1: native in-portal session types. FREE_15 (15min, free)
+  // and GAP_CLOSING (30min, NZD 30) join the existing ADMISSION/LIA.
+  // LIA (45min, NZD 150) is reused as-is. Durations/prices live in the
+  // code config map (session-config.ts), not here.
+  FREE_15
+  GAP_CLOSING
 }
 
 enum ConsultationStatus {
@@ -538,6 +544,10 @@ model User {
   // passwordless sign-in. Cascade on user delete (orphaned tokens
   // are useless).
   magicLinkTokens         MagicLinkToken[]
+
+  // PR-BOOKING-1: OWNER-set weekly working hours for this user as a
+  // bookable adviser. Empty for users who aren't advisers.
+  adviserAvailability     AdviserAvailability[]             @relation("AdviserAvailabilityAdviser")
 
   @@map("users")
 }
@@ -955,6 +965,21 @@ model Consultation {
   outcomeNotes    String?
   scheduledAt     DateTime?
   completedAt     DateTime?
+  // PR-BOOKING-1: native in-portal scheduling fields. All nullable so
+  // existing rows backfill as NULL with no breakage.
+  //   durationMinutes — session length (15/30/45), from the config map.
+  //   scheduledEndAt  — denormalised scheduledAt + duration; powers the
+  //                     overlap test and the partial-unique double-book
+  //                     guard without recomputing on every query.
+  //   bookingTimezone — IANA tz shown to the client at booking time
+  //                     (for display / confirmation emails).
+  //   holdExpiresAt   — optional soft-hold window for PENDING rows; the
+  //                     slot engine treats a PENDING row as busy only
+  //                     while holdExpiresAt > now.
+  durationMinutes Int?
+  scheduledEndAt  DateTime?
+  bookingTimezone String?
+  holdExpiresAt   DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -963,7 +988,45 @@ model Consultation {
 
   @@index([leadId])
   @@index([type])
+  // PR-BOOKING-1: busy-interval lookup for the slot engine (all booked
+  // sessions for an adviser within a date range).
+  @@index([assignedToId, scheduledAt])
   @@map("consultations")
+}
+
+// ─── BOOKING: ADVISER AVAILABILITY (PR-BOOKING-1) ─────────────────────────────
+//
+// OWNER-set recurring weekly working hours for a bookable adviser. One
+// row per adviser per weekday-window, so an adviser can have multiple
+// windows in a day (e.g. 09:00-12:00 and 13:00-17:00 = two rows).
+//
+// Times are stored as minutes-from-midnight (Int) in the row's `timezone`
+// (wall-clock, NOT absolute instants). The slot engine converts these to
+// absolute UTC per date using the IANA `timezone`, which is what makes
+// DST handling correct. `active` soft-disables a window without deleting.
+//
+// Date-specific overrides (days off / one-off hours) are deferred to
+// Phase 2 (AdviserAvailabilityException) — the slot engine is written so
+// they can layer on top of this weekly grid without rework.
+model AdviserAvailability {
+  id          String   @id @default(cuid())
+  adviserId   String
+  dayOfWeek   Int      // 0 = Sunday … 6 = Saturday
+  startMinute Int      // minutes from midnight, in `timezone`
+  endMinute   Int      // minutes from midnight, in `timezone`; must be > startMinute
+  timezone    String   @default("Pacific/Auckland")
+  active      Boolean  @default(true)
+  // Who set this window (OWNER/ADMIN). Plain nullable String with no
+  // relation, mirroring the Payment.verifiedById convention.
+  setById     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  adviser     User     @relation("AdviserAvailabilityAdviser", fields: [adviserId], references: [id], onDelete: Cascade)
+
+  @@index([adviserId, dayOfWeek])
+  @@index([adviserId, active])
+  @@map("adviser_availability")
 }
 
 // ─── CASES ───────────────────────────────────────────────────────────────────
