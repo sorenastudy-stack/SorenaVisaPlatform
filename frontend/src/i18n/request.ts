@@ -32,16 +32,39 @@ type SupportedLocale = keyof typeof MESSAGES;
 
 const DEFAULT_LOCALE: SupportedLocale = 'en';
 
-function resolveLocale(): SupportedLocale {
-  const cookieValue = cookies().get('NEXT_LOCALE')?.value;
-  if (cookieValue === 'en' || cookieValue === 'fa') return cookieValue;
-  return DEFAULT_LOCALE;
+function isSupported(value: unknown): value is SupportedLocale {
+  return value === 'en' || value === 'fa';
 }
 
-export default getRequestConfig(async () => {
-  const locale = resolveLocale();
+function resolveLocale(): SupportedLocale {
+  const cookieValue = cookies().get('NEXT_LOCALE')?.value;
+  return isSupported(cookieValue) ? cookieValue : DEFAULT_LOCALE;
+}
+
+export default getRequestConfig(async ({ requestLocale }) => {
+  // Robustness contract: this MUST always return a supported `locale`
+  // whose `messages` object is defined. If next-intl ever hands us a
+  // missing/unknown locale (no i18n routing today, so requestLocale is
+  // normally undefined) and we returned `messages: undefined`,
+  // getTranslations() faults at request time — which, with no /portal
+  // error boundary, previously surfaced as a silent hang on the Google
+  // sign-in redirect. So we resolve defensively and fall back to
+  // English for both the locale AND the messages.
+  let locale: SupportedLocale = DEFAULT_LOCALE;
+  try {
+    const fromRequest = await requestLocale; // next-intl v4 (Promise)
+    locale = isSupported(fromRequest) ? fromRequest : resolveLocale();
+  } catch {
+    locale = DEFAULT_LOCALE;
+  }
+
   return {
     locale,
-    messages: MESSAGES[locale],
+    messages: MESSAGES[locale] ?? MESSAGES[DEFAULT_LOCALE],
+    // A global default timeZone keeps server- and client-rendered dates
+    // identical (no hydration markup mismatch) and silences next-intl's
+    // ENVIRONMENT_FALLBACK warning. UTC is the safe, deterministic
+    // default until per-user time zones are introduced.
+    timeZone: 'UTC',
   };
 });
