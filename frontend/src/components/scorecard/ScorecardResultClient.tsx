@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Award, AlertTriangle, CheckCircle2, XCircle, Calendar, CreditCard,
   Sparkles, BookOpen, Lock, ArrowRight, Download, ExternalLink, Scale,
@@ -67,6 +68,7 @@ const BAND_COLOR_CLASSES: Record<string, { bg: string; text: string; border: str
 };
 
 export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }) {
+  const router = useRouter();
   const [openAnswerLog, setOpenAnswerLog] = useState(false);
   const [bookingClicked, setBookingClicked] = useState(!!data.consultationBookedAt);
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -113,20 +115,26 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
   else if (isBand3)                    scenario = 'B'; // gap-closing
   else                                 scenario = 'D'; // free 15-min
 
-  // Shared booking handler: opens the target URL synchronously (popup
-  // blockers reject window.open() called after an await) and then
-  // POSTs the audit log. Network failure surfaces inline but does not
-  // close the user's new tab.
-  async function handleBookingNavigate(targetUrl: string) {
+  // Shared booking handler: all booking now lives INSIDE the client
+  // portal. Each CTA maps to a booking "type" that the portal
+  // placeholder page reads from the query string. We still fire the
+  // booking-opened audit POST so tracking is unchanged, then navigate
+  // in-app to /portal/booking — no external Wix URLs (which 404).
+  //
+  // The external booking-urls.ts machinery + GET /scorecard/booking-urls
+  // endpoint are intentionally left in place (unused for navigation)
+  // in case we repurpose them later.
+  async function handleBookingNavigate(type: 'free15' | 'gap' | 'lia') {
     setBookingError(null);
-    const w = window.open(targetUrl, '_blank', 'noopener,noreferrer');
     try {
       await api.post(`/scorecard/${data.submissionId}/booking-opened`, {});
       setBookingClicked(true);
     } catch {
       setBookingError(RESULT_STRINGS.bookingError);
-      void w;
     }
+    // Navigate regardless of audit outcome — getting the user into the
+    // portal matters more than the tracking row.
+    router.push(`/portal/booking?type=${type}`);
   }
 
   return (
@@ -250,7 +258,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               <PrimaryBookingButton
                 icon={<CreditCard size={18} />}
                 label="Pay NZD 30 and book your Gap-Closing Session"
-                onClick={() => handleBookingNavigate(bookingUrls.GAP_CLOSING_PAYMENT)}
+                onClick={() => handleBookingNavigate('gap')}
               />
               <BookingFooter
                 clicked={bookingClicked}
@@ -265,7 +273,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
               <WhyThisMatters text={WHY_LIA_BAND_3} />
               <LiaConsultationButton
-                onClick={() => handleBookingNavigate(bookingUrls.LIA_CONSULTATION)}
+                onClick={() => handleBookingNavigate('lia')}
               />
               <BookingFooter
                 clicked={bookingClicked}
@@ -282,7 +290,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               <PrimaryBookingButton
                 icon={<Calendar size={18} />}
                 label="Book your free 15-minute consultation"
-                onClick={() => handleBookingNavigate(bookingUrls.FREE_15MIN)}
+                onClick={() => handleBookingNavigate('free15')}
               />
               <BookingFooter
                 clicked={bookingClicked}
@@ -297,7 +305,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
               <WhyThisMatters text={WHY_LIA_LOW_BAND} />
               <LiaConsultationButton
-                onClick={() => handleBookingNavigate(bookingUrls.LIA_CONSULTATION)}
+                onClick={() => handleBookingNavigate('lia')}
               />
               <BookingFooter
                 clicked={bookingClicked}
@@ -313,14 +321,14 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               <div>
                 <WhyThisMatters text={WHY_LIA_HIGH_BAND} />
                 <LiaConsultationButton
-                  onClick={() => handleBookingNavigate(bookingUrls.LIA_CONSULTATION)}
+                  onClick={() => handleBookingNavigate('lia')}
                 />
               </div>
 
               <div className="pt-4 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => handleBookingNavigate(bookingUrls.FREE_15MIN)}
+                  onClick={() => handleBookingNavigate('free15')}
                   className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-3 rounded-xl bg-gray-100 text-[#1E3A5F]/70 font-semibold text-sm hover:bg-gray-200 transition-colors"
                 >
                   <Calendar size={14} />
