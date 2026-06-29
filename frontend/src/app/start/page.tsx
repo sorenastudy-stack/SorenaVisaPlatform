@@ -5,16 +5,14 @@ import { motion } from 'framer-motion';
 
 const countries = [
   {
-    href:    '/start/new-zealand',
-    flag:    '🇳🇿',
-    nameEn:  'New Zealand',
-    nameFa:  'نیوزیلند',
+    href: '/start/new-zealand',
+    flag: '🇳🇿',
+    name: 'New Zealand',
   },
   {
-    href:    '/start/malaysia',
-    flag:    '🇲🇾',
-    nameEn:  'Malaysia',
-    nameFa:  'مالزی',
+    href: '/start/malaysia',
+    flag: '🇲🇾',
+    name: 'Malaysia',
   },
 ] as const;
 
@@ -33,10 +31,7 @@ const itemVariants = {
 
 export default function StartPage() {
   return (
-    <main
-      dir="rtl"
-      className="min-h-screen bg-sorena-cream font-vazirmatn text-sorena-text"
-    >
+    <main className="min-h-screen bg-sorena-cream font-sans text-sorena-text">
       <div className="mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center px-6 py-16">
         <motion.div
           variants={containerVariants}
@@ -48,14 +43,14 @@ export default function StartPage() {
             variants={itemVariants}
             className="text-3xl font-bold leading-tight text-sorena-navy sm:text-4xl md:text-5xl"
           >
-            به کدام کشور علاقه‌مندی؟
+            Which country are you interested in?
           </motion.h1>
 
           <motion.p
             variants={itemVariants}
             className="mt-5 max-w-xl text-base leading-relaxed text-sorena-text/80 sm:text-lg"
           >
-            مسیرت را از همین‌جا شروع کن. در هر مرحله کنارت هستیم.
+            Start your journey here. We&apos;re with you at every step.
           </motion.p>
 
           <motion.div
@@ -75,10 +70,7 @@ export default function StartPage() {
                     {c.flag}
                   </span>
                   <span className="text-xl font-semibold text-sorena-navy sm:text-2xl">
-                    {c.nameFa}
-                  </span>
-                  <span className="text-sm font-medium uppercase tracking-wider text-sorena-text/60 sm:text-base">
-                    {c.nameEn}
+                    {c.name}
                   </span>
                 </Link>
               </motion.div>
