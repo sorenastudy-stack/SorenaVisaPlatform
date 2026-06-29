@@ -16,6 +16,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
 
+    // Some paths (e.g. an OAuth guard that already issued a 302 redirect)
+    // have written the response before an exception propagates here.
+    // Writing again throws ERR_HTTP_HEADERS_SENT, which is uncaught and
+    // crashes the whole process. Bail out — the client already has a
+    // response.
+    if (response.headersSent) {
+      this.logger.warn(
+        'Exception after response already sent; skipping filter write.',
+      );
+      return;
+    }
+
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'An unexpected error occurred. Please try again.';
 
