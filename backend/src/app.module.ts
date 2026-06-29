@@ -41,6 +41,7 @@ import { ScorecardModule } from './scorecard/scorecard.module';
 import { MarketingModule } from './marketing/marketing.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { WixIntegrationModule } from './wix-integration/wix-integration.module';
+import { BookingModule } from './booking/booking.module';
 
 @Module({
   imports: [
@@ -133,6 +134,10 @@ import { WixIntegrationModule } from './wix-integration/wix-integration.module';
     // POST /webhooks/wix/payment (shared-secret authenticated),
     // staff CRUD at /staff/wix-payments/*.
     WixIntegrationModule,
+    // PR-BOOKING-3: native in-portal booking. Stage 3 = FREE_15 flow
+    // (GET /booking/slots, POST /booking/confirm, GET /booking/mine),
+    // gated to LEAD/STUDENT.
+    BookingModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`

@@ -81,6 +81,200 @@ export class BookingService {
   }
 
   /**
+   * The adviser pool for a session type. LIA → verified-LIA advisers.
+   * FREE_15 / GAP_CLOSING → any active user with at least one active
+   * availability window (the non-LIA pool).
+   */
+  async listAdvisersForType(sessionType: BookingSessionType): Promise<Array<{ id: string; name: string }>> {
+    const cfg = getSessionConfig(sessionType);
+    if (cfg.requiresLiaAdviser) return this.listEligibleLiaAdvisers();
+    // Non-LIA pool: active advisers with availability who are NOT LIAs.
+    // LIAs are reserved for paid LIA sessions.
+    return this.prisma.user.findMany({
+      where: {
+        isActive: true,
+        role: { not: 'LIA' },
+        adviserAvailability: { some: { active: true } },
+      },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Available slots for a session TYPE across its whole adviser pool.
+   * Merges every pool adviser's slots, dedupes by start instant (first
+   * adviser wins that time), and tags each slot with the adviser who will
+   * take it — so the confirm step knows which adviser to book.
+   */
+  async getSlotsForType(params: {
+    sessionType: BookingSessionType;
+    dateFrom: Date;
+    dateTo: Date;
+    now?: Date;
+  }): Promise<{
+    sessionType: BookingSessionType;
+    durationMinutes: number;
+    timezone: string;
+    slots: Array<{ startUtc: string; endUtc: string; adviserId: string }>;
+  }> {
+    const { sessionType, dateFrom, dateTo } = params;
+    const now = params.now ?? new Date();
+    const cfg = getSessionConfig(sessionType);
+
+    const advisers = await this.listAdvisersForType(sessionType);
+    let timezone = 'Pacific/Auckland';
+    const byStart = new Map<string, { startUtc: string; endUtc: string; adviserId: string }>();
+
+    for (const adviser of advisers) {
+      const res = await this.getAvailableSlots({ adviserId: adviser.id, sessionType, dateFrom, dateTo, now });
+      if (res.slots.length > 0) timezone = res.timezone;
+      for (const s of res.slots) {
+        const key = s.start.toISOString();
+        if (!byStart.has(key)) {
+          byStart.set(key, { startUtc: key, endUtc: s.end.toISOString(), adviserId: adviser.id });
+        }
+      }
+    }
+
+    const slots = [...byStart.values()].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+    return { sessionType, durationMinutes: cfg.durationMinutes, timezone, slots };
+  }
+
+  /**
+   * Resolve the CRM Lead for a signed-in client user (via the
+   * lead.contact.userId chain), creating a minimal Contact + Lead if the
+   * user doesn't have one yet (e.g. a Google-provisioned LEAD who hasn't
+   * been through the scorecard). Contact carries no email here to avoid
+   * the unique-email/emailHash constraints.
+   */
+  async resolveOrCreateLeadForUser(userId: string): Promise<string> {
+    const existing = await this.prisma.lead.findFirst({
+      where: { contact: { userId } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
+    if (!user) throw new BadRequestException('User not found');
+
+    return this.prisma.$transaction(async (tx) => {
+      // One Contact per user (Contact.userId is unique). Re-check inside
+      // the tx in case a Contact exists without a Lead.
+      let contact = await tx.contact.findUnique({ where: { userId }, select: { id: true } });
+      if (!contact) {
+        contact = await tx.contact.create({
+          data: { userId, fullName: user.name },
+          select: { id: true },
+        });
+      }
+      const lead = await tx.lead.create({ data: { contactId: contact.id }, select: { id: true } });
+      return lead.id;
+    });
+  }
+
+  /**
+   * Create + confirm a FREE_15 booking for the signed-in client. Validates
+   * the requested slot is genuinely offered for that adviser (inside
+   * working hours, ≥24h lead, not taken), then creates the Consultation
+   * and commits it transactionally. The slot/adviser come from the
+   * client; the LEAD identity comes from the JWT, never the body.
+   */
+  async createFreeBooking(params: {
+    userId: string;
+    adviserId: string;
+    slotStartUtc: string;
+    now?: Date;
+  }): Promise<{ id: string; scheduledAt: Date; scheduledEndAt: Date; status: string; timezone: string; adviserName: string }> {
+    const sessionType: BookingSessionType = 'FREE_15';
+    const now = params.now ?? new Date();
+
+    const slotStart = new Date(params.slotStartUtc);
+    if (isNaN(slotStart.getTime())) throw new BadRequestException('Invalid slotStartUtc');
+
+    // Re-derive the adviser's currently-available slots and require the
+    // requested one to be present — defends against booking outside hours,
+    // inside the 24h lead window, or a stale slot the client cached.
+    const windowEnd = new Date(slotStart.getTime() + 2 * 86_400_000);
+    const avail = await this.getAvailableSlots({
+      adviserId: params.adviserId, sessionType, dateFrom: new Date(now.getTime() - 60_000), dateTo: windowEnd, now,
+    });
+    const match = avail.slots.find((s) => s.start.getTime() === slotStart.getTime());
+    if (!match) {
+      throw new ConflictException('That time was just taken — please pick another slot');
+    }
+
+    const adviser = await this.prisma.user.findUnique({ where: { id: params.adviserId }, select: { name: true } });
+    const leadId = await this.resolveOrCreateLeadForUser(params.userId);
+
+    // Create the booking row, then commit it onto the slot (the commit
+    // guard + partial unique index enforce no double-booking).
+    const consultation = await this.prisma.consultation.create({
+      data: {
+        leadId,
+        type: 'FREE_15',
+        amountNZD: 0,
+        paymentStatus: 'PAID', // free → nothing to collect
+        assignedToId: params.adviserId,
+        status: 'PENDING',
+      },
+      select: { id: true },
+    });
+
+    const committed = await this.commitBooking({
+      consultationId: consultation.id,
+      adviserId: params.adviserId,
+      sessionType,
+      slotStart,
+      timezone: avail.timezone,
+      confirm: true,
+    });
+
+    return {
+      id: committed.id,
+      scheduledAt: committed.scheduledAt,
+      scheduledEndAt: committed.scheduledEndAt,
+      status: committed.status,
+      timezone: avail.timezone,
+      adviserName: adviser?.name ?? 'Your adviser',
+    };
+  }
+
+  /** The signed-in client's upcoming confirmed/booked sessions. */
+  async getMyUpcomingBookings(userId: string, now: Date = new Date()): Promise<Array<{
+    id: string; type: string; scheduledAt: Date; scheduledEndAt: Date | null;
+    durationMinutes: number | null; timezone: string | null; adviserName: string | null; status: string;
+  }>> {
+    const rows = await this.prisma.consultation.findMany({
+      where: {
+        lead: { contact: { userId } },
+        status: { in: [...ACTIVE_BOOKING_STATUSES] },
+        scheduledAt: { gte: now },
+      },
+      orderBy: { scheduledAt: 'asc' },
+      select: {
+        id: true, type: true, scheduledAt: true, scheduledEndAt: true,
+        durationMinutes: true, bookingTimezone: true, status: true,
+        assignedTo: { select: { name: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      type: r.type,
+      scheduledAt: r.scheduledAt as Date,
+      scheduledEndAt: r.scheduledEndAt,
+      durationMinutes: r.durationMinutes,
+      timezone: r.bookingTimezone,
+      adviserName: r.assignedTo?.name ?? null,
+      status: r.status,
+    }));
+  }
+
+  /**
    * Available slots for an adviser + session type over a date range.
    * Loads active weekly windows and current busy intervals, then defers
    * to the pure engine.
