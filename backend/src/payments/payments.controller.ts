@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest, Logger, BadRequestException } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
@@ -16,6 +16,7 @@ import { CreateCaseCustomLinkDto } from './dto/create-case-custom-link.dto';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { RejectPaymentDto } from './dto/reject-payment.dto';
+import { Prisma } from '@prisma/client';
 import Stripe from 'stripe';
 
 @Controller('payments')
@@ -251,7 +252,11 @@ export class PaymentsController {
         signature,
       );
     } catch (error) {
-      return { error: error.message };
+      // Signature verification failed. Return 400 (NOT 201) so the failure
+      // is visible in `stripe listen` and Stripe retries delivery. Returning
+      // a 2xx here previously masked secret-mismatch / raw-body problems.
+      this.logger.warn(`Stripe webhook signature verification failed: ${error.message}`);
+      throw new BadRequestException(`Webhook signature verification failed`);
     }
 
     // Handle payment_intent.succeeded
@@ -411,6 +416,10 @@ export class PaymentsController {
           );
         }
       }
+    } else if (paymentIntent.metadata?.paymentType === 'booking') {
+      // PR-BOOKING-4 — paid booking (GAP_CLOSING slice). Confirm the held
+      // consultation referenced by metadata.consultationId.
+      await this.confirmHeldBookingPayment(paymentIntent);
     } else {
       // Handle subscription payment. Note: pre-PR-LIA-AUTO-ASSIGN this branch
       // also (incorrectly) swallowed ACCOUNT_OPENING webhooks because the
@@ -434,6 +443,98 @@ export class PaymentsController {
         null,
         { plan, amount: paymentIntent.amount_received },
       );
+    }
+  }
+
+  /**
+   * PR-BOOKING-4 — confirm a held paid booking on payment success.
+   *
+   * Flips the held PENDING consultation → CONFIRMED + paymentStatus PAID.
+   * Idempotency for Stripe retries is already handled upstream by the
+   * Payment.create @unique guard (this runs at most once per intent); the
+   * already-CONFIRMED short-circuit is a second line of defence.
+   *
+   * PAID-NO-SLOT: if the hold lapsed and another confirmed booking took the
+   * adviser+slot, the confirm flip would double-book. We detect that (re-
+   * check + the partial unique index) and instead keep the payment, mark it
+   * PAID, drop the lost slot, and flag for staff refund/rebook — never lose
+   * the money. (Email/staff notification is a TODO in this slice — logged.)
+   */
+  private async confirmHeldBookingPayment(paymentIntent: any) {
+    const consultationId = paymentIntent.metadata?.consultationId as string | undefined;
+    if (!consultationId) {
+      this.logger.warn(`booking webhook ${paymentIntent.id}: no consultationId in metadata — skipping`);
+      return;
+    }
+    const consult = await this.prisma.consultation.findUnique({
+      where: { id: consultationId },
+      select: { id: true, status: true, assignedToId: true, scheduledAt: true, scheduledEndAt: true, leadId: true },
+    });
+    if (!consult) {
+      this.logger.warn(`booking webhook: consultation ${consultationId} not found`);
+      return;
+    }
+    if (consult.status === 'CONFIRMED') {
+      return; // idempotent — already confirmed
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Did another confirmed booking take this adviser+slot while the
+        // hold lapsed? (The partial unique index is the ultimate guard; this
+        // re-check gives a clean branch.)
+        if (consult.assignedToId && consult.scheduledAt && consult.scheduledEndAt) {
+          const clash = await tx.consultation.findFirst({
+            where: {
+              assignedToId: consult.assignedToId,
+              id: { not: consult.id },
+              status: { in: ['BOOKED', 'CONFIRMED'] },
+              scheduledAt: { not: null, lt: consult.scheduledEndAt },
+              scheduledEndAt: { gt: consult.scheduledAt },
+            },
+            select: { id: true },
+          });
+          if (clash) {
+            const err: any = new Error('slot lost');
+            err.__slotLost = true;
+            throw err;
+          }
+        }
+        await tx.consultation.update({
+          where: { id: consult.id },
+          data: { status: 'CONFIRMED', paymentStatus: 'PAID', stripePaymentId: paymentIntent.id, holdExpiresAt: null },
+        });
+      });
+
+      await this.eventsService.emit(
+        'BOOKING_CONFIRMED', 'CONSULTATION', consultationId, consult.leadId, 'SYSTEM', null,
+        { paymentIntentId: paymentIntent.id },
+      );
+      this.logger.log(`Booking ${consultationId} confirmed on payment ${paymentIntent.id}`);
+    } catch (e: any) {
+      const slotLost = e?.__slotLost
+        || (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002');
+      if (slotLost) {
+        await this.prisma.consultation.update({
+          where: { id: consultationId },
+          data: {
+            paymentStatus: 'PAID',
+            stripePaymentId: paymentIntent.id,
+            scheduledAt: null,
+            scheduledEndAt: null,
+            holdExpiresAt: null,
+          },
+        });
+        await this.eventsService.emit(
+          'BOOKING_PAID_SLOT_LOST', 'CONSULTATION', consultationId, consult.leadId, 'SYSTEM', null,
+          { paymentIntentId: paymentIntent.id },
+        );
+        this.logger.warn(
+          `Booking ${consultationId} PAID but slot lost — flagged for refund/rebook (TODO: notify staff + client).`,
+        );
+        return;
+      }
+      throw e;
     }
   }
 

@@ -341,11 +341,187 @@ function BackToCase() {
   );
 }
 
+// ── GAP_CLOSING paid flow (PR-BOOKING-4 slice 1) ──────────────────────
+interface Hold {
+  consultationId: string; holdExpiresAt: string; amountNZD: number;
+  type: string; slotStartUtc: string; adviserName: string; timezone: string;
+}
+type GapStep = 'pick' | 'hold' | 'expired';
+
+function GapBookingFlow() {
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [data, setData] = useState<SlotsResponse | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [step, setStep] = useState<GapStep>('pick');
+  const [hold, setHold] = useState<Hold | null>(null);
+  const [holding, setHolding] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+
+  async function loadSlots() {
+    setLoading(true); setLoadError(false);
+    try {
+      const now = new Date();
+      const to = new Date(now.getTime() + 14 * 86_400_000);
+      const res = await api.get<SlotsResponse>(
+        `/booking/slots?type=GAP_CLOSING&from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
+      );
+      setData(res);
+    } catch { setLoadError(true); } finally { setLoading(false); }
+  }
+  useEffect(() => { loadSlots(); }, []);
+
+  const days = useMemo(() => {
+    if (!data) return [] as Array<{ key: string; label: string; slots: Slot[] }>;
+    const tz = data.timezone;
+    const map = new Map<string, { key: string; label: string; slots: Slot[] }>();
+    for (const s of data.slots) {
+      const key = dateKey(s.startUtc, tz);
+      if (!map.has(key)) map.set(key, { key, label: fmt(s.startUtc, tz, { weekday: 'short', day: 'numeric', month: 'short' }), slots: [] });
+      map.get(key)!.slots.push(s);
+    }
+    return [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+  }, [data]);
+  useEffect(() => { if (!selectedDate && days.length > 0) setSelectedDate(days[0].key); }, [days, selectedDate]);
+
+  const tz = data?.timezone ?? 'Pacific/Auckland';
+  const activeDay = days.find((d) => d.key === selectedDate) ?? null;
+
+  // Countdown while holding.
+  useEffect(() => {
+    if (step !== 'hold' || !hold) return;
+    const tick = () => {
+      const s = Math.max(0, Math.round((new Date(hold.holdExpiresAt).getTime() - Date.now()) / 1000));
+      setSecondsLeft(s);
+      if (s <= 0) setStep('expired');
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [step, hold]);
+
+  async function startHold(slot: Slot) {
+    setHolding(true); setPickError(null);
+    try {
+      const h = await api.post<Hold>('/booking/hold', { type: 'GAP_CLOSING', slotStartUtc: slot.startUtc });
+      setHold(h); setStep('hold');
+    } catch (err) {
+      // Slot gone / no adviser free — refresh and let them pick again.
+      setPickError('That time is no longer available — please pick another.');
+      await loadSlots();
+    } finally { setHolding(false); }
+  }
+
+  async function pay() {
+    if (!hold) return;
+    setPaying(true);
+    try {
+      const { url } = await api.post<{ url: string }>('/booking/checkout', { consultationId: hold.consultationId });
+      window.location.href = url; // hand off to Stripe Checkout
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 409) { setStep('expired'); }
+      else { setStep('expired'); }
+    } finally { setPaying(false); }
+  }
+
+  function resetToPick() { setHold(null); setStep('pick'); loadSlots(); }
+
+  if (loading) {
+    return <Shell><div className="flex items-center justify-center gap-2 py-12 text-sorena-text/60"><Loader2 size={18} className="animate-spin" /> Finding available times…</div></Shell>;
+  }
+  if (loadError) {
+    return <Shell><p className="text-center text-sm text-sorena-text/70 py-8">We couldn&apos;t load available times. Please try again.</p><div className="text-center"><button onClick={loadSlots} className="text-sm font-semibold text-sorena-navy underline">Try again</button></div></Shell>;
+  }
+
+  // ── Hold expired ────────────────────────────────────────────────────
+  if (step === 'expired') {
+    return (
+      <Shell>
+        <div className="text-center py-2">
+          <h1 className="text-xl font-bold text-sorena-navy">Your hold expired</h1>
+          <p className="mt-3 text-sm text-sorena-text/75">No charge was made. Please pick a time again.</p>
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <button onClick={resetToPick} className="inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-sorena-gold px-8 py-3 font-semibold text-sorena-navy shadow-md hover:bg-sorena-gold/90">Pick a time</button>
+            <BackToCase />
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── Hold: 15-min countdown + pay ────────────────────────────────────
+  if (step === 'hold' && hold) {
+    const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+    const ss = String(secondsLeft % 60).padStart(2, '0');
+    return (
+      <Shell>
+        <h1 className="text-xl font-bold text-sorena-navy text-center">Confirm &amp; pay</h1>
+        <div className="mt-6 rounded-2xl bg-sorena-cream border border-sorena-navy/10 p-5 text-center">
+          <p className="text-xs uppercase tracking-wide text-sorena-text/50 font-semibold">Gap-Closing session · NZD {hold.amountNZD}</p>
+          <p className="mt-2 text-lg font-bold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          <p className="text-lg font-semibold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true })} NZ</p>
+          <p className="mt-1 text-xs text-sorena-text/50">with {hold.adviserName} · Times in New Zealand time</p>
+        </div>
+        <div className="mt-5 text-center">
+          <p className="text-sm text-sorena-text/70">We&apos;re holding this time for you.</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-sorena-navy">{mm}:{ss}</p>
+          <p className="text-xs text-sorena-text/50">minutes left to pay</p>
+        </div>
+        <div className="mt-6 space-y-3">
+          <button onClick={pay} disabled={paying} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 disabled:opacity-60">
+            {paying ? <><Loader2 size={18} className="animate-spin" /> Redirecting…</> : `Pay NZD ${hold.amountNZD}`}
+          </button>
+          <button onClick={resetToPick} disabled={paying} className="flex w-full items-center justify-center gap-1 text-sm font-semibold text-sorena-navy/70 hover:text-sorena-navy"><ArrowLeft size={14} /> Pick a different time</button>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── Pick (date row + that day's slots) ──────────────────────────────
+  return (
+    <Shell>
+      <h1 className="text-xl font-bold text-sorena-navy text-center">Book your Gap-Closing session</h1>
+      <p className="mt-2 text-center text-sm text-sorena-text/60">NZD 30 · Pick a day, then a time. You&apos;ll have 15 minutes to pay.</p>
+      {pickError && (
+        <div className="mt-4 rounded-xl bg-sorena-clay/10 border border-sorena-clay/30 px-4 py-3 text-sm text-sorena-clay text-center">{pickError}</div>
+      )}
+      {days.length === 0 ? (
+        <p className="mt-8 text-center text-sm text-sorena-text/60">There are no open times right now. Please check back soon.</p>
+      ) : (
+        <>
+          <div className="mt-6 -mx-1 flex gap-2 overflow-x-auto pb-2">
+            {days.map((d) => {
+              const active = d.key === selectedDate;
+              return (
+                <button key={d.key} onClick={() => setSelectedDate(d.key)} className={['flex-shrink-0 rounded-xl border px-4 py-3 text-center transition-colors min-w-[5.5rem]', active ? 'border-sorena-navy bg-sorena-navy text-white' : 'border-sorena-navy/15 bg-white text-sorena-navy hover:border-sorena-navy/40'].join(' ')}>
+                  <span className="block text-sm font-semibold">{d.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-5 text-xs text-sorena-text/50 text-center">Times shown in New Zealand time</p>
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {activeDay?.slots.map((s) => (
+              <button key={s.startUtc} disabled={holding} onClick={() => startHold(s)} className="rounded-xl border border-sorena-navy/15 bg-white px-2 py-3 text-sm font-semibold text-sorena-navy transition-all hover:-translate-y-0.5 hover:border-sorena-gold hover:shadow-sm disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-gold">
+                {fmt(s.startUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true })}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="mt-8"><BackToCase /></div>
+    </Shell>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────
 function BookingRouter() {
   const searchParams = useSearchParams();
   const type = (searchParams.get('type') ?? '').toLowerCase();
   if (type === 'free15') return <FreeBookingFlow />;
+  if (type === 'gap') return <GapBookingFlow />;
   return (
     <div className="mx-auto max-w-xl">
       <BookingPlaceholder type={type} />

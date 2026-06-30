@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
+  NotFoundException,
   Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -10,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   BookingSessionType,
   getSessionConfig,
+  BOOKING_HOLD_MINUTES,
 } from './session-config';
 import {
   computeAvailableSlots,
@@ -239,6 +241,143 @@ export class BookingService {
       },
     });
     return count > 0;
+  }
+
+  // ── PAID BOOKING: hold + checkout (PR-BOOKING-4, GAP_CLOSING slice) ────
+
+  /** Cancel this client's own stale (expired, unpaid) PENDING holds. */
+  async cancelStaleHoldsForUser(userId: string, now: Date): Promise<void> {
+    await this.prisma.consultation.updateMany({
+      where: {
+        lead: { contact: { userId } },
+        status: 'PENDING',
+        paymentStatus: { not: 'PAID' },
+        holdExpiresAt: { lt: now },
+      },
+      data: { status: 'CANCELLED' },
+    });
+  }
+
+  /**
+   * Create a HELD slot for a paid session. Capacity-aware: assigns a free
+   * adviser at the slot (preferred first), with a transactional re-check
+   * against overlapping active bookings AND other live holds, then writes
+   * a PENDING consultation with holdExpiresAt = now + BOOKING_HOLD_MINUTES.
+   * The slot engine counts this hold as busy until it expires. 409 if no
+   * adviser is free.
+   */
+  async createHold(params: {
+    userId: string;
+    sessionType: BookingSessionType;
+    slotStartUtc: string;
+    preferredAdviserId?: string;
+    now?: Date;
+  }): Promise<{
+    consultationId: string; holdExpiresAt: Date; amountNZD: number;
+    type: BookingSessionType; slotStartUtc: string; adviserName: string; timezone: string;
+  }> {
+    const { sessionType } = params;
+    const cfg = getSessionConfig(sessionType);
+    const now = params.now ?? new Date();
+
+    const slotStart = new Date(params.slotStartUtc);
+    if (isNaN(slotStart.getTime())) throw new BadRequestException('Invalid slotStartUtc');
+    const slotEnd = new Date(slotStart.getTime() + cfg.durationMinutes * 60_000);
+
+    // Release this client's own expired holds before making a new one.
+    await this.cancelStaleHoldsForUser(params.userId, now);
+
+    const { adviserIds, timezone } = await this.availableAdvisersAt(sessionType, slotStart, now);
+    if (adviserIds.length === 0) {
+      throw new ConflictException('That time is no longer available — please pick another slot');
+    }
+    const ordered = params.preferredAdviserId && adviserIds.includes(params.preferredAdviserId)
+      ? [params.preferredAdviserId, ...adviserIds.filter((id) => id !== params.preferredAdviserId)]
+      : adviserIds;
+
+    const leadId = await this.resolveOrCreateLeadForUser(params.userId);
+    const holdExpiresAt = new Date(now.getTime() + BOOKING_HOLD_MINUTES * 60_000);
+
+    for (const adviserId of ordered) {
+      try {
+        const consult = await this.prisma.$transaction(async (tx) => {
+          // Re-check: no active booking AND no other LIVE hold overlapping
+          // this adviser+slot. (Holds aren't covered by the partial unique
+          // index, so this app-level guard narrows the race; the confirm
+          // step's index is the hard backstop.)
+          const clash = await tx.consultation.findFirst({
+            where: {
+              assignedToId: adviserId,
+              scheduledAt: { not: null, lt: slotEnd },
+              scheduledEndAt: { gt: slotStart },
+              OR: [
+                { status: { in: [...ACTIVE_BOOKING_STATUSES] } },
+                { status: 'PENDING', holdExpiresAt: { gt: now } },
+              ],
+            },
+            select: { id: true },
+          });
+          if (clash) throw new ConflictException('taken');
+
+          return tx.consultation.create({
+            data: {
+              leadId,
+              type: sessionType as any,
+              amountNZD: cfg.priceNZD,
+              paymentStatus: 'PENDING',
+              status: 'PENDING',
+              assignedToId: adviserId,
+              scheduledAt: slotStart,
+              scheduledEndAt: slotEnd,
+              durationMinutes: cfg.durationMinutes,
+              bookingTimezone: timezone,
+              holdExpiresAt,
+            },
+            select: { id: true },
+          });
+        });
+
+        const adviser = await this.prisma.user.findUnique({ where: { id: adviserId }, select: { name: true } });
+        return {
+          consultationId: consult.id,
+          holdExpiresAt,
+          amountNZD: cfg.priceNZD,
+          type: sessionType,
+          slotStartUtc: slotStart.toISOString(),
+          adviserName: adviser?.name ?? 'Your adviser',
+          timezone,
+        };
+      } catch (e) {
+        if (e instanceof ConflictException) continue; // adviser taken — try next
+        throw e;
+      }
+    }
+    throw new ConflictException('That time is no longer available — please pick another slot');
+  }
+
+  /**
+   * Validate a held consultation is payable by this client and return the
+   * fields the controller needs to build the Stripe Checkout session.
+   * 409 if already paid/confirmed or the hold expired.
+   */
+  async getHoldForCheckout(userId: string, consultationId: string, now: Date = new Date()): Promise<{
+    id: string; leadId: string; type: BookingSessionType; amountNZD: number;
+  }> {
+    const c = await this.prisma.consultation.findFirst({
+      where: { id: consultationId, lead: { contact: { userId } } },
+      select: { id: true, leadId: true, type: true, status: true, paymentStatus: true, holdExpiresAt: true, amountNZD: true },
+    });
+    if (!c) throw new NotFoundException('Hold not found');
+    if (c.type !== 'GAP_CLOSING') {
+      throw new BadRequestException('This booking type is not payable yet');
+    }
+    if (c.status === 'CONFIRMED' || c.paymentStatus === 'PAID') {
+      throw new ConflictException('This booking is already paid');
+    }
+    if (c.status !== 'PENDING' || !c.holdExpiresAt || c.holdExpiresAt <= now) {
+      throw new ConflictException('Your hold expired — please pick a time again');
+    }
+    return { id: c.id, leadId: c.leadId, type: c.type as BookingSessionType, amountNZD: c.amountNZD };
   }
 
   /**

@@ -262,6 +262,52 @@ export class StripeService {
   }
 
   /**
+   * PR-BOOKING-4 — Stripe Checkout Session for a HELD booking slot.
+   *
+   * Hosted Checkout (mode 'payment'). Price comes from the caller
+   * (session-config, NOT the legacy amount maps). CRITICAL: metadata is
+   * set on BOTH the session `metadata` AND `payment_intent_data.metadata`
+   * — the webhook reads `paymentIntent.metadata`, which does NOT inherit
+   * the session metadata. `consultationId` is what lets the webhook find
+   * and confirm THIS held consultation.
+   */
+  async createBookingCheckoutSession(params: {
+    consultationId: string;
+    leadId: string;
+    bookingType: string; // e.g. 'GAP_CLOSING'
+    amountCents: number;
+    productName: string;
+  }) {
+    this.assertConfigured();
+    const metadata: Record<string, string> = {
+      leadId: params.leadId,
+      consultationId: params.consultationId,
+      paymentType: 'booking',
+      bookingType: params.bookingType,
+    };
+    const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const session = await this.stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: 'nzd',
+            product_data: { name: params.productName },
+            unit_amount: params.amountCents,
+          },
+          quantity: 1,
+        },
+      ],
+      metadata,
+      payment_intent_data: { metadata },
+      success_url: `${frontend}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${frontend}/portal/booking?type=gap`,
+    });
+    return session;
+  }
+
+  /**
    * Construct and verify webhook event
    */
   constructWebhookEvent(payload: Buffer, signature: string) {

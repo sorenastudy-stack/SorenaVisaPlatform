@@ -15,6 +15,27 @@ export class SlotsQueryDto {
   to!: string;
 }
 
+// PR-BOOKING-4 — paid booking (GAP_CLOSING slice).
+export class HoldBookingDto {
+  // Slice 1: GAP_CLOSING only. LIA lands in a later slice.
+  @IsIn(['GAP_CLOSING'])
+  type!: 'GAP_CLOSING';
+
+  @IsISO8601()
+  slotStartUtc!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  adviserId?: string;
+}
+
+export class CheckoutBookingDto {
+  @IsString()
+  @IsNotEmpty()
+  consultationId!: string;
+}
+
 export class ConfirmBookingDto {
   // Stage 3: only FREE_15 may be confirmed here (no payment). Paid types
   // are rejected until the Stripe flow lands.

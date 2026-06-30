@@ -10,6 +10,11 @@
 
 export type BookingSessionType = 'FREE_15' | 'GAP_CLOSING' | 'LIA';
 
+// PR-BOOKING-4: how long a paid-booking slot is held (PENDING consultation
+// with holdExpiresAt) while the client completes Stripe Checkout. Single
+// source of truth — tune here.
+export const BOOKING_HOLD_MINUTES = 15;
+
 export interface SessionTypeConfig {
   type: BookingSessionType;
   durationMinutes: number;
