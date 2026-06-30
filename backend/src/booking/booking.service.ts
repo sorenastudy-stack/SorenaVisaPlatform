@@ -225,6 +225,23 @@ export class BookingService {
   }
 
   /**
+   * Whether this client has already used their one free 15-min session.
+   * "Used" = any FREE_15 consultation that isn't cancelled (booked,
+   * confirmed, completed, no-show all count). Paid types are never
+   * limited — this only governs FREE_15.
+   */
+  async hasUsedFreeSession(userId: string): Promise<boolean> {
+    const count = await this.prisma.consultation.count({
+      where: {
+        type: 'FREE_15',
+        status: { not: 'CANCELLED' },
+        lead: { contact: { userId } },
+      },
+    });
+    return count > 0;
+  }
+
+  /**
    * Create + confirm a FREE_15 booking for the signed-in client, capacity-
    * aware. The client supplies only the start time (the LEAD identity comes
    * from the JWT, never the body); the server assigns one of the advisers
@@ -249,6 +266,15 @@ export class BookingService {
 
     const slotStart = new Date(params.slotStartUtc);
     if (isNaN(slotStart.getTime())) throw new BadRequestException('Invalid slotStartUtc');
+
+    // Free-once rule: one FREE_15 per client, ever. ForbiddenException
+    // (403) so the frontend can distinguish "already used" from the 409
+    // "slot just taken" path and show the paid-options message instead.
+    if (await this.hasUsedFreeSession(params.userId)) {
+      throw new ForbiddenException(
+        "You've already used your free consultation. Please choose a paid session to continue.",
+      );
+    }
 
     // Advisers free at this exact time (inside hours, ≥24h lead, not busy).
     const { adviserIds, timezone } = await this.availableAdvisersAt(sessionType, slotStart, now);

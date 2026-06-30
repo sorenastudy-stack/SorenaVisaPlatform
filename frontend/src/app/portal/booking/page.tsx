@@ -72,11 +72,17 @@ function FreeBookingFlow() {
   const [step, setStep] = useState<Step>('pick');
   const [submitting, setSubmitting] = useState(false);
   const [takenError, setTakenError] = useState(false);
+  const [freeUsed, setFreeUsed] = useState(false);
 
   async function loadSlots() {
     setLoading(true);
     setLoadError(false);
     try {
+      // Free-once gate: if the client already used their free session,
+      // show the "already used" panel instead of the slot picker.
+      const elig = await api.get<{ used: boolean }>('/booking/free-eligibility');
+      if (elig.used) { setFreeUsed(true); return; }
+
       const now = new Date();
       const to = new Date(now.getTime() + 14 * 86_400_000);
       const res = await api.get<SlotsResponse>(
@@ -127,7 +133,11 @@ function FreeBookingFlow() {
       });
       setStep('done');
     } catch (err) {
-      if (err instanceof ApiError && err.statusCode === 409) {
+      if (err instanceof ApiError && err.statusCode === 403) {
+        // Free-once rule tripped at confirm time (backstop) — show the
+        // "already used" panel.
+        setFreeUsed(true);
+      } else if (err instanceof ApiError && err.statusCode === 409) {
         // Someone took it first — bounce back to slot selection and refresh.
         setTakenError(true);
         setSelectedSlot(null);
@@ -149,6 +159,28 @@ function FreeBookingFlow() {
       <Shell>
         <div className="flex items-center justify-center gap-2 py-12 text-sorena-text/60">
           <Loader2 size={18} className="animate-spin" /> Finding available times…
+        </div>
+      </Shell>
+    );
+  }
+  // ── Free session already used ───────────────────────────────────────
+  if (freeUsed) {
+    return (
+      <Shell>
+        <div className="text-center py-2">
+          <h1 className="text-xl font-bold text-sorena-navy">Your free consultation is used</h1>
+          <p className="mt-3 text-sm text-sorena-text/75">
+            You&apos;ve already used your free consultation. Please choose a paid session to continue.
+          </p>
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <Link
+              href="/portal/booking?type=gap"
+              className="inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-sorena-gold px-8 py-3 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90"
+            >
+              Explore paid sessions
+            </Link>
+            <BackToCase />
+          </div>
         </div>
       </Shell>
     );

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { ArrowRight, FileText, Sparkles, Users } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
 
 // Client portal step 3 — the client's case overview.
 //
@@ -54,33 +55,41 @@ export default async function MyCasePage() {
   }
 
   // ─── No case yet — calm reassuring state ────────────────────────────
+  // A client can have booked sessions before a case exists, so the
+  // bookings section renders above the reassurance message.
   if (notFound) {
     return (
-      <section className="rounded-2xl bg-white border border-gray-200 p-8 md:p-12 text-center">
-        <div className="mx-auto mb-5 w-14 h-14 rounded-full bg-[#F3CE49]/15 flex items-center justify-center">
-          <Sparkles size={24} className="text-[#b8941f]" />
-        </div>
-        <h1 className="text-xl md:text-2xl font-bold text-[#1e3a5f] mb-2">
-          {t('portal.case.noCase.title')}
-        </h1>
-        <p className="text-sm text-gray-600 leading-relaxed max-w-md mx-auto">
-          {t('portal.case.noCase.body')}
-        </p>
-      </section>
+      <div className="space-y-6">
+        <UpcomingBookings />
+        <section className="rounded-2xl bg-white border border-gray-200 p-8 md:p-12 text-center">
+          <div className="mx-auto mb-5 w-14 h-14 rounded-full bg-[#F3CE49]/15 flex items-center justify-center">
+            <Sparkles size={24} className="text-[#b8941f]" />
+          </div>
+          <h1 className="text-xl md:text-2xl font-bold text-[#1e3a5f] mb-2">
+            {t('portal.case.noCase.title')}
+          </h1>
+          <p className="text-sm text-gray-600 leading-relaxed max-w-md mx-auto">
+            {t('portal.case.noCase.body')}
+          </p>
+        </section>
+      </div>
     );
   }
 
   // ─── Load failed (non-404) — calm error state ──────────────────────
   if (loadError || !caseData) {
     return (
-      <section className="rounded-2xl bg-white border border-gray-200 p-8 text-center">
-        <h1 className="text-lg font-bold text-[#1e3a5f] mb-2">
-          {t('portal.case.loadError.title')}
-        </h1>
-        <p className="text-sm text-gray-600">
-          {t('portal.case.loadError.body')}
-        </p>
-      </section>
+      <div className="space-y-6">
+        <UpcomingBookings />
+        <section className="rounded-2xl bg-white border border-gray-200 p-8 text-center">
+          <h1 className="text-lg font-bold text-[#1e3a5f] mb-2">
+            {t('portal.case.loadError.title')}
+          </h1>
+          <p className="text-sm text-gray-600">
+            {t('portal.case.loadError.body')}
+          </p>
+        </section>
+      </div>
     );
   }
 
@@ -112,6 +121,9 @@ export default async function MyCasePage() {
           </h1>
         </div>
       </section>
+
+      {/* ── Your upcoming sessions ───────────────────────────────────── */}
+      <UpcomingBookings />
 
       {/* ── Your team ────────────────────────────────────────────────── */}
       {team.length > 0 && (

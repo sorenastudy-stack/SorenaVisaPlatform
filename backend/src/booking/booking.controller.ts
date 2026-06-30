@@ -49,4 +49,14 @@ export class BookingController {
     const userId = req.user?.userId ?? req.user?.id;
     return this.service.getMyUpcomingBookings(userId);
   }
+
+  // GET /booking/free-eligibility — has the client already used their one
+  // free 15-min session? Lets the free-booking page show the "already
+  // used" state up front instead of after a rejected confirm.
+  @Get('free-eligibility')
+  async freeEligibility(@Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    const used = await this.service.hasUsedFreeSession(userId);
+    return { used };
+  }
 }
