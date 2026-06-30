@@ -37,8 +37,8 @@ export class BookingController {
     const userId = req.user?.userId ?? req.user?.id;
     const booking = await this.service.createFreeBooking({
       userId,
-      adviserId: dto.adviserId,
       slotStartUtc: dto.slotStartUtc,
+      preferredAdviserId: dto.adviserId,
     });
     return booking;
   }

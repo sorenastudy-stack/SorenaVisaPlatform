@@ -102,10 +102,18 @@ export class BookingService {
   }
 
   /**
-   * Available slots for a session TYPE across its whole adviser pool.
-   * Merges every pool adviser's slots, dedupes by start instant (first
-   * adviser wins that time), and tags each slot with the adviser who will
-   * take it — so the confirm step knows which adviser to book.
+   * Capacity-aware slot listing for a session TYPE across its adviser pool.
+   *
+   * Capacity model: each adviser = 1 seat. For a given start time the
+   * `remaining` count is the number of pool advisers who are BOTH (a)
+   * available per their weekly hours at that time AND (b) not already
+   * booked then. A time appears as long as remaining >= 1, and disappears
+   * only when every adviser at that time is taken/unavailable. Each entry
+   * carries the list of free adviserIds so the confirm step can assign
+   * one (and fall back to another on a race).
+   *
+   * 24h lead time, grid = duration, and timezone correctness are all
+   * inherited unchanged from the per-adviser getAvailableSlots.
    */
   async getSlotsForType(params: {
     sessionType: BookingSessionType;
@@ -116,7 +124,7 @@ export class BookingService {
     sessionType: BookingSessionType;
     durationMinutes: number;
     timezone: string;
-    slots: Array<{ startUtc: string; endUtc: string; adviserId: string }>;
+    slots: Array<{ startUtc: string; endUtc: string; remaining: number; availableAdviserIds: string[] }>;
   }> {
     const { sessionType, dateFrom, dateTo } = params;
     const now = params.now ?? new Date();
@@ -124,21 +132,54 @@ export class BookingService {
 
     const advisers = await this.listAdvisersForType(sessionType);
     let timezone = 'Pacific/Auckland';
-    const byStart = new Map<string, { startUtc: string; endUtc: string; adviserId: string }>();
+    // start instant → { endUtc, availableAdviserIds[] }. We ACCUMULATE
+    // every free adviser at that time (no dedup) — that list size is the
+    // capacity.
+    const byStart = new Map<string, { startUtc: string; endUtc: string; availableAdviserIds: string[] }>();
 
     for (const adviser of advisers) {
       const res = await this.getAvailableSlots({ adviserId: adviser.id, sessionType, dateFrom, dateTo, now });
       if (res.slots.length > 0) timezone = res.timezone;
       for (const s of res.slots) {
         const key = s.start.toISOString();
-        if (!byStart.has(key)) {
-          byStart.set(key, { startUtc: key, endUtc: s.end.toISOString(), adviserId: adviser.id });
+        const entry = byStart.get(key);
+        if (entry) {
+          entry.availableAdviserIds.push(adviser.id);
+        } else {
+          byStart.set(key, { startUtc: key, endUtc: s.end.toISOString(), availableAdviserIds: [adviser.id] });
         }
       }
     }
 
-    const slots = [...byStart.values()].sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+    const slots = [...byStart.values()]
+      .map((e) => ({
+        startUtc: e.startUtc,
+        endUtc: e.endUtc,
+        remaining: e.availableAdviserIds.length,
+        availableAdviserIds: e.availableAdviserIds,
+      }))
+      // A time with no free adviser simply never made it into the map, so
+      // every entry here already has remaining >= 1.
+      .sort((a, b) => a.startUtc.localeCompare(b.startUtc));
+
     return { sessionType, durationMinutes: cfg.durationMinutes, timezone, slots };
+  }
+
+  /**
+   * The pool advisers free at one exact start time (capacity helper).
+   * Reuses getSlotsForType over a tight window so 24h-lead / working-hours
+   * / busy filtering all apply identically. Returns the free adviserIds in
+   * pool order plus the resolved timezone.
+   */
+  private async availableAdvisersAt(
+    sessionType: BookingSessionType, slotStart: Date, now: Date,
+  ): Promise<{ adviserIds: string[]; timezone: string }> {
+    const cfg = getSessionConfig(sessionType);
+    const dateFrom = new Date(slotStart.getTime() - 60_000);
+    const dateTo = new Date(slotStart.getTime() + cfg.durationMinutes * 60_000 + 60_000);
+    const res = await this.getSlotsForType({ sessionType, dateFrom, dateTo, now });
+    const entry = res.slots.find((s) => s.startUtc === slotStart.toISOString());
+    return { adviserIds: entry?.availableAdviserIds ?? [], timezone: res.timezone };
   }
 
   /**
@@ -178,16 +219,23 @@ export class BookingService {
   }
 
   /**
-   * Create + confirm a FREE_15 booking for the signed-in client. Validates
-   * the requested slot is genuinely offered for that adviser (inside
-   * working hours, ≥24h lead, not taken), then creates the Consultation
-   * and commits it transactionally. The slot/adviser come from the
-   * client; the LEAD identity comes from the JWT, never the body.
+   * Create + confirm a FREE_15 booking for the signed-in client, capacity-
+   * aware. The client supplies only the start time (the LEAD identity comes
+   * from the JWT, never the body); the server assigns one of the advisers
+   * free at that time.
+   *
+   * Capacity behaviour: we compute the advisers free at the time and try
+   * to commit to each in turn (first free first; an optional
+   * preferredAdviserId is tried first when still free). The per-adviser
+   * commit guard + partial unique index prevent two clients getting the
+   * SAME adviser at the same time — so on a race we just move to the next
+   * free adviser. Only when EVERY adviser at that time is taken do we 409.
+   * This means two clients CAN both book 9am when two advisers are free.
    */
   async createFreeBooking(params: {
     userId: string;
-    adviserId: string;
     slotStartUtc: string;
+    preferredAdviserId?: string;
     now?: Date;
   }): Promise<{ id: string; scheduledAt: Date; scheduledEndAt: Date; status: string; timezone: string; adviserName: string }> {
     const sessionType: BookingSessionType = 'FREE_15';
@@ -196,52 +244,65 @@ export class BookingService {
     const slotStart = new Date(params.slotStartUtc);
     if (isNaN(slotStart.getTime())) throw new BadRequestException('Invalid slotStartUtc');
 
-    // Re-derive the adviser's currently-available slots and require the
-    // requested one to be present — defends against booking outside hours,
-    // inside the 24h lead window, or a stale slot the client cached.
-    const windowEnd = new Date(slotStart.getTime() + 2 * 86_400_000);
-    const avail = await this.getAvailableSlots({
-      adviserId: params.adviserId, sessionType, dateFrom: new Date(now.getTime() - 60_000), dateTo: windowEnd, now,
-    });
-    const match = avail.slots.find((s) => s.start.getTime() === slotStart.getTime());
-    if (!match) {
+    // Advisers free at this exact time (inside hours, ≥24h lead, not busy).
+    const { adviserIds, timezone } = await this.availableAdvisersAt(sessionType, slotStart, now);
+    if (adviserIds.length === 0) {
       throw new ConflictException('That time was just taken — please pick another slot');
     }
 
-    const adviser = await this.prisma.user.findUnique({ where: { id: params.adviserId }, select: { name: true } });
+    // Try the preferred adviser first (if still free), then the rest in
+    // pool order. "First free" assignment — noted as the simple policy;
+    // least-loaded could replace this later.
+    const ordered = params.preferredAdviserId && adviserIds.includes(params.preferredAdviserId)
+      ? [params.preferredAdviserId, ...adviserIds.filter((id) => id !== params.preferredAdviserId)]
+      : adviserIds;
+
     const leadId = await this.resolveOrCreateLeadForUser(params.userId);
 
-    // Create the booking row, then commit it onto the slot (the commit
-    // guard + partial unique index enforce no double-booking).
+    // One PENDING booking row, reused across adviser retries (commitBooking
+    // overwrites assignedToId each attempt). Avoids orphan rows on a race.
     const consultation = await this.prisma.consultation.create({
       data: {
         leadId,
         type: 'FREE_15',
         amountNZD: 0,
         paymentStatus: 'PAID', // free → nothing to collect
-        assignedToId: params.adviserId,
         status: 'PENDING',
       },
       select: { id: true },
     });
 
-    const committed = await this.commitBooking({
-      consultationId: consultation.id,
-      adviserId: params.adviserId,
-      sessionType,
-      slotStart,
-      timezone: avail.timezone,
-      confirm: true,
-    });
+    for (const adviserId of ordered) {
+      try {
+        const committed = await this.commitBooking({
+          consultationId: consultation.id,
+          adviserId,
+          sessionType,
+          slotStart,
+          timezone,
+          confirm: true,
+        });
+        const adviser = await this.prisma.user.findUnique({ where: { id: adviserId }, select: { name: true } });
+        return {
+          id: committed.id,
+          scheduledAt: committed.scheduledAt,
+          scheduledEndAt: committed.scheduledEndAt,
+          status: committed.status,
+          timezone,
+          adviserName: adviser?.name ?? 'Your adviser',
+        };
+      } catch (e) {
+        // This adviser was taken in the race — try the next free one.
+        if (e instanceof ConflictException) continue;
+        // Anything else: clean up the orphan PENDING row and rethrow.
+        await this.prisma.consultation.delete({ where: { id: consultation.id } }).catch(() => {});
+        throw e;
+      }
+    }
 
-    return {
-      id: committed.id,
-      scheduledAt: committed.scheduledAt,
-      scheduledEndAt: committed.scheduledEndAt,
-      status: committed.status,
-      timezone: avail.timezone,
-      adviserName: adviser?.name ?? 'Your adviser',
-    };
+    // Every free adviser got taken between listing and committing.
+    await this.prisma.consultation.delete({ where: { id: consultation.id } }).catch(() => {});
+    throw new ConflictException('That time was just taken — please pick another slot');
   }
 
   /** The signed-in client's upcoming confirmed/booked sessions. */

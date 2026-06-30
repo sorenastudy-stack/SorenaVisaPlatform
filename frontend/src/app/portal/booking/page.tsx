@@ -44,7 +44,10 @@ function BookingPlaceholder({ type }: { type: string }) {
 }
 
 // ── FREE_15 flow ──────────────────────────────────────────────────────
-interface Slot { startUtc: string; endUtc: string; adviserId: string; }
+// Capacity-aware: each time carries `remaining` seats (advisers free then)
+// and stays available until remaining hits 0. The server assigns the
+// adviser at confirm time, so the client sends only the start time.
+interface Slot { startUtc: string; endUtc: string; remaining: number; availableAdviserIds: string[]; }
 interface SlotsResponse { timezone: string; durationMinutes: number; slots: Slot[]; }
 
 function fmt(iso: string, tz: string, opts: Intl.DateTimeFormatOptions): string {
@@ -117,9 +120,9 @@ function FreeBookingFlow() {
     setSubmitting(true);
     setTakenError(false);
     try {
+      // Capacity model: the server assigns a free adviser for this time.
       await api.post('/booking/confirm', {
         type: 'FREE_15',
-        adviserId: selectedSlot.adviserId,
         slotStartUtc: selectedSlot.startUtc,
       });
       setStep('done');
@@ -272,9 +275,13 @@ function FreeBookingFlow() {
           <button
             key={s.startUtc}
             onClick={() => { setSelectedSlot(s); setStep('review'); }}
-            className="rounded-xl border border-sorena-navy/15 bg-white px-2 py-3 text-sm font-semibold text-sorena-navy transition-all hover:-translate-y-0.5 hover:border-sorena-gold hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-gold"
+            className="flex flex-col items-center rounded-xl border border-sorena-navy/15 bg-white px-2 py-2.5 text-sm font-semibold text-sorena-navy transition-all hover:-translate-y-0.5 hover:border-sorena-gold hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-gold"
           >
             {fmt(s.startUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true })}
+            {/* Gentle urgency only when nearly full (last seat). */}
+            {s.remaining === 1 && (
+              <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-sorena-clay">1 left</span>
+            )}
           </button>
         ))}
       </div>

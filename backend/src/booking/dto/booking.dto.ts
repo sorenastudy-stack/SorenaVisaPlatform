@@ -21,12 +21,16 @@ export class ConfirmBookingDto {
   @IsIn(['FREE_15'])
   type!: 'FREE_15';
 
-  @IsString()
-  @IsNotEmpty()
-  adviserId!: string;
-
   @IsISO8601()
   slotStartUtc!: string;
+
+  // Capacity model: the server assigns one of the advisers free at this
+  // time. adviserId is now an OPTIONAL preference only — if it's still
+  // free it's tried first, otherwise the server picks another free adviser.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  adviserId?: string;
 
   @IsOptional()
   @IsString()
