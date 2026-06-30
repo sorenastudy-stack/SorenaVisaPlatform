@@ -13,7 +13,14 @@ import { routeForRole } from '@/lib/role-redirect';
  *   2. POST the token to /api/auth/google-session, which sets the
  *      same httpOnly cookie the password-login flow uses.
  *   3. Wipe the fragment from the address bar with replaceState.
- *   4. Redirect to the role's destination via ROLE_REDIRECT.
+ *   4. HARD-navigate to the role's destination via ROLE_REDIRECT.
+ *
+ * Why a HARD navigation (window.location.assign), not router.replace:
+ * router.replace() does a client-side SOFT navigation into the
+ * destination (e.g. /portal/case — an async server component). That RSC
+ * transition intermittently never commits, leaving the user stuck on
+ * "Signing you in…". A full document load lands on the destination with
+ * the session cookie already set and sidesteps the soft-nav stall.
  *
  * Any failure (no token, route handler 4xx) bounces to
  * /login?error=not_authorized so the user gets a clear message.
@@ -24,9 +31,18 @@ type Status = 'working' | 'error';
 export default function GoogleCallbackPage() {
   const router = useRouter();
   const [status, setStatus] = useState<Status>('working');
+  const [dest, setDest] = useState<string>('/portal/case');
+  const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    // Safety net: if the hard navigation hasn't taken us away within a few
+    // seconds (e.g. a slow destination load), surface a visible link so the
+    // user is NEVER stranded on "Signing you in…" again.
+    const fallbackTimer = setTimeout(() => {
+      if (!cancelled) setShowFallback(true);
+    }, 3500);
 
     async function run() {
       const rawHash = window.location.hash.startsWith('#')
@@ -40,6 +56,9 @@ export default function GoogleCallbackPage() {
         router.replace('/login?error=not_authorized');
         return;
       }
+
+      const target = routeForRole(role);
+      setDest(target);
 
       let res: Response;
       try {
@@ -58,20 +77,22 @@ export default function GoogleCallbackPage() {
         return;
       }
 
-      // Cookie is set. Wipe the fragment from the address bar so the
-      // token doesn't sit in browser history. (The fragment is also
-      // not in any server log — this is purely cosmetic + defense
-      // against accidental link-sharing.)
+      // Cookie is set (awaited + res.ok confirmed). Wipe the token fragment
+      // from the address bar so it doesn't sit in browser history.
       try {
         window.history.replaceState({}, '', '/auth/callback');
       } catch { /* non-fatal */ }
 
       if (cancelled) return;
-      router.replace(routeForRole(role));
+
+      // HARD navigation — NOT router.replace. The cookie is already set, so
+      // a full document load of `target` authenticates cleanly and avoids
+      // the soft-nav-into-async-RSC stall that hung this page.
+      window.location.assign(target);
     }
 
     void run();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(fallbackTimer); };
   }, [router]);
 
   return (
@@ -86,7 +107,17 @@ export default function GoogleCallbackPage() {
             />
           </div>
           {status === 'working' ? (
-            <p className="mt-6 text-sm text-gray-600">Signing you in…</p>
+            <>
+              <p className="mt-6 text-sm text-gray-600">Signing you in…</p>
+              {showFallback && (
+                <p className="mt-4 text-sm text-gray-600">
+                  Taking longer than expected.{' '}
+                  <a href={dest} className="font-semibold text-sorena-navy underline">
+                    Continue to your portal
+                  </a>
+                </p>
+              )}
+            </>
           ) : (
             <div className="mt-6 text-sm text-red-700">
               <p>Could not complete sign-in. Please try again.</p>
