@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Send, X, FileText } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-LIA-7 — "Submit to INZ" overlay.
 //
@@ -120,14 +121,16 @@ export function SubmitToInzButton({ caseId }: { caseId: string }) {
               className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none disabled:bg-gray-50 mb-3"
             />
 
-            <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Submitted on</label>
-            <input
-              type="date"
-              value={submittedAt}
-              onChange={(e) => setSubmittedAt(e.target.value)}
-              disabled={submitting}
-              className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none disabled:bg-gray-50 mb-3"
-            />
+            <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Submitted on <span className="font-normal text-[#4A4A4A]/50">(dd/mm/yyyy)</span></label>
+            <div className="mb-3">
+              <DateInput
+                value={submittedAt || null}
+                onChange={(iso) => setSubmittedAt(iso ?? '')}
+                minYear={2015}
+                maxYear={new Date().getFullYear()}
+                disabled={submitting}
+              />
+            </div>
 
             <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Payment receipt (required)</label>
             <input

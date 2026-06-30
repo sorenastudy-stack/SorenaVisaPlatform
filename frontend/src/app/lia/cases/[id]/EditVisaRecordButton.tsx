@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Edit, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-LIA-8 — In-place edit of a visa record.
 //
@@ -114,23 +115,27 @@ export function EditVisaRecordButton({
 
             {outcome === 'APPROVED' && (
               <>
-                <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Visa start date</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  disabled={submitting}
-                  className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none disabled:bg-gray-50 mb-3"
-                />
+                <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Visa start date <span className="font-normal text-[#4A4A4A]/50">(dd/mm/yyyy)</span></label>
+                <div className="mb-3">
+                  <DateInput
+                    value={startDate || null}
+                    onChange={(iso) => setStartDate(iso ?? '')}
+                    minYear={new Date().getFullYear() - 1}
+                    maxYear={new Date().getFullYear() + 15}
+                    disabled={submitting}
+                  />
+                </div>
 
-                <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Visa end date</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  disabled={submitting}
-                  className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none disabled:bg-gray-50 mb-3"
-                />
+                <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Visa end date <span className="font-normal text-[#4A4A4A]/50">(dd/mm/yyyy)</span></label>
+                <div className="mb-3">
+                  <DateInput
+                    value={endDate || null}
+                    onChange={(iso) => setEndDate(iso ?? '')}
+                    minYear={new Date().getFullYear() - 1}
+                    maxYear={new Date().getFullYear() + 15}
+                    disabled={submitting}
+                  />
+                </div>
                 {startDate && endDate && startDate > endDate && (
                   <div className="text-xs text-red-700 mb-3">End date must be on or after start date.</div>
                 )}

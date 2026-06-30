@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatDate as fmtDate } from '@/lib/date';
 import { useTranslations } from 'next-intl';
 import {
   Banknote, Check, ClipboardCopy, CreditCard, FileText, Link2, Loader2,
@@ -83,15 +84,8 @@ function formatAmount(cents: number, currency: string): string {
 }
 
 function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year:  'numeric',
-      month: 'short',
-      day:   'numeric',
-    });
-  } catch {
-    return iso;
-  }
+  // Day-first NZ style ("8 Jul 2026") via the shared helper.
+  return fmtDate(iso);
 }
 
 type ManualProgress = 'idle' | 'uploading' | 'recording';

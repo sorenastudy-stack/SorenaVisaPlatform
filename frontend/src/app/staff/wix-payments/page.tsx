@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CreditCard, ExternalLink, RefreshCcw, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-SCORECARD-4 — Staff-side Wix payments browser.
 //
@@ -172,13 +173,13 @@ export default function WixPaymentsPage() {
             </div>
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wide text-[#4A4A4A]/70 mb-1">
-                Since
+                Since <span className="font-normal normal-case">(dd/mm/yyyy)</span>
               </label>
-              <input
-                type="date"
-                value={filterSince}
-                onChange={(e) => setFilterSince(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              <DateInput
+                value={filterSince || null}
+                onChange={(iso) => setFilterSince(iso ?? '')}
+                minYear={2015}
+                maxYear={new Date().getFullYear()}
               />
             </div>
           </div>

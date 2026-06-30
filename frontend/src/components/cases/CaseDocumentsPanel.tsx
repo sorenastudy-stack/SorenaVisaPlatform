@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatDate as fmtDate } from '@/lib/date';
 import { useTranslations } from 'next-intl';
 import { ExternalLink, FileText, Loader2, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -57,15 +58,8 @@ function formatSize(bytes: number): string {
 }
 
 function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year:  'numeric',
-      month: 'short',
-      day:   'numeric',
-    });
-  } catch {
-    return iso;
-  }
+  // Day-first NZ style ("8 Jul 2026") via the shared helper.
+  return fmtDate(iso);
 }
 
 export function CaseDocumentsPanel({

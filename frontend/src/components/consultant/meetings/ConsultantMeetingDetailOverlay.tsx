@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { MeetingStatusBadge } from '@/components/student/meetings/MeetingStatusBadge';
 import { TranscriptMetadataPicker } from './TranscriptMetadataPicker';
 import { TranscriptNotesEditor } from './TranscriptNotesEditor';
+import { formatDateTime as fmtDateTime } from '@/lib/date';
 
 // PR-DASH-3 — Consultant-side meeting detail overlay.
 //
@@ -38,10 +39,8 @@ interface MeetingDetail {
 }
 
 function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'full',
-    timeStyle: 'short',
-  }).format(new Date(iso));
+  // Day-first NZ style with weekday ("Wednesday, 8 Jul 2026, 1:30 pm").
+  return fmtDateTime(iso, { weekday: 'long' });
 }
 
 export function ConsultantMeetingDetailOverlay({

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatDate as fmtDate } from '@/lib/date';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -459,9 +460,8 @@ function formatBytes(n: number | null | undefined): string {
 }
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  // Day-first NZ style ("8 Jul 2026") via the shared helper.
+  return iso ? fmtDate(iso) : '—';
 }
 
 function formatRelative(iso: string | null | undefined): string {

@@ -7,6 +7,7 @@ import { useAdmission }     from '../AdmissionFormContext';
 import { DocumentUploader } from '../DocumentUploader';
 import { CountrySelect }    from '@/components/common/CountrySelect';
 import { ETHNICITIES }      from '@/lib/data/ethnicities';
+import { DateInput }        from '@/components/ui/DateInput';
 
 export function Step2AdditionalInfo() {
   const t = useTranslations();
@@ -90,11 +91,9 @@ export function Step2AdditionalInfo() {
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionStep2DobLabel')}
           </label>
-          <input
-            type="date"
-            value={dateOfBirth}
-            onChange={(e) => setStep2Fields({ dateOfBirth: e.target.value })}
-            className="w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2.5 text-sm text-sorena-navy focus:border-sorena-navy/60 focus:outline-none"
+          <DateInput
+            value={dateOfBirth || null}
+            onChange={(iso) => setStep2Fields({ dateOfBirth: iso ?? '' })}
           />
         </div>
 

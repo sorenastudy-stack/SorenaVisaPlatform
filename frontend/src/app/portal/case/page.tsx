@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { ArrowRight, FileText, Sparkles, Users } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
+import { formatDate as fmtDate } from '@/lib/date';
 
 // Client portal step 3 — the client's case overview.
 //
@@ -27,14 +28,8 @@ interface MyCase {
 }
 
 function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric', month: 'long', day: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
+  // Day-first NZ style ("8 Jul 2026") via the shared helper.
+  return iso ? fmtDate(iso) : null;
 }
 
 export default async function MyCasePage() {

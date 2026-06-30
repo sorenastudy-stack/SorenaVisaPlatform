@@ -8,6 +8,7 @@ import {
   Sparkles, BookOpen, Lock, ArrowRight, Download, ExternalLink, Scale,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatDate } from '@/lib/date';
 import { BAND_META, CATEGORY_META, RESULT_STRINGS } from '@/lib/scorecard/labels';
 import {
   FALLBACK_BOOKING_URLS,
@@ -94,9 +95,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
   const bandMeta = BAND_META[data.band];
   const colorClasses = BAND_COLOR_CLASSES[bandMeta?.color ?? 'gray'];
   const applicantName = data.answers?.full_name ?? '';
-  const generatedDate = new Date(data.submittedAt).toLocaleDateString('en-NZ', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
+  const generatedDate = formatDate(data.submittedAt);
 
   // Derive routing from band + hard-stop state. Hard-stop override
   // applies regardless of band — even Bands 1 and 2 — because legal

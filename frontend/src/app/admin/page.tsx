@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { displayCountry } from '@/lib/country-codes';
+import { formatDate as fmtDateShared } from '@/lib/date';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://sorenavisaplatform-production.up.railway.app';
 
@@ -67,7 +68,7 @@ function Badge({ label, style }: { label: string; style?: { bg: string; color: s
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
+  return fmtDateShared(iso);
 }
 
 // ── LOGIN ──────────────────────────────────────────────────────────────────────

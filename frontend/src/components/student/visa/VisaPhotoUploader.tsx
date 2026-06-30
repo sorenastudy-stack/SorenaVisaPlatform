@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { FileText, Trash2, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatDate } from '@/lib/date';
 
 // PR-VISA2 fix — INZ visa photo uploader.
 // Reuses the admission-documents pipeline (same endpoints, same signed-URL
@@ -171,7 +172,7 @@ export function VisaPhotoUploader({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-sorena-navy">{doc.fileName}</p>
             <p className="text-xs text-sorena-navy/40">
-              {fmtBytes(doc.fileSizeBytes)} · {new Date(doc.uploadedAt).toLocaleDateString()}
+              {fmtBytes(doc.fileSizeBytes)} · {formatDate(doc.uploadedAt)}
             </p>
           </div>
           <button

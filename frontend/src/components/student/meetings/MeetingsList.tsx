@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { MeetingStatusBadge } from './MeetingStatusBadge';
 import { MeetingDetailOverlay } from './MeetingDetailOverlay';
 import { BookMeetingButton } from './BookMeetingButton';
+import { formatDateTime as fmtDateTime } from '@/lib/date';
 
 // PR-DASH-3 — Student meetings list.
 //
@@ -25,10 +26,8 @@ export interface MeetingRow {
 }
 
 function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(iso));
+  // Day-first NZ style ("8 Jul 2026, 1:30 pm").
+  return fmtDateTime(iso);
 }
 
 const TYPE_KEY: Record<string, string> = {

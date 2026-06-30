@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Upload, FileText, Eye, Download, Trash2 } from 'lucide-react';
 import { useAdmission } from './AdmissionFormContext';
 import { api } from '@/lib/api';
+import { formatDate } from '@/lib/date';
 
 const ALLOWED_MIMES = [
   'application/pdf',
@@ -141,7 +142,7 @@ export function DocumentUploader({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-sorena-navy">{doc.fileName}</p>
             <p className="text-xs text-sorena-navy/40">
-              {fmtBytes(doc.fileSizeBytes)} · {new Date(doc.uploadedAt).toLocaleDateString()}
+              {fmtBytes(doc.fileSizeBytes)} · {formatDate(doc.uploadedAt)}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">

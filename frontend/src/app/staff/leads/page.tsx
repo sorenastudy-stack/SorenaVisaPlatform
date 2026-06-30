@@ -9,6 +9,8 @@ import {
 import { api } from '@/lib/api';
 import { displayCountry } from '@/lib/country-codes';
 import { Card, CardContent } from '@/components/ui/Card';
+import { DateInput } from '@/components/ui/DateInput';
+import { formatDate } from '@/lib/date';
 import {
   LeadStatusChip,
   ALL_LEAD_STATUSES,
@@ -73,7 +75,7 @@ function relativeTime(iso: string): string {
   if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
   if (diff < 604800) return `${Math.floor(diff / 86400)} day${Math.floor(diff / 86400) === 1 ? '' : 's'} ago`;
-  return date.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDate(date);
 }
 
 function initials(name: string): string {
@@ -288,22 +290,22 @@ export default function StaffLeadsPage() {
             </div>
 
             <div>
-              <FilterLabel>From</FilterLabel>
-              <input
-                type="date"
-                value={filters.dateFrom}
-                onChange={(e) => setFilter('dateFrom', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              <FilterLabel>From (dd/mm/yyyy)</FilterLabel>
+              <DateInput
+                value={filters.dateFrom || null}
+                onChange={(iso) => setFilter('dateFrom', iso ?? '')}
+                minYear={2015}
+                maxYear={new Date().getFullYear()}
               />
             </div>
 
             <div>
-              <FilterLabel>To</FilterLabel>
-              <input
-                type="date"
-                value={filters.dateTo}
-                onChange={(e) => setFilter('dateTo', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              <FilterLabel>To (dd/mm/yyyy)</FilterLabel>
+              <DateInput
+                value={filters.dateTo || null}
+                onChange={(iso) => setFilter('dateTo', iso ?? '')}
+                minYear={2015}
+                maxYear={new Date().getFullYear()}
               />
             </div>
           </div>

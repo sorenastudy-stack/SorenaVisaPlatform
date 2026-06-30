@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
+import { formatDate } from '@/lib/date';
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge';
 import { TicketDepartmentBadge } from '@/components/tickets/TicketDepartmentBadge';
 
@@ -67,7 +68,7 @@ function relativeTime(iso: string | null): string {
   if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
   if (diff < 604800) return `${Math.floor(diff / 86400)} day${Math.floor(diff / 86400) === 1 ? '' : 's'} ago`;
-  return date.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDate(date);
 }
 
 export default function StaffTicketsPage() {

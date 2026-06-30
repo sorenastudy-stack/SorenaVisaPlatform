@@ -7,6 +7,7 @@ import { MeetingStatusBadge } from '@/components/student/meetings/MeetingStatusB
 import { MeetingFormOverlay, type MeetingFormInitial } from './MeetingFormOverlay';
 import { CancelMeetingOverlay } from './CancelMeetingOverlay';
 import { ConsultantMeetingDetailOverlay } from './ConsultantMeetingDetailOverlay';
+import { formatDateTime as fmtDateTime } from '@/lib/date';
 
 // PR-DASH-3 — Consultant meetings list.
 //
@@ -29,10 +30,8 @@ export interface ConsultantMeetingRow {
 }
 
 function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(iso));
+  // Day-first NZ style ("8 Jul 2026, 1:30 pm").
+  return fmtDateTime(iso);
 }
 
 const TYPE_KEY: Record<string, string> = {

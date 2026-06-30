@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, X, FileText } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { DateInput } from '@/components/ui/DateInput';
 
 // PR-LIA-8 — "Record Approval" overlay.
 //
@@ -105,23 +106,27 @@ export function RecordVisaApprovalButton({ caseId }: { caseId: string }) {
               Capture the visa start/end dates and attach the visa document. The case moves to <strong>COMPLETED</strong> and the client receives an "your visa has been issued" email.
             </p>
 
-            <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Visa start date</label>
-            <input
-              type="date"
-              value={visaStartDate}
-              onChange={(e) => setVisaStartDate(e.target.value)}
-              disabled={submitting}
-              className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none disabled:bg-gray-50 mb-3"
-            />
+            <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Visa start date <span className="font-normal text-[#4A4A4A]/50">(dd/mm/yyyy)</span></label>
+            <div className="mb-3">
+              <DateInput
+                value={visaStartDate || null}
+                onChange={(iso) => setVisaStartDate(iso ?? '')}
+                minYear={new Date().getFullYear() - 1}
+                maxYear={new Date().getFullYear() + 15}
+                disabled={submitting}
+              />
+            </div>
 
-            <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Visa end date</label>
-            <input
-              type="date"
-              value={visaEndDate}
-              onChange={(e) => setVisaEndDate(e.target.value)}
-              disabled={submitting}
-              className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none disabled:bg-gray-50 mb-1"
-            />
+            <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Visa end date <span className="font-normal text-[#4A4A4A]/50">(dd/mm/yyyy)</span></label>
+            <div className="mb-1">
+              <DateInput
+                value={visaEndDate || null}
+                onChange={(iso) => setVisaEndDate(iso ?? '')}
+                minYear={new Date().getFullYear() - 1}
+                maxYear={new Date().getFullYear() + 15}
+                disabled={submitting}
+              />
+            </div>
             {visaStartDate && visaEndDate && visaStartDate > visaEndDate && (
               <div className="text-xs text-red-700 mb-3">End date must be on or after start date.</div>
             )}

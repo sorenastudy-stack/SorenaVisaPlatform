@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Users } from 'lucide-react';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { LEAD_STATUS_GLOSSARY } from '@/lib/glossary';
+import { formatDate as fmtDateShared } from '@/lib/date';
 
 type ScoreBand = 'HOT' | 'WARM' | 'COOL' | 'COLD' | null;
 type LeadStatus =
@@ -48,11 +49,7 @@ const statusStyles: Record<string, string> = {
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-NZ', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return fmtDateShared(iso);
 }
 
 export default async function SalesLeadsPage() {
