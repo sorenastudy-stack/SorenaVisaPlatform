@@ -19,6 +19,7 @@ import {
   WeeklyWindow,
   BusyInterval,
 } from './slot-engine';
+import { BookingConfirmationService } from './booking-confirmation.service';
 
 // PR-BOOKING-1 — booking service (Stage 1+2: data loading + slot engine +
 // commit guard). No controller/endpoints yet — that's the next stage.
@@ -47,7 +48,10 @@ const ACTIVE_BOOKING_STATUSES = ['BOOKED', 'CONFIRMED'] as const;
 export class BookingService {
   private readonly logger = new Logger(BookingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bookingConfirmation: BookingConfirmationService,
+  ) {}
 
   /**
    * Verify an adviser is eligible for a session type. LIA sessions require
@@ -454,6 +458,9 @@ export class BookingService {
           confirm: true,
         });
         const adviser = await this.prisma.user.findUnique({ where: { id: adviserId }, select: { name: true } });
+        // PR-BOOKING-5 — finalize (Jitsi link + confirmation email).
+        // Best-effort; never let it unwind the confirmed free booking.
+        await this.bookingConfirmation.onConfirmed(committed.id).catch(() => undefined);
         return {
           id: committed.id,
           scheduledAt: committed.scheduledAt,
@@ -479,7 +486,8 @@ export class BookingService {
   /** The signed-in client's upcoming confirmed/booked sessions. */
   async getMyUpcomingBookings(userId: string, now: Date = new Date()): Promise<Array<{
     id: string; type: string; scheduledAt: Date; scheduledEndAt: Date | null;
-    durationMinutes: number | null; timezone: string | null; adviserName: string | null; status: string;
+    durationMinutes: number | null; timezone: string | null; adviserName: string | null;
+    meetingLink: string | null; status: string;
   }>> {
     const rows = await this.prisma.consultation.findMany({
       where: {
@@ -490,7 +498,7 @@ export class BookingService {
       orderBy: { scheduledAt: 'asc' },
       select: {
         id: true, type: true, scheduledAt: true, scheduledEndAt: true,
-        durationMinutes: true, bookingTimezone: true, status: true,
+        durationMinutes: true, bookingTimezone: true, status: true, meetingLink: true,
         assignedTo: { select: { name: true } },
       },
     });
@@ -502,6 +510,7 @@ export class BookingService {
       durationMinutes: r.durationMinutes,
       timezone: r.bookingTimezone,
       adviserName: r.assignedTo?.name ?? null,
+      meetingLink: r.meetingLink,
       status: r.status,
     }));
   }

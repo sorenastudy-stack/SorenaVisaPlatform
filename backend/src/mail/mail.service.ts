@@ -19,6 +19,7 @@ import {
   visaExpiryReminderToOwnerBody,
   ticketReplyNotificationBody,
   consultationConfirmationBody,
+  bookingConfirmationBody,
 } from './mail.templates';
 
 // PR-EMAIL-1 — Unified Resend-based email service.
@@ -387,6 +388,27 @@ export class MailService implements OnModuleInit {
       html: wrapHtml(ticketReplyNotificationBody(clientName, link), {
         heading: 'New reply on your ticket',
       }),
+    });
+  }
+
+  // PR-BOOKING-5 — booking confirmation (free + paid). Mock-safe + failure-
+  // swallowing like every other send method, so it can never unwind a
+  // confirmed/paid booking.
+  async sendBookingConfirmation(
+    to:           string,
+    name:         string,
+    sessionLabel: string,
+    whenStr:      string,
+    adviserName:  string,
+    meetingLink:  string,
+  ): Promise<void> {
+    await this.send({
+      to,
+      subject: `Your ${sessionLabel} is confirmed — Sorena Visa`,
+      html: wrapHtml(
+        bookingConfirmationBody(name, sessionLabel, whenStr, adviserName, meetingLink),
+        { heading: 'Your session is confirmed' },
+      ),
     });
   }
 

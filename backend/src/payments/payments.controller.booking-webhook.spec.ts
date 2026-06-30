@@ -44,16 +44,18 @@ function makeController(opts: {
   };
 
   const eventsMock: any = { emit: jest.fn().mockResolvedValue(undefined) };
+  const bookingConfirmationMock: any = { onConfirmed: jest.fn().mockResolvedValue(undefined) };
   const controller = new PaymentsController(
     {} as any, {} as any, { activateSubscription: jest.fn() } as any, eventsMock,
     prismaMock, { sendConsultationConfirmation: jest.fn() } as any, { assignLiaToCase: jest.fn() } as any,
+    bookingConfirmationMock,
   );
 
   jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
   jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
   jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
-  return { controller, prismaMock, eventsMock, paymentCreate, consultationFindUnique, txConsultationUpdate, outerConsultationUpdate };
+  return { controller, prismaMock, eventsMock, paymentCreate, consultationFindUnique, txConsultationUpdate, outerConsultationUpdate, bookingConfirmationMock };
 }
 
 const handle = (c: PaymentsController, pi: unknown) =>
@@ -69,7 +71,7 @@ describe('PaymentsController — paid booking webhook branch', () => {
 
   it('confirm-on-success: flips the held consultation to CONFIRMED + PAID and emits BOOKING_CONFIRMED', async () => {
     const now = new Date();
-    const { controller, txConsultationUpdate, eventsMock } = makeController({
+    const { controller, txConsultationUpdate, eventsMock, bookingConfirmationMock } = makeController({
       consultation: { id: 'c1', status: 'PENDING', assignedToId: 'adv', scheduledAt: now, scheduledEndAt: now, leadId: 'lead-x' },
       txFindFirst: null,
     });
@@ -85,6 +87,8 @@ describe('PaymentsController — paid booking webhook branch', () => {
     expect(eventsMock.emit).toHaveBeenCalledWith(
       'BOOKING_CONFIRMED', 'CONSULTATION', 'c1', 'lead-x', 'SYSTEM', null, { paymentIntentId: 'pi_booking_1' },
     );
+    // PR-BOOKING-5 — finalize (Jitsi link + email) runs on the confirm path.
+    expect(bookingConfirmationMock.onConfirmed).toHaveBeenCalledWith('c1');
   });
 
   it('idempotent retry: a P2002 on payment.create returns early — no consultation lookup/confirm', async () => {
@@ -95,7 +99,7 @@ describe('PaymentsController — paid booking webhook branch', () => {
 
   it('paid-no-slot: a clash inside the confirm tx keeps the payment, marks PAID, drops the slot, emits BOOKING_PAID_SLOT_LOST', async () => {
     const now = new Date();
-    const { controller, outerConsultationUpdate, eventsMock } = makeController({
+    const { controller, outerConsultationUpdate, eventsMock, bookingConfirmationMock } = makeController({
       consultation: { id: 'c1', status: 'PENDING', assignedToId: 'adv', scheduledAt: now, scheduledEndAt: now, leadId: 'lead-x' },
       txFindFirst: { id: 'other-confirmed' }, // another booking took the slot
     });
@@ -110,5 +114,7 @@ describe('PaymentsController — paid booking webhook branch', () => {
     expect(eventsMock.emit).toHaveBeenCalledWith(
       'BOOKING_PAID_SLOT_LOST', 'CONSULTATION', 'c1', 'lead-x', 'SYSTEM', null, { paymentIntentId: 'pi_booking_1' },
     );
+    // Paid-no-slot must NOT finalize (no Jitsi link / no confirmation email).
+    expect(bookingConfirmationMock.onConfirmed).not.toHaveBeenCalled();
   });
 });

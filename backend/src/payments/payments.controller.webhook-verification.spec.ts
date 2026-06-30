@@ -41,6 +41,7 @@ function makeController() {
     sendNewLiaAssignment:         jest.fn().mockResolvedValue(undefined),
   };
   const liaAssignmentsMock:  any = { assignLiaToCase: jest.fn() };
+  const bookingConfirmationMock: any = { onConfirmed: jest.fn().mockResolvedValue(undefined) };
 
   const controller = new PaymentsController(
     stripeMock,
@@ -50,6 +51,7 @@ function makeController() {
     prismaMock,
     notificationsMock,
     liaAssignmentsMock,
+    bookingConfirmationMock,
   );
 
   // Silence the per-route Logger so a successful test doesn't print

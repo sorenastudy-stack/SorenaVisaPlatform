@@ -15,6 +15,7 @@ interface Booking {
   durationMinutes: number | null;
   timezone: string | null;
   adviserName: string | null;
+  meetingLink: string | null;
   status: string;
 }
 
@@ -70,6 +71,16 @@ export async function UpcomingBookings() {
                 </p>
                 {b.adviserName && (
                   <p className="text-xs text-gray-500 mt-0.5">with {b.adviserName}</p>
+                )}
+                {b.meetingLink && (
+                  <a
+                    href={b.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#F3CE49] px-3 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#F3CE49]/90"
+                  >
+                    Join your session
+                  </a>
                 )}
               </li>
             );

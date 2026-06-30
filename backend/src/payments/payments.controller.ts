@@ -7,6 +7,7 @@ import { EventsService } from '../events/events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
+import { BookingConfirmationService } from '../booking/booking-confirmation.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -33,6 +34,8 @@ export class PaymentsController {
     // PR-LIA-AUTO-ASSIGN — auto-assign an LIA when the $200 ACCOUNT_OPENING
     // charge succeeds and the matching case has a signed contract.
     private liaAssignments: LiaAssignmentService,
+    // PR-BOOKING-5 — finalize a confirmed paid booking (Jitsi link + email).
+    private bookingConfirmation: BookingConfirmationService,
   ) {}
 
   /**
@@ -511,6 +514,10 @@ export class PaymentsController {
         { paymentIntentId: paymentIntent.id },
       );
       this.logger.log(`Booking ${consultationId} confirmed on payment ${paymentIntent.id}`);
+      // PR-BOOKING-5 — finalize: Jitsi link + confirmation email. Best-
+      // effort + idempotent (meetingLink guard); never unwinds the paid
+      // booking. Runs only on the genuine confirm path (not paid-no-slot).
+      await this.bookingConfirmation.onConfirmed(consultationId).catch(() => undefined);
     } catch (e: any) {
       const slotLost = e?.__slotLost
         || (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002');

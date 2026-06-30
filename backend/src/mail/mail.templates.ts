@@ -308,3 +308,32 @@ export function consultationConfirmationBody(
     <p>Our team will be in touch shortly.</p>
   `;
 }
+
+// PR-BOOKING-5 — booking confirmation (free + paid). Calm + reassuring,
+// with the session details and the Jitsi join link.
+export function bookingConfirmationBody(
+  name:         string,
+  sessionLabel: string,
+  whenStr:      string,
+  adviserName:  string,
+  meetingLink:  string,
+): string {
+  return `
+    <p>Hi ${esc(name)},</p>
+    <p>Your <strong>${esc(sessionLabel)}</strong> is confirmed. We're looking forward to speaking with you.</p>
+    <p style="margin:16px 0;">
+      <strong>${esc(whenStr)}</strong><br/>
+      with ${esc(adviserName)}
+    </p>
+    <p style="margin:20px 0;">
+      <a href="${esc(meetingLink)}"
+         style="display:inline-block;background:#F3CE49;color:${NAVY};font-weight:600;text-decoration:none;padding:12px 22px;border-radius:10px;">
+        Join your session
+      </a>
+    </p>
+    <p style="color:${MUTED};font-size:13px;">Or paste this link into your browser at the time of your session:<br/>
+      <a href="${esc(meetingLink)}" style="color:${MUTED};">${esc(meetingLink)}</a>
+    </p>
+    <p style="color:${MUTED};font-size:13px;">You can also join from your Sorena portal. See you then.</p>
+  `;
+}
