@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Plus, X, BadgeCheck, Clock } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, X, BadgeCheck, Clock, CalendarOff, AlertTriangle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { formatDate } from '@/lib/date';
+import { DateInput } from '@/components/ui/DateInput';
 import {
   LANGUAGES, SESSION_TYPES, TIMEZONES, WEEKDAYS,
   minutesToHHMM, hhmmToMinutes,
@@ -15,6 +17,40 @@ interface Adviser {
   id: string; name: string; email: string; role: string; liaVerified: boolean;
   languages: string[]; timezone: string; bookableSessionTypes: string[];
   bookingActive: boolean; windows: Window[];
+}
+
+interface Leave {
+  id: string; startDate: string; endDate: string; kind: string; status: string;
+  reason: string | null;
+}
+interface Conflict {
+  id: string; type: string; scheduledAt: string; timezone: string | null;
+  clientName: string; clientEmail: string | null;
+}
+
+const LEAVE_STATUS_STYLE: Record<string, string> = {
+  REQUESTED: 'bg-sorena-gold/15 text-sorena-navy border border-sorena-gold/40',
+  APPROVED: 'bg-sorena-jade/10 text-sorena-jade border border-sorena-jade/30',
+  REJECTED: 'bg-gray-100 text-gray-500 border border-gray-200',
+  CANCELLED: 'bg-gray-100 text-gray-500 border border-gray-200',
+};
+
+// Day-first, unambiguous display (e.g. "8 Jul 2026") — never US mm/dd/yyyy.
+// The underlying value stays YYYY-MM-DD (what the backend expects).
+const fmtDay = (ymd: string): string => formatDate(ymd);
+function fmtDateRange(start: string, end: string): string {
+  return start === end ? fmtDay(start) : `${fmtDay(start)} – ${fmtDay(end)}`;
+}
+
+// Leave is scheduled around now — allow the current year through a few ahead.
+const LEAVE_MIN_YEAR = new Date().getFullYear();
+const LEAVE_MAX_YEAR = new Date().getFullYear() + 2;
+function fmtConflictWhen(iso: string, tz: string | null): string {
+  const zone = tz ?? 'Pacific/Auckland';
+  return new Intl.DateTimeFormat('en-NZ', {
+    timeZone: zone, weekday: 'short', day: 'numeric', month: 'short',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date(iso));
 }
 
 export function AdviserEditClient({ adviserId }: { adviserId: string }) {
@@ -35,6 +71,15 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
   const [savingHours, setSavingHours] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
+  // Section C (leave / time-off) state
+  const [leaves, setLeaves] = useState<Leave[]>([]);
+  const [leaveStart, setLeaveStart] = useState('');
+  const [leaveEnd, setLeaveEnd] = useState('');
+  const [leaveReason, setLeaveReason] = useState('');
+  const [addingLeave, setAddingLeave] = useState(false);
+  const [conflicts, setConflicts] = useState<Conflict[] | null>(null);
+  const [leaveMsg, setLeaveMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     api.get<Adviser>(`/staff/advisers/${adviserId}`)
@@ -48,6 +93,9 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
         setWindows(a.windows.map((w) => ({ dayOfWeek: w.dayOfWeek, startMinute: w.startMinute, endMinute: w.endMinute })));
       })
       .catch(() => { if (!cancelled) setLoadError(true); });
+    api.get<Leave[]>(`/staff/advisers/${adviserId}/leave`)
+      .then((rows) => { if (!cancelled) setLeaves(rows); })
+      .catch(() => { /* leave list is non-fatal; section just shows empty */ });
     return () => { cancelled = true; };
   }, [adviserId]);
 
@@ -106,6 +154,41 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not save hours.' });
     } finally { setSavingHours(false); }
+  }
+
+  // ── leave / time-off ────────────────────────────────────────────────
+  async function addLeave() {
+    setLeaveMsg(null); setConflicts(null);
+    if (!leaveStart || !leaveEnd) { setLeaveMsg({ kind: 'err', text: 'Pick a start and end date.' }); return; }
+    if (leaveEnd < leaveStart) { setLeaveMsg({ kind: 'err', text: 'End date must be on or after start date.' }); return; }
+    setAddingLeave(true);
+    try {
+      const res = await api.post<{ leave: Leave; conflicts: Conflict[] }>(
+        `/staff/advisers/${adviserId}/leave`,
+        { startDate: leaveStart, endDate: leaveEnd, reason: leaveReason || undefined },
+      );
+      setLeaves((prev) => [res.leave, ...prev]);
+      setLeaveStart(''); setLeaveEnd(''); setLeaveReason('');
+      if (res.conflicts.length > 0) {
+        setConflicts(res.conflicts);
+        setLeaveMsg(null);
+      } else {
+        setLeaveMsg({ kind: 'ok', text: 'Time off added. This adviser is now off on those days.' });
+      }
+    } catch (e) {
+      setLeaveMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not add time off.' });
+    } finally { setAddingLeave(false); }
+  }
+
+  async function deleteLeave(id: string) {
+    setLeaveMsg(null);
+    try {
+      await api.delete(`/staff/advisers/${adviserId}/leave/${id}`);
+      setLeaves((prev) => prev.filter((l) => l.id !== id));
+      setLeaveMsg({ kind: 'ok', text: 'Time off removed. Those days are available again.' });
+    } catch (e) {
+      setLeaveMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not remove time off.' });
+    }
   }
 
   if (loadError) {
@@ -236,10 +319,85 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
         </div>
       </section>
 
-      {/* ── Stage B placeholder ─────────────────────────────────────── */}
-      <section className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-gray-50/60 p-5 text-center">
-        <p className="text-sm font-semibold text-sorena-text/50">Leave / time off — coming soon</p>
-        <p className="mt-1 text-xs text-sorena-text/40">One-off days off and custom hours will appear here.</p>
+      {/* ── Section C — Leave / time off ────────────────────────────── */}
+      <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 md:p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-sorena-text/60">Leave / time off</h2>
+          <span className="inline-flex items-center gap-1 text-xs text-sorena-text/50"><CalendarOff size={13} /> Full days, in {timezone}</span>
+        </div>
+        <p className="mt-2 text-xs text-sorena-text/50">
+          Approved time off removes those whole days from booking availability. Existing confirmed sessions are never cancelled — they’re flagged below so you can rebook or notify the client.
+        </p>
+
+        {leaveMsg && (
+          <div className={`mt-4 rounded-xl px-4 py-3 text-sm ${leaveMsg.kind === 'ok' ? 'bg-sorena-jade/10 text-sorena-jade border border-sorena-jade/30' : 'bg-red-50 text-red-700 border border-red-200'}`}>{leaveMsg.text}</div>
+        )}
+
+        {/* Conflict warning banner (shown right after adding leave) */}
+        {conflicts && conflicts.length > 0 && (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+              <AlertTriangle size={16} />
+              {conflicts.length} confirmed {conflicts.length === 1 ? 'booking falls' : 'bookings fall'} within this leave — rebook or notify {conflicts.length === 1 ? 'this client' : 'these clients'}
+            </div>
+            <ul className="mt-2 space-y-1">
+              {conflicts.map((c) => (
+                <li key={c.id} className="text-xs text-amber-900">
+                  <span className="font-semibold">{c.clientName}</span>
+                  {' · '}{c.type}
+                  {' · '}{fmtConflictWhen(c.scheduledAt, c.timezone)}
+                  {c.clientEmail && <span className="text-amber-700"> · {c.clientEmail}</span>}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-[11px] text-amber-700">The leave was saved and these days are now off. The bookings above are unchanged (still confirmed).</p>
+          </div>
+        )}
+
+        {/* Add time off */}
+        <div className="mt-4 rounded-xl border border-gray-100 p-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-sorena-navy mb-1">From <span className="font-normal text-sorena-text/40">(dd/mm/yyyy)</span></label>
+              <DateInput value={leaveStart || null} onChange={(iso) => setLeaveStart(iso ?? '')} minYear={LEAVE_MIN_YEAR} maxYear={LEAVE_MAX_YEAR} />
+              {leaveStart && <p className="mt-1 text-[11px] text-sorena-text/50">{fmtDay(leaveStart)}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-sorena-navy mb-1">To <span className="font-normal text-sorena-text/40">(dd/mm/yyyy)</span></label>
+              <DateInput value={leaveEnd || null} onChange={(iso) => setLeaveEnd(iso ?? '')} minYear={LEAVE_MIN_YEAR} maxYear={LEAVE_MAX_YEAR} />
+              {leaveEnd && <p className="mt-1 text-[11px] text-sorena-text/50">{fmtDay(leaveEnd)}</p>}
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="block text-xs font-semibold text-sorena-navy mb-1">Reason (optional)</label>
+            <input type="text" value={leaveReason} maxLength={500} placeholder="e.g. Annual leave" onChange={(e) => setLeaveReason(e.target.value)} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
+          </div>
+          <div className="mt-3">
+            <button onClick={addLeave} disabled={addingLeave} className="inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-xl bg-sorena-gold px-5 py-2 text-sm font-semibold text-sorena-navy shadow-sm transition-all hover:bg-sorena-gold/90 disabled:opacity-60">
+              {addingLeave ? <><Loader2 size={15} className="animate-spin" /> Adding…</> : <><Plus size={15} /> Add time off</>}
+            </button>
+          </div>
+        </div>
+
+        {/* Existing leave list */}
+        <div className="mt-4 space-y-2">
+          {leaves.length === 0 ? (
+            <p className="text-xs text-sorena-text/40">No time off scheduled.</p>
+          ) : (
+            leaves.map((l) => (
+              <div key={l.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-sorena-navy">{fmtDateRange(l.startDate, l.endDate)}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${LEAVE_STATUS_STYLE[l.status] ?? 'bg-gray-100 text-gray-500'}`}>{l.status}</span>
+                  </div>
+                  {l.reason && <p className="mt-0.5 truncate text-xs text-sorena-text/50">{l.reason}</p>}
+                </div>
+                <button type="button" onClick={() => deleteLeave(l.id)} className="shrink-0 text-gray-400 hover:text-red-500" aria-label="Remove time off"><X size={16} /></button>
+              </div>
+            ))
+          )}
+        </div>
       </section>
     </div>
   );

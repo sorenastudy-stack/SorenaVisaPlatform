@@ -565,6 +565,9 @@ model User {
   // bookable adviser. Empty for users who aren't advisers.
   adviserAvailability     AdviserAvailability[]             @relation("AdviserAvailabilityAdviser")
 
+  // PR-BOOKING-ADMIN-B: leave / time-off rows for this user as an adviser.
+  adviserLeave            AdviserLeave[]                    @relation("AdviserLeaveAdviser")
+
   @@map("users")
 }
 
@@ -1047,6 +1050,56 @@ model AdviserAvailability {
   @@index([adviserId, dayOfWeek])
   @@index([adviserId, active])
   @@map("adviser_availability")
+}
+
+// ─── BOOKING: ADVISER LEAVE / TIME-OFF (PR-BOOKING-ADMIN-B) ───────────────────
+//
+// Full-day leave for a bookable adviser. APPROVED leave is removed from
+// booking availability by the slot engine (via its `excludedDates` hook):
+// each leave's [startDate, endDate] inclusive range expands to YYYY-MM-DD
+// calendar keys in the adviser's timezone, and those days are skipped.
+//
+// Dates are stored as "YYYY-MM-DD" STRINGS (wall-clock in the adviser's
+// timezone) — that is exactly the key format the slot engine consumes, so
+// there is no DateTime/UTC round-trip to introduce off-by-one drift.
+//
+// Two paths share this one model:
+//   • admin sets leave directly → created with status APPROVED (slice 1).
+//   • adviser requests → APPROVED by an admin (REQUESTED→APPROVED) — the
+//     lifecycle is modelled here but its UI is deferred to slice 2.
+// Only APPROVED blocks slots; REQUESTED/REJECTED/CANCELLED never do.
+enum AdviserLeaveStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AdviserLeaveKind {
+  DAY_OFF // full day(s); CUSTOM_HOURS (partial-day) reserved for later
+}
+
+model AdviserLeave {
+  id            String             @id @default(cuid())
+  adviserId     String
+  startDate     String             // "YYYY-MM-DD" in the adviser's tz (inclusive)
+  endDate       String             // "YYYY-MM-DD" (inclusive); == startDate for one day
+  kind          AdviserLeaveKind   @default(DAY_OFF)
+  status        AdviserLeaveStatus @default(REQUESTED)
+  reason        String?
+  // Who raised it / who approved-or-rejected it. Plain nullable Strings
+  // (no relation), mirroring AdviserAvailability.setById.
+  requestedById String?
+  approvedById  String?
+  decidedAt     DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  adviser       User               @relation("AdviserLeaveAdviser", fields: [adviserId], references: [id], onDelete: Cascade)
+
+  @@index([adviserId, status])
+  @@index([status])
+  @@map("adviser_leave")
 }
 
 // ─── CASES ───────────────────────────────────────────────────────────────────

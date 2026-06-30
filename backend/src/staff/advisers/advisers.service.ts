@@ -3,8 +3,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
-  UpdateAdviserProfileDto, AvailabilityWindowDto,
+  UpdateAdviserProfileDto, AvailabilityWindowDto, CreateAdviserLeaveDto,
 } from './dto/advisers.dto';
+import { zonedWallTimeToUtc } from '../../booking/slot-engine';
 
 // PR-BOOKING-ADMIN-A — adviser management service.
 //
@@ -186,4 +187,124 @@ export class AdvisersService {
 
     return this.getOne(id);
   }
+
+  // ── Leave / time-off (PR-BOOKING-ADMIN-B, Stage B slice 1) ─────────────
+
+  /** Load an adviser-eligible user (or 404). */
+  private async requireAdviser(id: string): Promise<{ id: string; timezone: string }> {
+    const u = await this.prisma.user.findFirst({
+      where: { id, role: { in: [...ADVISER_ROLES] } },
+      select: { id: true, timezone: true },
+    });
+    if (!u) throw new NotFoundException('Adviser not found');
+    return u;
+  }
+
+  /**
+   * Admin sets leave directly for an adviser → created APPROVED (this is the
+   * direct-set path; the requested→approved lifecycle is modelled but its UI
+   * is slice 2). Validates YYYY-MM-DD + endDate >= startDate.
+   *
+   * Saves the leave regardless, then runs CONFLICT DETECTION: existing
+   * BOOKED/CONFIRMED sessions whose scheduledAt falls inside the leave (the
+   * inclusive day range converted to UTC bounds via the adviser's tz). Those
+   * bookings are RETURNED but never modified or cancelled — staff rebook or
+   * notify manually.
+   */
+  async createLeave(id: string, dto: CreateAdviserLeaveDto, actorUserId: string) {
+    const adviser = await this.requireAdviser(id);
+
+    // Lexical compare is valid for zero-padded YYYY-MM-DD.
+    if (dto.endDate < dto.startDate) {
+      throw new BadRequestException('endDate must be on or after startDate');
+    }
+
+    const now = new Date();
+    const leave = await this.prisma.adviserLeave.create({
+      data: {
+        adviserId: id,
+        startDate: dto.startDate,
+        endDate: dto.endDate,
+        kind: 'DAY_OFF',
+        status: 'APPROVED',          // admin direct-set
+        reason: dto.reason ?? null,
+        requestedById: actorUserId,
+        approvedById: actorUserId,
+        decidedAt: now,
+      },
+      select: {
+        id: true, startDate: true, endDate: true, kind: true, status: true,
+        reason: true, decidedAt: true, createdAt: true,
+      },
+    });
+
+    // Conflict window: [startDate 00:00, dayAfter(endDate) 00:00) in adviser tz.
+    const s = parseYmd(dto.startDate);
+    const startUtc = zonedWallTimeToUtc(s.y, s.m, s.d, 0, adviser.timezone);
+    const after = parseYmd(nextDayYmd(dto.endDate));
+    const endExclusiveUtc = zonedWallTimeToUtc(after.y, after.m, after.d, 0, adviser.timezone);
+
+    const conflictRows = await this.prisma.consultation.findMany({
+      where: {
+        assignedToId: id,
+        status: { in: ['BOOKED', 'CONFIRMED'] },
+        scheduledAt: { gte: startUtc, lt: endExclusiveUtc },
+      },
+      orderBy: { scheduledAt: 'asc' },
+      select: {
+        id: true, type: true, scheduledAt: true, bookingTimezone: true,
+        lead: { select: { contact: { select: { fullName: true, user: { select: { name: true, email: true } } } } } },
+      },
+    });
+
+    const conflicts = conflictRows.map((c) => ({
+      id: c.id,
+      type: c.type,
+      scheduledAt: c.scheduledAt,
+      timezone: c.bookingTimezone,
+      clientName: c.lead?.contact?.fullName || c.lead?.contact?.user?.name || 'Client',
+      clientEmail: c.lead?.contact?.user?.email ?? null,
+    }));
+
+    return { leave, conflicts };
+  }
+
+  /** List an adviser's leave, future-first. Optional status filter. */
+  async listLeave(id: string, status?: string) {
+    await this.requireAdviser(id);
+    const allowed = ['REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED'];
+    const where: { adviserId: string; status?: any } = { adviserId: id };
+    if (status && allowed.includes(status)) where.status = status;
+    return this.prisma.adviserLeave.findMany({
+      where,
+      // YYYY-MM-DD sorts chronologically; desc puts upcoming/newest first.
+      orderBy: [{ startDate: 'desc' }],
+      select: {
+        id: true, startDate: true, endDate: true, kind: true, status: true,
+        reason: true, decidedAt: true, createdAt: true,
+      },
+    });
+  }
+
+  /** Remove/cancel a leave (admin). Scoped to the adviser to avoid id mix-ups. */
+  async deleteLeave(id: string, leaveId: string) {
+    await this.requireAdviser(id);
+    const lv = await this.prisma.adviserLeave.findFirst({
+      where: { id: leaveId, adviserId: id },
+      select: { id: true },
+    });
+    if (!lv) throw new NotFoundException('Leave not found');
+    await this.prisma.adviserLeave.delete({ where: { id: leaveId } });
+    return { ok: true };
+  }
+}
+
+// ── YYYY-MM-DD calendar helpers (pure; UTC-anchored, DST-free) ──────────────
+function parseYmd(ymd: string): { y: number; m: number; d: number } {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return { y, m, d };
+}
+function nextDayYmd(ymd: string): string {
+  const t = new Date(`${ymd}T00:00:00Z`).getTime() + 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
 }

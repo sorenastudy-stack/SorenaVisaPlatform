@@ -18,6 +18,7 @@ import {
   AvailableSlot,
   WeeklyWindow,
   BusyInterval,
+  zonedDateParts,
 } from './slot-engine';
 import { BookingConfirmationService } from './booking-confirmation.service';
 
@@ -43,6 +44,31 @@ export interface SlotResult {
 // Booking lifecycle states that occupy an adviser's time. PENDING is
 // included only while a soft hold is live (holdExpiresAt > now).
 const ACTIVE_BOOKING_STATUSES = ['BOOKED', 'CONFIRMED'] as const;
+
+/**
+ * Expand an inclusive YYYY-MM-DD range into its calendar-day keys, clipped
+ * to [clipFrom, clipTo] (also YYYY-MM-DD). Used to turn APPROVED adviser
+ * leave into the slot engine's `excludedDates` set. Pure calendar math: we
+ * parse each date as UTC midnight and step 24h — UTC has no DST so this
+ * never skips/duplicates a day, and toISOString() yields the same zero-
+ * padded YYYY-MM-DD the engine derives via zonedDateParts.
+ */
+function expandYmdRange(start: string, end: string, clipFrom: string, clipTo: string): string[] {
+  // Lexical comparison is valid for zero-padded YYYY-MM-DD.
+  const lo = start > clipFrom ? start : clipFrom;
+  const hi = end < clipTo ? end : clipTo;
+  if (lo > hi) return [];
+  const out: string[] = [];
+  let t = new Date(`${lo}T00:00:00Z`).getTime();
+  const endT = new Date(`${hi}T00:00:00Z`).getTime();
+  if (isNaN(t) || isNaN(endT)) return out;
+  // Safety bound: a single query window is never more than ~2 years.
+  for (let guard = 0; t <= endT && guard < 800; guard++) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+    t += 86_400_000;
+  }
+  return out;
+}
 
 @Injectable()
 export class BookingService {
@@ -323,6 +349,16 @@ export class BookingService {
           });
           if (clash) throw new ConflictException('taken');
 
+          // Defense-in-depth (PR-BOOKING-ADMIN-B): no holds on an APPROVED
+          // leave day either (the engine already hides it; this blocks a
+          // hand-crafted slotStart).
+          const slotYmd = zonedDateParts(slotStart, timezone).key;
+          const onLeave = await tx.adviserLeave.findFirst({
+            where: { adviserId, status: 'APPROVED', startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
+            select: { id: true },
+          });
+          if (onLeave) throw new ConflictException('taken');
+
           return tx.consultation.create({
             data: {
               leadId,
@@ -569,6 +605,30 @@ export class BookingService {
         return { start, end };
       });
 
+    // 3. APPROVED leave → excluded calendar dates (PR-BOOKING-ADMIN-B).
+    //    Only APPROVED blocks; REQUESTED/REJECTED/CANCELLED never do. We
+    //    load leave overlapping the query window (lexical YYYY-MM-DD bounds
+    //    in the adviser's tz) and expand each to per-day keys clipped to the
+    //    window. The pure engine then skips those days — the capacity/pool
+    //    path inherits this automatically (it fans out per adviser here).
+    const fromYmd = zonedDateParts(dateFrom, timezone).key;
+    const toYmd = zonedDateParts(dateTo, timezone).key;
+    const leaves = await this.prisma.adviserLeave.findMany({
+      where: {
+        adviserId,
+        status: 'APPROVED',
+        startDate: { lte: toYmd },
+        endDate: { gte: fromYmd },
+      },
+      select: { startDate: true, endDate: true },
+    });
+    const excludedDates = new Set<string>();
+    for (const lv of leaves) {
+      for (const key of expandYmdRange(lv.startDate, lv.endDate, fromYmd, toYmd)) {
+        excludedDates.add(key);
+      }
+    }
+
     const slots = computeAvailableSlots({
       timezone,
       windows,
@@ -579,6 +639,7 @@ export class BookingService {
       now,
       minLeadMinutes: 24 * 60, // 24h lead time
       bufferMinutes: 0,        // 0 for launch
+      excludedDates,
     });
 
     return { adviserId, timezone, sessionType, durationMinutes: cfg.durationMinutes, slots };
@@ -622,6 +683,18 @@ export class BookingService {
         });
         if (clash) {
           throw new ConflictException('That time was just taken — please pick another slot');
+        }
+
+        // Defense-in-depth (PR-BOOKING-ADMIN-B): refuse to commit onto a day
+        // the adviser has APPROVED leave for. The slot engine already hides
+        // such days, so this only fires for a stale/hand-crafted request.
+        const slotYmd = zonedDateParts(slotStart, timezone).key;
+        const onLeave = await tx.adviserLeave.findFirst({
+          where: { adviserId, status: 'APPROVED', startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
+          select: { id: true },
+        });
+        if (onLeave) {
+          throw new ConflictException('That adviser is on leave that day — please pick another slot');
         }
 
         const updated = await tx.consultation.update({

@@ -1,8 +1,11 @@
 import {
   IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsNotEmpty,
-  Max, Min, ValidateNested, ArrayMaxSize,
+  Max, Min, ValidateNested, ArrayMaxSize, Matches, MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+// YYYY-MM-DD calendar date (the format the slot engine consumes directly).
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 // PR-BOOKING-ADMIN-A — adviser config DTOs.
 
@@ -54,4 +57,20 @@ export class ReplaceAvailabilityDto {
   @ValidateNested({ each: true })
   @Type(() => AvailabilityWindowDto)
   windows!: AvailabilityWindowDto[];
+}
+
+// PR-BOOKING-ADMIN-B — admin sets adviser leave directly (created APPROVED).
+export class CreateAdviserLeaveDto {
+  @IsString()
+  @Matches(YMD, { message: 'startDate must be YYYY-MM-DD' })
+  startDate!: string;
+
+  @IsString()
+  @Matches(YMD, { message: 'endDate must be YYYY-MM-DD' })
+  endDate!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
 }

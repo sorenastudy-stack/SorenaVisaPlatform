@@ -1,9 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Put, UseGuards } from '@nestjs/common';
+import {
+  Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Req, UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../roles/staff-roles.guard';
 import { AdminTier } from '../roles/staff-roles.decorator';
 import { AdvisersService } from './advisers.service';
-import { UpdateAdviserProfileDto, ReplaceAvailabilityDto } from './dto/advisers.dto';
+import {
+  UpdateAdviserProfileDto, ReplaceAvailabilityDto, CreateAdviserLeaveDto,
+} from './dto/advisers.dto';
 
 // PR-BOOKING-ADMIN-A — adviser management endpoints.
 //
@@ -39,5 +43,33 @@ export class AdvisersController {
   @Put(':id/availability')
   replaceAvailability(@Param('id') id: string, @Body() dto: ReplaceAvailabilityDto) {
     return this.service.replaceAvailability(id, dto.windows);
+  }
+
+  // ── Leave / time-off (PR-BOOKING-ADMIN-B, Stage B slice 1) ───────────
+  // Admin-direct path only for now: created APPROVED. The request→approve
+  // lifecycle is modelled in the schema but its endpoints land in slice 2.
+
+  // POST /staff/advisers/:id/leave — set leave directly (status APPROVED).
+  // Returns { leave, conflicts } — conflicts are existing BOOKED/CONFIRMED
+  // sessions inside the leave; they are surfaced, never modified.
+  @Post(':id/leave')
+  createLeave(
+    @Param('id') id: string,
+    @Body() dto: CreateAdviserLeaveDto,
+    @Req() req: any,
+  ) {
+    return this.service.createLeave(id, dto, req.user.userId);
+  }
+
+  // GET /staff/advisers/:id/leave?status= — list this adviser's leave.
+  @Get(':id/leave')
+  listLeave(@Param('id') id: string, @Query('status') status?: string) {
+    return this.service.listLeave(id, status);
+  }
+
+  // DELETE /staff/advisers/:id/leave/:leaveId — remove/cancel a leave.
+  @Delete(':id/leave/:leaveId')
+  deleteLeave(@Param('id') id: string, @Param('leaveId') leaveId: string) {
+    return this.service.deleteLeave(id, leaveId);
   }
 }
