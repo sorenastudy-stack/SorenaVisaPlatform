@@ -15,11 +15,10 @@ export class SlotsQueryDto {
   to!: string;
 }
 
-// PR-BOOKING-4 — paid booking (GAP_CLOSING slice).
+// PR-BOOKING-4 — paid booking. Slice 1: GAP_CLOSING. Slice 2: + LIA.
 export class HoldBookingDto {
-  // Slice 1: GAP_CLOSING only. LIA lands in a later slice.
-  @IsIn(['GAP_CLOSING'])
-  type!: 'GAP_CLOSING';
+  @IsIn(['GAP_CLOSING', 'LIA'])
+  type!: 'GAP_CLOSING' | 'LIA';
 
   @IsISO8601()
   slotStartUtc!: string;

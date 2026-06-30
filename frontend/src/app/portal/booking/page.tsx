@@ -341,14 +341,22 @@ function BackToCase() {
   );
 }
 
-// ── GAP_CLOSING paid flow (PR-BOOKING-4 slice 1) ──────────────────────
+// ── Paid flow (PR-BOOKING-4): GAP_CLOSING (slice 1) + LIA (slice 2) ────
 interface Hold {
   consultationId: string; holdExpiresAt: string; amountNZD: number;
   type: string; slotStartUtc: string; adviserName: string; timezone: string;
 }
 type GapStep = 'pick' | 'hold' | 'expired';
 
-function GapBookingFlow() {
+// Display strings only — the authoritative price/duration live in the
+// backend session-config; the hold response carries the real amount.
+const PAID_CONFIG: Record<'GAP_CLOSING' | 'LIA', { label: string; price: number }> = {
+  GAP_CLOSING: { label: 'Gap-Closing session', price: 30 },
+  LIA:         { label: 'LIA Consultation (45 min)', price: 150 },
+};
+
+function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }) {
+  const cfg = PAID_CONFIG[sessionType];
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [data, setData] = useState<SlotsResponse | null>(null);
@@ -366,7 +374,7 @@ function GapBookingFlow() {
       const now = new Date();
       const to = new Date(now.getTime() + 14 * 86_400_000);
       const res = await api.get<SlotsResponse>(
-        `/booking/slots?type=GAP_CLOSING&from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
+        `/booking/slots?type=${sessionType}&from=${encodeURIComponent(now.toISOString())}&to=${encodeURIComponent(to.toISOString())}`,
       );
       setData(res);
     } catch { setLoadError(true); } finally { setLoading(false); }
@@ -405,7 +413,7 @@ function GapBookingFlow() {
   async function startHold(slot: Slot) {
     setHolding(true); setPickError(null);
     try {
-      const h = await api.post<Hold>('/booking/hold', { type: 'GAP_CLOSING', slotStartUtc: slot.startUtc });
+      const h = await api.post<Hold>('/booking/hold', { type: sessionType, slotStartUtc: slot.startUtc });
       setHold(h); setStep('hold');
     } catch (err) {
       // Slot gone / no adviser free — refresh and let them pick again.
@@ -459,7 +467,7 @@ function GapBookingFlow() {
       <Shell>
         <h1 className="text-xl font-bold text-sorena-navy text-center">Confirm &amp; pay</h1>
         <div className="mt-6 rounded-2xl bg-sorena-cream border border-sorena-navy/10 p-5 text-center">
-          <p className="text-xs uppercase tracking-wide text-sorena-text/50 font-semibold">Gap-Closing session · NZD {hold.amountNZD}</p>
+          <p className="text-xs uppercase tracking-wide text-sorena-text/50 font-semibold">{cfg.label} · NZD {hold.amountNZD}</p>
           <p className="mt-2 text-lg font-bold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
           <p className="text-lg font-semibold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true })} NZ</p>
           <p className="mt-1 text-xs text-sorena-text/50">with {hold.adviserName} · Times in New Zealand time</p>
@@ -482,8 +490,8 @@ function GapBookingFlow() {
   // ── Pick (date row + that day's slots) ──────────────────────────────
   return (
     <Shell>
-      <h1 className="text-xl font-bold text-sorena-navy text-center">Book your Gap-Closing session</h1>
-      <p className="mt-2 text-center text-sm text-sorena-text/60">NZD 30 · Pick a day, then a time. You&apos;ll have 15 minutes to pay.</p>
+      <h1 className="text-xl font-bold text-sorena-navy text-center">Book your {cfg.label}</h1>
+      <p className="mt-2 text-center text-sm text-sorena-text/60">NZD {cfg.price} · Pick a day, then a time. You&apos;ll have 15 minutes to pay.</p>
       {pickError && (
         <div className="mt-4 rounded-xl bg-sorena-clay/10 border border-sorena-clay/30 px-4 py-3 text-sm text-sorena-clay text-center">{pickError}</div>
       )}
@@ -521,7 +529,8 @@ function BookingRouter() {
   const searchParams = useSearchParams();
   const type = (searchParams.get('type') ?? '').toLowerCase();
   if (type === 'free15') return <FreeBookingFlow />;
-  if (type === 'gap') return <GapBookingFlow />;
+  if (type === 'gap') return <PaidBookingFlow sessionType="GAP_CLOSING" />;
+  if (type === 'lia') return <PaidBookingFlow sessionType="LIA" />;
   return (
     <div className="mx-auto max-w-xl">
       <BookingPlaceholder type={type} />

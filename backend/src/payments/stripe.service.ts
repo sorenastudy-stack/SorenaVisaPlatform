@@ -286,6 +286,8 @@ export class StripeService {
       bookingType: params.bookingType,
     };
     const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // Return the user to the right booking page on cancel (gap / lia).
+    const cancelType = params.bookingType === 'LIA' ? 'lia' : 'gap';
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -302,7 +304,7 @@ export class StripeService {
       metadata,
       payment_intent_data: { metadata },
       success_url: `${frontend}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontend}/portal/booking?type=gap`,
+      cancel_url: `${frontend}/portal/booking?type=${cancelType}`,
     });
     return session;
   }

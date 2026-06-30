@@ -368,7 +368,7 @@ export class BookingService {
       select: { id: true, leadId: true, type: true, status: true, paymentStatus: true, holdExpiresAt: true, amountNZD: true },
     });
     if (!c) throw new NotFoundException('Hold not found');
-    if (c.type !== 'GAP_CLOSING') {
+    if (c.type !== 'GAP_CLOSING' && c.type !== 'LIA') {
       throw new BadRequestException('This booking type is not payable yet');
     }
     if (c.status === 'CONFIRMED' || c.paymentStatus === 'PAID') {
