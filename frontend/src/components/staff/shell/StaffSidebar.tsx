@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
-  Settings, CreditCard, BadgeCheck,
+  Settings, CreditCard, BadgeCheck, CalendarClock,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -49,6 +49,8 @@ const TICKETS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'CONSULTANT',
 // @Roles set on LiaProfilesVerifierController (E5-E8). LIA is excluded
 // — they manage their own credential via /lia/licence (Screen A).
 const LIA_VERIFICATION_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
+// PR-BOOKING-ADMIN-A: adviser management panel — admin tier only.
+const ADVISER_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 
 const NAV: NavItem[] = [
   { label: 'staff.nav.overview',          href: '/staff',                    icon: <LayoutDashboard size={18} /> },
@@ -66,6 +68,7 @@ const NAV: NavItem[] = [
   // surface's English-only labels (the .nav.* keys above are the
   // pre-existing translated ones).
   { label: 'LIA verification',            href: '/staff/lia-verification',   icon: <BadgeCheck size={18} />,  roleGate: LIA_VERIFICATION_ROLES },
+  { label: 'Advisers',                    href: '/staff/advisers',           icon: <CalendarClock size={18} />, roleGate: ADVISER_ROLES },
   { label: 'staff.nav.marketing',         href: '/staff/marketing',          icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },
   // PR-SCORECARD-4: Wix payments visible to OWNER/SUPER_ADMIN/ADMIN/FINANCE.
   { label: 'staff.nav.wixPayments',       href: '/staff/wix-payments',       icon: <CreditCard size={18} />,  roleGate: WIX_PAYMENT_ROLES },

@@ -81,21 +81,27 @@ export class BookingService {
   }
 
   /**
-   * The adviser pool for a session type. LIA → verified-LIA advisers.
-   * FREE_15 / GAP_CLOSING → any active user with at least one active
-   * availability window (the non-LIA pool).
+   * The adviser pool for a session type (PR-BOOKING-ADMIN-A tightened).
+   * An adviser is in the pool iff they are: active, booking-active, have
+   * the type in `bookableSessionTypes`, AND have ≥1 active availability
+   * window. For LIA sessions they must additionally be role LIA with a
+   * verified LiaProfile. This makes the pool explicit + admin-controlled
+   * (configured via /staff/advisers) rather than role-inferred.
    */
   async listAdvisersForType(sessionType: BookingSessionType): Promise<Array<{ id: string; name: string }>> {
     const cfg = getSessionConfig(sessionType);
-    if (cfg.requiresLiaAdviser) return this.listEligibleLiaAdvisers();
-    // Non-LIA pool: active advisers with availability who are NOT LIAs.
-    // LIAs are reserved for paid LIA sessions.
+    const where: Prisma.UserWhereInput = {
+      isActive: true,
+      bookingActive: true,
+      bookableSessionTypes: { has: sessionType as any },
+      adviserAvailability: { some: { active: true } },
+    };
+    if (cfg.requiresLiaAdviser) {
+      where.role = 'LIA';
+      where.liaProfile = { iaaLicenceVerifiedAt: { not: null } };
+    }
     return this.prisma.user.findMany({
-      where: {
-        isActive: true,
-        role: { not: 'LIA' },
-        adviserAvailability: { some: { active: true } },
-      },
+      where,
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });

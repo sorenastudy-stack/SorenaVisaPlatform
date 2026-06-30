@@ -412,6 +412,22 @@ model User {
   // PR-LIA-2 auto-assignment ignores it — empty array means "general".
   specialisedCountries String[] @default([])
 
+  // PR-BOOKING-ADMIN-A: adviser booking configuration, set by OWNER/ADMIN
+  // in the /staff/advisers panel. All additive + defaulted.
+  //   languages            — ISO 639-1 codes the adviser speaks (future
+  //                          client language filter reads these).
+  //   timezone             — the adviser's canonical IANA zone (source of
+  //                          truth; mirrored into AdviserAvailability rows
+  //                          on save so the slot engine stays correct).
+  //   bookableSessionTypes — which session types this adviser handles
+  //                          (reuses the ConsultationType enum). LIA still
+  //                          additionally requires a verified LiaProfile.
+  //   bookingActive        — quick on/off without clearing config.
+  languages            String[]           @default([])
+  timezone             String             @default("Pacific/Auckland")
+  bookableSessionTypes ConsultationType[] @default([])
+  bookingActive        Boolean            @default(true)
+
   assignedLeads    Lead[]           @relation("LeadOwner")
   consultations    Consultation[]   @relation("ConsultationAdviser")
   cases            Case[]           @relation("CaseOwner")
