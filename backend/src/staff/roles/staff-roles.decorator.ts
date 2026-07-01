@@ -12,7 +12,11 @@ import { SetMetadata } from '@nestjs/common';
 
 export const STAFF_ROLES_KEY = 'staff_roles';
 
-export type StaffRole =
+// The staff-portal access allow-list used by StaffRolesGuard. NOTE: this is
+// the legacy guard union (a subset of UserRole values), DISTINCT from the
+// Prisma `StaffRole` enum (the descriptive ADMIN/ADVISER/... taxonomy). Named
+// StaffAccessRole to avoid colliding with that enum.
+export type StaffAccessRole =
   | 'OWNER'
   | 'SUPER_ADMIN'
   | 'ADMIN'
@@ -22,7 +26,7 @@ export type StaffRole =
   | 'FINANCE';
 
 // Allow ANY of the listed roles.
-export const StaffRoles = (...roles: StaffRole[]) =>
+export const StaffRoles = (...roles: StaffAccessRole[]) =>
   SetMetadata(STAFF_ROLES_KEY, roles);
 
 // Convenience for OWNER-only routes.

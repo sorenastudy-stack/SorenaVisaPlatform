@@ -47,7 +47,7 @@ function BookingPlaceholder({ type }: { type: string }) {
 // Capacity-aware: each time carries `remaining` seats (advisers free then)
 // and stays available until remaining hits 0. The server assigns the
 // adviser at confirm time, so the client sends only the start time.
-interface Slot { startUtc: string; endUtc: string; remaining: number; availableAdviserIds: string[]; }
+interface Slot { startUtc: string; endUtc: string; remaining: number; availableStaffIds: string[]; }
 interface SlotsResponse { timezone: string; durationMinutes: number; slots: Slot[]; }
 
 function fmt(iso: string, tz: string, opts: Intl.DateTimeFormatOptions): string {
@@ -344,7 +344,7 @@ function BackToCase() {
 // ── Paid flow (PR-BOOKING-4): GAP_CLOSING (slice 1) + LIA (slice 2) ────
 interface Hold {
   consultationId: string; holdExpiresAt: string; amountNZD: number;
-  type: string; slotStartUtc: string; adviserName: string; timezone: string;
+  type: string; slotStartUtc: string; staffName: string; timezone: string;
 }
 type GapStep = 'pick' | 'hold' | 'expired';
 
@@ -470,7 +470,7 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
           <p className="text-xs uppercase tracking-wide text-sorena-text/50 font-semibold">{cfg.label} · NZD {hold.amountNZD}</p>
           <p className="mt-2 text-lg font-bold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
           <p className="text-lg font-semibold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true })} NZ</p>
-          <p className="mt-1 text-xs text-sorena-text/50">with {hold.adviserName} · Times in New Zealand time</p>
+          <p className="mt-1 text-xs text-sorena-text/50">with {hold.staffName} · Times in New Zealand time</p>
         </div>
         <div className="mt-5 text-center">
           <p className="text-sm text-sorena-text/70">We&apos;re holding this time for you.</p>

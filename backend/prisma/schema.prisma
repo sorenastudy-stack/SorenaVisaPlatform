@@ -35,6 +35,18 @@ enum UserRole {
   FINANCE
 }
 
+// PR-STAFF-RENAME — the staff-portal role taxonomy. "Staff" is the umbrella
+// for everyone who logs into the staff portal; each has exactly one of these.
+// ADVISER = LIA advisers only (no longer the umbrella). Distinct from the
+// legacy `UserRole` (kept for auth guards + booking) and from the guard
+// allow-list type `StaffAccessRole`.
+enum StaffRole {
+  ADMIN
+  ADVISER
+  SUPPORT_CONSULTANT
+  ADMISSION_CONSULTANT
+}
+
 enum LeadStatus {
   NEW
   CONTACTED
@@ -391,6 +403,12 @@ model User {
   // binding the same Google account.
   googleId         String?   @unique
   role             UserRole  @default(SALES)
+  // PR-STAFF-RENAME: descriptive staff-portal role. Coexists with `role`
+  // (which still drives auth guards + booking's LIA gate). Null for
+  // non-staff users (LEAD/STUDENT/AGENT). Backfilled from `role` by
+  // migration: LIA→ADVISER, ADMIN/OWNER/SUPER_ADMIN→ADMIN,
+  // SUPPORT→SUPPORT_CONSULTANT, CONSULTANT→ADMISSION_CONSULTANT.
+  staffRole        StaffRole?
   canEditGlobalData Boolean  @default(false)
   isActive         Boolean   @default(true)
   lastLoginAt      DateTime?
@@ -412,14 +430,14 @@ model User {
   // PR-LIA-2 auto-assignment ignores it — empty array means "general".
   specialisedCountries String[] @default([])
 
-  // PR-BOOKING-ADMIN-A: adviser booking configuration, set by OWNER/ADMIN
-  // in the /staff/advisers panel. All additive + defaulted.
-  //   languages            — ISO 639-1 codes the adviser speaks (future
+  // PR-BOOKING-ADMIN-A: staff booking configuration, set by OWNER/ADMIN
+  // in the /staff/team panel. All additive + defaulted.
+  //   languages            — ISO 639-1 codes the staff member speaks (future
   //                          client language filter reads these).
-  //   timezone             — the adviser's canonical IANA zone (source of
-  //                          truth; mirrored into AdviserAvailability rows
+  //   timezone             — the staff member's canonical IANA zone (source of
+  //                          truth; mirrored into StaffAvailability rows
   //                          on save so the slot engine stays correct).
-  //   bookableSessionTypes — which session types this adviser handles
+  //   bookableSessionTypes — which session types this staff member handles
   //                          (reuses the ConsultationType enum). LIA still
   //                          additionally requires a verified LiaProfile.
   //   bookingActive        — quick on/off without clearing config.
@@ -429,7 +447,7 @@ model User {
   bookingActive        Boolean            @default(true)
 
   assignedLeads    Lead[]           @relation("LeadOwner")
-  consultations    Consultation[]   @relation("ConsultationAdviser")
+  consultations    Consultation[]   @relation("ConsultationStaff")
   cases            Case[]           @relation("CaseOwner")
   // PR-LIA-2: cases where this user is the assigned LIA.
   liaCases         Case[]           @relation("CaseLia")
@@ -562,11 +580,11 @@ model User {
   magicLinkTokens         MagicLinkToken[]
 
   // PR-BOOKING-1: OWNER-set weekly working hours for this user as a
-  // bookable adviser. Empty for users who aren't advisers.
-  adviserAvailability     AdviserAvailability[]             @relation("AdviserAvailabilityAdviser")
+  // bookable staff member. Empty for users who aren't bookable.
+  staffAvailability       StaffAvailability[]               @relation("StaffAvailabilityStaff")
 
-  // PR-BOOKING-ADMIN-B: leave / time-off rows for this user as an adviser.
-  adviserLeave            AdviserLeave[]                    @relation("AdviserLeaveAdviser")
+  // PR-BOOKING-ADMIN-B: leave / time-off rows for this user as staff.
+  staffLeave              StaffLeave[]                      @relation("StaffLeaveStaff")
 
   @@map("users")
 }
@@ -1007,20 +1025,20 @@ model Consultation {
   updatedAt       DateTime           @updatedAt
 
   lead       Lead  @relation(fields: [leadId], references: [id])
-  assignedTo User? @relation("ConsultationAdviser", fields: [assignedToId], references: [id])
+  assignedTo User? @relation("ConsultationStaff", fields: [assignedToId], references: [id])
 
   @@index([leadId])
   @@index([type])
   // PR-BOOKING-1: busy-interval lookup for the slot engine (all booked
-  // sessions for an adviser within a date range).
+  // sessions for a staff member within a date range).
   @@index([assignedToId, scheduledAt])
   @@map("consultations")
 }
 
-// ─── BOOKING: ADVISER AVAILABILITY (PR-BOOKING-1) ─────────────────────────────
+// ─── BOOKING: STAFF AVAILABILITY (PR-BOOKING-1) ───────────────────────────────
 //
-// OWNER-set recurring weekly working hours for a bookable adviser. One
-// row per adviser per weekday-window, so an adviser can have multiple
+// OWNER-set recurring weekly working hours for a bookable staff member. One
+// row per staff member per weekday-window, so they can have multiple
 // windows in a day (e.g. 09:00-12:00 and 13:00-17:00 = two rows).
 //
 // Times are stored as minutes-from-midnight (Int) in the row's `timezone`
@@ -1029,11 +1047,11 @@ model Consultation {
 // DST handling correct. `active` soft-disables a window without deleting.
 //
 // Date-specific overrides (days off / one-off hours) are deferred to
-// Phase 2 (AdviserAvailabilityException) — the slot engine is written so
+// Phase 2 (StaffAvailabilityException) — the slot engine is written so
 // they can layer on top of this weekly grid without rework.
-model AdviserAvailability {
+model StaffAvailability {
   id          String   @id @default(cuid())
-  adviserId   String
+  staffId     String
   dayOfWeek   Int      // 0 = Sunday … 6 = Saturday
   startMinute Int      // minutes from midnight, in `timezone`
   endMinute   Int      // minutes from midnight, in `timezone`; must be > startMinute
@@ -1045,61 +1063,61 @@ model AdviserAvailability {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  adviser     User     @relation("AdviserAvailabilityAdviser", fields: [adviserId], references: [id], onDelete: Cascade)
+  staff       User     @relation("StaffAvailabilityStaff", fields: [staffId], references: [id], onDelete: Cascade)
 
-  @@index([adviserId, dayOfWeek])
-  @@index([adviserId, active])
-  @@map("adviser_availability")
+  @@index([staffId, dayOfWeek])
+  @@index([staffId, active])
+  @@map("staff_availability")
 }
 
-// ─── BOOKING: ADVISER LEAVE / TIME-OFF (PR-BOOKING-ADMIN-B) ───────────────────
+// ─── BOOKING: STAFF LEAVE / TIME-OFF (PR-BOOKING-ADMIN-B) ─────────────────────
 //
-// Full-day leave for a bookable adviser. APPROVED leave is removed from
+// Full-day leave for a bookable staff member. APPROVED leave is removed from
 // booking availability by the slot engine (via its `excludedDates` hook):
 // each leave's [startDate, endDate] inclusive range expands to YYYY-MM-DD
-// calendar keys in the adviser's timezone, and those days are skipped.
+// calendar keys in the staff member's timezone, and those days are skipped.
 //
-// Dates are stored as "YYYY-MM-DD" STRINGS (wall-clock in the adviser's
+// Dates are stored as "YYYY-MM-DD" STRINGS (wall-clock in the staff member's
 // timezone) — that is exactly the key format the slot engine consumes, so
 // there is no DateTime/UTC round-trip to introduce off-by-one drift.
 //
 // Two paths share this one model:
 //   • admin sets leave directly → created with status APPROVED (slice 1).
-//   • adviser requests → APPROVED by an admin (REQUESTED→APPROVED) — the
+//   • staff requests → APPROVED by an admin (REQUESTED→APPROVED) — the
 //     lifecycle is modelled here but its UI is deferred to slice 2.
 // Only APPROVED blocks slots; REQUESTED/REJECTED/CANCELLED never do.
-enum AdviserLeaveStatus {
+enum StaffLeaveStatus {
   REQUESTED
   APPROVED
   REJECTED
   CANCELLED
 }
 
-enum AdviserLeaveKind {
+enum StaffLeaveKind {
   DAY_OFF // full day(s); CUSTOM_HOURS (partial-day) reserved for later
 }
 
-model AdviserLeave {
-  id            String             @id @default(cuid())
-  adviserId     String
-  startDate     String             // "YYYY-MM-DD" in the adviser's tz (inclusive)
-  endDate       String             // "YYYY-MM-DD" (inclusive); == startDate for one day
-  kind          AdviserLeaveKind   @default(DAY_OFF)
-  status        AdviserLeaveStatus @default(REQUESTED)
+model StaffLeave {
+  id            String           @id @default(cuid())
+  staffId       String
+  startDate     String           // "YYYY-MM-DD" in the staff member's tz (inclusive)
+  endDate       String           // "YYYY-MM-DD" (inclusive); == startDate for one day
+  kind          StaffLeaveKind   @default(DAY_OFF)
+  status        StaffLeaveStatus @default(REQUESTED)
   reason        String?
   // Who raised it / who approved-or-rejected it. Plain nullable Strings
-  // (no relation), mirroring AdviserAvailability.setById.
+  // (no relation), mirroring StaffAvailability.setById.
   requestedById String?
   approvedById  String?
   decidedAt     DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
-  adviser       User               @relation("AdviserLeaveAdviser", fields: [adviserId], references: [id], onDelete: Cascade)
+  staff         User             @relation("StaffLeaveStaff", fields: [staffId], references: [id], onDelete: Cascade)
 
-  @@index([adviserId, status])
+  @@index([staffId, status])
   @@index([status])
-  @@map("adviser_leave")
+  @@map("staff_leave")
 }
 
 // ─── CASES ───────────────────────────────────────────────────────────────────

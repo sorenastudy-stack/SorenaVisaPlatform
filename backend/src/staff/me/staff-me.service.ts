@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { staffPermissions, StaffPermissions } from './staff-permissions';
-import type { StaffRole } from '../roles/staff-roles.decorator';
+import type { StaffAccessRole } from '../roles/staff-roles.decorator';
 
 // PR-CONSULT-2 — `/api/staff/me` service.
 //
@@ -16,7 +16,7 @@ export interface StaffMeSnapshot {
   id:          string;
   email:       string;
   fullName:    string;
-  role:        StaffRole;
+  role:        StaffAccessRole;
   isActive:    boolean;
   permissions: StaffPermissions;
 }
@@ -33,7 +33,7 @@ export class StaffMeService {
     if (!user) throw new NotFoundException('User not found');
 
     const isActive = user.staffActiveStatus?.isActive !== false;
-    const role = user.role as StaffRole;
+    const role = user.role as StaffAccessRole;
 
     return {
       id:          user.id,

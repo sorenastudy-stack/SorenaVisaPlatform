@@ -12,7 +12,7 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 // The bookable session types (subset of ConsultationType used for booking).
 export const BOOKING_SESSION_TYPES = ['FREE_15', 'GAP_CLOSING', 'LIA'] as const;
 
-export class UpdateAdviserProfileDto {
+export class UpdateStaffProfileDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -60,7 +60,7 @@ export class ReplaceAvailabilityDto {
 }
 
 // PR-BOOKING-ADMIN-B — admin sets adviser leave directly (created APPROVED).
-export class CreateAdviserLeaveDto {
+export class CreateStaffLeaveDto {
   @IsString()
   @Matches(YMD, { message: 'startDate must be YYYY-MM-DD' })
   startDate!: string;

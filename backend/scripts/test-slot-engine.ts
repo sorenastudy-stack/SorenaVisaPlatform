@@ -40,14 +40,14 @@ async function main() {
   });
 
   // ── Reset weekly availability: Mon–Fri 09:00–12:00 and 13:00–17:00 ──
-  await prisma.adviserAvailability.deleteMany({ where: { adviserId: adviser.id } });
+  await prisma.staffAvailability.deleteMany({ where: { staffId: adviser.id } });
   const windows: Array<{ dayOfWeek: number; startMinute: number; endMinute: number }> = [];
   for (let dow = 1; dow <= 5; dow++) {
     windows.push({ dayOfWeek: dow, startMinute: 540, endMinute: 720 });  // 09:00–12:00
     windows.push({ dayOfWeek: dow, startMinute: 780, endMinute: 1020 }); // 13:00–17:00
   }
-  await prisma.adviserAvailability.createMany({
-    data: windows.map((w) => ({ ...w, adviserId: adviser.id, timezone: TZ, active: true })),
+  await prisma.staffAvailability.createMany({
+    data: windows.map((w) => ({ ...w, staffId: adviser.id, timezone: TZ, active: true })),
   });
 
   // ── Seed a test lead (Contact → Lead) to attach bookings to ─────────
@@ -68,7 +68,7 @@ async function main() {
 
   // ── 1. Slot engine (DB-backed, via the real service) ────────────────
   const res = await booking.getAvailableSlots({
-    adviserId: adviser.id, sessionType: 'LIA', dateFrom, dateTo, now,
+    staffId: adviser.id, sessionType: 'LIA', dateFrom, dateTo, now,
   });
   console.log(`timezone=${res.timezone} duration=${res.durationMinutes}min  total slots=${res.slots.length}\n`);
   console.log('First 12 slots:');
@@ -95,7 +95,7 @@ async function main() {
     select: { id: true },
   });
   createdConsultationIds.push(c1.id);
-  const res2 = await booking.getAvailableSlots({ adviserId: adviser.id, sessionType: 'LIA', dateFrom, dateTo, now });
+  const res2 = await booking.getAvailableSlots({ staffId: adviser.id, sessionType: 'LIA', dateFrom, dateTo, now });
   const stillOffered = res2.slots.some((s) => s.start.getTime() === target.start.getTime());
   console.log('\nBUSY EXCLUSION:');
   console.log('  booked first slot:          ', fmt(target.start));
@@ -113,7 +113,7 @@ async function main() {
   createdConsultationIds.push(pendingA.id, pendingB.id);
 
   const committed = await booking.commitBooking({
-    consultationId: pendingA.id, adviserId: adviser.id, sessionType: 'LIA',
+    consultationId: pendingA.id, staffId: adviser.id, sessionType: 'LIA',
     slotStart: freeSlot.start, timezone: TZ, confirm: true,
   });
   console.log('\nCOMMIT GUARD:');
@@ -122,7 +122,7 @@ async function main() {
   let got409 = false;
   try {
     await booking.commitBooking({
-      consultationId: pendingB.id, adviserId: adviser.id, sessionType: 'LIA',
+      consultationId: pendingB.id, staffId: adviser.id, sessionType: 'LIA',
       slotStart: freeSlot.start, timezone: TZ, confirm: true,
     });
   } catch (e: any) {

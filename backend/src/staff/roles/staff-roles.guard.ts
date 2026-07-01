@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../prisma/prisma.service';
-import { STAFF_ROLES_KEY, StaffRole } from './staff-roles.decorator';
+import { STAFF_ROLES_KEY, StaffAccessRole } from './staff-roles.decorator';
 
 // PR-CONSULT-1 — Staff-roles guard.
 //
@@ -27,7 +27,7 @@ export class StaffRolesGuard implements CanActivate {
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const required = this.reflector.getAllAndOverride<StaffRole[] | undefined>(
+    const required = this.reflector.getAllAndOverride<StaffAccessRole[] | undefined>(
       STAFF_ROLES_KEY,
       [ctx.getHandler(), ctx.getClass()],
     );
@@ -39,7 +39,7 @@ export class StaffRolesGuard implements CanActivate {
     if (!user?.userId || !user?.role) {
       throw new ForbiddenException('Authentication required');
     }
-    if (!required.includes(user.role as StaffRole)) {
+    if (!required.includes(user.role as StaffAccessRole)) {
       throw new ForbiddenException(
         `Role ${user.role} is not allowed for this action`,
       );

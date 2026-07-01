@@ -26,7 +26,7 @@ import { BookingConfirmationService } from './booking-confirmation.service';
 // commit guard). No controller/endpoints yet — that's the next stage.
 
 export interface SlotQuery {
-  adviserId: string;
+  staffId: string;
   sessionType: BookingSessionType;
   dateFrom: Date;
   dateTo: Date;
@@ -34,7 +34,7 @@ export interface SlotQuery {
 }
 
 export interface SlotResult {
-  adviserId: string;
+  staffId: string;
   timezone: string;
   sessionType: BookingSessionType;
   durationMinutes: number;
@@ -83,12 +83,12 @@ export class BookingService {
    * Verify an adviser is eligible for a session type. LIA sessions require
    * a User(role=LIA) with a verified LiaProfile. Throws otherwise.
    */
-  async assertAdviserEligible(adviserId: string, sessionType: BookingSessionType): Promise<void> {
+  async assertStaffEligible(staffId: string, sessionType: BookingSessionType): Promise<void> {
     const cfg = getSessionConfig(sessionType);
-    if (!cfg.requiresLiaAdviser) return;
+    if (!cfg.requiresLia) return;
 
     const adviser = await this.prisma.user.findUnique({
-      where: { id: adviserId },
+      where: { id: staffId },
       select: { role: true, isActive: true, liaProfile: { select: { iaaLicenceVerifiedAt: true } } },
     });
     if (!adviser || !adviser.isActive) {
@@ -100,7 +100,7 @@ export class BookingService {
   }
 
   /** Verified-LIA advisers eligible for LIA sessions (caller can fan out). */
-  async listEligibleLiaAdvisers(): Promise<Array<{ id: string; name: string }>> {
+  async listEligibleLiaStaff(): Promise<Array<{ id: string; name: string }>> {
     return this.prisma.user.findMany({
       where: {
         role: 'LIA',
@@ -118,17 +118,17 @@ export class BookingService {
    * the type in `bookableSessionTypes`, AND have ≥1 active availability
    * window. For LIA sessions they must additionally be role LIA with a
    * verified LiaProfile. This makes the pool explicit + admin-controlled
-   * (configured via /staff/advisers) rather than role-inferred.
+   * (configured via /staff/team) rather than role-inferred.
    */
-  async listAdvisersForType(sessionType: BookingSessionType): Promise<Array<{ id: string; name: string }>> {
+  async listStaffForType(sessionType: BookingSessionType): Promise<Array<{ id: string; name: string }>> {
     const cfg = getSessionConfig(sessionType);
     const where: Prisma.UserWhereInput = {
       isActive: true,
       bookingActive: true,
       bookableSessionTypes: { has: sessionType as any },
-      adviserAvailability: { some: { active: true } },
+      staffAvailability: { some: { active: true } },
     };
-    if (cfg.requiresLiaAdviser) {
+    if (cfg.requiresLia) {
       where.role = 'LIA';
       where.liaProfile = { iaaLicenceVerifiedAt: { not: null } };
     }
@@ -147,7 +147,7 @@ export class BookingService {
    * available per their weekly hours at that time AND (b) not already
    * booked then. A time appears as long as remaining >= 1, and disappears
    * only when every adviser at that time is taken/unavailable. Each entry
-   * carries the list of free adviserIds so the confirm step can assign
+   * carries the list of free staffIds so the confirm step can assign
    * one (and fall back to another on a race).
    *
    * 24h lead time, grid = duration, and timezone correctness are all
@@ -162,29 +162,29 @@ export class BookingService {
     sessionType: BookingSessionType;
     durationMinutes: number;
     timezone: string;
-    slots: Array<{ startUtc: string; endUtc: string; remaining: number; availableAdviserIds: string[] }>;
+    slots: Array<{ startUtc: string; endUtc: string; remaining: number; availableStaffIds: string[] }>;
   }> {
     const { sessionType, dateFrom, dateTo } = params;
     const now = params.now ?? new Date();
     const cfg = getSessionConfig(sessionType);
 
-    const advisers = await this.listAdvisersForType(sessionType);
+    const advisers = await this.listStaffForType(sessionType);
     let timezone = 'Pacific/Auckland';
-    // start instant → { endUtc, availableAdviserIds[] }. We ACCUMULATE
+    // start instant → { endUtc, availableStaffIds[] }. We ACCUMULATE
     // every free adviser at that time (no dedup) — that list size is the
     // capacity.
-    const byStart = new Map<string, { startUtc: string; endUtc: string; availableAdviserIds: string[] }>();
+    const byStart = new Map<string, { startUtc: string; endUtc: string; availableStaffIds: string[] }>();
 
     for (const adviser of advisers) {
-      const res = await this.getAvailableSlots({ adviserId: adviser.id, sessionType, dateFrom, dateTo, now });
+      const res = await this.getAvailableSlots({ staffId: adviser.id, sessionType, dateFrom, dateTo, now });
       if (res.slots.length > 0) timezone = res.timezone;
       for (const s of res.slots) {
         const key = s.start.toISOString();
         const entry = byStart.get(key);
         if (entry) {
-          entry.availableAdviserIds.push(adviser.id);
+          entry.availableStaffIds.push(adviser.id);
         } else {
-          byStart.set(key, { startUtc: key, endUtc: s.end.toISOString(), availableAdviserIds: [adviser.id] });
+          byStart.set(key, { startUtc: key, endUtc: s.end.toISOString(), availableStaffIds: [adviser.id] });
         }
       }
     }
@@ -193,8 +193,8 @@ export class BookingService {
       .map((e) => ({
         startUtc: e.startUtc,
         endUtc: e.endUtc,
-        remaining: e.availableAdviserIds.length,
-        availableAdviserIds: e.availableAdviserIds,
+        remaining: e.availableStaffIds.length,
+        availableStaffIds: e.availableStaffIds,
       }))
       // A time with no free adviser simply never made it into the map, so
       // every entry here already has remaining >= 1.
@@ -206,18 +206,18 @@ export class BookingService {
   /**
    * The pool advisers free at one exact start time (capacity helper).
    * Reuses getSlotsForType over a tight window so 24h-lead / working-hours
-   * / busy filtering all apply identically. Returns the free adviserIds in
+   * / busy filtering all apply identically. Returns the free staffIds in
    * pool order plus the resolved timezone.
    */
-  private async availableAdvisersAt(
+  private async availableStaffAt(
     sessionType: BookingSessionType, slotStart: Date, now: Date,
-  ): Promise<{ adviserIds: string[]; timezone: string }> {
+  ): Promise<{ staffIds: string[]; timezone: string }> {
     const cfg = getSessionConfig(sessionType);
     const dateFrom = new Date(slotStart.getTime() - 60_000);
     const dateTo = new Date(slotStart.getTime() + cfg.durationMinutes * 60_000 + 60_000);
     const res = await this.getSlotsForType({ sessionType, dateFrom, dateTo, now });
     const entry = res.slots.find((s) => s.startUtc === slotStart.toISOString());
-    return { adviserIds: entry?.availableAdviserIds ?? [], timezone: res.timezone };
+    return { staffIds: entry?.availableStaffIds ?? [], timezone: res.timezone };
   }
 
   /**
@@ -300,11 +300,11 @@ export class BookingService {
     userId: string;
     sessionType: BookingSessionType;
     slotStartUtc: string;
-    preferredAdviserId?: string;
+    preferredStaffId?: string;
     now?: Date;
   }): Promise<{
     consultationId: string; holdExpiresAt: Date; amountNZD: number;
-    type: BookingSessionType; slotStartUtc: string; adviserName: string; timezone: string;
+    type: BookingSessionType; slotStartUtc: string; staffName: string; timezone: string;
   }> {
     const { sessionType } = params;
     const cfg = getSessionConfig(sessionType);
@@ -317,18 +317,18 @@ export class BookingService {
     // Release this client's own expired holds before making a new one.
     await this.cancelStaleHoldsForUser(params.userId, now);
 
-    const { adviserIds, timezone } = await this.availableAdvisersAt(sessionType, slotStart, now);
-    if (adviserIds.length === 0) {
+    const { staffIds, timezone } = await this.availableStaffAt(sessionType, slotStart, now);
+    if (staffIds.length === 0) {
       throw new ConflictException('That time is no longer available — please pick another slot');
     }
-    const ordered = params.preferredAdviserId && adviserIds.includes(params.preferredAdviserId)
-      ? [params.preferredAdviserId, ...adviserIds.filter((id) => id !== params.preferredAdviserId)]
-      : adviserIds;
+    const ordered = params.preferredStaffId && staffIds.includes(params.preferredStaffId)
+      ? [params.preferredStaffId, ...staffIds.filter((id) => id !== params.preferredStaffId)]
+      : staffIds;
 
     const leadId = await this.resolveOrCreateLeadForUser(params.userId);
     const holdExpiresAt = new Date(now.getTime() + BOOKING_HOLD_MINUTES * 60_000);
 
-    for (const adviserId of ordered) {
+    for (const staffId of ordered) {
       try {
         const consult = await this.prisma.$transaction(async (tx) => {
           // Re-check: no active booking AND no other LIVE hold overlapping
@@ -337,7 +337,7 @@ export class BookingService {
           // step's index is the hard backstop.)
           const clash = await tx.consultation.findFirst({
             where: {
-              assignedToId: adviserId,
+              assignedToId: staffId,
               scheduledAt: { not: null, lt: slotEnd },
               scheduledEndAt: { gt: slotStart },
               OR: [
@@ -353,8 +353,8 @@ export class BookingService {
           // leave day either (the engine already hides it; this blocks a
           // hand-crafted slotStart).
           const slotYmd = zonedDateParts(slotStart, timezone).key;
-          const onLeave = await tx.adviserLeave.findFirst({
-            where: { adviserId, status: 'APPROVED', startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
+          const onLeave = await tx.staffLeave.findFirst({
+            where: { staffId, status: 'APPROVED', startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
             select: { id: true },
           });
           if (onLeave) throw new ConflictException('taken');
@@ -366,7 +366,7 @@ export class BookingService {
               amountNZD: cfg.priceNZD,
               paymentStatus: 'PENDING',
               status: 'PENDING',
-              assignedToId: adviserId,
+              assignedToId: staffId,
               scheduledAt: slotStart,
               scheduledEndAt: slotEnd,
               durationMinutes: cfg.durationMinutes,
@@ -377,14 +377,14 @@ export class BookingService {
           });
         });
 
-        const adviser = await this.prisma.user.findUnique({ where: { id: adviserId }, select: { name: true } });
+        const adviser = await this.prisma.user.findUnique({ where: { id: staffId }, select: { name: true } });
         return {
           consultationId: consult.id,
           holdExpiresAt,
           amountNZD: cfg.priceNZD,
           type: sessionType,
           slotStartUtc: slotStart.toISOString(),
-          adviserName: adviser?.name ?? 'Your adviser',
+          staffName: adviser?.name ?? 'Your adviser',
           timezone,
         };
       } catch (e) {
@@ -428,7 +428,7 @@ export class BookingService {
    *
    * Capacity behaviour: we compute the advisers free at the time and try
    * to commit to each in turn (first free first; an optional
-   * preferredAdviserId is tried first when still free). The per-adviser
+   * preferredStaffId is tried first when still free). The per-adviser
    * commit guard + partial unique index prevent two clients getting the
    * SAME adviser at the same time — so on a race we just move to the next
    * free adviser. Only when EVERY adviser at that time is taken do we 409.
@@ -437,9 +437,9 @@ export class BookingService {
   async createFreeBooking(params: {
     userId: string;
     slotStartUtc: string;
-    preferredAdviserId?: string;
+    preferredStaffId?: string;
     now?: Date;
-  }): Promise<{ id: string; scheduledAt: Date; scheduledEndAt: Date; status: string; timezone: string; adviserName: string }> {
+  }): Promise<{ id: string; scheduledAt: Date; scheduledEndAt: Date; status: string; timezone: string; staffName: string }> {
     const sessionType: BookingSessionType = 'FREE_15';
     const now = params.now ?? new Date();
 
@@ -456,17 +456,17 @@ export class BookingService {
     }
 
     // Advisers free at this exact time (inside hours, ≥24h lead, not busy).
-    const { adviserIds, timezone } = await this.availableAdvisersAt(sessionType, slotStart, now);
-    if (adviserIds.length === 0) {
+    const { staffIds, timezone } = await this.availableStaffAt(sessionType, slotStart, now);
+    if (staffIds.length === 0) {
       throw new ConflictException('That time was just taken — please pick another slot');
     }
 
     // Try the preferred adviser first (if still free), then the rest in
     // pool order. "First free" assignment — noted as the simple policy;
     // least-loaded could replace this later.
-    const ordered = params.preferredAdviserId && adviserIds.includes(params.preferredAdviserId)
-      ? [params.preferredAdviserId, ...adviserIds.filter((id) => id !== params.preferredAdviserId)]
-      : adviserIds;
+    const ordered = params.preferredStaffId && staffIds.includes(params.preferredStaffId)
+      ? [params.preferredStaffId, ...staffIds.filter((id) => id !== params.preferredStaffId)]
+      : staffIds;
 
     const leadId = await this.resolveOrCreateLeadForUser(params.userId);
 
@@ -483,17 +483,17 @@ export class BookingService {
       select: { id: true },
     });
 
-    for (const adviserId of ordered) {
+    for (const staffId of ordered) {
       try {
         const committed = await this.commitBooking({
           consultationId: consultation.id,
-          adviserId,
+          staffId,
           sessionType,
           slotStart,
           timezone,
           confirm: true,
         });
-        const adviser = await this.prisma.user.findUnique({ where: { id: adviserId }, select: { name: true } });
+        const adviser = await this.prisma.user.findUnique({ where: { id: staffId }, select: { name: true } });
         // PR-BOOKING-5 — finalize (Jitsi link + confirmation email).
         // Best-effort; never let it unwind the confirmed free booking.
         await this.bookingConfirmation.onConfirmed(committed.id).catch(() => undefined);
@@ -503,7 +503,7 @@ export class BookingService {
           scheduledEndAt: committed.scheduledEndAt,
           status: committed.status,
           timezone,
-          adviserName: adviser?.name ?? 'Your adviser',
+          staffName: adviser?.name ?? 'Your adviser',
         };
       } catch (e) {
         // This adviser was taken in the race — try the next free one.
@@ -522,7 +522,7 @@ export class BookingService {
   /** The signed-in client's upcoming confirmed/booked sessions. */
   async getMyUpcomingBookings(userId: string, now: Date = new Date()): Promise<Array<{
     id: string; type: string; scheduledAt: Date; scheduledEndAt: Date | null;
-    durationMinutes: number | null; timezone: string | null; adviserName: string | null;
+    durationMinutes: number | null; timezone: string | null; staffName: string | null;
     meetingLink: string | null; status: string;
   }>> {
     const rows = await this.prisma.consultation.findMany({
@@ -545,7 +545,7 @@ export class BookingService {
       scheduledEndAt: r.scheduledEndAt,
       durationMinutes: r.durationMinutes,
       timezone: r.bookingTimezone,
-      adviserName: r.assignedTo?.name ?? null,
+      staffName: r.assignedTo?.name ?? null,
       meetingLink: r.meetingLink,
       status: r.status,
     }));
@@ -557,19 +557,19 @@ export class BookingService {
    * to the pure engine.
    */
   async getAvailableSlots(query: SlotQuery): Promise<SlotResult> {
-    const { adviserId, sessionType, dateFrom, dateTo } = query;
+    const { staffId, sessionType, dateFrom, dateTo } = query;
     const now = query.now ?? new Date();
     const cfg = getSessionConfig(sessionType);
 
-    await this.assertAdviserEligible(adviserId, sessionType);
+    await this.assertStaffEligible(staffId, sessionType);
 
     // 1. Active weekly windows for the adviser.
-    const availabilityRows = await this.prisma.adviserAvailability.findMany({
-      where: { adviserId, active: true },
+    const availabilityRows = await this.prisma.staffAvailability.findMany({
+      where: { staffId, active: true },
       select: { dayOfWeek: true, startMinute: true, endMinute: true, timezone: true },
     });
     if (availabilityRows.length === 0) {
-      return { adviserId, timezone: 'Pacific/Auckland', sessionType, durationMinutes: cfg.durationMinutes, slots: [] };
+      return { staffId, timezone: 'Pacific/Auckland', sessionType, durationMinutes: cfg.durationMinutes, slots: [] };
     }
     // All rows share a timezone in practice; take the first as the adviser tz.
     const timezone = availabilityRows[0].timezone;
@@ -586,7 +586,7 @@ export class BookingService {
     const rangeEnd = new Date(dateTo.getTime() + 86_400_000);
     const bookings = await this.prisma.consultation.findMany({
       where: {
-        assignedToId: adviserId,
+        assignedToId: staffId,
         scheduledAt: { not: null, gte: rangeStart, lte: rangeEnd },
         OR: [
           { status: { in: [...ACTIVE_BOOKING_STATUSES] } },
@@ -613,9 +613,9 @@ export class BookingService {
     //    path inherits this automatically (it fans out per adviser here).
     const fromYmd = zonedDateParts(dateFrom, timezone).key;
     const toYmd = zonedDateParts(dateTo, timezone).key;
-    const leaves = await this.prisma.adviserLeave.findMany({
+    const leaves = await this.prisma.staffLeave.findMany({
       where: {
-        adviserId,
+        staffId,
         status: 'APPROVED',
         startDate: { lte: toYmd },
         endDate: { gte: fromYmd },
@@ -642,7 +642,7 @@ export class BookingService {
       excludedDates,
     });
 
-    return { adviserId, timezone, sessionType, durationMinutes: cfg.durationMinutes, slots };
+    return { staffId, timezone, sessionType, durationMinutes: cfg.durationMinutes, slots };
   }
 
   /**
@@ -657,13 +657,13 @@ export class BookingService {
    */
   async commitBooking(params: {
     consultationId: string;
-    adviserId: string;
+    staffId: string;
     sessionType: BookingSessionType;
     slotStart: Date;
     timezone: string;
     confirm?: boolean; // CONFIRMED if true (e.g. paid), else BOOKED
   }): Promise<{ id: string; scheduledAt: Date; scheduledEndAt: Date; status: string }> {
-    const { consultationId, adviserId, sessionType, slotStart, timezone } = params;
+    const { consultationId, staffId, sessionType, slotStart, timezone } = params;
     const cfg = getSessionConfig(sessionType);
     const slotEnd = new Date(slotStart.getTime() + cfg.durationMinutes * 60_000);
     const nextStatus = params.confirm ? 'CONFIRMED' : 'BOOKED';
@@ -673,7 +673,7 @@ export class BookingService {
         // Re-check: any active booking for this adviser overlapping the slot?
         const clash = await tx.consultation.findFirst({
           where: {
-            assignedToId: adviserId,
+            assignedToId: staffId,
             id: { not: consultationId },
             status: { in: [...ACTIVE_BOOKING_STATUSES] },
             scheduledAt: { not: null, lt: slotEnd },
@@ -689,8 +689,8 @@ export class BookingService {
         // the adviser has APPROVED leave for. The slot engine already hides
         // such days, so this only fires for a stale/hand-crafted request.
         const slotYmd = zonedDateParts(slotStart, timezone).key;
-        const onLeave = await tx.adviserLeave.findFirst({
-          where: { adviserId, status: 'APPROVED', startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
+        const onLeave = await tx.staffLeave.findFirst({
+          where: { staffId, status: 'APPROVED', startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
           select: { id: true },
         });
         if (onLeave) {
@@ -700,7 +700,7 @@ export class BookingService {
         const updated = await tx.consultation.update({
           where: { id: consultationId },
           data: {
-            assignedToId: adviserId,
+            assignedToId: staffId,
             scheduledAt: slotStart,
             scheduledEndAt: slotEnd,
             durationMinutes: cfg.durationMinutes,

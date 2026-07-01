@@ -55,12 +55,12 @@ export class BookingConfirmationService {
       // 2. Email the client (best-effort — MailService swallows failures).
       const clientEmail = c.lead?.contact?.user?.email ?? null;
       const clientName = c.lead?.contact?.fullName || c.lead?.contact?.user?.name || 'there';
-      const adviserName = c.assignedTo?.name || 'your adviser';
+      const staffName = c.assignedTo?.name || 'your adviser';
       const sessionLabel = getSessionConfig(c.type as BookingSessionType).label;
       const whenStr = this.formatWhen(c.scheduledAt, c.bookingTimezone);
 
       if (clientEmail) {
-        await this.mail.sendBookingConfirmation(clientEmail, clientName, sessionLabel, whenStr, adviserName, meetingLink);
+        await this.mail.sendBookingConfirmation(clientEmail, clientName, sessionLabel, whenStr, staffName, meetingLink);
       } else {
         this.logger.warn(`onConfirmed: no client email for consultation ${consultationId} — link generated, email skipped`);
       }

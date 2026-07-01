@@ -36,7 +36,7 @@ export class BookingController {
     });
   }
 
-  // POST /booking/confirm  { type:'FREE_15', adviserId, slotStartUtc }
+  // POST /booking/confirm  { type:'FREE_15', staffId, slotStartUtc }
   // Creates + confirms the booking for the signed-in client. 409 if the
   // slot was taken between listing and confirming.
   @Post('confirm')
@@ -45,7 +45,7 @@ export class BookingController {
     const booking = await this.service.createFreeBooking({
       userId,
       slotStartUtc: dto.slotStartUtc,
-      preferredAdviserId: dto.adviserId,
+      preferredStaffId: dto.staffId,
     });
     return booking;
   }
@@ -57,7 +57,7 @@ export class BookingController {
     return this.service.getMyUpcomingBookings(userId);
   }
 
-  // POST /booking/hold  { type:'GAP_CLOSING', slotStartUtc, adviserId? }
+  // POST /booking/hold  { type:'GAP_CLOSING', slotStartUtc, staffId? }
   // Reserves the slot (PENDING + 15-min hold) so the client can pay.
   @Post('hold')
   async hold(@Body() dto: HoldBookingDto, @Req() req: any) {
@@ -66,7 +66,7 @@ export class BookingController {
       userId,
       sessionType: dto.type,
       slotStartUtc: dto.slotStartUtc,
-      preferredAdviserId: dto.adviserId,
+      preferredStaffId: dto.staffId,
     });
   }
 

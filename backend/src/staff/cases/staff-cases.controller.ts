@@ -1,7 +1,7 @@
 import { BadRequestException, Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../roles/staff-roles.guard';
-import { AdminTier, StaffRoles, StaffRole } from '../roles/staff-roles.decorator';
+import { AdminTier, StaffRoles, StaffAccessRole } from '../roles/staff-roles.decorator';
 import { StaffCasesService } from './staff-cases.service';
 import { StaffCasesListQueryDto } from './dto/staff-cases.dto';
 
@@ -20,7 +20,7 @@ export class StaffCasesController {
   @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
   list(@Req() req: any, @Query() query: StaffCasesListQueryDto) {
     return this.cases.listCases(
-      { userId: req.user.userId, role: req.user.role as StaffRole },
+      { userId: req.user.userId, role: req.user.role as StaffAccessRole },
       {
         status:       query.status,
         assignedToMe: query.assignedToMe === 'true',
@@ -48,7 +48,7 @@ export class StaffCasesController {
   @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
   detail(@Req() req: any, @Param('id') id: string) {
     return this.cases.getCaseDetail(
-      { userId: req.user.userId, role: req.user.role as StaffRole },
+      { userId: req.user.userId, role: req.user.role as StaffAccessRole },
       id,
     );
   }
@@ -57,7 +57,7 @@ export class StaffCasesController {
   @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
   activity(@Req() req: any, @Param('id') id: string) {
     return this.cases.getCaseActivity(
-      { userId: req.user.userId, role: req.user.role as StaffRole },
+      { userId: req.user.userId, role: req.user.role as StaffAccessRole },
       id,
     );
   }

@@ -399,14 +399,14 @@ export class MailService implements OnModuleInit {
     name:         string,
     sessionLabel: string,
     whenStr:      string,
-    adviserName:  string,
+    staffName:  string,
     meetingLink:  string,
   ): Promise<void> {
     await this.send({
       to,
       subject: `Your ${sessionLabel} is confirmed — Sorena Visa`,
       html: wrapHtml(
-        bookingConfirmationBody(name, sessionLabel, whenStr, adviserName, meetingLink),
+        bookingConfirmationBody(name, sessionLabel, whenStr, staffName, meetingLink),
         { heading: 'Your session is confirmed' },
       ),
     });

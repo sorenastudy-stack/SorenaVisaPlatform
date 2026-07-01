@@ -32,9 +32,9 @@ async function main() {
       create: { email: a.email, name: a.name, role: 'CONSULTANT', isActive: true },
       select: { id: true, name: true, role: true },
     });
-    await prisma.adviserAvailability.deleteMany({ where: { adviserId: adviser.id } });
-    await prisma.adviserAvailability.createMany({
-      data: windows.map((w) => ({ ...w, adviserId: adviser.id, timezone: TZ, active: true })),
+    await prisma.staffAvailability.deleteMany({ where: { staffId: adviser.id } });
+    await prisma.staffAvailability.createMany({
+      data: windows.map((w) => ({ ...w, staffId: adviser.id, timezone: TZ, active: true })),
     });
     console.log('Seeded non-LIA adviser:', adviser.name, `(${adviser.role})`, adviser.id);
   }

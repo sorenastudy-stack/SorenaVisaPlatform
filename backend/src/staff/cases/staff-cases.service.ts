@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { summarizeAuditEntry } from '../../common/audit/audit.helper';
-import type { StaffRole } from '../roles/staff-roles.decorator';
+import type { StaffAccessRole } from '../roles/staff-roles.decorator';
 
 // PR-CONSULT-2 — Staff cases service.
 //
@@ -16,10 +16,10 @@ import type { StaffRole } from '../roles/staff-roles.decorator';
 //
 // No new tables. All reads filter / aggregate from existing rows.
 
-const ADMIN_TIER: StaffRole[] = ['OWNER', 'SUPER_ADMIN', 'ADMIN'];
-const NON_ADMIN_TIER: StaffRole[] = ['LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'];
+const ADMIN_TIER: StaffAccessRole[] = ['OWNER', 'SUPER_ADMIN', 'ADMIN'];
+const NON_ADMIN_TIER: StaffAccessRole[] = ['LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'];
 
-interface CallerCtx { userId: string; role: StaffRole }
+interface CallerCtx { userId: string; role: StaffAccessRole }
 
 export interface ListCasesQuery {
   status?: string;

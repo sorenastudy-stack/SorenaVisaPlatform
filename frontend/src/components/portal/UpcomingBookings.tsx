@@ -14,7 +14,7 @@ interface Booking {
   scheduledEndAt: string | null;
   durationMinutes: number | null;
   timezone: string | null;
-  adviserName: string | null;
+  staffName: string | null;
   meetingLink: string | null;
   status: string;
 }
@@ -69,8 +69,8 @@ export async function UpcomingBookings() {
                   {fmtDate(b.scheduledAt, tz)} at {fmtTime(b.scheduledAt, tz)}
                   <span className="text-gray-400"> ({tz})</span>
                 </p>
-                {b.adviserName && (
-                  <p className="text-xs text-gray-500 mt-0.5">with {b.adviserName}</p>
+                {b.staffName && (
+                  <p className="text-xs text-gray-500 mt-0.5">with {b.staffName}</p>
                 )}
                 {b.meetingLink && (
                   <a

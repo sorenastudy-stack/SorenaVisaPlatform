@@ -26,7 +26,7 @@ export interface BusyInterval {
 
 export interface SlotEngineInput {
   timezone: string;            // IANA, e.g. "Pacific/Auckland"
-  windows: WeeklyWindow[];     // active weekly windows for the adviser
+  windows: WeeklyWindow[];     // active weekly windows for the staff
   busy: BusyInterval[];        // existing bookings (UTC)
   durationMinutes: number;     // session length; also the grid step
   dateFrom: Date;              // range start (UTC instant)
@@ -35,7 +35,7 @@ export interface SlotEngineInput {
   minLeadMinutes?: number;     // earliest a slot may start, from now. Default 24h.
   bufferMinutes?: number;      // gap padded around busy intervals. Default 0.
   // Phase-2 hook: calendar dates (YYYY-MM-DD in `timezone`) to skip
-  // entirely (e.g. adviser day off). Empty for now.
+  // entirely (e.g. staff day off). Empty for now.
   excludedDates?: Set<string>;
 }
 
@@ -114,7 +114,7 @@ function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
 
 /**
  * Compute available slots = (weekly working hours) minus (busy), in the
- * adviser timezone, with no past/too-soon slots and no double-booking.
+ * staff timezone, with no past/too-soon slots and no double-booking.
  */
 export function computeAvailableSlots(input: SlotEngineInput): AvailableSlot[] {
   const {
@@ -144,7 +144,7 @@ export function computeAvailableSlots(input: SlotEngineInput): AvailableSlot[] {
 
   const slots: AvailableSlot[] = [];
 
-  // Iterate calendar dates in the adviser timezone from dateFrom to dateTo.
+  // Iterate calendar dates in the staff timezone from dateFrom to dateTo.
   // Step a UTC cursor by 24h but always re-derive the tz calendar date, so
   // DST day-length changes can't desync the loop.
   const endMs = dateTo.getTime();

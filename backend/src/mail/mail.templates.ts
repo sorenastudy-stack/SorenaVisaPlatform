@@ -315,7 +315,7 @@ export function bookingConfirmationBody(
   name:         string,
   sessionLabel: string,
   whenStr:      string,
-  adviserName:  string,
+  staffName:  string,
   meetingLink:  string,
 ): string {
   return `
@@ -323,7 +323,7 @@ export function bookingConfirmationBody(
     <p>Your <strong>${esc(sessionLabel)}</strong> is confirmed. We're looking forward to speaking with you.</p>
     <p style="margin:16px 0;">
       <strong>${esc(whenStr)}</strong><br/>
-      with ${esc(adviserName)}
+      with ${esc(staffName)}
     </p>
     <p style="margin:20px 0;">
       <a href="${esc(meetingLink)}"

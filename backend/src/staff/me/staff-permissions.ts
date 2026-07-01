@@ -13,7 +13,7 @@
 //   ADMIN         — read-all, manage cases / staff (no approvals queue).
 //   LIA / CONSULTANT / SUPPORT / FINANCE — scoped to own assignments.
 
-import type { StaffRole } from '../roles/staff-roles.decorator';
+import type { StaffAccessRole } from '../roles/staff-roles.decorator';
 
 export interface StaffPermissions {
   // Can open the /staff/users CRUD page + invite / deactivate staff.
@@ -33,7 +33,7 @@ export interface StaffPermissions {
   canReassign:      boolean;
 }
 
-export function staffPermissions(role: StaffRole | string): StaffPermissions {
+export function staffPermissions(role: StaffAccessRole | string): StaffPermissions {
   const isOwner = role === 'OWNER';
   const isSuperAdmin = role === 'SUPER_ADMIN';
   const isAdmin = role === 'ADMIN';

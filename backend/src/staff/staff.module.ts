@@ -7,7 +7,7 @@ import { StaffMeModule } from './me/staff-me.module';
 import { StaffCasesModule } from './cases/staff-cases.module';
 import { StaffTicketsModule } from './tickets/staff-tickets.module';
 import { LiaProfilesModule } from './lia-profiles/lia-profiles.module';
-import { AdvisersModule } from './advisers/advisers.module';
+import { TeamModule } from './team/team.module';
 
 // PR-CONSULT-1 — Staff root module.
 //
@@ -32,8 +32,8 @@ import { AdvisersModule } from './advisers/advisers.module';
     StaffCasesModule,
     StaffTicketsModule,
     LiaProfilesModule,
-    // PR-BOOKING-ADMIN-A: /staff/advisers — booking config + weekly hours.
-    AdvisersModule,
+    // PR-BOOKING-ADMIN-A: /staff/team — staff booking config + weekly hours.
+    TeamModule,
   ],
   exports: [
     AssignmentsModule,

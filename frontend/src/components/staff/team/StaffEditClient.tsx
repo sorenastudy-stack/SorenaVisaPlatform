@@ -10,10 +10,10 @@ import { DateInput } from '@/components/ui/DateInput';
 import {
   LANGUAGES, SESSION_TYPES, TIMEZONES, WEEKDAYS,
   minutesToHHMM, hhmmToMinutes,
-} from '@/lib/booking/adviser-options';
+} from '@/lib/booking/staff-options';
 
 interface Window { id?: string; dayOfWeek: number; startMinute: number; endMinute: number; }
-interface Adviser {
+interface Staff {
   id: string; name: string; email: string; role: string; liaVerified: boolean;
   languages: string[]; timezone: string; bookableSessionTypes: string[];
   bookingActive: boolean; windows: Window[];
@@ -53,9 +53,9 @@ function fmtConflictWhen(iso: string, tz: string | null): string {
   }).format(new Date(iso));
 }
 
-export function AdviserEditClient({ adviserId }: { adviserId: string }) {
+export function StaffEditClient({ staffId }: { staffId: string }) {
   const router = useRouter();
-  const [data, setData] = useState<Adviser | null>(null);
+  const [data, setData] = useState<Staff | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   // Section A (profile) draft
@@ -82,7 +82,7 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    api.get<Adviser>(`/staff/advisers/${adviserId}`)
+    api.get<Staff>(`/staff/team/${staffId}`)
       .then((a) => {
         if (cancelled) return;
         setData(a);
@@ -93,11 +93,11 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
         setWindows(a.windows.map((w) => ({ dayOfWeek: w.dayOfWeek, startMinute: w.startMinute, endMinute: w.endMinute })));
       })
       .catch(() => { if (!cancelled) setLoadError(true); });
-    api.get<Leave[]>(`/staff/advisers/${adviserId}/leave`)
+    api.get<Leave[]>(`/staff/team/${staffId}/leave`)
       .then((rows) => { if (!cancelled) setLeaves(rows); })
       .catch(() => { /* leave list is non-fatal; section just shows empty */ });
     return () => { cancelled = true; };
-  }, [adviserId]);
+  }, [staffId]);
 
   function toggle<T>(list: T[], v: T): T[] {
     return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
@@ -106,7 +106,7 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
   async function saveProfile() {
     setSavingProfile(true); setMsg(null);
     try {
-      const updated = await api.patch<Adviser>(`/staff/advisers/${adviserId}`, {
+      const updated = await api.patch<Staff>(`/staff/team/${staffId}`, {
         languages, timezone, bookableSessionTypes: types, bookingActive,
       });
       setData(updated);
@@ -145,7 +145,7 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
     if (err) { setMsg({ kind: 'err', text: err }); return; }
     setSavingHours(true); setMsg(null);
     try {
-      const updated = await api.put<Adviser>(`/staff/advisers/${adviserId}/availability`, {
+      const updated = await api.put<Staff>(`/staff/team/${staffId}/availability`, {
         windows: windows.map((w) => ({ dayOfWeek: w.dayOfWeek, startMinute: w.startMinute, endMinute: w.endMinute })),
       });
       setData(updated);
@@ -164,7 +164,7 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
     setAddingLeave(true);
     try {
       const res = await api.post<{ leave: Leave; conflicts: Conflict[] }>(
-        `/staff/advisers/${adviserId}/leave`,
+        `/staff/team/${staffId}/leave`,
         { startDate: leaveStart, endDate: leaveEnd, reason: leaveReason || undefined },
       );
       setLeaves((prev) => [res.leave, ...prev]);
@@ -173,7 +173,7 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
         setConflicts(res.conflicts);
         setLeaveMsg(null);
       } else {
-        setLeaveMsg({ kind: 'ok', text: 'Time off added. This adviser is now off on those days.' });
+        setLeaveMsg({ kind: 'ok', text: 'Time off added. This staff member is now off on those days.' });
       }
     } catch (e) {
       setLeaveMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not add time off.' });
@@ -183,7 +183,7 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
   async function deleteLeave(id: string) {
     setLeaveMsg(null);
     try {
-      await api.delete(`/staff/advisers/${adviserId}/leave/${id}`);
+      await api.delete(`/staff/team/${staffId}/leave/${id}`);
       setLeaves((prev) => prev.filter((l) => l.id !== id));
       setLeaveMsg({ kind: 'ok', text: 'Time off removed. Those days are available again.' });
     } catch (e) {
@@ -192,7 +192,7 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
   }
 
   if (loadError) {
-    return <div className="mx-auto max-w-3xl px-4 py-10 text-sm text-red-600">Adviser not found or failed to load. <Link href="/staff/advisers" className="underline">Back</Link></div>;
+    return <div className="mx-auto max-w-3xl px-4 py-10 text-sm text-red-600">Staff member not found or failed to load. <Link href="/staff/team" className="underline">Back</Link></div>;
   }
   if (!data) {
     return <div className="mx-auto max-w-3xl px-4 py-12 flex items-center gap-2 text-sorena-text/60"><Loader2 size={18} className="animate-spin" /> Loading…</div>;
@@ -200,7 +200,7 @@ export function AdviserEditClient({ adviserId }: { adviserId: string }) {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
-      <Link href="/staff/advisers" className="inline-flex items-center gap-1 text-sm text-sorena-text/60 hover:text-sorena-navy mb-4"><ArrowLeft size={14} /> Advisers</Link>
+      <Link href="/staff/team" className="inline-flex items-center gap-1 text-sm text-sorena-text/60 hover:text-sorena-navy mb-4"><ArrowLeft size={14} /> Staff</Link>
 
       <div className="mb-6 flex items-center gap-2">
         <h1 className="text-2xl font-bold text-sorena-navy">{data.name}</h1>

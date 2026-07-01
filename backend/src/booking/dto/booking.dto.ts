@@ -26,7 +26,7 @@ export class HoldBookingDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  adviserId?: string;
+  staffId?: string;
 }
 
 export class CheckoutBookingDto {
@@ -45,12 +45,12 @@ export class ConfirmBookingDto {
   slotStartUtc!: string;
 
   // Capacity model: the server assigns one of the advisers free at this
-  // time. adviserId is now an OPTIONAL preference only — if it's still
+  // time. staffId is now an OPTIONAL preference only — if it's still
   // free it's tried first, otherwise the server picks another free adviser.
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  adviserId?: string;
+  staffId?: string;
 
   @IsOptional()
   @IsString()

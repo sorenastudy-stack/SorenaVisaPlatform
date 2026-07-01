@@ -23,7 +23,7 @@ export interface SessionTypeConfig {
   /** Whether a Stripe payment must succeed before slot selection. */
   requiresPayment: boolean;
   /** Whether the adviser must be a User(role=LIA) with a verified LiaProfile. */
-  requiresLiaAdviser: boolean;
+  requiresLia: boolean;
   /** Customer-facing label. */
   label: string;
 }
@@ -34,7 +34,7 @@ export const SESSION_TYPES: Record<BookingSessionType, SessionTypeConfig> = {
     durationMinutes: 15,
     priceNZD: 0,
     requiresPayment: false,
-    requiresLiaAdviser: false,
+    requiresLia: false,
     label: 'Free 15-minute consultation',
   },
   GAP_CLOSING: {
@@ -42,7 +42,7 @@ export const SESSION_TYPES: Record<BookingSessionType, SessionTypeConfig> = {
     durationMinutes: 30,
     priceNZD: 30,
     requiresPayment: true,
-    requiresLiaAdviser: false,
+    requiresLia: false,
     label: 'Gap-Closing session',
   },
   LIA: {
@@ -50,7 +50,7 @@ export const SESSION_TYPES: Record<BookingSessionType, SessionTypeConfig> = {
     durationMinutes: 45,
     priceNZD: 150,
     requiresPayment: true,
-    requiresLiaAdviser: true,
+    requiresLia: true,
     label: 'LIA Consultation',
   },
 };

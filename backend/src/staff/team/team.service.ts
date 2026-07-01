@@ -3,8 +3,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
-  UpdateAdviserProfileDto, AvailabilityWindowDto, CreateAdviserLeaveDto,
-} from './dto/advisers.dto';
+  UpdateStaffProfileDto, AvailabilityWindowDto, CreateStaffLeaveDto,
+} from './dto/team.dto';
 import { zonedWallTimeToUtc } from '../../booking/slot-engine';
 
 // PR-BOOKING-ADMIN-A — adviser management service.
@@ -15,27 +15,27 @@ import { zonedWallTimeToUtc } from '../../booking/slot-engine';
 // create users — that's /staff/users.
 
 // Adviser-eligible roles.
-const ADVISER_ROLES = ['LIA', 'CONSULTANT'] as const;
+const BOOKABLE_STAFF_ROLES = ['LIA', 'CONSULTANT'] as const;
 
 @Injectable()
-export class AdvisersService {
+export class TeamService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** List adviser-eligible users with booking config + availability summary. */
   async list() {
     const users = await this.prisma.user.findMany({
-      where: { role: { in: [...ADVISER_ROLES] } },
+      where: { role: { in: [...BOOKABLE_STAFF_ROLES] } },
       orderBy: { name: 'asc' },
       select: {
         id: true, name: true, email: true, role: true, isActive: true,
         languages: true, timezone: true, bookableSessionTypes: true, bookingActive: true,
         liaProfile: { select: { iaaLicenceVerifiedAt: true } },
-        _count: { select: { adviserAvailability: { where: { active: true } } } },
+        _count: { select: { staffAvailability: { where: { active: true } } } },
       },
     });
 
     return users.map((u) => {
-      const windowCount = u._count.adviserAvailability;
+      const windowCount = u._count.staffAvailability;
       const liaVerified = !!u.liaProfile?.iaaLicenceVerifiedAt;
       const hasTypes = u.bookableSessionTypes.length > 0;
       // Derived: bookable if active toggle on, has at least one type, and
@@ -62,19 +62,19 @@ export class AdvisersService {
   /** One adviser's full config: profile + weekly windows + LIA status. */
   async getOne(id: string) {
     const u = await this.prisma.user.findFirst({
-      where: { id, role: { in: [...ADVISER_ROLES] } },
+      where: { id, role: { in: [...BOOKABLE_STAFF_ROLES] } },
       select: {
         id: true, name: true, email: true, role: true, isActive: true,
         languages: true, timezone: true, bookableSessionTypes: true, bookingActive: true,
         liaProfile: { select: { iaaLicenceVerifiedAt: true } },
-        adviserAvailability: {
+        staffAvailability: {
           where: { active: true },
           orderBy: [{ dayOfWeek: 'asc' }, { startMinute: 'asc' }],
           select: { id: true, dayOfWeek: true, startMinute: true, endMinute: true, timezone: true },
         },
       },
     });
-    if (!u) throw new NotFoundException('Adviser not found');
+    if (!u) throw new NotFoundException('Staff member not found');
 
     return {
       id: u.id,
@@ -86,7 +86,7 @@ export class AdvisersService {
       timezone: u.timezone,
       bookableSessionTypes: u.bookableSessionTypes,
       bookingActive: u.bookingActive,
-      windows: u.adviserAvailability,
+      windows: u.staffAvailability,
     };
   }
 
@@ -96,12 +96,12 @@ export class AdvisersService {
    * timezone propagates into the adviser's availability rows so the slot
    * engine (which reads the row timezone) stays consistent.
    */
-  async updateProfile(id: string, dto: UpdateAdviserProfileDto) {
+  async updateProfile(id: string, dto: UpdateStaffProfileDto) {
     const u = await this.prisma.user.findFirst({
-      where: { id, role: { in: [...ADVISER_ROLES] } },
+      where: { id, role: { in: [...BOOKABLE_STAFF_ROLES] } },
       select: { id: true, role: true, liaProfile: { select: { iaaLicenceVerifiedAt: true } } },
     });
-    if (!u) throw new NotFoundException('Adviser not found');
+    if (!u) throw new NotFoundException('Staff member not found');
 
     if (dto.bookableSessionTypes?.includes('LIA')) {
       const verified = u.role === 'LIA' && !!u.liaProfile?.iaaLicenceVerifiedAt;
@@ -122,8 +122,8 @@ export class AdvisersService {
       });
       // Mirror the canonical timezone into the adviser's availability rows.
       if (dto.timezone !== undefined) {
-        await tx.adviserAvailability.updateMany({
-          where: { adviserId: id },
+        await tx.staffAvailability.updateMany({
+          where: { staffId: id },
           data: { timezone: dto.timezone },
         });
       }
@@ -140,10 +140,10 @@ export class AdvisersService {
    */
   async replaceAvailability(id: string, windows: AvailabilityWindowDto[]) {
     const u = await this.prisma.user.findFirst({
-      where: { id, role: { in: [...ADVISER_ROLES] } },
+      where: { id, role: { in: [...BOOKABLE_STAFF_ROLES] } },
       select: { id: true, timezone: true },
     });
-    if (!u) throw new NotFoundException('Adviser not found');
+    if (!u) throw new NotFoundException('Staff member not found');
 
     // Per-window: start < end.
     for (const w of windows) {
@@ -170,11 +170,11 @@ export class AdvisersService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.adviserAvailability.deleteMany({ where: { adviserId: id } });
+      await tx.staffAvailability.deleteMany({ where: { staffId: id } });
       if (windows.length > 0) {
-        await tx.adviserAvailability.createMany({
+        await tx.staffAvailability.createMany({
           data: windows.map((w) => ({
-            adviserId: id,
+            staffId: id,
             dayOfWeek: w.dayOfWeek,
             startMinute: w.startMinute,
             endMinute: w.endMinute,
@@ -191,12 +191,12 @@ export class AdvisersService {
   // ── Leave / time-off (PR-BOOKING-ADMIN-B, Stage B slice 1) ─────────────
 
   /** Load an adviser-eligible user (or 404). */
-  private async requireAdviser(id: string): Promise<{ id: string; timezone: string }> {
+  private async requireStaff(id: string): Promise<{ id: string; timezone: string }> {
     const u = await this.prisma.user.findFirst({
-      where: { id, role: { in: [...ADVISER_ROLES] } },
+      where: { id, role: { in: [...BOOKABLE_STAFF_ROLES] } },
       select: { id: true, timezone: true },
     });
-    if (!u) throw new NotFoundException('Adviser not found');
+    if (!u) throw new NotFoundException('Staff member not found');
     return u;
   }
 
@@ -211,8 +211,8 @@ export class AdvisersService {
    * bookings are RETURNED but never modified or cancelled — staff rebook or
    * notify manually.
    */
-  async createLeave(id: string, dto: CreateAdviserLeaveDto, actorUserId: string) {
-    const adviser = await this.requireAdviser(id);
+  async createLeave(id: string, dto: CreateStaffLeaveDto, actorUserId: string) {
+    const staff = await this.requireStaff(id);
 
     // Lexical compare is valid for zero-padded YYYY-MM-DD.
     if (dto.endDate < dto.startDate) {
@@ -220,9 +220,9 @@ export class AdvisersService {
     }
 
     const now = new Date();
-    const leave = await this.prisma.adviserLeave.create({
+    const leave = await this.prisma.staffLeave.create({
       data: {
-        adviserId: id,
+        staffId: id,
         startDate: dto.startDate,
         endDate: dto.endDate,
         kind: 'DAY_OFF',
@@ -240,9 +240,9 @@ export class AdvisersService {
 
     // Conflict window: [startDate 00:00, dayAfter(endDate) 00:00) in adviser tz.
     const s = parseYmd(dto.startDate);
-    const startUtc = zonedWallTimeToUtc(s.y, s.m, s.d, 0, adviser.timezone);
+    const startUtc = zonedWallTimeToUtc(s.y, s.m, s.d, 0, staff.timezone);
     const after = parseYmd(nextDayYmd(dto.endDate));
-    const endExclusiveUtc = zonedWallTimeToUtc(after.y, after.m, after.d, 0, adviser.timezone);
+    const endExclusiveUtc = zonedWallTimeToUtc(after.y, after.m, after.d, 0, staff.timezone);
 
     const conflictRows = await this.prisma.consultation.findMany({
       where: {
@@ -271,11 +271,11 @@ export class AdvisersService {
 
   /** List an adviser's leave, future-first. Optional status filter. */
   async listLeave(id: string, status?: string) {
-    await this.requireAdviser(id);
+    await this.requireStaff(id);
     const allowed = ['REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED'];
-    const where: { adviserId: string; status?: any } = { adviserId: id };
+    const where: { staffId: string; status?: any } = { staffId: id };
     if (status && allowed.includes(status)) where.status = status;
-    return this.prisma.adviserLeave.findMany({
+    return this.prisma.staffLeave.findMany({
       where,
       // YYYY-MM-DD sorts chronologically; desc puts upcoming/newest first.
       orderBy: [{ startDate: 'desc' }],
@@ -288,13 +288,13 @@ export class AdvisersService {
 
   /** Remove/cancel a leave (admin). Scoped to the adviser to avoid id mix-ups. */
   async deleteLeave(id: string, leaveId: string) {
-    await this.requireAdviser(id);
-    const lv = await this.prisma.adviserLeave.findFirst({
-      where: { id: leaveId, adviserId: id },
+    await this.requireStaff(id);
+    const lv = await this.prisma.staffLeave.findFirst({
+      where: { id: leaveId, staffId: id },
       select: { id: true },
     });
     if (!lv) throw new NotFoundException('Leave not found');
-    await this.prisma.adviserLeave.delete({ where: { id: leaveId } });
+    await this.prisma.staffLeave.delete({ where: { id: leaveId } });
     return { ok: true };
   }
 }

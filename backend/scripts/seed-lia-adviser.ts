@@ -27,10 +27,10 @@ async function main() {
   });
 
   // Weekly availability: Mon–Fri 09:00–12:00 & 13:00–17:00.
-  await prisma.adviserAvailability.deleteMany({ where: { adviserId: adviser.id } });
+  await prisma.staffAvailability.deleteMany({ where: { staffId: adviser.id } });
   const wins: Array<{ dayOfWeek: number; startMinute: number; endMinute: number }> = [];
   for (let d = 1; d <= 5; d++) { wins.push({ dayOfWeek: d, startMinute: 540, endMinute: 720 }, { dayOfWeek: d, startMinute: 780, endMinute: 1020 }); }
-  await prisma.adviserAvailability.createMany({ data: wins.map((w) => ({ ...w, adviserId: adviser.id, timezone: TZ, active: true })) });
+  await prisma.staffAvailability.createMany({ data: wins.map((w) => ({ ...w, staffId: adviser.id, timezone: TZ, active: true })) });
 
   console.log('Seeded VERIFIED LIA adviser:', adviser.name, `(${adviser.role})`, adviser.id);
   console.log('  bookableSessionTypes: [LIA], bookingActive: true, verified: yes, windows:', wins.length, '(Mon–Fri 09–12 & 13–17 NZ)');

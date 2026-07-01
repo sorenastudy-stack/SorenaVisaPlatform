@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, Search, ChevronRight, BadgeCheck } from 'lucide-react';
 import { api } from '@/lib/api';
-import { langLabel, sessionTypeLabel } from '@/lib/booking/adviser-options';
+import { langLabel, sessionTypeLabel } from '@/lib/booking/staff-options';
 
-interface AdviserSummary {
+interface StaffSummary {
   id: string; name: string; email: string; role: string; liaVerified: boolean;
   languages: string[]; timezone: string; bookableSessionTypes: string[];
   bookingActive: boolean; windowCount: number; availabilitySet: boolean; bookable: boolean;
@@ -21,15 +21,15 @@ function Chip({ children, tone = 'navy' }: { children: React.ReactNode; tone?: '
   return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}>{children}</span>;
 }
 
-export function AdvisersListClient() {
-  const [rows, setRows] = useState<AdviserSummary[] | null>(null);
+export function StaffListClient() {
+  const [rows, setRows] = useState<StaffSummary[] | null>(null);
   const [error, setError] = useState(false);
   const [q, setQ] = useState('');
   const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    api.get<AdviserSummary[]>('/staff/advisers')
+    api.get<StaffSummary[]>('/staff/team')
       .then((r) => { if (!cancelled) setRows(r); })
       .catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; };
@@ -47,10 +47,10 @@ export function AdvisersListClient() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-sorena-navy">Advisers</h1>
+        <h1 className="text-2xl font-bold text-sorena-navy">Staff</h1>
       </div>
       <p className="text-sm text-sorena-text/60 mb-6">
-        Configure booking for advisers (LIA &amp; Consultant staff). To add a new staff member, use{' '}
+        Configure booking for staff (advisers &amp; consultants). To add a new staff member, use{' '}
         <Link href="/staff/users" className="font-semibold text-sorena-navy underline">Staff</Link>.
       </p>
 
@@ -71,20 +71,20 @@ export function AdvisersListClient() {
         </label>
       </div>
 
-      {error && <p className="text-sm text-red-600">Couldn&apos;t load advisers. Please refresh.</p>}
+      {error && <p className="text-sm text-red-600">Couldn&apos;t load staff. Please refresh.</p>}
       {!rows && !error && (
-        <div className="flex items-center gap-2 py-12 text-sorena-text/60"><Loader2 size={18} className="animate-spin" /> Loading advisers…</div>
+        <div className="flex items-center gap-2 py-12 text-sorena-text/60"><Loader2 size={18} className="animate-spin" /> Loading staff…</div>
       )}
 
       {rows && filtered.length === 0 && (
-        <p className="py-10 text-center text-sm text-sorena-text/60">No advisers match.</p>
+        <p className="py-10 text-center text-sm text-sorena-text/60">No staff match.</p>
       )}
 
       <div className="space-y-3">
         {filtered.map((a) => (
           <Link
             key={a.id}
-            href={`/staff/advisers/${a.id}`}
+            href={`/staff/team/${a.id}`}
             className="block rounded-2xl border border-gray-200 bg-white p-4 md:p-5 shadow-sm transition-all hover:border-sorena-navy/30 hover:shadow"
           >
             <div className="flex items-start justify-between gap-3">
