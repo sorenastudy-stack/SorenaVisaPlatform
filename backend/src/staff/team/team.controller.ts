@@ -6,7 +6,7 @@ import { StaffRolesGuard } from '../roles/staff-roles.guard';
 import { AdminTier } from '../roles/staff-roles.decorator';
 import { TeamService } from './team.service';
 import {
-  UpdateStaffProfileDto, ReplaceAvailabilityDto, CreateStaffLeaveDto,
+  UpdateStaffProfileDto, ReplaceAvailabilityDto, CreateStaffLeaveDto, DecideLeaveDto,
 } from './dto/team.dto';
 
 // PR-BOOKING-ADMIN-A — adviser management endpoints.
@@ -25,6 +25,13 @@ export class TeamController {
   @Get()
   list() {
     return this.service.list();
+  }
+
+  // GET /staff/team/leave/pending — central queue of all PENDING requests.
+  // Declared BEFORE the `:id` routes so the static path wins the match.
+  @Get('leave/pending')
+  listPendingLeave() {
+    return this.service.listPendingLeave();
   }
 
   // GET /staff/team/:id — one adviser's full config + weekly windows.
@@ -65,6 +72,18 @@ export class TeamController {
   @Get(':id/leave')
   listLeave(@Param('id') id: string, @Query('status') status?: string) {
     return this.service.listLeave(id, status);
+  }
+
+  // PATCH /staff/team/:id/leave/:leaveId — approve/reject a PENDING request.
+  // Returns { leave, conflicts } (conflicts non-empty only on approve).
+  @Patch(':id/leave/:leaveId')
+  decideLeave(
+    @Param('id') id: string,
+    @Param('leaveId') leaveId: string,
+    @Body() dto: DecideLeaveDto,
+    @Req() req: any,
+  ) {
+    return this.service.decideLeave(id, leaveId, dto.status, req.user.userId);
   }
 
   // DELETE /staff/team/:id/leave/:leaveId — remove/cancel a leave.

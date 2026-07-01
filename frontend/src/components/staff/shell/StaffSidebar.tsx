@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
-  Settings, CreditCard, BadgeCheck, CalendarClock,
+  Settings, CreditCard, BadgeCheck, CalendarClock, CalendarOff,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -68,7 +68,9 @@ const NAV: NavItem[] = [
   // surface's English-only labels (the .nav.* keys above are the
   // pre-existing translated ones).
   { label: 'LIA verification',            href: '/staff/lia-verification',   icon: <BadgeCheck size={18} />,  roleGate: LIA_VERIFICATION_ROLES },
-  { label: 'Staff',                    href: '/staff/team',           icon: <CalendarClock size={18} />, roleGate: STAFF_PANEL_ROLES },
+  { label: 'staff.nav.bookingSetup',   href: '/staff/team',           icon: <CalendarClock size={18} />, roleGate: STAFF_PANEL_ROLES },
+  // PR-BOOKING-ADMIN-B slice 2: self-service leave — every staff role.
+  { label: 'My leave',                 href: '/staff/leave',          icon: <CalendarOff size={18} /> },
   { label: 'staff.nav.marketing',         href: '/staff/marketing',          icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },
   // PR-SCORECARD-4: Wix payments visible to OWNER/SUPER_ADMIN/ADMIN/FINANCE.
   { label: 'staff.nav.wixPayments',       href: '/staff/wix-payments',       icon: <CreditCard size={18} />,  roleGate: WIX_PAYMENT_ROLES },

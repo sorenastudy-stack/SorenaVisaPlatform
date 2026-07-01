@@ -45,6 +45,14 @@ export interface SlotResult {
 // included only while a soft hold is live (holdExpiresAt > now).
 const ACTIVE_BOOKING_STATUSES = ['BOOKED', 'CONFIRMED'] as const;
 
+// StaffLeave statuses that remove days from NEW-booking availability.
+// PR-BOOKING-ADMIN-B slice 2: a PENDING request (status REQUESTED) blocks
+// new bookings the moment it's raised — exactly like an APPROVED leave —
+// so nobody can book those days while a decision is pending. REJECTED /
+// CANCELLED are excluded, so a rejected/withdrawn request reopens the days
+// automatically. (This never touches EXISTING confirmed bookings.)
+const LEAVE_BLOCKS_BOOKING = ['APPROVED', 'REQUESTED'] as const;
+
 /**
  * Expand an inclusive YYYY-MM-DD range into its calendar-day keys, clipped
  * to [clipFrom, clipTo] (also YYYY-MM-DD). Used to turn APPROVED adviser
@@ -354,7 +362,7 @@ export class BookingService {
           // hand-crafted slotStart).
           const slotYmd = zonedDateParts(slotStart, timezone).key;
           const onLeave = await tx.staffLeave.findFirst({
-            where: { staffId, status: 'APPROVED', startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
+            where: { staffId, status: { in: [...LEAVE_BLOCKS_BOOKING] }, startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
             select: { id: true },
           });
           if (onLeave) throw new ConflictException('taken');
@@ -616,7 +624,7 @@ export class BookingService {
     const leaves = await this.prisma.staffLeave.findMany({
       where: {
         staffId,
-        status: 'APPROVED',
+        status: { in: [...LEAVE_BLOCKS_BOOKING] },
         startDate: { lte: toYmd },
         endDate: { gte: fromYmd },
       },
@@ -690,7 +698,7 @@ export class BookingService {
         // such days, so this only fires for a stale/hand-crafted request.
         const slotYmd = zonedDateParts(slotStart, timezone).key;
         const onLeave = await tx.staffLeave.findFirst({
-          where: { staffId, status: 'APPROVED', startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
+          where: { staffId, status: { in: [...LEAVE_BLOCKS_BOOKING] }, startDate: { lte: slotYmd }, endDate: { gte: slotYmd } },
           select: { id: true },
         });
         if (onLeave) {

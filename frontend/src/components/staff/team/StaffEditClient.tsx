@@ -191,6 +191,31 @@ export function StaffEditClient({ staffId }: { staffId: string }) {
     }
   }
 
+  // Approve/reject a PENDING (REQUESTED) request. Approve keeps the days
+  // blocked (now permanent) and surfaces any overlapping confirmed bookings;
+  // reject reopens the days. Existing confirmed bookings are never touched.
+  async function decideLeave(id: string, status: 'APPROVED' | 'REJECTED') {
+    setLeaveMsg(null); setConflicts(null);
+    try {
+      const res = await api.patch<{ leave: Leave; conflicts: Conflict[] }>(
+        `/staff/team/${staffId}/leave/${id}`, { status },
+      );
+      setLeaves((prev) => prev.map((l) => (l.id === id ? res.leave : l)));
+      if (status === 'APPROVED' && res.conflicts.length > 0) {
+        setConflicts(res.conflicts);
+      } else {
+        setLeaveMsg({
+          kind: 'ok',
+          text: status === 'APPROVED'
+            ? 'Request approved. Those days stay blocked for booking.'
+            : 'Request rejected. Those days are available again.',
+        });
+      }
+    } catch (e) {
+      setLeaveMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not update the request.' });
+    }
+  }
+
   if (loadError) {
     return <div className="mx-auto max-w-3xl px-4 py-10 text-sm text-red-600">Staff member not found or failed to load. <Link href="/staff/team" className="underline">Back</Link></div>;
   }
@@ -393,7 +418,14 @@ export function StaffEditClient({ staffId }: { staffId: string }) {
                   </div>
                   {l.reason && <p className="mt-0.5 truncate text-xs text-sorena-text/50">{l.reason}</p>}
                 </div>
-                <button type="button" onClick={() => deleteLeave(l.id)} className="shrink-0 text-gray-400 hover:text-red-500" aria-label="Remove time off"><X size={16} /></button>
+                {l.status === 'REQUESTED' ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button type="button" onClick={() => decideLeave(l.id, 'APPROVED')} className="rounded-lg bg-sorena-jade/10 px-2.5 py-1 text-xs font-semibold text-sorena-jade border border-sorena-jade/30 hover:bg-sorena-jade/20">Approve</button>
+                    <button type="button" onClick={() => decideLeave(l.id, 'REJECTED')} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-100">Reject</button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => deleteLeave(l.id)} className="shrink-0 text-gray-400 hover:text-red-500" aria-label="Remove time off"><X size={16} /></button>
+                )}
               </div>
             ))
           )}

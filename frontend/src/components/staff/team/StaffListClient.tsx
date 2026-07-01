@@ -2,14 +2,24 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, Search, ChevronRight, BadgeCheck } from 'lucide-react';
-import { api } from '@/lib/api';
+import { Loader2, Search, ChevronRight, BadgeCheck, AlertTriangle } from 'lucide-react';
+import { api, ApiError } from '@/lib/api';
 import { langLabel, sessionTypeLabel } from '@/lib/booking/staff-options';
+import { formatDate } from '@/lib/date';
 
 interface StaffSummary {
   id: string; name: string; email: string; role: string; liaVerified: boolean;
   languages: string[]; timezone: string; bookableSessionTypes: string[];
   bookingActive: boolean; windowCount: number; availabilitySet: boolean; bookable: boolean;
+}
+
+interface PendingLeave {
+  id: string; staffId: string; staffName: string;
+  startDate: string; endDate: string; reason: string | null; conflictCount: number;
+}
+
+function fmtRange(start: string, end: string): string {
+  return start === end ? formatDate(start) : `${formatDate(start)} – ${formatDate(end)}`;
 }
 
 function Chip({ children, tone = 'navy' }: { children: React.ReactNode; tone?: 'navy' | 'gold' | 'muted' }) {
@@ -26,14 +36,35 @@ export function StaffListClient() {
   const [error, setError] = useState(false);
   const [q, setQ] = useState('');
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [pending, setPending] = useState<PendingLeave[]>([]);
+  const [pendingMsg, setPendingMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     api.get<StaffSummary[]>('/staff/team')
       .then((r) => { if (!cancelled) setRows(r); })
       .catch(() => { if (!cancelled) setError(true); });
+    api.get<PendingLeave[]>('/staff/team/leave/pending')
+      .then((r) => { if (!cancelled) setPending(r); })
+      .catch(() => { /* non-fatal — the queue just stays hidden */ });
     return () => { cancelled = true; };
   }, []);
+
+  async function decide(p: PendingLeave, status: 'APPROVED' | 'REJECTED') {
+    setPendingMsg(null);
+    try {
+      await api.patch(`/staff/team/${p.staffId}/leave/${p.id}`, { status });
+      setPending((prev) => prev.filter((x) => x.id !== p.id));
+      setPendingMsg({
+        kind: 'ok',
+        text: status === 'APPROVED'
+          ? `Approved ${p.staffName}'s leave. Those days stay blocked.`
+          : `Rejected ${p.staffName}'s request. Those days are available again.`,
+      });
+    } catch (e) {
+      setPendingMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not update the request.' });
+    }
+  }
 
   const filtered = useMemo(() => {
     if (!rows) return [];
@@ -53,6 +84,40 @@ export function StaffListClient() {
         Configure booking for staff (advisers &amp; consultants). To add a new staff member, use{' '}
         <Link href="/staff/users" className="font-semibold text-sorena-navy underline">Staff</Link>.
       </p>
+
+      {/* Pending leave requests — central triage queue (ADMIN/OWNER) */}
+      {(pending.length > 0 || pendingMsg) && (
+        <section className="mb-6 rounded-2xl border border-sorena-gold/40 bg-sorena-gold/5 p-4 md:p-5">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
+            Pending leave requests{pending.length > 0 ? ` (${pending.length})` : ''}
+          </h2>
+          {pendingMsg && (
+            <div className={`mt-3 rounded-xl px-3 py-2 text-sm ${pendingMsg.kind === 'ok' ? 'bg-sorena-jade/10 text-sorena-jade border border-sorena-jade/30' : 'bg-red-50 text-red-700 border border-red-200'}`}>{pendingMsg.text}</div>
+          )}
+          <div className="mt-3 space-y-2">
+            {pending.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link href={`/staff/team/${p.staffId}`} className="text-sm font-semibold text-sorena-navy underline underline-offset-2">{p.staffName}</Link>
+                    <span className="text-sm text-sorena-text/70">{fmtRange(p.startDate, p.endDate)}</span>
+                    {p.conflictCount > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-300">
+                        <AlertTriangle size={11} /> {p.conflictCount} booking{p.conflictCount === 1 ? '' : 's'} that day
+                      </span>
+                    )}
+                  </div>
+                  {p.reason && <p className="mt-0.5 truncate text-xs text-sorena-text/50">{p.reason}</p>}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={() => decide(p, 'APPROVED')} className="rounded-lg bg-sorena-jade/10 px-2.5 py-1 text-xs font-semibold text-sorena-jade border border-sorena-jade/30 hover:bg-sorena-jade/20">Approve</button>
+                  <button type="button" onClick={() => decide(p, 'REJECTED')} className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-100">Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Controls */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">

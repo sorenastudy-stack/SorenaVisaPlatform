@@ -59,7 +59,8 @@ export class ReplaceAvailabilityDto {
   windows!: AvailabilityWindowDto[];
 }
 
-// PR-BOOKING-ADMIN-B — admin sets adviser leave directly (created APPROVED).
+// PR-BOOKING-ADMIN-B — leave creation. Admin direct-set (→ APPROVED) reuses
+// this; the staff self-request path (→ REQUESTED) reuses it too.
 export class CreateStaffLeaveDto {
   @IsString()
   @Matches(YMD, { message: 'startDate must be YYYY-MM-DD' })
@@ -73,4 +74,10 @@ export class CreateStaffLeaveDto {
   @IsString()
   @MaxLength(500)
   reason?: string;
+}
+
+// PR-BOOKING-ADMIN-B slice 2 — admin approves/rejects a pending request.
+export class DecideLeaveDto {
+  @IsIn(['APPROVED', 'REJECTED'])
+  status!: 'APPROVED' | 'REJECTED';
 }

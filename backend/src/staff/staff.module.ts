@@ -8,6 +8,7 @@ import { StaffCasesModule } from './cases/staff-cases.module';
 import { StaffTicketsModule } from './tickets/staff-tickets.module';
 import { LiaProfilesModule } from './lia-profiles/lia-profiles.module';
 import { TeamModule } from './team/team.module';
+import { StaffLeaveModule } from './leave/staff-leave.module';
 
 // PR-CONSULT-1 — Staff root module.
 //
@@ -34,6 +35,8 @@ import { TeamModule } from './team/team.module';
     LiaProfilesModule,
     // PR-BOOKING-ADMIN-A: /staff/team — staff booking config + weekly hours.
     TeamModule,
+    // PR-BOOKING-ADMIN-B slice 2: /staff/me/leave — staff self-service leave.
+    StaffLeaveModule,
   ],
   exports: [
     AssignmentsModule,

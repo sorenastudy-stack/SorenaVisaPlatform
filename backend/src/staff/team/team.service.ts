@@ -238,15 +238,24 @@ export class TeamService {
       },
     });
 
-    // Conflict window: [startDate 00:00, dayAfter(endDate) 00:00) in adviser tz.
-    const s = parseYmd(dto.startDate);
-    const startUtc = zonedWallTimeToUtc(s.y, s.m, s.d, 0, staff.timezone);
-    const after = parseYmd(nextDayYmd(dto.endDate));
-    const endExclusiveUtc = zonedWallTimeToUtc(after.y, after.m, after.d, 0, staff.timezone);
+    const conflicts = await this.findLeaveConflicts(id, staff.timezone, dto.startDate, dto.endDate);
+    return { leave, conflicts };
+  }
 
-    const conflictRows = await this.prisma.consultation.findMany({
+  /**
+   * Existing BOOKED/CONFIRMED sessions that fall inside a leave range
+   * [startYmd, endYmd] (inclusive), converted to UTC via the staff tz.
+   * Surfaced to admins as a warning only — never modified or cancelled.
+   */
+  private async findLeaveConflicts(staffId: string, timezone: string, startYmd: string, endYmd: string) {
+    const s = parseYmd(startYmd);
+    const startUtc = zonedWallTimeToUtc(s.y, s.m, s.d, 0, timezone);
+    const after = parseYmd(nextDayYmd(endYmd));
+    const endExclusiveUtc = zonedWallTimeToUtc(after.y, after.m, after.d, 0, timezone);
+
+    const rows = await this.prisma.consultation.findMany({
       where: {
-        assignedToId: id,
+        assignedToId: staffId,
         status: { in: ['BOOKED', 'CONFIRMED'] },
         scheduledAt: { gte: startUtc, lt: endExclusiveUtc },
       },
@@ -256,8 +265,7 @@ export class TeamService {
         lead: { select: { contact: { select: { fullName: true, user: { select: { name: true, email: true } } } } } },
       },
     });
-
-    const conflicts = conflictRows.map((c) => ({
+    return rows.map((c) => ({
       id: c.id,
       type: c.type,
       scheduledAt: c.scheduledAt,
@@ -265,8 +273,72 @@ export class TeamService {
       clientName: c.lead?.contact?.fullName || c.lead?.contact?.user?.name || 'Client',
       clientEmail: c.lead?.contact?.user?.email ?? null,
     }));
+  }
 
+  /**
+   * Approve or reject a PENDING (REQUESTED) leave request. ADMIN/OWNER tier
+   * (guarded at the controller). Approve → APPROVED (leave becomes permanent,
+   * identical downstream behaviour to an admin-created leave) + surfaces any
+   * overlapping confirmed bookings as a warning. Reject → REJECTED (the days
+   * reopen automatically, since only APPROVED/REQUESTED block bookings).
+   * Existing confirmed bookings are never modified.
+   */
+  async decideLeave(staffId: string, leaveId: string, status: 'APPROVED' | 'REJECTED', actorUserId: string) {
+    const staff = await this.requireStaff(staffId);
+    const lv = await this.prisma.staffLeave.findFirst({
+      where: { id: leaveId, staffId },
+      select: { id: true, status: true, startDate: true, endDate: true },
+    });
+    if (!lv) throw new NotFoundException('Leave request not found');
+    if (lv.status !== 'REQUESTED') {
+      throw new BadRequestException('Only a pending request can be approved or rejected');
+    }
+
+    const leave = await this.prisma.staffLeave.update({
+      where: { id: leaveId },
+      data: { status, approvedById: actorUserId, decidedAt: new Date() },
+      select: {
+        id: true, startDate: true, endDate: true, kind: true, status: true,
+        reason: true, decidedAt: true, createdAt: true,
+      },
+    });
+
+    const conflicts = status === 'APPROVED'
+      ? await this.findLeaveConflicts(staffId, staff.timezone, lv.startDate, lv.endDate)
+      : [];
     return { leave, conflicts };
+  }
+
+  /**
+   * Central triage queue: every PENDING (REQUESTED) request across all staff,
+   * with the requester's name and a count of overlapping confirmed bookings
+   * so an admin can prioritise. ADMIN/OWNER tier (guarded at the controller).
+   */
+  async listPendingLeave() {
+    const rows = await this.prisma.staffLeave.findMany({
+      where: { status: 'REQUESTED' },
+      orderBy: [{ startDate: 'asc' }],
+      select: {
+        id: true, staffId: true, startDate: true, endDate: true, kind: true,
+        reason: true, createdAt: true,
+        staff: { select: { name: true, timezone: true } },
+      },
+    });
+    const out = [];
+    for (const r of rows) {
+      const conflicts = await this.findLeaveConflicts(r.staffId, r.staff.timezone, r.startDate, r.endDate);
+      out.push({
+        id: r.id,
+        staffId: r.staffId,
+        staffName: r.staff.name,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        reason: r.reason,
+        createdAt: r.createdAt,
+        conflictCount: conflicts.length,
+      });
+    }
+    return out;
   }
 
   /** List an adviser's leave, future-first. Optional status filter. */
