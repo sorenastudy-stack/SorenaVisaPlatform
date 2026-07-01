@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CalendarOff, Loader2, Plus, X } from 'lucide-react';
+import { Loader2, Plus, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/date';
 import { DateInput } from '@/components/ui/DateInput';
@@ -81,13 +81,10 @@ export function MyLeaveClient() {
     }
   }
 
+  // Rendered as a tab body inside the HR page (which owns the container +
+  // heading), so this returns just the sections — no outer max-width wrapper.
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-6 flex items-center gap-2">
-        <CalendarOff size={20} className="text-sorena-navy" />
-        <h1 className="text-2xl font-bold text-sorena-navy">My leave</h1>
-      </div>
-
+    <div>
       {msg && (
         <div className={`mb-5 rounded-xl px-4 py-3 text-sm ${msg.kind === 'ok' ? 'bg-sorena-jade/10 text-sorena-jade border border-sorena-jade/30' : 'bg-red-50 text-red-700 border border-red-200'}`}>{msg.text}</div>
       )}

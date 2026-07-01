@@ -14,6 +14,7 @@ import { DeactivateConfirmOverlay } from './DeactivateConfirmOverlay';
 import { ReactivateConfirmOverlay } from './ReactivateConfirmOverlay';
 import { EditStaffOverlay } from './EditStaffOverlay';
 import { HardDeleteConfirmOverlay } from './HardDeleteConfirmOverlay';
+import { StaffHrAdminSection } from './StaffHrAdminSection';
 import type { StaffUserRow, StaffUserDetail } from './types';
 
 // PR-CONSULT-3 — Staff detail overlay.
@@ -163,6 +164,10 @@ export function StaffDetailOverlay({
             <div className="text-sm text-gray-500">—</div>
           )}
         </section>
+
+        <PermissionGate require="canManageStaff">
+          <StaffHrAdminSection userId={user.id} />
+        </PermissionGate>
 
         <PermissionGate require="canManageStaff">
           <div className="space-y-2">

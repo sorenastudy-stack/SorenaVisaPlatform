@@ -586,6 +586,14 @@ model User {
   // PR-BOOKING-ADMIN-B: leave / time-off rows for this user as staff.
   staffLeave              StaffLeave[]                      @relation("StaffLeaveStaff")
 
+  // PR-STAFF-HR (Phase 3): HR self-service. Admin-set job description (plain
+  // text) + who/when set it; and one current employment-contract PDF per
+  // staff member (replace-on-reupload). Staff read only their own.
+  jobDescription          String?
+  jobDescriptionSetById   String?
+  jobDescriptionSetAt     DateTime?
+  staffContract           StaffContract?                    @relation("StaffContractStaff")
+
   @@map("users")
 }
 
@@ -1118,6 +1126,29 @@ model StaffLeave {
   @@index([staffId, status])
   @@index([status])
   @@map("staff_leave")
+}
+
+// ─── STAFF HR: EMPLOYMENT CONTRACT (PR-STAFF-HR, Phase 3) ─────────────────────
+//
+// One current employment-contract PDF per staff member (userId @unique →
+// re-upload replaces the row + deletes the old file). Bytes live on local
+// disk under ./uploads/staff-contracts/{userId}/ — the SAME mechanism the
+// student document uploaders use — and are served privately via a 5-minute
+// signed-JWT token (/files/signed/:token). Never public. Uploaded only by
+// ADMIN/OWNER; read only by the owning staff member (or an admin).
+model StaffContract {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  fileUrl      String   // absolute disk path (matches AdmissionDocument.fileUrl convention)
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  uploadedById String   // the ADMIN/OWNER who uploaded it
+  uploadedAt   DateTime @default(now())
+
+  staff        User     @relation("StaffContractStaff", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("staff_contract")
 }
 
 // ─── CASES ───────────────────────────────────────────────────────────────────

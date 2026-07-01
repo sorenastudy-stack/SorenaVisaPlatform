@@ -1,7 +1,7 @@
-import { MyLeaveClient } from '@/components/staff/leave/MyLeaveClient';
+import { redirect } from 'next/navigation';
 
-// PR-BOOKING-ADMIN-B slice 2 — "My leave" self-service page. Open to every
-// staff role; the /staff layout already enforces staff-only access.
-export default function StaffMyLeavePage() {
-  return <MyLeaveClient />;
+// PR-STAFF-HR (Phase 3) — "My leave" moved into the HR page as a tab.
+// Keep this route as a permanent redirect so old links still work.
+export default function StaffLeaveRedirect() {
+  redirect('/staff/hr');
 }
