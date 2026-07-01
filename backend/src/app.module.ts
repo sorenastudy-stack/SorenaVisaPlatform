@@ -42,6 +42,7 @@ import { MarketingModule } from './marketing/marketing.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { WixIntegrationModule } from './wix-integration/wix-integration.module';
 import { BookingModule } from './booking/booking.module';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
@@ -138,6 +139,9 @@ import { BookingModule } from './booking/booking.module';
     // (GET /booking/slots, POST /booking/confirm, GET /booking/mine),
     // gated to LEAD/STUDENT.
     BookingModule,
+    // PR-WALLET slice 1: client store-credit wallet + ledger (GET /wallet)
+    // and proof-of-acceptance capture used by the paid-booking checkout.
+    WalletModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`

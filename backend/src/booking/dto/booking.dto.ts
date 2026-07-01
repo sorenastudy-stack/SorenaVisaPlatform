@@ -1,4 +1,4 @@
-import { IsIn, IsISO8601, IsOptional, IsString, IsNotEmpty } from 'class-validator';
+import { IsBoolean, IsIn, IsISO8601, IsOptional, IsString, IsNotEmpty } from 'class-validator';
 
 // PR-BOOKING-3 — request DTOs for the client booking flow.
 
@@ -33,6 +33,12 @@ export class CheckoutBookingDto {
   @IsString()
   @IsNotEmpty()
   consultationId!: string;
+
+  // PR-WALLET slice 1 — the client must actively tick the cancellation/refund
+  // policy checkbox before paying. The server records proof (IP/UA/version)
+  // and refuses checkout unless this is true.
+  @IsBoolean()
+  accepted!: boolean;
 }
 
 export class ConfirmBookingDto {

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { ArrowRight, FileText, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, FileText, Sparkles, Users, Wallet } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
 import { formatDate as fmtDate } from '@/lib/date';
@@ -119,6 +119,15 @@ export default async function MyCasePage() {
 
       {/* ── Your upcoming sessions ───────────────────────────────────── */}
       <UpcomingBookings />
+
+      {/* ── Wallet ───────────────────────────────────────────────────── */}
+      <Link href="/portal/wallet" className="flex items-center justify-between rounded-2xl bg-white border border-gray-200 p-5 md:p-6 transition-all hover:border-sorena-navy/30 hover:shadow">
+        <div className="flex items-center gap-2">
+          <Wallet size={16} className="text-[#b8941f]" />
+          <span className="text-sm font-bold uppercase tracking-wide text-gray-500">My wallet</span>
+        </div>
+        <ArrowRight size={16} className="text-gray-300" />
+      </Link>
 
       {/* ── Your team ────────────────────────────────────────────────── */}
       {team.length > 0 && (

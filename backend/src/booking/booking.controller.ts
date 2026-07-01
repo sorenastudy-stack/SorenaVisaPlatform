@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { BookingService } from './booking.service';
 import { StripeService } from '../payments/stripe.service';
+import { PolicyAcceptanceService } from '../wallet/policy-acceptance.service';
 import { getSessionConfig } from './session-config';
 import {
   SlotsQueryDto, ConfirmBookingDto, HoldBookingDto, CheckoutBookingDto,
@@ -23,6 +24,7 @@ export class BookingController {
   constructor(
     private readonly service: BookingService,
     private readonly stripe: StripeService,
+    private readonly policyAcceptance: PolicyAcceptanceService,
   ) {}
 
   // GET /booking/slots?type=FREE_15&from=ISO&to=ISO
@@ -70,12 +72,26 @@ export class BookingController {
     });
   }
 
-  // POST /booking/checkout  { consultationId }
+  // POST /booking/checkout  { consultationId, accepted }
   // Creates a Stripe Checkout session for a held (PENDING, live) GAP slot.
+  // PR-WALLET slice 1: the client must accept the cancellation/refund policy
+  // first; we record proof (IP/UA/version) BEFORE creating the Stripe session.
   @Post('checkout')
   async checkout(@Body() dto: CheckoutBookingDto, @Req() req: any) {
     const userId = req.user?.userId ?? req.user?.id;
+    if (dto.accepted !== true) {
+      throw new BadRequestException('You must accept the cancellation & refund policy to continue.');
+    }
+    // Validate ownership + that the hold is still payable BEFORE recording.
     const hold = await this.service.getHoldForCheckout(userId, dto.consultationId);
+    const fwd = req.headers?.['x-forwarded-for'];
+    const ipAddress = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0]?.trim() || req.ip || null;
+    await this.policyAcceptance.record({
+      userId,
+      consultationId: hold.id,
+      ipAddress,
+      userAgent: req.headers?.['user-agent'] ?? null,
+    });
     const cfg = getSessionConfig(hold.type);
     const session = await this.stripe.createBookingCheckoutSession({
       consultationId: hold.id,

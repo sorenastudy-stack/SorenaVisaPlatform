@@ -594,6 +594,11 @@ model User {
   jobDescriptionSetAt     DateTime?
   staffContract           StaffContract?                    @relation("StaffContractStaff")
 
+  // PR-WALLET (slice 1): the client's single store-credit wallet + the
+  // proof-of-acceptance rows captured before a paid booking.
+  wallet                  Wallet?                           @relation("WalletUser")
+  policyAcceptances       PolicyAcceptance[]                @relation("PolicyAcceptanceUser")
+
   @@map("users")
 }
 
@@ -1149,6 +1154,80 @@ model StaffContract {
   staff        User     @relation("StaffContractStaff", fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("staff_contract")
+}
+
+// ─── WALLET + STORE CREDIT (PR-WALLET, slice 1) ──────────────────────────────
+//
+// Client store-credit wallet. NOT cash: tiered cancellation/no-show refunds
+// post CREDIT here (later slices); it is spent on future bookings; it is never
+// a Stripe card refund (the captured Stripe money is kept). One wallet per
+// client User. `balanceCents` is a DENORMALISED cache — the append-only
+// WalletTransaction ledger is the source of truth. ALL money is Int cents.
+model Wallet {
+  id           String              @id @default(cuid())
+  userId       String              @unique
+  balanceCents Int                 @default(0)
+  currency     String              @default("NZD")
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  user         User                @relation("WalletUser", fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[] @relation("WalletTransactionWallet")
+
+  @@map("wallet")
+}
+
+// Immutable, append-only ledger. Rows are NEVER updated or deleted. Each row
+// snapshots `balanceAfterCents` for audit. `amountCents` is SIGNED: positive =
+// credit in, negative = spend out. A partial-unique index on
+// relatedConsultationId (WHERE type is a REFUND_* kind), added in the
+// migration SQL, guarantees a consultation can be credited at most once.
+enum WalletTransactionType {
+  REFUND_CANCEL_FULL // cancel >24h before → 100% credited
+  REFUND_CANCEL_LATE // cancel <24h before → 80% credited (20% retained)
+  REFUND_NO_SHOW     // human-marked no-show → 75% credited (25% retained)
+  SPEND_BOOKING      // credit spent on a future booking (negative amount)
+  CASH_REDEMPTION    // exceptional cash-out (later PR; negative amount)
+  ADJUSTMENT         // manual admin correction
+}
+
+model WalletTransaction {
+  id                    String                @id @default(cuid())
+  walletId              String
+  amountCents           Int                   // signed: + credit / − spend
+  type                  WalletTransactionType
+  balanceAfterCents     Int                   // running balance snapshot (audit)
+  reason                String?
+  relatedConsultationId String?
+  relatedPaymentId      String?
+  createdById           String                // system, admin, or the client
+  createdAt             DateTime              @default(now())
+
+  wallet                Wallet                @relation("WalletTransactionWallet", fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId, createdAt])
+  @@index([relatedConsultationId])
+  @@map("wallet_transaction")
+}
+
+// Proof-of-acceptance of the cancellation/refund policy, captured server-side
+// BEFORE a paid booking's Stripe session is created. Stores who/when + IP,
+// device (user-agent), and the policy version they accepted.
+model PolicyAcceptance {
+  id             String   @id @default(cuid())
+  userId         String
+  consultationId String?
+  policyVersion  String
+  acceptedAt     DateTime @default(now())
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  user           User     @relation("PolicyAcceptanceUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([consultationId])
+  @@map("policy_acceptance")
 }
 
 // ─── CASES ───────────────────────────────────────────────────────────────────

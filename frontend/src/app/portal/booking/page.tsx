@@ -367,6 +367,8 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
   const [paying, setPaying] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  // PR-WALLET slice 1 — must accept the cancellation/refund policy before pay.
+  const [accepted, setAccepted] = useState(false);
 
   async function loadSlots() {
     setLoading(true); setLoadError(false);
@@ -423,10 +425,10 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
   }
 
   async function pay() {
-    if (!hold) return;
+    if (!hold || !accepted) return;
     setPaying(true);
     try {
-      const { url } = await api.post<{ url: string }>('/booking/checkout', { consultationId: hold.consultationId });
+      const { url } = await api.post<{ url: string }>('/booking/checkout', { consultationId: hold.consultationId, accepted: true });
       window.location.href = url; // hand off to Stripe Checkout
     } catch (err) {
       if (err instanceof ApiError && err.statusCode === 409) { setStep('expired'); }
@@ -477,10 +479,26 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
           <p className="mt-1 text-2xl font-bold tabular-nums text-sorena-navy">{mm}:{ss}</p>
           <p className="text-xs text-sorena-text/50">minutes left to pay</p>
         </div>
+        {/* Cancellation & refund policy — must be accepted before paying. */}
+        <div className="mt-6 rounded-xl border border-sorena-navy/10 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-sorena-text/50">Cancellation &amp; refund policy</p>
+          <ul className="mt-2 space-y-1 text-xs leading-relaxed text-sorena-text/70">
+            <li>• Cancel more than 24 hours before: 100% to your Sorena wallet.</li>
+            <li>• Cancel within 24 hours: 20% retained, 80% to your wallet.</li>
+            <li>• No-show: 25% retained, 75% to your wallet.</li>
+            <li>• Wallet credit never expires and is usable across Sorena services; it isn’t cash-refundable (except where legally required) or transferable.</li>
+          </ul>
+          <label className="mt-3 flex items-start gap-2 text-sm text-sorena-navy">
+            <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-0.5 h-4 w-4 rounded" />
+            <span>I have read and accept the cancellation &amp; refund policy.</span>
+          </label>
+        </div>
+
         <div className="mt-6 space-y-3">
-          <button onClick={pay} disabled={paying} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 disabled:opacity-60">
+          <button onClick={pay} disabled={paying || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 disabled:opacity-60 disabled:hover:translate-y-0">
             {paying ? <><Loader2 size={18} className="animate-spin" /> Redirecting…</> : `Pay NZD ${hold.amountNZD}`}
           </button>
+          {!accepted && <p className="text-center text-xs text-sorena-text/50">Please accept the policy above to continue.</p>}
           <button onClick={resetToPick} disabled={paying} className="flex w-full items-center justify-center gap-1 text-sm font-semibold text-sorena-navy/70 hover:text-sorena-navy"><ArrowLeft size={14} /> Pick a different time</button>
         </div>
       </Shell>
