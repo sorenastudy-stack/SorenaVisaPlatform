@@ -51,6 +51,9 @@ const TICKETS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'CONSULTANT',
 const LIA_VERIFICATION_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 // PR-BOOKING-ADMIN-A: staff management panel — admin tier only.
 const STAFF_PANEL_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
+// PR-WALLET slice 2: consultation bookings (mark no-show/completed/cancel) —
+// roles that run consultations + admin tier.
+const BOOKINGS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT'] as const;
 
 const NAV: NavItem[] = [
   { label: 'staff.nav.overview',          href: '/staff',                    icon: <LayoutDashboard size={18} /> },
@@ -60,6 +63,8 @@ const NAV: NavItem[] = [
   // see leads → tweak attribution".
   { label: 'staff.nav.leads',             href: '/staff/leads',              icon: <Users size={18} />,       roleGate: LEADS_ROLES },
   { label: 'staff.nav.meetings',          href: '/staff/meetings',           icon: <Calendar size={18} /> },
+  // PR-WALLET slice 2: consultation bookings + outcome marker.
+  { label: 'Bookings',                     href: '/staff/bookings',           icon: <CalendarClock size={18} />, roleGate: BOOKINGS_ROLES },
   { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} />,       roleGate: TICKETS_ROLES },
   { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },
   { label: 'staff.nav.approvals',         href: '/staff/approvals',          icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },

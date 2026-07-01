@@ -6,12 +6,13 @@ import { BookingService } from './booking.service';
 import { BookingHoldCleanupService } from './booking-hold-cleanup.service';
 import { BookingConfirmationModule } from './booking-confirmation.module';
 import { WalletModule } from '../wallet/wallet.module';
+import { BookingCancellationModule } from './booking-cancellation.module';
 
 // PR-BOOKING — native in-portal booking. Stage 3 wired FREE_15; Stage 4
 // (slice 1) adds GAP_CLOSING paid booking (hold + Stripe Checkout +
 // webhook confirm). PaymentsModule is imported for StripeService.
 @Module({
-  imports: [PrismaModule, PaymentsModule, BookingConfirmationModule, WalletModule],
+  imports: [PrismaModule, PaymentsModule, BookingConfirmationModule, WalletModule, BookingCancellationModule],
   controllers: [BookingController],
   providers: [BookingService, BookingHoldCleanupService],
   exports: [BookingService],

@@ -1,5 +1,6 @@
 import { CalendarClock } from 'lucide-react';
 import { apiServer } from '@/lib/apiServer';
+import { CancelBookingButton } from './CancelBookingButton';
 
 // Client portal — "Your upcoming sessions". Server component: fetches the
 // signed-in client's bookings from GET /booking/mine (cookie-bound) and
@@ -72,16 +73,19 @@ export async function UpcomingBookings() {
                 {b.staffName && (
                   <p className="text-xs text-gray-500 mt-0.5">with {b.staffName}</p>
                 )}
-                {b.meetingLink && (
-                  <a
-                    href={b.meetingLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#F3CE49] px-3 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#F3CE49]/90"
-                  >
-                    Join your session
-                  </a>
-                )}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {b.meetingLink && (
+                    <a
+                      href={b.meetingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#F3CE49] px-3 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#F3CE49]/90"
+                    >
+                      Join your session
+                    </a>
+                  )}
+                  <CancelBookingButton bookingId={b.id} />
+                </div>
               </li>
             );
           })}

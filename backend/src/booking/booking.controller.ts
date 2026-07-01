@@ -1,10 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { BookingService } from './booking.service';
 import { StripeService } from '../payments/stripe.service';
 import { PolicyAcceptanceService } from '../wallet/policy-acceptance.service';
+import { BookingCancellationService } from './booking-cancellation.service';
 import { getSessionConfig } from './session-config';
 import {
   SlotsQueryDto, ConfirmBookingDto, HoldBookingDto, CheckoutBookingDto,
@@ -25,6 +26,7 @@ export class BookingController {
     private readonly service: BookingService,
     private readonly stripe: StripeService,
     private readonly policyAcceptance: PolicyAcceptanceService,
+    private readonly cancellation: BookingCancellationService,
   ) {}
 
   // GET /booking/slots?type=FREE_15&from=ISO&to=ISO
@@ -111,5 +113,19 @@ export class BookingController {
     const userId = req.user?.userId ?? req.user?.id;
     const used = await this.service.hasUsedFreeSession(userId);
     return { used };
+  }
+
+  // GET /booking/:id/cancel-preview — the tier + wallet credit the client
+  // would get by cancelling NOW (authoritative; same math as the cancel).
+  @Get(':id/cancel-preview')
+  cancelPreview(@Param('id') id: string, @Req() req: any) {
+    return this.cancellation.previewClientCancel(req.user?.userId ?? req.user?.id, id);
+  }
+
+  // POST /booking/:id/cancel — client self-cancel of an UPCOMING booking.
+  // Posts the tiered wallet credit + flips the booking to CANCELLED atomically.
+  @Post(':id/cancel')
+  cancel(@Param('id') id: string, @Req() req: any) {
+    return this.cancellation.clientCancel(req.user?.userId ?? req.user?.id, id);
   }
 }

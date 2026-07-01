@@ -10,6 +10,7 @@ import { LiaProfilesModule } from './lia-profiles/lia-profiles.module';
 import { TeamModule } from './team/team.module';
 import { StaffLeaveModule } from './leave/staff-leave.module';
 import { StaffHrModule } from './hr/staff-hr.module';
+import { StaffBookingsModule } from './bookings/staff-bookings.module';
 
 // PR-CONSULT-1 — Staff root module.
 //
@@ -40,6 +41,9 @@ import { StaffHrModule } from './hr/staff-hr.module';
     StaffLeaveModule,
     // PR-STAFF-HR (Phase 3): /staff/me/contract + /job-description — self-service HR.
     StaffHrModule,
+    // PR-WALLET slice 2: /staff/bookings + /staff/consultations/:id/status —
+    // consultation list + No-Show/Completed/Cancel marker (tiered wallet credit).
+    StaffBookingsModule,
   ],
   exports: [
     AssignmentsModule,
