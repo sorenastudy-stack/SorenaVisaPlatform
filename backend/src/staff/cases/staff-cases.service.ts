@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { summarizeAuditEntry } from '../../common/audit/audit.helper';
 import type { StaffAccessRole } from '../roles/staff-roles.decorator';
@@ -18,12 +19,17 @@ import type { StaffAccessRole } from '../roles/staff-roles.decorator';
 
 const ADMIN_TIER: StaffAccessRole[] = ['OWNER', 'SUPER_ADMIN', 'ADMIN'];
 const NON_ADMIN_TIER: StaffAccessRole[] = ['LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'];
+// PR-OPS-CASES: roles that may READ every case (no per-assignment scoping).
+// OPERATIONS is read-all like admin tier, but WITHOUT admin powers
+// (no reassignment / risk / legal — those routes exclude it).
+const SEE_ALL_TIER: StaffAccessRole[] = [...ADMIN_TIER, 'OPERATIONS'];
 
 interface CallerCtx { userId: string; role: StaffAccessRole }
 
 export interface ListCasesQuery {
   status?: string;
   assignedToMe?: boolean;
+  activeOnly?: boolean;
   q?: string;
   page?: number;
   pageSize?: number;
@@ -84,6 +90,10 @@ export class StaffCasesService {
     // real state machine (ADMISSION / VISA / INZ_SUBMITTED / …).
     if (query.status) {
       where.stage = query.status;
+    } else if (query.activeOnly) {
+      // PR-OPS-CASES: active = still in-flight (not completed/withdrawn).
+      // Only applied when no explicit stage filter is set.
+      where.stage = { notIn: ['COMPLETED', 'WITHDRAWN'] };
     }
 
     // Search — substring match on the lead's contact name or email.
@@ -141,7 +151,8 @@ export class StaffCasesService {
   //   - CONSULTANT               → { ownerId: caller.userId }
   //   - SUPPORT / FINANCE / else → 'none' (caller sees zero rows)
   private caseListVisibilityWhere(caller: CallerCtx): Record<string, unknown> | 'none' {
-    if (ADMIN_TIER.includes(caller.role)) return {};
+    // Admin tier + OPERATIONS see every case (no scoping).
+    if (SEE_ALL_TIER.includes(caller.role)) return {};
     if (caller.role === 'LIA')        return { liaId:   caller.userId };
     if (caller.role === 'CONSULTANT') return { ownerId: caller.userId };
     return 'none';
@@ -188,6 +199,7 @@ export class StaffCasesService {
       id:        row.id,
       status:    row.stage, // display stage in the status field — Case.status is vestigial
       stage:     row.stage,
+      notes:     row.notes ?? null, // PR-OPS-CASES: editable on the overview tab
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       student: {
@@ -215,7 +227,7 @@ export class StaffCasesService {
   // The original assertVisible() still targets VisaCase and is used by
   // getCaseActivity() until step 4 repoints it.
   private async assertVisibleCase(caller: CallerCtx, caseId: string) {
-    if (ADMIN_TIER.includes(caller.role)) {
+    if (SEE_ALL_TIER.includes(caller.role)) {
       const exists = await this.prisma.case.findUnique({
         where:  { id: caseId },
         select: { id: true },
@@ -304,6 +316,125 @@ export class StaffCasesService {
         newValue:   r.newValue,
       }),
     }));
+  }
+
+  // ── OPS dashboard ──────────────────────────────────────────────────
+  // PR-OPS-DASHBOARD — SEE_ALL (admin tier + OPERATIONS). Reuses:
+  //   • counts   → case.groupBy by stage (dashboard.service pattern) + active filter
+  //   • worklist → existing signals (hard-stop / high-risk / unassigned / escalation)
+  //   • recent   → cross-case slice of the audit log, formatted with the same
+  //                summarizeAuditEntry the per-case /:id/activity feed uses.
+  // No new tracking fields. "stuck in stage" / "missing docs" are intentionally
+  // NOT included (no clean source — see PR notes).
+  async opsDashboard(caller: CallerCtx) {
+    if (!SEE_ALL_TIER.includes(caller.role)) {
+      throw new ForbiddenException('Role cannot access the operations dashboard');
+    }
+    const ACTIVE_STAGES: Prisma.EnumCaseStageFilter = { notIn: ['COMPLETED', 'WITHDRAWN'] };
+
+    // 1) Counts by active stage.
+    const grouped = await this.prisma.case.groupBy({
+      by: ['stage'],
+      where: { stage: ACTIVE_STAGES },
+      _count: { _all: true },
+    });
+    const countMap = new Map(grouped.map((g) => [String(g.stage), g._count._all]));
+    const countsByStage = ['ADMISSION', 'VISA', 'INZ_SUBMITTED'].map((stage) => ({
+      stage,
+      count: countMap.get(stage) ?? 0,
+    }));
+
+    // 2) Worklist — active cases matching any needs-action signal.
+    const flagged = await this.prisma.case.findMany({
+      where: {
+        stage: ACTIVE_STAGES,
+        OR: [
+          { liaId: null },
+          { riskLevel: { in: ['HIGH', 'BLOCKED'] } },
+          { lead: { hardStopFlag: true } },
+          { lead: { liaEscalationRequired: true } },
+        ],
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true, stage: true, liaId: true, riskLevel: true, updatedAt: true,
+        lead: {
+          select: {
+            hardStopFlag: true, liaEscalationRequired: true,
+            contact: { select: { fullName: true, email: true } },
+          },
+        },
+      },
+    });
+    const REASON_WEIGHT: Record<string, number> = { HARD_STOP: 4, HIGH_RISK: 3, ESCALATION: 2, UNASSIGNED: 1 };
+    const worklist = flagged
+      .map((c) => {
+        const reasons: string[] = [];
+        if (c.lead?.hardStopFlag) reasons.push('HARD_STOP');
+        if (c.riskLevel === 'HIGH' || c.riskLevel === 'BLOCKED') reasons.push('HIGH_RISK');
+        if (c.lead?.liaEscalationRequired) reasons.push('ESCALATION');
+        if (!c.liaId) reasons.push('UNASSIGNED');
+        const weight = reasons.reduce((m, r) => Math.max(m, REASON_WEIGHT[r] ?? 0), 0);
+        return {
+          caseId: c.id,
+          clientName: c.lead?.contact?.fullName || c.lead?.contact?.email || 'Client',
+          stage: c.stage,
+          reasons,
+          weight,
+          updatedAt: c.updatedAt,
+        };
+      })
+      .sort((a, b) => b.weight - a.weight || b.updatedAt.getTime() - a.updatedAt.getTime())
+      .map(({ weight, ...rest }) => rest);
+
+    // 3) Recent activity — cross-case audit slice. Only rows resolving to a
+    //    real Case are surfaced, so every row links cleanly to /ops/cases/:id.
+    const candidates = await this.prisma.auditLog.findMany({
+      where: {
+        entityType: { in: ['CASE', 'VisaCase', 'VisaCaseAssignment', 'VisaCaseFileNote', 'VisaSupportTicket', 'VisaMeeting'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { user: { select: { name: true, role: true } } },
+    });
+    const deriveCaseId = (r: (typeof candidates)[number]): string | null => {
+      if ((r.entityType === 'CASE' || r.entityType === 'VisaCase') && r.entityId) return r.entityId;
+      for (const blob of [r.newValue, r.oldValue]) {
+        if (blob && typeof blob === 'object' && typeof (blob as Record<string, unknown>).caseId === 'string') {
+          return (blob as Record<string, string>).caseId;
+        }
+      }
+      return null;
+    };
+    const withCase = candidates
+      .map((r) => ({ r, caseId: deriveCaseId(r) }))
+      .filter((x): x is { r: (typeof candidates)[number]; caseId: string } => !!x.caseId);
+    const ids = Array.from(new Set(withCase.map((x) => x.caseId)));
+    const cases = ids.length
+      ? await this.prisma.case.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, lead: { select: { contact: { select: { fullName: true, email: true } } } } },
+        })
+      : [];
+    const nameById = new Map(cases.map((c) => [c.id, c.lead?.contact?.fullName || c.lead?.contact?.email || 'Client']));
+    const recentActivity = withCase
+      .filter((x) => nameById.has(x.caseId))
+      .slice(0, 12)
+      .map(({ r, caseId }) => ({
+        id: r.id,
+        caseId,
+        clientName: nameById.get(caseId) ?? 'Client',
+        actorName: r.user?.name ?? null,
+        actorRole: r.user?.role ?? null,
+        createdAt: r.createdAt,
+        summary: summarizeAuditEntry({
+          eventType: r.eventType, action: r.action, entityType: r.entityType,
+          entityId: r.entityId, oldValue: r.oldValue, newValue: r.newValue,
+        }),
+      }));
+
+    return { countsByStage, worklist, recentActivity };
   }
 
   // ── Eligible staff for reassignment ──────────────────────────────
@@ -437,7 +568,7 @@ export class StaffCasesService {
 
   // Throws NotFound if the case is invisible to the caller.
   private async assertVisible(caller: CallerCtx, caseId: string) {
-    if (ADMIN_TIER.includes(caller.role)) {
+    if (SEE_ALL_TIER.includes(caller.role)) {
       const exists = await this.prisma.visaCase.findUnique({
         where:  { id: caseId },
         select: { id: true },

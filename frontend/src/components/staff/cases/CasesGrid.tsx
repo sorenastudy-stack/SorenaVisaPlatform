@@ -12,7 +12,7 @@ import type { CaseRowApi } from './useCasesQuery';
 // student name + status pill at the top, the email below, then the
 // two main assignment slots and the relative "updated" time.
 
-export function CasesGrid({ items }: { items: CaseRowApi[] }) {
+export function CasesGrid({ items, basePath = '/staff/cases' }: { items: CaseRowApi[]; basePath?: string }) {
   const router = useRouter();
   const t = useTranslations();
 
@@ -30,7 +30,7 @@ export function CasesGrid({ items }: { items: CaseRowApi[] }) {
         <button
           type="button"
           key={c.id}
-          onClick={() => router.push(`/staff/cases/${c.id}`)}
+          onClick={() => router.push(`${basePath}/${c.id}`)}
           className="text-left rounded-xl border border-gray-200 bg-white p-4 hover:border-[#1e3a5f]/40 hover:shadow-sm transition-all min-h-[160px] flex flex-col gap-2"
         >
           <div className="flex items-start justify-between gap-2">

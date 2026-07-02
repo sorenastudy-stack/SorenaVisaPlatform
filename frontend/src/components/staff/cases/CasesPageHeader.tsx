@@ -11,14 +11,14 @@ import { Table2, LayoutGrid, Search } from 'lucide-react';
 // line. The view-mode toggle persists via the parent's localStorage
 // hook — this component is just a controlled view.
 
-const STATUSES = [
-  'DRAFT',
-  'SUBMITTED_FOR_REVIEW',
-  'REVIEWED',
-  'READY_FOR_INZ',
+// The list/detail endpoints filter the CaseStage column (Case.status is
+// vestigial), so the dropdown offers CaseStage values — not VisaCaseStatus.
+const STAGES = [
+  'ADMISSION',
+  'VISA',
   'INZ_SUBMITTED',
-  'APPROVED',
-  'DECLINED',
+  'COMPLETED',
+  'WITHDRAWN',
 ];
 
 export function CasesPageHeader({
@@ -62,8 +62,8 @@ export function CasesPageHeader({
           onChange={(e) => onStatusChange(e.target.value)}
           className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 min-h-[48px]"
         >
-          <option value="">{t('staff.cases.columns.status')}</option>
-          {STATUSES.map((s) => (
+          <option value="">Stage</option>
+          {STAGES.map((s) => (
             <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
           ))}
         </select>

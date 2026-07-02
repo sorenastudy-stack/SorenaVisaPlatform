@@ -16,6 +16,7 @@ export interface CaseDetail {
   id:        string;
   status:    string;
   stage:     string;
+  notes:     string | null; // PR-OPS-CASES: editable on the overview tab
   createdAt: string;
   updatedAt: string;
   student: {

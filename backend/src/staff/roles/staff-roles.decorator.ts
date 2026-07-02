@@ -23,7 +23,10 @@ export type StaffAccessRole =
   | 'LIA'
   | 'CONSULTANT'
   | 'SUPPORT'
-  | 'FINANCE';
+  | 'FINANCE'
+  // PR-OPS-CASES: operations staff — read-all cases + edit stage/notes only
+  // (no reassignment, no risk/legal actions).
+  | 'OPERATIONS';
 
 // Allow ANY of the listed roles.
 export const StaffRoles = (...roles: StaffAccessRole[]) =>

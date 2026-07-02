@@ -46,7 +46,13 @@ export class CasesController {
     return this.casesService.findOne(id);
   }
 
+  // PR-OPS-CASES — was guarded by JwtAuthGuard only (any authenticated user
+  // could edit a case). Now role-gated: admin tier + OPERATIONS. OPERATIONS
+  // edits stage/notes via UpdateCaseDto; reassignment + risk/legal stay on the
+  // dedicated routes below (which exclude OPERATIONS).
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS')
   update(@Param('id') id: string, @Body() dto: UpdateCaseDto) {
     return this.casesService.updateCase(id, dto);
   }

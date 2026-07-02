@@ -24,9 +24,21 @@ function defaultViewMode(): 'table' | 'card' {
   return window.matchMedia('(min-width: 1024px)').matches ? 'table' : 'card';
 }
 
-export function CasesPageClient() {
+// PR-OPS-CASES: `activeOnly` + `basePath` let the OPS cases page reuse this
+// component unchanged for staff (defaults preserve /staff/cases behaviour).
+export function CasesPageClient({
+  activeOnly = false,
+  basePath = '/staff/cases',
+  initialStatus = '',
+}: {
+  activeOnly?: boolean;
+  basePath?: string;
+  // PR-OPS-DASHBOARD: deep-link initial stage filter (e.g. count card →
+  // /ops/cases?stage=VISA). Empty = unfiltered.
+  initialStatus?: string;
+} = {}) {
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(initialStatus);
   const [assignedToMe, setAssignedToMe] = useState(false);
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
@@ -56,6 +68,7 @@ export function CasesPageClient() {
     q:            search,
     status,
     assignedToMe,
+    activeOnly,
     page,
     pageSize:     20,
   });
@@ -84,9 +97,9 @@ export function CasesPageClient() {
           Loading cases…
         </div>
       ) : viewMode === 'table' ? (
-        <CasesTable items={data?.items ?? []} />
+        <CasesTable items={data?.items ?? []} basePath={basePath} />
       ) : (
-        <CasesGrid items={data?.items ?? []} />
+        <CasesGrid items={data?.items ?? []} basePath={basePath} />
       )}
 
       {data && (

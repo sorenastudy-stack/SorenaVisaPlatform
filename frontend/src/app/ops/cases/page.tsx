@@ -1,20 +1,20 @@
-import { Card, CardContent } from '@/components/ui/Card';
-import { Briefcase } from 'lucide-react';
+import { CasesPageClient } from '@/components/staff/cases/CasesPageClient';
 
-export default function Page() {
+// PR-OPS-CASES — OPS "active cases" list. Reuses the staff cases list
+// components; `activeOnly` restricts to in-flight cases and `basePath` routes
+// row clicks to the OPS detail. `?stage=` (PR-OPS-DASHBOARD) deep-links from the
+// dashboard count cards into a pre-filtered list. Role gating (OPERATIONS +
+// admin tier) is handled by the /ops layout; the backend also gates the API.
+export default function OpsCasesPage({
+  searchParams,
+}: {
+  searchParams?: { stage?: string };
+}) {
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-[#1E3A5F] mb-1">Cases</h1>
-      <p className="text-sm text-[#4A4A4A]/70 mb-8">All active cases across the team.</p>
-      <Card>
-        <CardContent className="py-16 text-center">
-          <Briefcase size={32} className="mx-auto text-[#1E3A5F]/30 mb-3" />
-          <p className="text-[#4A4A4A] font-medium">Coming soon</p>
-          <p className="text-sm text-[#4A4A4A]/60 mt-1">
-            This section is under construction.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+    <CasesPageClient
+      activeOnly
+      basePath="/ops/cases"
+      initialStatus={searchParams?.stage ?? ''}
+    />
   );
 }

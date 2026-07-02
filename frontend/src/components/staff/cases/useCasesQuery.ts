@@ -37,6 +37,9 @@ export interface CasesQuery {
   q?:            string;
   status?:       string;
   assignedToMe?: boolean;
+  // PR-OPS-CASES: when true, restrict to active cases (stage not
+  // COMPLETED/WITHDRAWN). Used by the OPS cases page.
+  activeOnly?:   boolean;
   page?:         number;
   pageSize?:     number;
 }
@@ -69,6 +72,7 @@ export function useCasesQuery(query: CasesQuery) {
     if (debouncedQ) params.set('q', debouncedQ);
     if (query.status) params.set('status', query.status);
     if (query.assignedToMe) params.set('assignedToMe', 'true');
+    if (query.activeOnly) params.set('activeOnly', 'true');
     if (query.page) params.set('page', String(query.page));
     if (query.pageSize) params.set('pageSize', String(query.pageSize));
 
@@ -84,7 +88,7 @@ export function useCasesQuery(query: CasesQuery) {
       .finally(() => {
         if (seq === seqRef.current) setLoading(false);
       });
-  }, [debouncedQ, query.status, query.assignedToMe, query.page, query.pageSize]);
+  }, [debouncedQ, query.status, query.assignedToMe, query.activeOnly, query.page, query.pageSize]);
 
   return { data, loading, error };
 }

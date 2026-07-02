@@ -20,7 +20,12 @@ import type { CaseDetail } from './types';
 // panel reflects the new assignee. The Documents / Meetings /
 // Tickets tabs render a PlaceholderPanel until later PRs ship.
 
-export function CaseDetailClient({ caseId }: { caseId: string }) {
+// PR-OPS-CASES: `canEdit` forces the overview stage/notes editor on (the OPS
+// detail page passes true). Omitted on the staff surface, where the editor
+// falls back to admin-tier from StaffContext. The Reassign button is gated by
+// <PermissionGate> and auto-hides under /ops (no StaffProvider → canReassign
+// false), so no extra wiring is needed to hide it for OPS.
+export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?: boolean }) {
   const t = useTranslations();
   const [data, setData] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +71,7 @@ export function CaseDetailClient({ caseId }: { caseId: string }) {
       <div>
         <CaseTabs active={tab} onChange={setTab} />
         <div className="pt-5">
-          {tab === 'overview'  && <CaseOverviewTab data={data} />}
+          {tab === 'overview'  && <CaseOverviewTab data={data} canEdit={canEdit} onSaved={refresh} />}
           {tab === 'activity'  && <CaseActivityTab caseId={data.id} />}
           {tab === 'documents' && <CaseDocumentsPanel caseId={data.id} canDelete={true} />}
           {tab === 'payments'  && <CasePaymentsPanel caseId={data.id} />}

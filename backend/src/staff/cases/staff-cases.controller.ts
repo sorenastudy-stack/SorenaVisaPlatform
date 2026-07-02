@@ -17,13 +17,14 @@ export class StaffCasesController {
   constructor(private readonly cases: StaffCasesService) {}
 
   @Get()
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
   list(@Req() req: any, @Query() query: StaffCasesListQueryDto) {
     return this.cases.listCases(
       { userId: req.user.userId, role: req.user.role as StaffAccessRole },
       {
         status:       query.status,
         assignedToMe: query.assignedToMe === 'true',
+        activeOnly:   query.activeOnly === 'true',
         q:            query.q,
         page:         query.page,
         pageSize:     query.pageSize,
@@ -44,8 +45,17 @@ export class StaffCasesController {
     return this.cases.listEligibleStaff(slot);
   }
 
+  // PR-OPS-DASHBOARD — counts + worklist + recent activity for the OPS home.
+  // Declared BEFORE @Get(':id') so 'dashboard' isn't captured as an id.
+  // SEE_ALL tier only (admin + OPERATIONS); service re-checks the role.
+  @Get('dashboard')
+  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS')
+  dashboard(@Req() req: any) {
+    return this.cases.opsDashboard({ userId: req.user.userId, role: req.user.role as StaffAccessRole });
+  }
+
   @Get(':id')
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
   detail(@Req() req: any, @Param('id') id: string) {
     return this.cases.getCaseDetail(
       { userId: req.user.userId, role: req.user.role as StaffAccessRole },
@@ -54,7 +64,7 @@ export class StaffCasesController {
   }
 
   @Get(':id/activity')
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
   activity(@Req() req: any, @Param('id') id: string) {
     return this.cases.getCaseActivity(
       { userId: req.user.userId, role: req.user.role as StaffAccessRole },

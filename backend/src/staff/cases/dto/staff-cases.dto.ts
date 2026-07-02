@@ -3,28 +3,33 @@ import { Type } from 'class-transformer';
 
 // PR-CONSULT-2 — Staff cases query DTO.
 //
-// Each filter is optional. `status` is validated against the known
-// VisaCaseStatus enum values. `assignedToMe` and `q` are free-form.
+// Each filter is optional. The `status` param filters the CaseStage column
+// (Case.status is vestigial), so it's validated against CaseStage values —
+// NOT VisaCaseStatus. `assignedToMe` / `activeOnly` / `q` are free-form.
 // `page` / `pageSize` carry sensible defaults + a hard upper bound.
 
-const VISA_CASE_STATUSES = [
-  'DRAFT',
-  'SUBMITTED_FOR_REVIEW',
-  'REVIEWED',
-  'READY_FOR_INZ',
+const CASE_STAGES = [
+  'ADMISSION',
+  'VISA',
   'INZ_SUBMITTED',
-  'APPROVED',
-  'DECLINED',
+  'COMPLETED',
+  'WITHDRAWN',
 ] as const;
 
 export class StaffCasesListQueryDto {
   @IsOptional()
-  @IsIn(VISA_CASE_STATUSES as unknown as string[])
+  @IsIn(CASE_STAGES as unknown as string[])
   status?: string;
 
   @IsOptional()
   @IsBooleanString()
   assignedToMe?: string;
+
+  // PR-OPS-CASES: when 'true', restrict to active cases
+  // (stage NOT IN COMPLETED/WITHDRAWN). Used by the OPS cases page.
+  @IsOptional()
+  @IsBooleanString()
+  activeOnly?: string;
 
   @IsOptional()
   @IsString()

@@ -12,7 +12,7 @@ import type { CaseRowApi } from './useCasesQuery';
 // detail. The not-assigned slot ("Not yet assigned") gets faded
 // text so the table reads scanner-friendly.
 
-export function CasesTable({ items }: { items: CaseRowApi[] }) {
+export function CasesTable({ items, basePath = '/staff/cases' }: { items: CaseRowApi[]; basePath?: string }) {
   const router = useRouter();
   const t = useTranslations();
 
@@ -41,7 +41,7 @@ export function CasesTable({ items }: { items: CaseRowApi[] }) {
           {items.map((c) => (
             <tr
               key={c.id}
-              onClick={() => router.push(`/staff/cases/${c.id}`)}
+              onClick={() => router.push(`${basePath}/${c.id}`)}
               className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-[#faf8f3] transition-colors"
             >
               <td className="px-4 py-3 font-medium text-gray-900">{c.studentName || '—'}</td>
