@@ -1709,6 +1709,11 @@
   "portal": {
     "headerTitle": "My Case",
     "signOut": "Sign out",
+    "nav": {
+      "myCase": "My Case",
+      "documents": "Documents",
+      "wallet": "Wallet"
+    },
     "case": {
       "heading": "Your case",
       "stage": {
