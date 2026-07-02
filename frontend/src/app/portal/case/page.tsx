@@ -4,6 +4,7 @@ import { ArrowRight, FileText, Sparkles, Users, Wallet, ListChecks, Clock, Messa
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { getSession } from '@/lib/auth';
 import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
+import { ReloginBanner } from '@/components/portal/ReloginBanner';
 import { formatDate as fmtDate } from '@/lib/date';
 
 // Client portal step 3 — the client's case overview.
@@ -113,8 +114,23 @@ export default async function MyCasePage() {
   const session = await getSession();
   const canMessage = session?.role === 'STUDENT';
 
+  // Promoted-but-stale detection: the DB says STAGE_2 (client + LIA have
+  // signed → the user was promoted to STUDENT), but this browser's session
+  // cookie still holds the old LEAD role, so /student/* would bounce them
+  // until they re-authenticate. Show a gentle "sign in again" prompt.
+  let portalStage: 'STAGE_1' | 'STAGE_2' = 'STAGE_1';
+  try {
+    const s = await apiServer.get<{ portalStage: 'STAGE_1' | 'STAGE_2' }>('/portal/me/stage');
+    portalStage = s.portalStage;
+  } catch {
+    /* default STAGE_1 → no banner */
+  }
+  const promotedButStale = portalStage === 'STAGE_2' && session?.role !== 'STUDENT';
+
   return (
     <div className="space-y-6">
+      {promotedButStale && <ReloginBanner />}
+
       {/* ── Status hero ──────────────────────────────────────────────── */}
       <section className="relative overflow-hidden rounded-3xl bg-[#1e3a5f] text-white px-6 py-8 md:px-10 md:py-12">
         <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-[#F3CE49]/15 blur-3xl" aria-hidden />

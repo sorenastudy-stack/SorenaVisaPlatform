@@ -1715,6 +1715,12 @@
       "documents": "Documents",
       "wallet": "Wallet"
     },
+    "relogin": {
+      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
+      "title": "You're all set!",
+      "body": "Please sign in again to unlock your next steps.",
+      "button": "Sign in again"
+    },
     "case": {
       "heading": "پرونده شما",
       "stage": {
