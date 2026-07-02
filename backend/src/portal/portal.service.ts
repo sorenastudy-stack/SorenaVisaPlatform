@@ -150,4 +150,37 @@ export class PortalService {
       .sort((a, b) => b.date.getTime() - a.date.getTime())
       .map((e) => ({ date: e.date, kind: e.kind, label: e.label }));
   }
+
+  // ── Portal stage gate ───────────────────────────────────────────────────
+  // STAGE_2 unlocks once BOTH the client party (CLIENT or, for a minor, the
+  // GUARDIAN who signs on their behalf) AND the LIA have signed the engagement
+  // letter — the DIRECTOR signature is intentionally ignored. Derived purely
+  // from the caller's OWN case (lead.contact.userId → case → contract →
+  // signers). "Signed" = the durable ContractSigner.signedAt IS NOT NULL, the
+  // codebase's defensive convention (see payments.controller.ts). Never throws:
+  // no case / no contract / not-both-signed all resolve to STAGE_1.
+  async getPortalStage(userId: string): Promise<{ portalStage: 'STAGE_1' | 'STAGE_2' }> {
+    const c = await this.prisma.case.findFirst({
+      where:  { lead: { contact: { userId } } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        contract: {
+          select: {
+            signers: {
+              where:  { role: { in: ['CLIENT', 'GUARDIAN', 'LIA'] } },
+              select: { role: true, signedAt: true },
+            },
+          },
+        },
+      },
+    });
+
+    const signers = c?.contract?.signers ?? [];
+    const clientSigned = signers.some(
+      (s) => (s.role === 'CLIENT' || s.role === 'GUARDIAN') && s.signedAt !== null,
+    );
+    const liaSigned = signers.some((s) => s.role === 'LIA' && s.signedAt !== null);
+
+    return { portalStage: clientSigned && liaSigned ? 'STAGE_2' : 'STAGE_1' };
+  }
 }

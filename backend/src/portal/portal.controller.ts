@@ -32,4 +32,14 @@ export class PortalController {
     const userId = req.user?.userId ?? req.user?.id;
     return this.service.getMyCase(userId);
   }
+
+  // GET /portal/me/stage → { portalStage: 'STAGE_1' | 'STAGE_2' }
+  // Stage-gate value for the client portal. STAGE_2 once the client (or their
+  // guardian) AND the LIA have signed the contract (director ignored). Derived
+  // server-side from the caller's own case — never throws, never 404s.
+  @Get('me/stage')
+  getPortalStage(@Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.service.getPortalStage(userId);
+  }
 }
