@@ -62,19 +62,28 @@ export class WalletService {
       throw new BadRequestException('amountCents must be a non-zero integer (cents)');
     }
     const run = async (db: Tx) => {
-      const wallet = await db.wallet.upsert({
+      // Ensure the wallet row exists (first-access create), then take a
+      // row-level lock and read the authoritative balance UNDER the lock.
+      // Without `FOR UPDATE`, two concurrent posts on the same wallet both
+      // read the same balance and the second write clobbers the first
+      // (lost update → double-spend / wrong balance). The lock serialises
+      // them for the life of the enclosing transaction. PR-WALLET slice 3.
+      const base = await db.wallet.upsert({
         where: { userId: params.userId },
         create: { userId: params.userId },
         update: {},
-        select: { id: true, balanceCents: true },
+        select: { id: true },
       });
-      const nextBalance = wallet.balanceCents + params.amountCents;
+      const locked = await db.$queryRaw<Array<{ balanceCents: number }>>`
+        SELECT "balanceCents" FROM "wallet" WHERE "id" = ${base.id} FOR UPDATE`;
+      const currentBalance = Number(locked[0].balanceCents);
+      const nextBalance = currentBalance + params.amountCents;
       if (nextBalance < 0) {
         throw new BadRequestException('Insufficient wallet balance');
       }
       const entry = await db.walletTransaction.create({
         data: {
-          walletId: wallet.id,
+          walletId: base.id,
           amountCents: params.amountCents,
           type: params.type,
           balanceAfterCents: nextBalance,
@@ -85,7 +94,7 @@ export class WalletService {
         },
         select: { id: true },
       });
-      await db.wallet.update({ where: { id: wallet.id }, data: { balanceCents: nextBalance } });
+      await db.wallet.update({ where: { id: base.id }, data: { balanceCents: nextBalance } });
       return { transactionId: entry.id, balanceCents: nextBalance };
     };
     return tx ? run(tx) : this.prisma.$transaction(run);

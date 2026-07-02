@@ -346,7 +346,7 @@ interface Hold {
   consultationId: string; holdExpiresAt: string; amountNZD: number;
   type: string; slotStartUtc: string; staffName: string; timezone: string;
 }
-type GapStep = 'pick' | 'hold' | 'expired';
+type GapStep = 'pick' | 'hold' | 'expired' | 'done';
 
 // Display strings only — the authoritative price/duration live in the
 // backend session-config; the hold response carries the real amount.
@@ -369,6 +369,10 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
   const [secondsLeft, setSecondsLeft] = useState(0);
   // PR-WALLET slice 1 — must accept the cancellation/refund policy before pay.
   const [accepted, setAccepted] = useState(false);
+  // PR-WALLET slice 3 — wallet balance (cents) for the "pay with credit" option.
+  const [walletCents, setWalletCents] = useState<number | null>(null);
+  const [payingWallet, setPayingWallet] = useState(false);
+  const [doneBalanceCents, setDoneBalanceCents] = useState<number | null>(null);
 
   async function loadSlots() {
     setLoading(true); setLoadError(false);
@@ -382,6 +386,14 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
     } catch { setLoadError(true); } finally { setLoading(false); }
   }
   useEffect(() => { loadSlots(); }, []);
+
+  // Wallet balance for the "pay with credit" option. Non-fatal — if it fails
+  // the client just sees the card button (no wallet option shown).
+  useEffect(() => {
+    api.get<{ balanceCents: number }>('/wallet')
+      .then((w) => setWalletCents(w.balanceCents))
+      .catch(() => setWalletCents(null));
+  }, []);
 
   const days = useMemo(() => {
     if (!data) return [] as Array<{ key: string; label: string; slots: Slot[] }>;
@@ -436,6 +448,29 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
     } finally { setPaying(false); }
   }
 
+  // PR-WALLET slice 3 — pay the full price from wallet credit (no Stripe).
+  // Same policy-acceptance gate as card. On success we land on the in-app
+  // "done" screen; on 409 (hold gone / slot lost / already paid) → expired.
+  async function payWithWallet() {
+    if (!hold || !accepted) return;
+    setPayingWallet(true);
+    try {
+      const res = await api.post<{ status: string; newBalanceCents: number }>(
+        '/booking/pay-with-wallet', { consultationId: hold.consultationId, accepted: true },
+      );
+      setDoneBalanceCents(res.newBalanceCents);
+      setStep('done');
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 400) {
+        // Balance no longer covers it (spent elsewhere) — hide the wallet
+        // option and let them pay by card instead. Stay on the hold screen.
+        setWalletCents(null);
+      } else {
+        setStep('expired');
+      }
+    } finally { setPayingWallet(false); }
+  }
+
   function resetToPick() { setHold(null); setStep('pick'); loadSlots(); }
 
   if (loading) {
@@ -456,6 +491,26 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
             <button onClick={resetToPick} className="inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-sorena-gold px-8 py-3 font-semibold text-sorena-navy shadow-md hover:bg-sorena-gold/90">Pick a time</button>
             <BackToCase />
           </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── Done (wallet-paid; card path redirects to Stripe instead) ───────
+  if (step === 'done') {
+    return (
+      <Shell>
+        <div className="text-center py-4">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-sorena-jade/15">
+            <Check size={26} className="text-sorena-jade" />
+          </div>
+          <h1 className="text-2xl font-bold text-sorena-navy">You&apos;re booked!</h1>
+          <p className="mt-3 text-base text-sorena-text/80">
+            Paid with your Sorena wallet credit.
+            {doneBalanceCents != null && ` New balance: NZD ${(doneBalanceCents / 100).toFixed(2)}.`}
+          </p>
+          <p className="mt-1 text-sm text-sorena-text/60">We&apos;ll email your confirmation and meeting link.</p>
+          <div className="mt-8"><BackToCase /></div>
         </div>
       </Shell>
     );
@@ -495,11 +550,26 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
         </div>
 
         <div className="mt-6 space-y-3">
-          <button onClick={pay} disabled={paying || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 disabled:opacity-60 disabled:hover:translate-y-0">
+          {/* PR-WALLET slice 3 — wallet-covers-full option, shown alongside
+              card when the balance covers the price. Full amount only. */}
+          {walletCents != null && walletCents >= Math.round(hold.amountNZD * 100) && (
+            <>
+              <button onClick={payWithWallet} disabled={payingWallet || paying || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-navy px-6 py-3.5 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-navy/90 disabled:opacity-60 disabled:hover:translate-y-0">
+                {payingWallet ? <><Loader2 size={18} className="animate-spin" /> Paying…</> : `Pay with wallet credit (NZD ${hold.amountNZD})`}
+              </button>
+              <p className="text-center text-xs text-sorena-text/50">
+                Wallet balance NZD {(walletCents / 100).toFixed(2)} · after this booking NZD {((walletCents - Math.round(hold.amountNZD * 100)) / 100).toFixed(2)}
+              </p>
+              <div className="flex items-center gap-3 py-1 text-xs text-sorena-text/40">
+                <span className="h-px flex-1 bg-sorena-navy/10" /> or pay by card <span className="h-px flex-1 bg-sorena-navy/10" />
+              </div>
+            </>
+          )}
+          <button onClick={pay} disabled={paying || payingWallet || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 disabled:opacity-60 disabled:hover:translate-y-0">
             {paying ? <><Loader2 size={18} className="animate-spin" /> Redirecting…</> : `Pay NZD ${hold.amountNZD}`}
           </button>
           {!accepted && <p className="text-center text-xs text-sorena-text/50">Please accept the policy above to continue.</p>}
-          <button onClick={resetToPick} disabled={paying} className="flex w-full items-center justify-center gap-1 text-sm font-semibold text-sorena-navy/70 hover:text-sorena-navy"><ArrowLeft size={14} /> Pick a different time</button>
+          <button onClick={resetToPick} disabled={paying || payingWallet} className="flex w-full items-center justify-center gap-1 text-sm font-semibold text-sorena-navy/70 hover:text-sorena-navy"><ArrowLeft size={14} /> Pick a different time</button>
         </div>
       </Shell>
     );

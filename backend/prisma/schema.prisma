@@ -181,6 +181,15 @@ enum PaymentStatus {
   REFUNDED
 }
 
+// PR-WALLET slice 3: how a paid booking was settled. NULL for legacy rows and
+// FREE_15 (nothing collected). CARD = Stripe PaymentIntent; WALLET = store
+// credit spent (SPEND_BOOKING ledger entry, no Stripe Payment row). The refund
+// path reads this to know where to compute the tier base from.
+enum PaymentMethod {
+  CARD
+  WALLET
+}
+
 // Phase 6.5 — finance staff verification state for each Payment row.
 // Distinct from PaymentStatus (which tracks the Stripe/manual outcome):
 // a payment can be Stripe-`succeeded` AND verification-`PENDING` until
@@ -1011,6 +1020,9 @@ model Consultation {
   currency        String             @default("NZD")
   paymentStatus   PaymentStatus      @default(PENDING)
   stripePaymentId String?
+  // PR-WALLET slice 3: settlement method, set at confirm. NULL until paid
+  // (and for free bookings). CARD via Stripe; WALLET via store credit.
+  paidWith        PaymentMethod?
   status          ConsultationStatus @default(PENDING)
   outcomeNotes    String?
   scheduledAt     DateTime?

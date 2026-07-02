@@ -52,11 +52,11 @@ export class BookingCancellationService {
     if (c.type === 'FREE_15') {
       return { eligible: true as const, free: true, tier: 'free', creditCents: 0, retainedCents: 0, currency: c.currency };
     }
-    const amount = await this.paymentAmountCents(c.stripePaymentId);
-    if (amount == null) {
+    const basis = await this.resolveRefundBasis(c);
+    if (basis == null) {
       return { eligible: true as const, free: false, tier: 'unknown', creditCents: 0, retainedCents: 0, currency: c.currency, note: 'no linked payment on file' };
     }
-    const r = computeRefund(amount, 'CANCEL', hoursUntil(c.scheduledAt!, now));
+    const r = computeRefund(basis.baseCents, 'CANCEL', hoursUntil(c.scheduledAt!, now));
     return {
       eligible: true as const, free: false, tier: r.type,
       creditCents: r.creditCents, retainedCents: r.retainedCents, currency: c.currency,
@@ -143,12 +143,31 @@ export class BookingCancellationService {
     return { ok: true };
   }
 
-  private async paymentAmountCents(stripePaymentId: string | null): Promise<number | null> {
-    if (!stripePaymentId) return null;
-    const pay = await this.prisma.payment.findUnique({
-      where: { stripePaymentIntentId: stripePaymentId }, select: { amount: true },
+  /**
+   * Resolve the tier BASE (integer cents) + how the booking was paid.
+   *   CARD   → the Stripe Payment.amount (looked up by stripePaymentId).
+   *   WALLET → the SPEND_BOOKING debit amount (slice 3; no Payment row exists).
+   * Returns null when there's no money on file (data anomaly) so the caller
+   * flips status without inventing a refund. Either way the credit lands in the
+   * wallet — only the base source differs.
+   */
+  private async resolveRefundBasis(c: LoadedConsultation): Promise<
+    | { source: 'CARD'; baseCents: number; paymentId: string }
+    | { source: 'WALLET'; baseCents: number }
+    | null
+  > {
+    if (c.stripePaymentId) {
+      const pay = await this.prisma.payment.findUnique({
+        where: { stripePaymentIntentId: c.stripePaymentId }, select: { id: true, amount: true },
+      });
+      return pay ? { source: 'CARD', baseCents: pay.amount, paymentId: pay.id } : null;
+    }
+    // Wallet-paid: the append-only SPEND_BOOKING row is the authoritative base.
+    const spend = await this.prisma.walletTransaction.findFirst({
+      where: { relatedConsultationId: c.id, type: 'SPEND_BOOKING' },
+      select: { amountCents: true },
     });
-    return pay?.amount ?? null;
+    return spend ? { source: 'WALLET', baseCents: Math.abs(spend.amountCents) } : null;
   }
 
   /**
@@ -161,14 +180,9 @@ export class BookingCancellationService {
     opts: { newStatus: TerminalStatus; refundKind: RefundKind; now: Date; actorId: string },
   ) {
     const isFree = c.type === 'FREE_15';
-    let paymentAmount: number | null = null;
-    let paymentId: string | null = null;
-    if (!isFree && c.stripePaymentId) {
-      const pay = await this.prisma.payment.findUnique({
-        where: { stripePaymentIntentId: c.stripePaymentId }, select: { id: true, amount: true },
-      });
-      if (pay) { paymentAmount = pay.amount; paymentId = pay.id; }
-    }
+    // Base + source (card Payment or wallet SPEND_BOOKING). Read before the tx;
+    // both sources are immutable once written.
+    const basis = isFree ? null : await this.resolveRefundBasis(c);
 
     try {
       const credit = await this.prisma.$transaction(async (tx) => {
@@ -179,8 +193,8 @@ export class BookingCancellationService {
         }
 
         let posted: { type: string; creditCents: number; retainedCents: number } | null = null;
-        if (!isFree && paymentAmount != null && c.clientUserId) {
-          const r = computeRefund(paymentAmount, opts.refundKind, c.scheduledAt ? hoursUntil(c.scheduledAt, opts.now) : 0);
+        if (basis && c.clientUserId) {
+          const r = computeRefund(basis.baseCents, opts.refundKind, c.scheduledAt ? hoursUntil(c.scheduledAt, opts.now) : 0);
           if (r.creditCents > 0) {
             await this.wallet.postTransaction({
               userId: c.clientUserId,
@@ -189,7 +203,7 @@ export class BookingCancellationService {
               createdById: opts.actorId,
               reason: `${c.type} booking — ${r.tierLabel}`,
               relatedConsultationId: c.id,
-              relatedPaymentId: paymentId ?? undefined,
+              relatedPaymentId: basis.source === 'CARD' ? basis.paymentId : undefined,
             }, tx);
           }
           posted = { type: r.type, creditCents: r.creditCents, retainedCents: r.retainedCents };
@@ -199,9 +213,9 @@ export class BookingCancellationService {
         return posted;
       });
 
-      if (!isFree && paymentAmount == null) {
+      if (!isFree && basis == null) {
         this.logger.warn(
-          `Booking ${c.id} (${c.type}) marked ${opts.newStatus} but has NO linked Payment — ` +
+          `Booking ${c.id} (${c.type}) marked ${opts.newStatus} but has NO linked payment (card or wallet) — ` +
           `status changed, NO wallet credit posted. Flag for manual review.`,
         );
       }

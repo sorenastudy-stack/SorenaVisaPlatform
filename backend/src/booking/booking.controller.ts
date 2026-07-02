@@ -8,7 +8,7 @@ import { PolicyAcceptanceService } from '../wallet/policy-acceptance.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { getSessionConfig } from './session-config';
 import {
-  SlotsQueryDto, ConfirmBookingDto, HoldBookingDto, CheckoutBookingDto,
+  SlotsQueryDto, ConfirmBookingDto, HoldBookingDto, CheckoutBookingDto, PayWithWalletDto,
 } from './dto/booking.dto';
 
 // PR-BOOKING-3 — client booking endpoints (Stage 3: FREE_15 flow).
@@ -103,6 +103,31 @@ export class BookingController {
       productName: `Sorena Visa — ${cfg.label}`,
     });
     return { url: session.url };
+  }
+
+  // POST /booking/pay-with-wallet  { consultationId, accepted }
+  // PR-WALLET slice 3 — settle a held paid booking from wallet credit (full
+  // amount only; no Stripe). Records the SAME policy acceptance as /checkout
+  // BEFORE debiting, then confirms atomically. Returns the booking + new
+  // balance with no redirect. If the wallet doesn't cover the price the debit
+  // is refused (400) and the client falls back to card.
+  @Post('pay-with-wallet')
+  async payWithWallet(@Body() dto: PayWithWalletDto, @Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    if (dto.accepted !== true) {
+      throw new BadRequestException('You must accept the cancellation & refund policy to continue.');
+    }
+    // Validate ownership + that the hold is still payable BEFORE recording.
+    const hold = await this.service.getHoldForCheckout(userId, dto.consultationId);
+    const fwd = req.headers?.['x-forwarded-for'];
+    const ipAddress = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0]?.trim() || req.ip || null;
+    await this.policyAcceptance.record({
+      userId,
+      consultationId: hold.id,
+      ipAddress,
+      userAgent: req.headers?.['user-agent'] ?? null,
+    });
+    return this.service.payHeldBookingWithWallet(userId, hold.id);
   }
 
   // GET /booking/free-eligibility — has the client already used their one

@@ -21,6 +21,7 @@ import {
   zonedDateParts,
 } from './slot-engine';
 import { BookingConfirmationService } from './booking-confirmation.service';
+import { WalletService } from '../wallet/wallet.service';
 
 // PR-BOOKING-1 — booking service (Stage 1+2: data loading + slot engine +
 // commit guard). No controller/endpoints yet — that's the next stage.
@@ -85,6 +86,7 @@ export class BookingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bookingConfirmation: BookingConfirmationService,
+    private readonly wallet: WalletService,
   ) {}
 
   /**
@@ -426,6 +428,95 @@ export class BookingService {
       throw new ConflictException('Your hold expired — please pick a time again');
     }
     return { id: c.id, leadId: c.leadId, type: c.type as BookingSessionType, amountNZD: c.amountNZD };
+  }
+
+  /**
+   * PR-WALLET slice 3 — settle a held paid booking from the client's wallet
+   * (FULL amount only; the caller has already recorded policy acceptance).
+   *
+   * One atomic transaction: re-check the hold is still payable, re-check the
+   * slot wasn't taken, debit the wallet (SPEND_BOOKING, which locks the wallet
+   * row and refuses a negative balance), and flip the consultation to
+   * CONFIRMED / PAID / paidWith=WALLET. All-or-nothing — never a debit without
+   * a confirm, never a confirm without a debit. `wallet_transaction_spend_once_idx`
+   * is the double-checkout backstop (P2002 → 409). No Stripe involved.
+   *
+   * Insufficient balance → 400; lost slot / expired hold / already paid → 409.
+   */
+  async payHeldBookingWithWallet(
+    userId: string,
+    consultationId: string,
+    now: Date = new Date(),
+  ): Promise<{ status: 'CONFIRMED'; paidWith: 'WALLET'; newBalanceCents: number }> {
+    // Ownership + still-payable checks BEFORE touching money (404 / 409 / 400).
+    const hold = await this.getHoldForCheckout(userId, consultationId, now);
+    const cfg = getSessionConfig(hold.type);
+    const priceCents = Math.round(cfg.priceNZD * 100);
+    if (priceCents <= 0) throw new BadRequestException('This booking is not payable.');
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Re-load inside the tx — must still be a live, unpaid hold.
+        const fresh = await tx.consultation.findUnique({
+          where: { id: consultationId },
+          select: {
+            status: true, paymentStatus: true, holdExpiresAt: true,
+            assignedToId: true, scheduledAt: true, scheduledEndAt: true,
+          },
+        });
+        if (!fresh) throw new NotFoundException('Hold not found');
+        if (fresh.status === 'CONFIRMED' || fresh.paymentStatus === 'PAID') {
+          throw new ConflictException('This booking is already paid');
+        }
+        if (fresh.status !== 'PENDING' || !fresh.holdExpiresAt || fresh.holdExpiresAt <= now) {
+          throw new ConflictException('Your hold expired — please pick a time again');
+        }
+
+        // Slot-clash re-check: a card booking may have confirmed this
+        // adviser+slot while the hold sat here. Wallet payment is synchronous,
+        // so on a clash we abort the whole tx — nothing is debited.
+        if (fresh.assignedToId && fresh.scheduledAt && fresh.scheduledEndAt) {
+          const clash = await tx.consultation.findFirst({
+            where: {
+              assignedToId: fresh.assignedToId,
+              id: { not: consultationId },
+              status: { in: ['BOOKED', 'CONFIRMED'] },
+              scheduledAt: { not: null, lt: fresh.scheduledEndAt },
+              scheduledEndAt: { gt: fresh.scheduledAt },
+            },
+            select: { id: true },
+          });
+          if (clash) throw new ConflictException('That time was just taken — please pick another slot.');
+        }
+
+        // Debit (locks the wallet row; throws 400 if balance < priceCents).
+        const debit = await this.wallet.debit({
+          userId,
+          amountCents: priceCents,
+          type: 'SPEND_BOOKING',
+          createdById: userId,
+          reason: `${hold.type} booking — paid with wallet credit`,
+          relatedConsultationId: consultationId,
+        }, tx);
+
+        await tx.consultation.update({
+          where: { id: consultationId },
+          data: { status: 'CONFIRMED', paymentStatus: 'PAID', paidWith: 'WALLET', holdExpiresAt: null },
+        });
+        return { newBalanceCents: debit.balanceCents };
+      });
+
+      // Best-effort finalize (Jitsi link + email), same as the card path.
+      await this.bookingConfirmation.onConfirmed(consultationId).catch(() => undefined);
+      this.logger.log(`Booking ${consultationId} confirmed via wallet credit (${priceCents}c) for user ${userId}`);
+      return { status: 'CONFIRMED', paidWith: 'WALLET', newBalanceCents: result.newBalanceCents };
+    } catch (e) {
+      // Double-checkout backstop: spend-once index rejected a 2nd SPEND_BOOKING.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('This booking is already paid');
+      }
+      throw e;
+    }
   }
 
   /**

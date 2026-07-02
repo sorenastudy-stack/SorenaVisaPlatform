@@ -41,6 +41,18 @@ export class CheckoutBookingDto {
   accepted!: boolean;
 }
 
+// PR-WALLET slice 3 — pay a held booking from wallet credit (full amount).
+// Same shape as checkout: the client must accept the policy here too, because
+// a wallet-paid booking is still cancellable under the tiered refund policy.
+export class PayWithWalletDto {
+  @IsString()
+  @IsNotEmpty()
+  consultationId!: string;
+
+  @IsBoolean()
+  accepted!: boolean;
+}
+
 export class ConfirmBookingDto {
   // Stage 3: only FREE_15 may be confirmed here (no payment). Paid types
   // are rejected until the Stripe flow lands.

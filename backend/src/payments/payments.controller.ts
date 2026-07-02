@@ -505,7 +505,9 @@ export class PaymentsController {
         }
         await tx.consultation.update({
           where: { id: consult.id },
-          data: { status: 'CONFIRMED', paymentStatus: 'PAID', stripePaymentId: paymentIntent.id, holdExpiresAt: null },
+          // PR-WALLET slice 3: mark the settlement method so the refund path
+          // knows the tier base is a Stripe Payment (not a wallet debit).
+          data: { status: 'CONFIRMED', paymentStatus: 'PAID', stripePaymentId: paymentIntent.id, paidWith: 'CARD', holdExpiresAt: null },
         });
       });
 
@@ -527,6 +529,7 @@ export class PaymentsController {
           data: {
             paymentStatus: 'PAID',
             stripePaymentId: paymentIntent.id,
+            paidWith: 'CARD',
             scheduledAt: null,
             scheduledEndAt: null,
             holdExpiresAt: null,
