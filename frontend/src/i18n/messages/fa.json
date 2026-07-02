@@ -1721,6 +1721,29 @@
       "body": "Please sign in again to unlock your next steps.",
       "button": "Sign in again"
     },
+    "contractReady": {
+      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
+      "title": "Your contract is ready",
+      "body": "Please check your email to review and sign your engagement letter."
+    },
+    "assessment": {
+      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
+      "title": "Your readiness assessment",
+      "completed": "Completed",
+      "pdf": "Download your assessment (PDF)"
+    },
+    "stage2": {
+      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
+      "heading": "Your active case",
+      "study": "Choose your field of study",
+      "studyBody": "Select and rank the programmes you want to apply to.",
+      "visa": "Visa application questions",
+      "visaBody": "Complete your INZ visa application details.",
+      "documents": "Educational documents",
+      "documentsBody": "Upload your qualifications and transcripts.",
+      "tickets": "Messages & support",
+      "ticketsBody": "Ask your team a question or track a request."
+    },
     "case": {
       "heading": "پرونده شما",
       "stage": {

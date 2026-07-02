@@ -92,9 +92,11 @@ export class PortalService {
       });
     }
 
-    // Awaiting the client's signature: DRAFT / SENT / VIEWED (SIGNED / DECLINED
-    // / EXPIRED need no client action here).
-    if (contract && ['DRAFT', 'SENT', 'VIEWED'].includes(contract.status)) {
+    // Awaiting the client's signature: SENT / VIEWED only. A DRAFT contract has
+    // not been emailed yet, so the client has nothing to sign — prompting them
+    // to "check your email" would be premature and the "Open" row would dead-end.
+    // (SIGNED / DECLINED / EXPIRED need no client action here.)
+    if (contract && ['SENT', 'VIEWED'].includes(contract.status)) {
       steps.push({ kind: 'CONTRACT', label: 'Sign your engagement letter', detail: null });
     }
 

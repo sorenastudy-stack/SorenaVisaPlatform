@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { ArrowRight, FileText, Sparkles, Users, Wallet, ListChecks, Clock, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, FileText, Sparkles, Users, Wallet, ListChecks, Clock, MessageSquare, CheckCircle2, Award, Mail, GraduationCap, ClipboardList, FolderOpen } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { getSession } from '@/lib/auth';
 import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
 import { ReloginBanner } from '@/components/portal/ReloginBanner';
+import { AssessmentPdfButton } from '@/components/portal/AssessmentPdfButton';
 import { formatDate as fmtDate } from '@/lib/date';
 
 // Client portal step 3 — the client's case overview.
@@ -31,6 +32,13 @@ interface MyCase {
   inzSubmittedAt:       string | null;
   nextSteps:            NextStep[];
   timeline:             TimelineEvent[];
+}
+
+interface AssessmentResult {
+  submissionId: string;
+  bandName:     string;
+  bandRange:    string;
+  submittedAt:  string;
 }
 
 function formatDate(iso: string | null): string | null {
@@ -127,6 +135,21 @@ export default async function MyCasePage() {
   }
   const promotedButStale = portalStage === 'STAGE_2' && session?.role !== 'STUDENT';
 
+  // Stage-1 assessment card — the client's own latest readiness result. The
+  // endpoint 404s when they've never submitted; treat that as "no card".
+  let assessment: AssessmentResult | null = null;
+  try {
+    assessment = await apiServer.get<AssessmentResult>('/scorecard/me/latest');
+  } catch {
+    /* no submission (404) or transient error → no assessment card */
+  }
+
+  // Stage-1 "contract ready to sign" prompt — reuse the existing contract
+  // signal from getMyCase.nextSteps (emitted while the engagement letter is
+  // DRAFT/SENT/VIEWED). No in-portal sign link exists — the client signs via
+  // the DocuSign email.
+  const contractReadyToSign = caseData.nextSteps.some((s) => s.kind === 'CONTRACT');
+
   return (
     <div className="space-y-6">
       {promotedButStale && <ReloginBanner />}
@@ -143,6 +166,21 @@ export default async function MyCasePage() {
           </h1>
         </div>
       </section>
+
+      {/* ── Contract ready to sign (check email) ─────────────────────── */}
+      {contractReadyToSign && (
+        <section className="rounded-2xl border border-[#F3CE49]/50 bg-[#faf8f3] p-5 md:p-6">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#F3CE49]/20">
+              <Mail size={20} className="text-[#8a6d10]" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-[#1e3a5f]">{t('portal.contractReady.title')}</h2>
+              <p className="mt-1 text-sm leading-relaxed text-gray-600">{t('portal.contractReady.body')}</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── What to do next ──────────────────────────────────────────── */}
       <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
@@ -174,6 +212,22 @@ export default async function MyCasePage() {
         )}
       </section>
 
+      {/* ── Stage 2: active case entry points (contract signed) ──────── */}
+      {portalStage === 'STAGE_2' && (
+        <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <GraduationCap size={16} className="text-[#b8941f]" />
+            <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">{t('portal.stage2.heading')}</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Stage2Card href="/student/admission" icon={<GraduationCap size={18} className="text-[#1e3a5f]" />} title={t('portal.stage2.study')} body={t('portal.stage2.studyBody')} />
+            <Stage2Card href="/student/documents"  icon={<ClipboardList size={18} className="text-[#1e3a5f]" />} title={t('portal.stage2.visa')} body={t('portal.stage2.visaBody')} />
+            <Stage2Card href="/student/admission" icon={<FolderOpen size={18} className="text-[#1e3a5f]" />} title={t('portal.stage2.documents')} body={t('portal.stage2.documentsBody')} />
+            <Stage2Card href="/student/tickets"    icon={<MessageSquare size={18} className="text-[#1e3a5f]" />} title={t('portal.stage2.tickets')} body={t('portal.stage2.ticketsBody')} />
+          </div>
+        </section>
+      )}
+
       {/* ── Your upcoming sessions ───────────────────────────────────── */}
       <UpcomingBookings />
 
@@ -185,6 +239,22 @@ export default async function MyCasePage() {
         </div>
         <ArrowRight size={16} className="text-gray-300" />
       </Link>
+
+      {/* ── Readiness assessment (if the client has a result) ────────── */}
+      {assessment && (
+        <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Award size={16} className="text-[#b8941f]" />
+            <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">{t('portal.assessment.title')}</h2>
+          </div>
+          <p className="text-lg font-bold text-[#1e3a5f]">{assessment.bandName}</p>
+          <p className="text-sm text-gray-500">{assessment.bandRange}</p>
+          <p className="mt-1 text-xs text-gray-400">{t('portal.assessment.completed')} {formatDate(assessment.submittedAt)}</p>
+          <div className="mt-4">
+            <AssessmentPdfButton submissionId={assessment.submissionId} />
+          </div>
+        </section>
+      )}
 
       {/* ── Your team ────────────────────────────────────────────────── */}
       {team.length > 0 && (
@@ -274,5 +344,23 @@ export default async function MyCasePage() {
         </div>
       </Link>
     </div>
+  );
+}
+
+// Stage-2 entry-point card — a plain link to an existing /student/* page. No
+// sensitive data rendered here; the target pages are own-data + STUDENT gated.
+function Stage2Card({ href, icon, title, body }: { href: string; icon: React.ReactNode; title: string; body: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-[#1e3a5f]/40 hover:shadow-sm"
+    >
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-[#1e3a5f]/10">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-[#1e3a5f]">{title}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{body}</p>
+      </div>
+      <ArrowRight size={16} className="mt-1 flex-shrink-0 text-gray-300" />
+    </Link>
   );
 }
