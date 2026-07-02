@@ -335,6 +335,34 @@ export class StripeService {
   }
 
   /**
+   * PR-CARD-REFUND — issue a real refund against the original PaymentIntent.
+   * `amountCents` is integer cents (must be <= captured). The idempotencyKey
+   * makes a retry/double-submit return the SAME Stripe refund instead of
+   * issuing a second one — critical, this is real money. Our free-text reason
+   * goes in metadata (Stripe's own `reason` is a restricted enum we don't set).
+   * Returns the Stripe Refund object ({ id, status, ... }).
+   */
+  async createRefund(params: {
+    paymentIntentId: string;
+    amountCents: number;
+    idempotencyKey: string;
+    reason?: string;
+  }) {
+    this.assertConfigured();
+    if (!Number.isInteger(params.amountCents) || params.amountCents <= 0) {
+      throw new BadRequestException('Refund amount must be a positive integer (cents)');
+    }
+    return this.stripe.refunds.create(
+      {
+        payment_intent: params.paymentIntentId,
+        amount: params.amountCents,
+        ...(params.reason ? { metadata: { reason: params.reason.slice(0, 500) } } : {}),
+      },
+      { idempotencyKey: params.idempotencyKey },
+    );
+  }
+
+  /**
    * Retrieve a customer
    */
   async getCustomer(customerId: string) {

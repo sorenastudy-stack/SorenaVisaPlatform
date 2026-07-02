@@ -5,6 +5,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
 import { StaffRolesModule } from '../roles/staff-roles.module';
 import { AssignmentsModule } from '../assignments/assignments.module';
+import { PaymentsModule } from '../../payments/payments.module';
 
 // PR-CONSULT-1 — Owner-approval module.
 //
@@ -13,7 +14,7 @@ import { AssignmentsModule } from '../assignments/assignments.module';
 // staff CRUD endpoints branch on role (OWNER executes inline,
 // SUPER_ADMIN enqueues, ADMIN 403).
 @Module({
-  imports:   [PrismaModule, CryptoModule, StaffRolesModule, AssignmentsModule],
+  imports:   [PrismaModule, CryptoModule, StaffRolesModule, AssignmentsModule, PaymentsModule],
   controllers: [OwnerApprovalController],
   providers: [OwnerApprovalService],
   exports:   [OwnerApprovalService],

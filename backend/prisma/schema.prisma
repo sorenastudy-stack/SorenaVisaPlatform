@@ -3735,18 +3735,25 @@ model StaffActiveStatus {
   @@map("staff_active_status")
 }
 
-// Placeholder for Stripe-issued refunds. Stripe isn't wired yet —
-// PR-CONSULT-1's ISSUE_REFUND executor creates a row with
-// status='PENDING_STRIPE_INTEGRATION'. A future PR replaces that
-// with a real Stripe refund call.
+// Stripe-issued card refunds (real money out). PR-CARD-REFUND wires
+// stripe.refunds.create against the original PaymentIntent for the
+// exceptional cash-out cases (legal / service-not-provided).
+//   status: PENDING (Stripe accepted, async) → COMPLETED (succeeded) /
+//   FAILED. The legacy PENDING_STRIPE_INTEGRATION value predates the
+//   wiring (dormant owner-approval executor) and is excluded from the
+//   "one live refund per payment" guard.
+//   paymentId references Payment.id; consultationId links the booking
+//   for the wallet-exclusivity check + staff UI.
 model Refund {
-  id          String   @id @default(cuid())
-  paymentId   String
-  amountCents Int
-  reason      String?
-  status      String   @default("PENDING_STRIPE_INTEGRATION")
-  createdAt   DateTime @default(now())
-  createdById String
+  id             String   @id @default(cuid())
+  paymentId      String
+  consultationId String?
+  amountCents    Int
+  reason         String?
+  status         String   @default("PENDING_STRIPE_INTEGRATION")
+  stripeRefundId String?  @unique
+  createdAt      DateTime @default(now())
+  createdById    String
 
   @@index([paymentId])
   @@map("refunds")

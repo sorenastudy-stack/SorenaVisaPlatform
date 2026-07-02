@@ -19,6 +19,9 @@ interface Row {
   staffName: string | null;
   clientName: string;
   startedOrPast: boolean;
+  // PR-CARD-REFUND — admin-only; true when this card-paid booking can be
+  // refunded to the client's card (server re-checks authoritatively).
+  cardRefundable: boolean;
 }
 
 const TYPE_LABEL: Record<string, string> = { FREE_15: 'Free 15-min', GAP_CLOSING: 'Gap-Closing', LIA: 'LIA', ADMISSION: 'Admission' };
@@ -43,6 +46,9 @@ export function StaffBookingsClient() {
   const [error, setError] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // PR-CARD-REFUND — rows whose refund request was just submitted this session
+  // (prevents an immediate duplicate request; cleared on reload).
+  const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {
     api.get<Row[]>('/staff/bookings')
@@ -59,6 +65,22 @@ export function StaffBookingsClient() {
       load();
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not update the booking.' });
+    } finally { setBusyId(null); }
+  }
+
+  // PR-CARD-REFUND (two-person control) — this does NOT refund directly. It
+  // sends a refund REQUEST that an OWNER must approve before any money moves.
+  async function requestRefund(id: string, amountNZD: number, clientName: string) {
+    if (!window.confirm(
+      `Request a NZD ${amountNZD} card refund for ${clientName}?\n\nThis sends a refund request for owner approval — no money moves until an owner approves it. Use this only for the exceptional cases (legal / service not provided).`,
+    )) return;
+    setBusyId(id); setMsg(null);
+    try {
+      await api.post(`/staff/consultations/${id}/refund-to-card`, {});
+      setRequestedIds((prev) => new Set(prev).add(id));
+      setMsg({ kind: 'ok', text: `Refund request sent for owner approval (NZD ${amountNZD} to ${clientName}).` });
+    } catch (e) {
+      setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not send the refund request.' });
     } finally { setBusyId(null); }
   }
 
@@ -93,11 +115,22 @@ export function StaffBookingsClient() {
                   <p className="mt-1 text-sm text-sorena-text/70">{fmt(b.scheduledAt, b.timezone)}{b.staffName ? ` · ${b.staffName}` : ''}</p>
                   <p className="text-xs text-sorena-text/50">NZD {b.amountNZD} · {b.paymentStatus}</p>
                 </div>
-                {active && (
+                {(active || b.cardRefundable) && (
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <button type="button" disabled={busy} onClick={() => mark(b.id, 'COMPLETED')} className="rounded-lg border border-sorena-navy/20 px-2.5 py-1 text-xs font-semibold text-sorena-navy hover:bg-sorena-navy/5 disabled:opacity-50">Completed</button>
-                    <button type="button" disabled={busy || !b.startedOrPast} title={b.startedOrPast ? '' : 'Available after the session start time'} onClick={() => mark(b.id, 'NO_SHOW')} className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40">No-show</button>
-                    <button type="button" disabled={busy} onClick={() => mark(b.id, 'CANCELLED')} className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                    {active && (
+                      <>
+                        <button type="button" disabled={busy} onClick={() => mark(b.id, 'COMPLETED')} className="rounded-lg border border-sorena-navy/20 px-2.5 py-1 text-xs font-semibold text-sorena-navy hover:bg-sorena-navy/5 disabled:opacity-50">Completed</button>
+                        <button type="button" disabled={busy || !b.startedOrPast} title={b.startedOrPast ? '' : 'Available after the session start time'} onClick={() => mark(b.id, 'NO_SHOW')} className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-40">No-show</button>
+                        <button type="button" disabled={busy} onClick={() => mark(b.id, 'CANCELLED')} className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold text-gray-500 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                      </>
+                    )}
+                    {b.cardRefundable && (
+                      requestedIds.has(b.id) ? (
+                        <span className="rounded-lg border border-sorena-gold/40 bg-sorena-gold/10 px-2.5 py-1 text-xs font-semibold text-[#8a6d10]">Refund requested — awaiting owner</span>
+                      ) : (
+                        <button type="button" disabled={busy} onClick={() => requestRefund(b.id, b.amountNZD, b.clientName)} title="Sends a refund request for owner approval" className="rounded-lg border border-red-300 bg-red-50/50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Refund to card</button>
+                      )
+                    )}
                   </div>
                 )}
               </div>

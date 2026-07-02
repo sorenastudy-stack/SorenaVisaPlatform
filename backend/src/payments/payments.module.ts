@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PaymentsController } from './payments.controller';
 import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
+import { RefundService } from './refund.service';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
@@ -17,7 +18,7 @@ import { BookingConfirmationModule } from '../booking/booking-confirmation.modul
   // BookingModule⇄PaymentsModule cycle.
   imports: [SubscriptionsModule, PrismaModule, MailModule, CasesModule, BookingConfirmationModule],
   controllers: [PaymentsController],
-  providers: [StripeService, PaymentsService, EventsService],
-  exports: [StripeService, PaymentsService],
+  providers: [StripeService, PaymentsService, EventsService, RefundService],
+  exports: [StripeService, PaymentsService, RefundService],
 })
 export class PaymentsModule {}

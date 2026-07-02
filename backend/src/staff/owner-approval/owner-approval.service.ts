@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { AssignmentsService } from '../assignments/assignments.service';
+import { RefundService } from '../../payments/refund.service';
 import * as bcrypt from 'bcrypt';
 
 // PR-CONSULT-1 — Owner-approval service.
@@ -50,6 +51,7 @@ export class OwnerApprovalService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly assignments: AssignmentsService,
+    private readonly refunds: RefundService,
   ) {}
 
   // ── Crypto helpers (base64 envelope — matches PR-DASH-3/4) ────────
@@ -129,6 +131,13 @@ export class OwnerApprovalService {
     if (!req) throw new NotFoundException('Approval request not found');
     if (req.status !== 'PENDING') {
       throw new BadRequestException(`Request is ${req.status}, not PENDING`);
+    }
+    // Two-person control: the approver must never be the requester. This is
+    // what guarantees no single person can move money (or run any sensitive
+    // action) alone — even an OWNER who filed the request needs a second
+    // OWNER to approve it.
+    if (req.requestedById === ownerId) {
+      throw new ForbiddenException('You cannot approve your own request — a second person must approve.');
     }
     if (req.expiresAt.getTime() < Date.now()) {
       await this.prisma.ownerApprovalRequest.update({
@@ -638,26 +647,21 @@ export class OwnerApprovalService {
     });
   }
 
+  // PR-CARD-REFUND — executed ONLY on OWNER approval (actorId = the approving
+  // OWNER). Delegates to RefundService, which re-runs every guard AT APPROVAL
+  // TIME (wallet-exclusivity, card-payment exists, full captured amount,
+  // idempotency) and issues the real Stripe refund. A throw here lands the
+  // request in EXECUTION_FAILED with no money moved.
   private async execIssueRefund(
     payload: Record<string, unknown>,
     actorId: string,
   ): Promise<void> {
-    const paymentId = String(payload.paymentId ?? '');
-    const amount = Number(payload.amountCents ?? payload.amount ?? 0);
-    if (!paymentId || !Number.isFinite(amount) || amount <= 0) {
-      throw new BadRequestException('paymentId and positive amountCents are required');
+    const consultationId = String(payload.consultationId ?? '');
+    if (!consultationId) {
+      throw new BadRequestException('consultationId is required to issue a refund');
     }
-    // Stripe isn't wired yet — record the intent so a future PR can
-    // pick it up.
-    await this.prisma.refund.create({
-      data: {
-        paymentId,
-        amountCents: Math.floor(amount),
-        reason:      payload.reason ? String(payload.reason) : null,
-        status:      'PENDING_STRIPE_INTEGRATION',
-        createdById: actorId,
-      },
-    });
+    const reason = payload.reason ? String(payload.reason) : undefined;
+    await this.refunds.refundBookingToCard(consultationId, actorId, reason);
   }
 
   private async execChangePlatformSetting(
