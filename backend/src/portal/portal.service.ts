@@ -34,6 +34,13 @@ export class PortalService {
       );
     }
 
+    // The case id is now ownership-verified (found via lead.contact.userId),
+    // so the follow-up reads scope by c.id safely.
+    const [nextSteps, timeline] = await Promise.all([
+      this.buildNextSteps(c.id),
+      this.buildTimeline(c),
+    ]);
+
     // Explicit field picking — DO NOT spread. Every key here is on the
     // documented client-safe whitelist. The relation includes are
     // mapped to {name} only — the staff user's id, role, email, etc.
@@ -50,6 +57,97 @@ export class PortalService {
       assignedFinance:      c.finance ? { name: c.finance.name } : null,
       inzApplicationNumber: c.inzApplicationNumber,
       inzSubmittedAt:       c.inzSubmittedAt,
+      nextSteps,
+      timeline,
     };
+  }
+
+  // ── "What you need to do next" — composed from existing signals, ────────
+  // client-safe. Outstanding application documents (MISSING / REJECTED),
+  // an unsigned engagement letter, and any due invoice. Internal fields
+  // (ApplicationDocument.notes, Invoice.notes, etc.) are never surfaced.
+  private async buildNextSteps(caseId: string) {
+    const [docs, contract, invoices] = await Promise.all([
+      this.prisma.applicationDocument.findMany({
+        where:  { application: { caseId }, status: { in: ['MISSING', 'REJECTED'] } },
+        select: { type: true, status: true },
+      }),
+      this.prisma.contract.findUnique({
+        where:  { caseId },
+        select: { status: true },
+      }),
+      this.prisma.invoice.findMany({
+        where:  { caseId, status: { in: ['SENT', 'OVERDUE'] } },
+        select: { invoiceNumber: true, amount: true, currency: true, dueDate: true },
+      }),
+    ]);
+
+    const steps: Array<{ kind: string; label: string; detail?: string | null }> = [];
+
+    for (const d of docs) {
+      steps.push({
+        kind: 'DOCUMENT',
+        label: d.status === 'REJECTED' ? `Re-upload your ${d.type}` : `Provide your ${d.type}`,
+        detail: d.status === 'REJECTED' ? 'Needs attention' : null,
+      });
+    }
+
+    // Awaiting the client's signature: DRAFT / SENT / VIEWED (SIGNED / DECLINED
+    // / EXPIRED need no client action here).
+    if (contract && ['DRAFT', 'SENT', 'VIEWED'].includes(contract.status)) {
+      steps.push({ kind: 'CONTRACT', label: 'Sign your engagement letter', detail: null });
+    }
+
+    for (const inv of invoices) {
+      steps.push({
+        kind: 'INVOICE',
+        label: `Pay invoice ${inv.invoiceNumber}`,
+        detail: `${inv.currency} ${inv.amount.toString()}${inv.dueDate ? ` · due ${inv.dueDate.toISOString().slice(0, 10)}` : ''}`,
+      });
+    }
+
+    return steps;
+  }
+
+  // ── Case timeline — milestone-based (NOT the internal audit log). Built ─
+  // from timestamps on the case's own records, so it's reliable and safe by
+  // construction: no staff actor identities, no risk/notes/routing, no
+  // decline reasons. Newest first.
+  private async buildTimeline(c: { id: string; createdAt: Date; inzSubmittedAt: Date | null }) {
+    const [contract, uploads, visa] = await Promise.all([
+      this.prisma.contract.findUnique({ where: { caseId: c.id }, select: { signedAt: true } }),
+      this.prisma.document.findMany({
+        where:  { caseId: c.id, status: 'UPLOADED' },
+        select: { originalName: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.visa.findUnique({ where: { caseId: c.id }, select: { outcome: true, issuedAt: true } }),
+    ]);
+
+    const events: Array<{ date: Date; kind: string; label: string }> = [
+      { date: c.createdAt, kind: 'CASE_OPENED', label: 'Case opened' },
+    ];
+    if (contract?.signedAt) {
+      events.push({ date: contract.signedAt, kind: 'CONTRACT_SIGNED', label: 'Engagement letter signed' });
+    }
+    for (const u of uploads) {
+      events.push({ date: u.createdAt, kind: 'DOCUMENT_UPLOADED', label: `You uploaded “${u.originalName}”` });
+    }
+    if (c.inzSubmittedAt) {
+      events.push({ date: c.inzSubmittedAt, kind: 'INZ_SUBMITTED', label: 'Application submitted to Immigration NZ' });
+    }
+    if (visa) {
+      events.push({
+        date: visa.issuedAt,
+        kind: 'VISA_DECISION',
+        // Outcome is client-relevant; the decline REASON stays internal.
+        label: visa.outcome === 'APPROVED' ? 'Visa approved' : 'Visa application decision recorded',
+      });
+    }
+
+    return events
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .map((e) => ({ date: e.date, kind: e.kind, label: e.label }));
   }
 }
