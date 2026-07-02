@@ -507,7 +507,76 @@ export class ContractsService {
       }
     }
 
+    // 7. PR-CLIENT-STAGE — auto-promote the client LEAD → STUDENT once BOTH
+    //    the client party (CLIENT or GUARDIAN) AND the LIA have signed, so
+    //    they can reach the /student/* Stage-2 pages. Director signature is
+    //    NOT required. Best-effort: never blocks the webhook response.
+    await this.maybePromoteClientToStudent(contract.id, contract.caseId);
+
     return updated;
+  }
+
+  // PR-CLIENT-STAGE — promote the case's client user LEAD → STUDENT when the
+  // client-party signer AND the LIA signer have both signed. Idempotent
+  // (already STUDENT / any other role → no-op), one-directional (only ever
+  // promotes LEAD; never demotes), and director-independent. Scoped strictly
+  // to the one user tied to this contract (contract → case → lead → contact →
+  // userId). Webhook-only path — not client-triggerable.
+  private async maybePromoteClientToStudent(contractId: string, caseId: string): Promise<void> {
+    try {
+      const signers = await this.prisma.contractSigner.findMany({
+        where:  { contractId, role: { in: ['CLIENT', 'GUARDIAN', 'LIA'] } },
+        select: { role: true, signedAt: true },
+      });
+      const clientSigned = signers.some(
+        (s) => (s.role === 'CLIENT' || s.role === 'GUARDIAN') && s.signedAt !== null,
+      );
+      const liaSigned = signers.some((s) => s.role === 'LIA' && s.signedAt !== null);
+      if (!clientSigned || !liaSigned) return; // director ignored; not yet both-signed
+
+      const c = await this.prisma.case.findUnique({
+        where:  { id: caseId },
+        select: { lead: { select: { contact: { select: { userId: true } } } } },
+      });
+      const userId = c?.lead?.contact?.userId ?? null;
+      if (!userId) return; // client has no user account to promote
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId }, select: { id: true, role: true },
+      });
+      // One-directional + idempotent: only the pre-contract LEAD is promoted;
+      // an already-STUDENT (duplicate webhook) or any staff role is a no-op.
+      if (!user || !this.shouldPromoteToStudent(user.role)) return;
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: userId }, data: { role: 'STUDENT' } });
+        await tx.auditLog.create({
+          data: {
+            userId,
+            action:            'CLIENT_PROMOTED_TO_STUDENT',
+            eventType:         'CLIENT_PROMOTED_TO_STUDENT',
+            entityType:        'USER',
+            entityId:          userId,
+            oldValue:          { role: 'LEAD' } as Prisma.InputJsonValue,
+            newValue:          { role: 'STUDENT', reason: 'contract client+LIA signed', caseId } as Prisma.InputJsonValue,
+            actorNameSnapshot: 'SYSTEM',
+            actorRoleSnapshot: 'SYSTEM',
+          },
+        });
+      });
+      this.logger.log(`Client ${userId} promoted LEAD → STUDENT on contract sign (case ${caseId})`);
+    } catch (err: any) {
+      // Never let a promotion failure break the webhook.
+      this.logger.error(
+        `Client LEAD→STUDENT promotion check failed for case ${caseId}: ${err?.message ?? err}`,
+      );
+    }
+  }
+
+  // Only the pre-contract client role is promotable. STUDENT (idempotent
+  // no-op on duplicate webhooks) and every staff role are left untouched.
+  private shouldPromoteToStudent(role: string | null | undefined): boolean {
+    return role === 'LEAD';
   }
 
   async getSigningUrl(caseId: string, returnUrl: string) {
