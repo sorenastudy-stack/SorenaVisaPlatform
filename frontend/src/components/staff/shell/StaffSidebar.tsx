@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
-  Settings, CreditCard, BadgeCheck, CalendarClock, CalendarOff,
+  Settings, CreditCard, BadgeCheck, CalendarClock, CalendarOff, FileText,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -54,10 +54,15 @@ const STAFF_PANEL_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 // PR-WALLET slice 2: consultation bookings (mark no-show/completed/cancel) —
 // roles that run consultations + admin tier.
 const BOOKINGS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT'] as const;
+// PR-STAFF-DOCS: "My case documents" — assignment-based. Slot-holding roles +
+// admin tier (admin sees all; others see only their currently-assigned cases).
+const DOCS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'] as const;
 
 const NAV: NavItem[] = [
   { label: 'staff.nav.overview',          href: '/staff',                    icon: <LayoutDashboard size={18} /> },
   { label: 'staff.nav.cases',             href: '/staff/cases',              icon: <Briefcase size={18} /> },
+  // PR-STAFF-DOCS: documents for the viewer's currently-assigned cases.
+  { label: 'Documents',                    href: '/staff/documents',          icon: <FileText size={18} />,    roleGate: DOCS_ROLES },
   // PR-CRM-LEADS: unified lead funnel. Positioned between Cases and
   // Marketing because the day-to-day staff workflow is "see cases →
   // see leads → tweak attribution".

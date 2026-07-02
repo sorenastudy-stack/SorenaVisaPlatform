@@ -182,6 +182,67 @@ export class DocumentsService {
     }));
   }
 
+  // ─── 3b. Cross-case "my documents" — assignment-based, least-access ────
+  // Lists UPLOADED documents for cases where the caller is CURRENTLY a slot
+  // holder (liaId / ownerId / supportId / financeId), resolved live from the
+  // Case columns — so a reassign-away instantly drops the case from this list.
+  // Admin tier sees all. This is the server-side gate for the list; per-doc
+  // download is separately gated by getDownloadUrl → checkCaseDocumentsAccess.
+  // Never leaks r2Key.
+  async listMyDocuments(actor: Actor) {
+    const isAdmin = !!actor.role && ['OWNER', 'SUPER_ADMIN', 'ADMIN'].includes(actor.role);
+    const where: Prisma.DocumentWhereInput = {
+      status: DocumentUploadStatus.UPLOADED,
+      ...(isAdmin
+        ? {}
+        : {
+            case: {
+              OR: [
+                { liaId: actor.id },
+                { ownerId: actor.id },
+                { supportId: actor.id },
+                { financeId: actor.id },
+              ],
+            },
+          }),
+    };
+
+    const rows = await this.prisma.document.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+      select: {
+        id: true,
+        caseId: true,
+        originalName: true,
+        mimeType: true,
+        sizeBytes: true,
+        category: true,
+        createdAt: true,
+        uploader: { select: { name: true } },
+        case: {
+          select: {
+            stage: true,
+            lead: { select: { contact: { select: { fullName: true, email: true } } } },
+          },
+        },
+      },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      caseId: r.caseId,
+      originalName: r.originalName,
+      mimeType: r.mimeType,
+      sizeBytes: r.sizeBytes,
+      category: r.category,
+      createdAt: r.createdAt,
+      uploaderName: r.uploader?.name ?? null,
+      stage: r.case?.stage ?? null,
+      clientName: r.case?.lead?.contact?.fullName || r.case?.lead?.contact?.email || 'Client',
+    }));
+  }
+
   // ─── 4. Issue a presigned download URL ─────────────────────────────────
   async getDownloadUrl(caseId: string, documentId: string, actor: Actor) {
     await this.assertAccess(
@@ -209,7 +270,10 @@ export class DocumentsService {
       throw new NotFoundException('Document not found on this case.');
     }
 
-    const url = await this.r2.getPresignedDownloadUrl(doc.r2Key, 300);
+    // 60s TTL (was 300): least-access for PII — narrows the window in which an
+    // already-issued URL keeps working after a reassign-away. The client opens
+    // the URL immediately, so 60s is ample.
+    const url = await this.r2.getPresignedDownloadUrl(doc.r2Key, 60);
 
     await this.prisma.auditLog.create({
       data: {
@@ -227,7 +291,7 @@ export class DocumentsService {
       },
     });
 
-    return { url, expiresInSeconds: 300 };
+    return { url, expiresInSeconds: 60 };
   }
 
   // ─── 5. Delete a document ──────────────────────────────────────────────
