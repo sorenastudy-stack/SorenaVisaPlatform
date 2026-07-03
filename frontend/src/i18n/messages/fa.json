@@ -1715,7 +1715,11 @@
       "documents": "Documents",
       "wallet": "Wallet",
       "messages": "Messages & support",
-      "back": "Back"
+      "back": "Back",
+      "dashboard": "Home",
+      "visa": "Visa application",
+      "apply": "Apply / Study",
+      "payments": "Payments"
     },
     "relogin": {
       "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",

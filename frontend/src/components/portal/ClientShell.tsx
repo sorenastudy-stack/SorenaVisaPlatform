@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   Briefcase, FileText, Wallet, MessageSquare,
+  LayoutDashboard, ClipboardList, CreditCard, Plane,
   Menu, X, LogOut, Globe, ArrowLeft,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
@@ -14,57 +15,95 @@ import { useLocaleStore } from '@/lib/stores/localeStore';
 import type { Session } from '@/lib/auth';
 import { BackToTop } from '@/components/common/BackToTop';
 
-// CLIENT-SHELL slice 1 — the unified client navigation shell for /portal/*.
+// CLIENT-SHELL — the unified client navigation shell for /portal/* AND /student/*.
 //
 // A navy left sidebar (always visible on lg+, an overlay drawer on mobile) plus
 // a white top header (hamburger, optional back, locale toggle, avatar, sign out).
 // Structurally mirrors the shared staff PortalLayout so the client experience
 // stops "jumping" between shells — but it is a SEPARATE component: it does not
-// touch PortalLayout, so staff/student shells cannot regress.
+// touch PortalLayout, so staff shells cannot regress.
 //
-// Nav visibility is UX only. "Messages & support" targets /student/tickets and
-// is shown only at STAGE_2; that route stays protected by middleware regardless.
+// Data-driven nav (slice 2): callers may pass their own `navItems`; when omitted
+// the built-in /portal config is used (so /portal is byte-for-byte unchanged).
+// Icons are passed as a string `iconName` (mapped below) so a SERVER component
+// (the student layout) can build nav data without shipping React elements.
+//
+// Nav visibility is UX only. Any link into a STUDENT-only route (e.g. the
+// /student/* items, or the /portal "Messages" → /student/tickets) stays
+// protected by middleware regardless of what the sidebar renders.
 //
 // RTL: the outer flex row and header clusters reverse automatically under
 // document dir="rtl" (set by LocaleProvider), so the sidebar moves to the right
 // with no extra classes. Only the absolutely-positioned mobile drawer needs
 // explicit ltr:/rtl: side variants.
 
-interface ClientNavItem {
-  labelKey: string;
-  href: string;
-  icon: React.ReactNode;
-  exact?: boolean;       // active-match: strict equality vs startsWith
-  stage2Only?: boolean;  // render only when portalStage === 'STAGE_2'
+// Icon registry — keeps React elements inside this client component so nav
+// data can cross the server→client boundary as plain strings.
+const ICONS = {
+  briefcase:     Briefcase,
+  fileText:      FileText,
+  wallet:        Wallet,
+  messageSquare: MessageSquare,
+  dashboard:     LayoutDashboard,
+  clipboard:     ClipboardList,
+  creditCard:    CreditCard,
+  visa:          Plane,
+} as const;
+
+type IconName = keyof typeof ICONS;
+
+// Guarantee an absolute nav target. A slash-less href (e.g. "student") would be
+// resolved by <Link> RELATIVE to the current path — from /student/case that
+// yields /student/student (a 404). Prefixing a leading slash makes every nav
+// destination path-independent. Real URLs (/, http(s):, #, mailto:, tel:) pass
+// through untouched.
+function toAbsoluteHref(href: string): string {
+  return /^(\/|https?:|#|mailto:|tel:)/.test(href) ? href : `/${href}`;
 }
 
-const NAV_ITEMS: ClientNavItem[] = [
-  { labelKey: 'portal.nav.myCase',    href: '/portal/case',           icon: <Briefcase size={18} />, exact: true },
-  { labelKey: 'portal.nav.documents', href: '/portal/case/documents', icon: <FileText size={18} /> },
-  { labelKey: 'portal.nav.wallet',    href: '/portal/wallet',         icon: <Wallet size={18} /> },
+export interface ClientNavItem {
+  labelKey:    string;
+  href:        string;
+  iconName:    IconName;
+  exact?:      boolean;   // active-match: strict equality vs startsWith
+  stage2Only?: boolean;   // (built-in /portal config) render only at STAGE_2
+  badgeCount?: number;    // >0 renders a red unread dot
+}
+
+// Built-in /portal config — used when the caller passes no `navItems`.
+// UNCHANGED from slice 1 (same items, order, exact flags, stage gating).
+const PORTAL_NAV_ITEMS: ClientNavItem[] = [
+  { labelKey: 'portal.nav.myCase',    href: '/portal/case',           iconName: 'briefcase', exact: true },
+  { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText' },
+  { labelKey: 'portal.nav.wallet',    href: '/portal/wallet',         iconName: 'wallet' },
   // STAGE_2 only — links into the STUDENT-only tickets area (middleware-gated).
-  { labelKey: 'portal.nav.messages',  href: '/student/tickets',       icon: <MessageSquare size={18} />, stage2Only: true },
+  { labelKey: 'portal.nav.messages',  href: '/student/tickets',       iconName: 'messageSquare', stage2Only: true },
 ];
 
 interface ClientShellProps {
-  children: React.ReactNode;
-  session: Session;
-  portalStage: 'STAGE_1' | 'STAGE_2';
-  backHref?: string;
+  children:     React.ReactNode;
+  session:      Session;
+  portalStage:  'STAGE_1' | 'STAGE_2';
+  navItems?:    ClientNavItem[];  // omitted → built-in /portal config
+  backHref?:    string;
   backLabelKey?: string;
 }
 
-export function ClientShell({ children, session, portalStage, backHref, backLabelKey }: ClientShellProps) {
+export function ClientShell({ children, session, portalStage, navItems, backHref, backLabelKey }: ClientShellProps) {
   const t = useTranslations();
   const pathname = usePathname();
   const router = useRouter();
   const { locale, toggleLocale } = useLocaleStore();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const navItems = NAV_ITEMS.filter((i) => !i.stage2Only || portalStage === 'STAGE_2');
+  const items = (navItems ?? PORTAL_NAV_ITEMS).filter(
+    (i) => !i.stage2Only || portalStage === 'STAGE_2',
+  );
 
-  const isActive = (item: ClientNavItem) =>
-    item.exact ? pathname === item.href : pathname.startsWith(item.href);
+  const isActive = (item: ClientNavItem) => {
+    const href = toAbsoluteHref(item.href);
+    return item.exact ? pathname === href : pathname.startsWith(href);
+  };
 
   const handleSignOut = async () => {
     try {
@@ -88,12 +127,14 @@ export function ClientShell({ children, session, portalStage, backHref, backLabe
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const active = isActive(item);
+          const Icon = ICONS[item.iconName];
+          const href = toAbsoluteHref(item.href);
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={href}
+              href={href}
               onClick={() => setDrawerOpen(false)}
               aria-current={active ? 'page' : undefined}
               className={cn(
@@ -103,8 +144,14 @@ export function ClientShell({ children, session, portalStage, backHref, backLabe
                   : 'text-white/70 hover:bg-white/10 hover:text-white',
               )}
             >
-              {item.icon}
+              <Icon size={18} />
               <span className="flex-1">{t(item.labelKey)}</span>
+              {item.badgeCount ? (
+                <span
+                  className="inline-block w-2 h-2 rounded-full bg-red-500"
+                  aria-label={`${item.badgeCount} unread`}
+                />
+              ) : null}
             </Link>
           );
         })}
@@ -150,7 +197,7 @@ export function ClientShell({ children, session, portalStage, backHref, backLabe
             </button>
             {backHref && (
               <Link
-                href={backHref}
+                href={toAbsoluteHref(backHref)}
                 className="inline-flex items-center gap-1.5 px-2 py-2 rounded-lg text-sm font-semibold text-sorena-navy hover:bg-gray-100 min-h-[44px]"
               >
                 <ArrowLeft size={16} className="rtl:rotate-180" />

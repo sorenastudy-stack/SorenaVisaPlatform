@@ -1714,7 +1714,11 @@
       "documents": "Documents",
       "wallet": "Wallet",
       "messages": "Messages & support",
-      "back": "Back"
+      "back": "Back",
+      "dashboard": "Home",
+      "visa": "Visa application",
+      "apply": "Apply / Study",
+      "payments": "Payments"
     },
     "relogin": {
       "title": "You're all set!",
