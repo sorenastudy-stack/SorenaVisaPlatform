@@ -223,7 +223,7 @@ export default async function StudentDashboard() {
         </Link>
 
         {/* Messages */}
-        <Link href="/student/messages" className="block">
+        <Link href="/student/case/messages" className="block">
           <Card className="hover:border-[#F3CE49]/50 transition-colors cursor-pointer h-full">
             <CardContent className="pt-5">
               <div className="flex items-start gap-3">
@@ -287,7 +287,7 @@ export default async function StudentDashboard() {
                     {latestMessage.sender?.name ?? 'Sorena Team'} · {timeAgo(latestMessage.createdAt)}
                   </span>
                   <Link
-                    href="/student/messages"
+                    href="/student/case/messages"
                     className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b8941f] transition-colors"
                   >
                     View all →
@@ -299,7 +299,7 @@ export default async function StudentDashboard() {
                 <MessageCircle size={28} className="text-[#4A4A4A]/20 mx-auto mb-2" />
                 <p className="text-sm text-[#4A4A4A]/60">No messages yet.</p>
                 <Link
-                  href="/student/messages"
+                  href="/student/case/messages"
                   className="mt-2 inline-block text-sm font-semibold text-[#b8941f] hover:underline"
                 >
                   Send us a message →

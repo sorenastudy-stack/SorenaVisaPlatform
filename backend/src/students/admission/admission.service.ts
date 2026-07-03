@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../../mail/mail.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
@@ -388,9 +389,22 @@ export class AdmissionService {
     });
     if (existing) return existing;
 
-    return this.prisma.admissionApplication.create({
-      data: { caseId, contactId, status: 'DRAFT', currentStep: 1 },
-    });
+    try {
+      return await this.prisma.admissionApplication.create({
+        data: { caseId, contactId, status: 'DRAFT', currentStep: 1 },
+      });
+    } catch (e) {
+      // Idempotent create, mirroring the visa section. NOTE: caseId is NOT
+      // @unique on AdmissionApplication today, so a concurrent double-create
+      // currently yields two DRAFT rows rather than a P2002 (the resolver
+      // tolerates this via findFirst). This catch future-proofs the method for
+      // when a unique constraint is added; on P2002 it returns the winner's row.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const row = await this.prisma.admissionApplication.findFirst({ where: { caseId } });
+        if (row) return row;
+      }
+      throw e;
+    }
   }
 
   private async assertDocumentOwnership(documentId: string, userId: string) {

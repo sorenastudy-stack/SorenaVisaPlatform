@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
@@ -626,9 +627,28 @@ export class VisaService {
       where: { applicationId: admission.id },
     });
     if (!visa) {
-      visa = await this.prisma.visaApplication.create({
-        data: { applicationId: admission.id, currentStep: 1 },
-      });
+      try {
+        visa = await this.prisma.visaApplication.create({
+          data: { applicationId: admission.id, currentStep: 1 },
+        });
+      } catch (e) {
+        // Idempotent create. A concurrent request (React StrictMode's dev
+        // double-mount POST, or a genuine client double-submit) can create
+        // the row first; applicationId is @unique, so the loser throws P2002.
+        // Re-fetch the winner's row instead of failing the request.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          visa = await this.prisma.visaApplication.findUnique({
+            where: { applicationId: admission.id },
+          });
+        } else {
+          throw e;
+        }
+      }
+    }
+    if (!visa) {
+      // P2002 fired but the row could not be re-read — surface a retryable error
+      // rather than returning a malformed payload.
+      throw new NotFoundException('Visa application could not be created. Please retry.');
     }
     return {
       visaApplication: this.decryptVisaRow(visa as Record<string, unknown>),
