@@ -1713,7 +1713,9 @@
       "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
       "myCase": "My Case",
       "documents": "Documents",
-      "wallet": "Wallet"
+      "wallet": "Wallet",
+      "messages": "Messages & support",
+      "back": "Back"
     },
     "relogin": {
       "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
