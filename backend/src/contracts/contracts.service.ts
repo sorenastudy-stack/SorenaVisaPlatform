@@ -533,6 +533,12 @@ export class ContractsService {
     //    NOT required. Best-effort: never blocks the webhook response.
     await this.maybePromoteClientToStudent(contract.id, contract.caseId);
 
+    // 8. Gap #4 — auto-create the fixed engagement invoice once the CLIENT
+    //    party has signed (NOT waiting for the LIA), so the client's Pay-now
+    //    (buildNextSteps SENT filter) surfaces with zero staff action.
+    //    Best-effort + idempotent: one ENG-<caseId> invoice per case, ever.
+    await this.maybeCreateEngagementInvoice(contract.id, contract.caseId);
+
     return updated;
   }
 
@@ -597,6 +603,107 @@ export class ContractsService {
   // no-op on duplicate webhooks) and every staff role are left untouched.
   private shouldPromoteToStudent(role: string | null | undefined): boolean {
     return role === 'LEAD';
+  }
+
+  // Gap #4 — auto-create the fixed engagement invoice when the client signs.
+  //
+  // Trigger: a CLIENT/GUARDIAN signer on this contract has signedAt set (the
+  // client has signed) — the LIA/director are NOT required. Fee is config-
+  // driven (ENGAGEMENT_FEE_CENTS / ENGAGEMENT_FEE_CURRENCY, defaults
+  // 20000 / USD) so the number is never hardcoded in the logic body.
+  //
+  // Idempotent — ONE engagement invoice per case, ever: the invoiceNumber is
+  // the deterministic `ENG-<caseId>` and `Invoice.invoiceNumber` is @unique.
+  // A fast-path existence check skips (and avoids a duplicate audit row); a
+  // concurrent re-delivery that races the create is caught via P2002 and
+  // treated as already-done. Best-effort: any failure is logged, never
+  // thrown — it must not break the webhook or block the promotion above.
+  private async maybeCreateEngagementInvoice(contractId: string, caseId: string): Promise<void> {
+    try {
+      // Trigger: has the client party signed? (not waiting for LIA)
+      const signers = await this.prisma.contractSigner.findMany({
+        where:  { contractId, role: { in: ['CLIENT', 'GUARDIAN'] } },
+        select: { signedAt: true },
+      });
+      if (!signers.some((s) => s.signedAt !== null)) return;
+
+      const invoiceNumber = `ENG-${caseId}`;
+
+      // Idempotency fast-path: already created on an earlier signed event.
+      const existing = await this.prisma.invoice.findUnique({
+        where:  { invoiceNumber },
+        select: { id: true },
+      });
+      if (existing) return;
+
+      // The invoice needs the case's client contact.
+      const c = await this.prisma.case.findUnique({
+        where:  { id: caseId },
+        select: { lead: { select: { contactId: true } } },
+      });
+      const contactId = c?.lead?.contactId ?? null;
+      if (!contactId) {
+        this.logger.warn(`Engagement invoice skipped for case ${caseId} — no client contact`);
+        return;
+      }
+
+      // Config-driven fee (never hardcode the amount in the body).
+      const amountCents = Number(process.env.ENGAGEMENT_FEE_CENTS ?? 20000);
+      const currency = (process.env.ENGAGEMENT_FEE_CURRENCY ?? 'USD').toUpperCase();
+      if (!Number.isFinite(amountCents) || amountCents <= 0) {
+        this.logger.error(
+          `Engagement invoice skipped for case ${caseId} — invalid ENGAGEMENT_FEE_CENTS "${process.env.ENGAGEMENT_FEE_CENTS}"`,
+        );
+        return;
+      }
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 14);
+
+      try {
+        const inv = await this.prisma.invoice.create({
+          data: {
+            caseId,
+            contactId,
+            invoiceNumber,
+            description: 'Engagement fee',
+            amount:      new Prisma.Decimal(amountCents).div(100),
+            currency,
+            status:      'SENT',
+            dueDate,
+          },
+          select: { id: true },
+        });
+        await this.prisma.auditLog.create({
+          data: {
+            userId:            null,
+            action:            'INVOICE_CREATED_ON_SIGN',
+            eventType:         'INVOICE_CREATED_ON_SIGN',
+            entityType:        'Invoice',
+            entityId:          inv.id,
+            newValue:          { caseId, amountCents, currency } as Prisma.InputJsonValue,
+            actorNameSnapshot: 'SYSTEM',
+            actorRoleSnapshot: 'SYSTEM',
+          },
+        });
+        this.logger.log(
+          `Engagement invoice ${invoiceNumber} created (SENT, ${currency} ${(amountCents / 100).toFixed(2)}) for case ${caseId} on client sign`,
+        );
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          // A concurrent signed-event re-delivery created it first — idempotent
+          // no-op, and no duplicate audit row.
+          this.logger.log(
+            `Engagement invoice ${invoiceNumber} already exists (P2002 race) — idempotent skip`,
+          );
+          return;
+        }
+        throw err;
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `Engagement invoice creation failed for case ${caseId}: ${err?.message ?? err}`,
+      );
+    }
   }
 
   async getSigningUrl(caseId: string, returnUrl: string) {
