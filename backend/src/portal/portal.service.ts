@@ -138,6 +138,77 @@ export class PortalService {
     };
   }
 
+  // GET /portal/me/payments — the caller's OWN payment history (read-only).
+  //
+  // Ownership: scoped by the same lead.contact.userId chain as getMyCase —
+  // the caller never supplies an id. Returns a client-safe shape (no raw FK
+  // ids, no verification/finance internals, no full Stripe metadata blob).
+  // Empty list (not 404) when the client has no payments yet.
+  async getMyPayments(userId: string) {
+    const payments = await this.prisma.payment.findMany({
+      where:   { lead: { contact: { userId } } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        createdAt: true,
+        amount: true,
+        currency: true,
+        status: true,
+        paymentType: true,
+        metadata: true,
+      },
+    });
+
+    // Resolve invoice numbers for payments that reference an invoice (the
+    // client pay-link path stamps metadata.invoiceId), so the label can read
+    // "Invoice TEST-INV-001" instead of a generic type. Batched — no N+1.
+    const invoiceIds = payments
+      .map((p) => this.readInvoiceId(p.metadata))
+      .filter((v): v is string => v !== null);
+    const invoiceMap = new Map<string, string>();
+    if (invoiceIds.length) {
+      const invoices = await this.prisma.invoice.findMany({
+        where:  { id: { in: invoiceIds } },
+        select: { id: true, invoiceNumber: true },
+      });
+      for (const inv of invoices) invoiceMap.set(inv.id, inv.invoiceNumber);
+    }
+
+    return payments.map((p) => {
+      const invoiceId = this.readInvoiceId(p.metadata);
+      const invoiceNumber = invoiceId ? invoiceMap.get(invoiceId) : undefined;
+      return {
+        id:          p.id,
+        createdAt:   p.createdAt.toISOString(),
+        amountCents: p.amount,
+        currency:    p.currency,
+        status:      p.status,
+        label:       this.paymentLabel(p.paymentType, invoiceNumber),
+        ...(invoiceNumber ? { invoiceNumber } : {}),
+      };
+    });
+  }
+
+  // Safely pull a string invoiceId out of the JSON metadata blob.
+  private readInvoiceId(metadata: unknown): string | null {
+    if (typeof metadata !== 'object' || metadata === null) return null;
+    const v = (metadata as Record<string, unknown>).invoiceId;
+    return typeof v === 'string' && v.length > 0 ? v : null;
+  }
+
+  // Human "what was this for" label. Invoice number wins when present;
+  // otherwise map the known paymentType discriminators, defaulting to a
+  // neutral "Payment" for manual/unknown/custom charges.
+  private paymentLabel(paymentType: string, invoiceNumber?: string): string {
+    if (invoiceNumber) return `Invoice ${invoiceNumber}`;
+    switch (paymentType) {
+      case 'ACCOUNT_OPENING': return 'Account opening payment';
+      case 'consultation':    return 'Consultation';
+      case 'subscription':    return 'Subscription';
+      default:                return 'Payment';
+    }
+  }
+
   // ── "What you need to do next" — composed from existing signals, ────────
   // client-safe. Outstanding application documents (MISSING / REJECTED),
   // an unsigned engagement letter, and any due invoice. Internal fields

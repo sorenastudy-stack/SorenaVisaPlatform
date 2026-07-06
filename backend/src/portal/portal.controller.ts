@@ -43,6 +43,13 @@ export class PortalController {
     return this.service.getPortalStage(userId);
   }
 
+  // GET /portal/me/payments → the caller's OWN payment history (read-only).
+  @Get('me/payments')
+  getMyPayments(@Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.service.getMyPayments(userId);
+  }
+
   // POST /portal/me/invoices/:invoiceId/pay-link → { url }
   // Generates a Stripe pay link for the caller's OWN unpaid invoice. The
   // amount is read server-side from the Invoice; the client only supplies
