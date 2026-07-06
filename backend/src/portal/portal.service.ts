@@ -1,5 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaymentsService } from '../payments/payments.service';
 
 // Client portal step 2 — service for the signed-in client's OWN case.
 //
@@ -15,7 +22,76 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PortalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly payments: PaymentsService,
+  ) {}
+
+  // POST /portal/me/invoices/:invoiceId/pay-link — generate a Stripe pay
+  // link for the caller's OWN unpaid invoice.
+  //
+  // Security: the amount is read server-side from the Invoice (the client
+  // never supplies it), and the invoice's case must belong to the caller
+  // via the lead.contact.userId chain. An invoice owned by another client
+  // returns the SAME 404 as not-found, so we never confirm its existence.
+  async createInvoicePayLink(
+    userId: string,
+    invoiceId: string,
+  ): Promise<{ url: string }> {
+    const invoice = await this.prisma.invoice.findUnique({
+      where:  { id: invoiceId },
+      select: { id: true, amount: true, currency: true, status: true, caseId: true },
+    });
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+    if (!invoice.caseId) {
+      throw new BadRequestException('Invoice not payable');
+    }
+
+    // Ownership: the invoice's case must belong to the caller. A mismatch
+    // returns 404 (not 403) so we never reveal the invoice exists.
+    const ownedCase = await this.prisma.case.findFirst({
+      where:  { id: invoice.caseId, lead: { contact: { userId } } },
+      select: { id: true },
+    });
+    if (!ownedCase) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    // Payable statuses only — mirrors buildNextSteps' SENT/OVERDUE filter.
+    if (!['SENT', 'OVERDUE'].includes(invoice.status)) {
+      throw new ConflictException('Invoice not payable');
+    }
+
+    // Amount is authoritative from the Invoice; convert Decimal → integer
+    // cents the same way the staff custom-link path does.
+    const cents = Math.round(invoice.amount.toNumber() * 100);
+    if (cents <= 0) {
+      throw new BadRequestException('Invoice amount is not payable');
+    }
+
+    const { url } = await this.payments.createCustomLinkForCase(
+      invoice.caseId,
+      cents,
+      invoice.currency.toLowerCase(),
+      invoiceId, // stamped into Stripe metadata for later webhook reconciliation
+    );
+
+    // Audit — the client generated a pay link for their own invoice.
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action:     'INVOICE_PAY_LINK_CREATED',
+        eventType:  'INVOICE_PAY_LINK_CREATED',
+        entityType: 'Invoice',
+        entityId:   invoiceId,
+        newValue:   { caseId: invoice.caseId, cents } as Prisma.InputJsonValue,
+      },
+    });
+
+    return { url };
+  }
 
   async getMyCase(userId: string) {
     const c = await this.prisma.case.findFirst({
@@ -78,11 +154,11 @@ export class PortalService {
       }),
       this.prisma.invoice.findMany({
         where:  { caseId, status: { in: ['SENT', 'OVERDUE'] } },
-        select: { invoiceNumber: true, amount: true, currency: true, dueDate: true },
+        select: { id: true, invoiceNumber: true, amount: true, currency: true, dueDate: true },
       }),
     ]);
 
-    const steps: Array<{ kind: string; label: string; detail?: string | null }> = [];
+    const steps: Array<{ kind: string; label: string; detail?: string | null; invoiceId?: string }> = [];
 
     for (const d of docs) {
       steps.push({
@@ -105,6 +181,7 @@ export class PortalService {
         kind: 'INVOICE',
         label: `Pay invoice ${inv.invoiceNumber}`,
         detail: `${inv.currency} ${inv.amount.toString()}${inv.dueDate ? ` · due ${inv.dueDate.toISOString().slice(0, 10)}` : ''}`,
+        invoiceId: inv.id,
       });
     }
 

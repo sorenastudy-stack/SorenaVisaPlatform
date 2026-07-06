@@ -220,6 +220,7 @@ export class StripeService {
     caseId:      string,
     amountCents: number,
     currency:    string = 'nzd',
+    invoiceId?:  string,
   ) {
     this.assertConfigured();
 
@@ -234,6 +235,14 @@ export class StripeService {
       paymentType: 'consultation',
       type:        'CUSTOM_AMOUNT',
     };
+    // When the link is generated for a specific invoice (client pay-link
+    // path), stamp invoiceId so a later webhook can reconcile the exact
+    // Invoice. Absent on the staff custom-amount path (invoiceId undefined).
+    // The same `metadata` object is passed to BOTH the top-level metadata
+    // and payment_intent_data.metadata below, so this covers both.
+    if (invoiceId) {
+      metadata.invoiceId = invoiceId;
+    }
 
     const paymentLink = await this.stripe.paymentLinks.create({
       line_items: [{

@@ -1,12 +1,15 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { PortalController } from './portal.controller';
 import { PortalService } from './portal.service';
 
 // Client portal step 2 — client-only surface.
-// Only one route today: GET /portal/me/case.
+// PaymentsModule is imported for its exported PaymentsService, used by the
+// invoice pay-link route. No cycle: nothing in the payments graph imports
+// PortalModule.
 @Module({
-  imports:     [PrismaModule],
+  imports:     [PrismaModule, PaymentsModule],
   controllers: [PortalController],
   providers:   [PortalService],
 })

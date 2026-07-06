@@ -107,6 +107,7 @@ export class PaymentsService {
     caseId:      string,
     amountCents: number,
     currency:    string = 'nzd',
+    invoiceId?:  string,
   ) {
     const c = await this.prisma.case.findUnique({
       where:  { id: caseId },
@@ -121,6 +122,7 @@ export class PaymentsService {
       caseId,
       amountCents,
       currency,
+      invoiceId,
     );
 
     return {

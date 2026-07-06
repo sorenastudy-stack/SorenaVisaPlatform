@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth';
 import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
 import { ReloginBanner } from '@/components/portal/ReloginBanner';
 import { AssessmentPdfButton } from '@/components/portal/AssessmentPdfButton';
+import { PayInvoiceButton } from '@/components/portal/PayInvoiceButton';
 import { formatDate as fmtDate } from '@/lib/date';
 
 // Client portal step 3 — the client's case overview.
@@ -15,7 +16,7 @@ import { formatDate as fmtDate } from '@/lib/date';
 // to a friendly human message and render filled slots only.
 
 interface AssignedPerson { name: string }
-interface NextStep { kind: string; label: string; detail: string | null }
+interface NextStep { kind: string; label: string; detail: string | null; invoiceId?: string | null }
 interface TimelineEvent { date: string; kind: string; label: string }
 
 interface MyCase {
@@ -205,6 +206,9 @@ export default async function MyCasePage() {
                   <Link href="/portal/case/documents" className="shrink-0 text-xs font-semibold text-[#1e3a5f] underline underline-offset-4 hover:text-[#b8941f]">
                     Open
                   </Link>
+                )}
+                {s.kind === 'INVOICE' && s.invoiceId && (
+                  <PayInvoiceButton invoiceId={s.invoiceId} />
                 )}
               </li>
             ))}

@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -41,5 +41,16 @@ export class PortalController {
   getPortalStage(@Req() req: any) {
     const userId = req.user?.userId ?? req.user?.id;
     return this.service.getPortalStage(userId);
+  }
+
+  // POST /portal/me/invoices/:invoiceId/pay-link → { url }
+  // Generates a Stripe pay link for the caller's OWN unpaid invoice. The
+  // amount is read server-side from the Invoice; the client only supplies
+  // invoiceId, which the service re-verifies belongs to the caller's own
+  // case (never trusting a client-supplied case id).
+  @Post('me/invoices/:invoiceId/pay-link')
+  payInvoice(@Param('invoiceId') invoiceId: string, @Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.service.createInvoicePayLink(userId, invoiceId);
   }
 }

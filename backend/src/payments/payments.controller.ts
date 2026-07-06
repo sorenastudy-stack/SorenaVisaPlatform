@@ -334,6 +334,53 @@ export class PaymentsController {
       throw err;
     }
 
+    // ── Invoice reconciliation ─────────────────────────────────────────
+    // If this payment settled a specific invoice (the client pay-link path
+    // stamps invoiceId into the PaymentIntent metadata), flip that invoice
+    // to PAID. Idempotent + best-effort: only SENT/OVERDUE invoices are
+    // touched, so a webhook replay or an already-PAID/CANCELLED/REFUNDED/
+    // DRAFT/PARTIAL invoice is a no-op; any failure here is logged but never
+    // breaks the webhook (the Payment row above is the money source-of-truth).
+    // The staff custom-link path and older links carry no invoiceId → skipped.
+    const reconcileInvoiceId = paymentIntent.metadata?.invoiceId as string | undefined;
+    if (reconcileInvoiceId) {
+      try {
+        const invoice = await this.prisma.invoice.findUnique({
+          where:  { id: reconcileInvoiceId },
+          select: { id: true, status: true, caseId: true },
+        });
+        if (invoice && ['SENT', 'OVERDUE'].includes(invoice.status)) {
+          await this.prisma.invoice.update({
+            where: { id: reconcileInvoiceId },
+            data:  { status: 'PAID', paidAt: new Date() },
+          });
+          await this.prisma.auditLog.create({
+            data: {
+              userId:            null,
+              action:            'INVOICE_RECONCILED_PAID',
+              eventType:         'INVOICE_RECONCILED_PAID',
+              entityType:        'Invoice',
+              entityId:          reconcileInvoiceId,
+              newValue:          {
+                status:                'PAID',
+                stripePaymentIntentId: paymentIntent.id,
+                caseId:                invoice.caseId,
+              } as Prisma.InputJsonValue,
+              actorNameSnapshot: 'SYSTEM',
+              actorRoleSnapshot: 'SYSTEM',
+            },
+          });
+          this.logger.log(
+            `Invoice ${reconcileInvoiceId} reconciled → PAID from paymentIntent ${paymentIntent.id}`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Invoice reconciliation failed for invoice ${reconcileInvoiceId} (paymentIntent ${paymentIntent.id}): ${err?.message ?? err}`,
+        );
+      }
+    }
+
     // Check if it's a consultation or subscription payment
     if (paymentIntent.metadata?.paymentType === 'consultation') {
       // Mark consultation as paid - would need additional logic here

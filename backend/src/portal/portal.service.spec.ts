@@ -21,7 +21,9 @@ import { PortalService } from './portal.service';
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 function makeService(findFirst: jest.Mock): PortalService {
-  return new PortalService({ case: { findFirst } } as any);
+  // Second arg is PaymentsService — unused by the getMyCase tests below,
+  // so an empty stub satisfies the constructor after the pay-link DI change.
+  return new PortalService({ case: { findFirst } } as any, {} as any);
 }
 
 function makeCtx(role: string): any {
