@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -20,8 +20,15 @@ export class ContractsController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA')
-  create(@Body() dto: CreateContractDto) {
-    return this.contractsService.createContract(dto);
+  create(@Body() dto: CreateContractDto, @Req() req: any) {
+    // JwtStrategy.validate returns { userId, email, role } — there is no
+    // `req.user.id` and no guaranteed `name`. Build the actor object the
+    // same way cases.controller.ts does so the send can be attributed.
+    return this.contractsService.createContract(dto, {
+      id:   req.user?.userId ?? req.user?.id,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    });
   }
 
   @Get(':caseId')

@@ -107,7 +107,10 @@ export class ContractsService {
   // payments.controller.ts) continue to fire; case.liaId is set here
   // BEFORE either trigger runs, so both short-circuit through the
   // assignLiaToCase 'already_assigned' branch and stay idempotent.
-  async createContract(dto: CreateContractDto) {
+  async createContract(
+    dto: CreateContractDto,
+    actor: { id: string; name: string | null; role: string | null },
+  ) {
     // 1. Validate case + no existing contract + client identity present.
     const caseRecord = await this.prisma.case.findUnique({
       where: { id: dto.caseId },
@@ -302,6 +305,23 @@ export class ContractsService {
         ],
       });
       return c;
+    });
+
+    // 8. Audit the send, attributed to the acting staff user (who / when /
+    //    which case). Mirrors the inline auditLog.create pattern used by the
+    //    LEAD→STUDENT promotion below. Written after the contract + signers
+    //    are persisted so entityId references a real row.
+    await this.prisma.auditLog.create({
+      data: {
+        userId:            actor.id,
+        action:            'CONTRACT_SENT',
+        eventType:         'CONTRACT_SENT',
+        entityType:        'Contract',
+        entityId:          contract.id,
+        newValue:          { caseId: dto.caseId, status: 'SENT' } as Prisma.InputJsonValue,
+        actorNameSnapshot: actor.name,
+        actorRoleSnapshot: actor.role,
+      },
     });
 
     this.logger.log(

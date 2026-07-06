@@ -507,6 +507,8 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
       return entry.entityType
         ? `Saved ${entry.entityType}`
         : 'Visa step saved';
+    case 'CONTRACT_SENT':
+      return 'Contract sent to client';
     default:
       return humaniseEventType(event);
   }
