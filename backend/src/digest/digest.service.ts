@@ -94,7 +94,7 @@ const TICKET_TERMINAL_STATUSES = new Set(['RESOLVED', 'CLOSED']);
 
 export interface SendClientDigestResult {
   sent:      boolean;
-  reason?:   'case-not-found' | 'no-email';
+  reason?:   'case-not-found' | 'no-email' | 'send-failed';
   itemCount: number;
 }
 
@@ -124,10 +124,13 @@ export class DigestService {
    *   4. Hand off to NotificationsService.sendWeeklyDigest.
    *
    * Returns a small result object so the future cron can log per-case
-   * outcomes. NEVER throws on missing case / missing email — those
-   * are normal sweep-time conditions, not errors. The underlying
-   * sendEmail itself swallows SMTP failures (log + return), so a
-   * down SMTP relay can't crash the cron mid-sweep either.
+   * outcomes. NEVER throws — missing case / missing email are normal
+   * sweep-time conditions (reason 'case-not-found' / 'no-email'), and a
+   * send failure is caught and reported as reason 'send-failed' rather
+   * than propagated, so a down SMTP/Resend relay can't crash the cron
+   * mid-sweep. MailService.sendWeeklyDigest DOES propagate its send error
+   * (unlike the fire-and-forget helpers) precisely so we can report it
+   * truthfully here instead of a misleading sent:true.
    */
   async sendClientDigest(
     caseId: string,
@@ -168,7 +171,18 @@ export class DigestService {
     const portalUrl = `${process.env.APP_URL ?? 'https://app.sorenavisa.com'}/portal/case`;
     const { subject, html } = buildDigestEmail(fullName, items, portalUrl);
 
-    await this.mail.sendWeeklyDigest(email, subject, html);
+    try {
+      await this.mail.sendWeeklyDigest(email, subject, html);
+    } catch (err) {
+      // MailService.sendWeeklyDigest propagates send failures. Report the
+      // failure truthfully (sent:false / 'send-failed') instead of a
+      // misleading sent:true on a connection timeout — but do NOT rethrow,
+      // so a down relay can't crash the sweep mid-run.
+      this.logger.error(
+        `Digest send failed for case ${caseId}: ${err instanceof Error ? err.message : err}`,
+      );
+      return { sent: false, reason: 'send-failed', itemCount: items.length };
+    }
     return { sent: true, itemCount: items.length };
   }
 

@@ -830,20 +830,28 @@ describe('DigestService.sendClientDigest', () => {
     expect(html).not.toMatch(/Hi (null|undefined)/i);
   });
 
-  it('does NOT swallow notifications.sendWeeklyDigest throws (caller can log it)', async () => {
+  it('SMTP failure → { sent: false, reason: "send-failed", itemCount } — does NOT throw out of sendClientDigest', async () => {
+    // Post-fix contract: NotificationsService.sendWeeklyDigest now
+    // propagates SMTP/connection errors (it used to swallow them via
+    // the private sendEmail's catch). sendClientDigest catches that
+    // failure and reports it truthfully in the result, so the cron
+    // and the manual trigger both see sent:false instead of a
+    // misleading sent:true on a connection timeout.
     const { service, notifications } = makeService({
       sendCaseRow: { lead: { contact: { email: 'client@example.com', fullName: 'Test' } } },
       caseRow:     CASE_FIXTURE,
-      audit:       [],
+      audit: [{
+        eventType: 'INZ_SUBMITTED',
+        entityType: 'CASE',
+        entityId: CASE_ID,
+        newValue: { inzApplicationNumber: 'INZ-1' },
+        actorRoleSnapshot: 'LIA',
+        createdAt: INSIDE_1,
+      }],
     });
-    notifications.sendWeeklyDigest.mockRejectedValueOnce(new Error('SMTP down'));
-    await expect(service.sendClientDigest(CASE_ID, SINCE, UNTIL)).rejects.toThrow('SMTP down');
-    // Note: the real NotificationsService.sendEmail wraps nodemailer
-    // in its own try/catch and never throws — so this rejection only
-    // surfaces if a future change makes it throw, OR if the SMTP
-    // config is missing entirely (where the underlying transport
-    // returns silently anyway). The test pins the contract: if the
-    // injected dependency throws, sendClientDigest does not eat it.
+    notifications.sendWeeklyDigest.mockRejectedValueOnce(new Error('Connection timeout'));
+    const result = await service.sendClientDigest(CASE_ID, SINCE, UNTIL);
+    expect(result).toEqual({ sent: false, reason: 'send-failed', itemCount: 1 });
   });
 });
 

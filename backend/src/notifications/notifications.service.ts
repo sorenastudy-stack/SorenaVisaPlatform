@@ -416,13 +416,38 @@ export class NotificationsService {
     await this.sendEmail(email, subject, html);
   }
 
-  // Phase 8 — weekly client digest. Thin pass-through: the digest
-  // module owns the HTML composition (template + per-event sentences)
-  // and hands the finished payload here. Routing through the same
-  // private `sendEmail` keeps the SMTP-config-missing fallback and
-  // the per-send success/failure log on the digest path too.
+  // Phase 8 — weekly client digest.
+  //
+  // CRITICAL: unlike the other notification methods on this service,
+  // this one PROPAGATES nodemailer failures to the caller instead of
+  // catching+logging+swallowing like the private `sendEmail` does.
+  // Reason: the digest layer's `sendClientDigest` returns a {sent}
+  // flag the cron will log per-case, and silently reporting sent=true
+  // on a connection timeout (which is exactly what was happening
+  // pre-fix on the Railway → SMTP path) hides real outages.
+  //
+  // The success log line includes nodemailer's messageId + raw
+  // response so future deliverability investigations can correlate
+  // the success line with the SMTP server's queue id.
   async sendWeeklyDigest(email: string, subject: string, html: string): Promise<void> {
-    await this.sendEmail(email, subject, html);
+    if (!this.transporter) {
+      this.logger.warn(`Digest email not sent to ${email}: SMTP configuration missing`);
+      throw new Error('SMTP is not configured');
+    }
+    try {
+      const info = await this.transporter.sendMail({
+        from:    process.env.FROM_EMAIL,
+        to:      email,
+        subject,
+        html,
+      });
+      this.logger.log(
+        `Digest email sent to ${email}: messageId=${info.messageId ?? '(none)'} response=${info.response ?? '(none)'}`,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to send digest email to ${email}`, error);
+      throw error;
+    }
   }
 
   private async sendEmail(to: string, subject: string, html: string): Promise<void> {
