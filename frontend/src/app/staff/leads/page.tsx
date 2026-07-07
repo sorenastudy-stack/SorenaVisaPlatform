@@ -49,8 +49,6 @@ interface LeadListRow {
   assignedToName: string | null;
   attributedAgentName: string | null;
   trackingLinkChannel: string | null;
-  hasWixPayments: boolean;
-  totalPaidNzd: number;
 }
 
 interface ListResponse {
@@ -372,7 +370,6 @@ export default function StaffLeadsPage() {
                       <th className="py-2 pr-3 font-semibold">Status</th>
                       <th className="py-2 pr-3 font-semibold">Country</th>
                       <th className="py-2 pr-3 font-semibold">Assignee</th>
-                      <th className="py-2 pr-3 font-semibold">Paid (NZD)</th>
                       <th className="py-2 pr-3 font-semibold">Created</th>
                       <th className="py-2 font-semibold w-0"></th>
                     </tr>
@@ -411,11 +408,6 @@ export default function StaffLeadsPage() {
                         <td className="py-2.5 pr-3 text-[#4A4A4A]">{displayCountry(r.country) ?? '—'}</td>
                         <td className="py-2.5 pr-3 text-[#4A4A4A]">
                           {r.assignedToName ?? <span className="italic text-[#4A4A4A]/60">Unassigned</span>}
-                        </td>
-                        <td className="py-2.5 pr-3 font-mono text-[#1E3A5F]">
-                          {r.totalPaidNzd > 0
-                            ? r.totalPaidNzd.toFixed(2)
-                            : <span className="text-[#4A4A4A]/40">—</span>}
                         </td>
                         <td className="py-2.5 pr-3 text-xs text-[#4A4A4A]/70">
                           {relativeTime(r.createdAt)}
@@ -460,7 +452,6 @@ export default function StaffLeadsPage() {
                       </div>
                       <div className="mt-1.5 text-xs text-[#4A4A4A]/60">
                         {relativeTime(r.createdAt)}
-                        {r.totalPaidNzd > 0 && <> · NZD {r.totalPaidNzd.toFixed(2)} paid</>}
                       </div>
                     </Link>
                   </li>
