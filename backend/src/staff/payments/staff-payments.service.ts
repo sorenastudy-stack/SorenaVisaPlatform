@@ -223,41 +223,52 @@ export class StaffPaymentsService {
   }
 
   // ── Finance portal: dashboard + finalised ledger ─────────────────────────
-  // Both read-only, sourced from PAYMENT_CONFIRMED_BY_FINANCE audit rows joined
-  // to the invoice's CURRENT state — so an invoice later reset to SENT (e.g. in
-  // testing) naturally drops out (it's no longer PAID). FINANCE/OWNER gated at
-  // the controller.
+  // Both read-only. The finalised ledger shows EVERY confirmed engagement
+  // payment regardless of method — Stripe card (auto-reconciled by the webhook)
+  // AND bank/partner-exchange (accountant-confirmed) — each labeled by method.
+  // Sourced from the CURRENT invoice state (status PAID), so an invoice later
+  // reset to SENT naturally drops out. FINANCE/OWNER gated at the controller.
+  // READ-ONLY: never writes, never touches the confirm flow or reconciliation.
 
-  // The set of invoices confirmed PAID by an accountant and still PAID now.
-  // Returns the latest confirm audit per invoice, joined to client/case data.
+  // Every PAID engagement invoice (ENG-%), with its method derived:
+  //   • receiptMethod 'bank' / 'exchange' → accountant-confirmed (client uploaded
+  //     a receipt); confirmed-by = the finance user from the confirm audit.
+  //   • receiptMethod null → Stripe card (auto-reconciled; no receipt ever
+  //     uploaded); confirmed-by = 'Stripe (automatic)'.
+  // Confirmed date = paidAt (set by both the reconciliation and the finance
+  // confirm), falling back to the finance-confirm audit timestamp.
   private async confirmedRows() {
-    const audits = await this.prisma.auditLog.findMany({
-      where: { eventType: 'PAYMENT_CONFIRMED_BY_FINANCE' },
-      orderBy: { createdAt: 'desc' },
-      select: { entityId: true, createdAt: true, actorNameSnapshot: true, newValue: true },
-    });
-
-    // Latest audit per invoice (list is already newest-first).
-    const latest = new Map<string, (typeof audits)[number]>();
-    for (const a of audits) {
-      if (a.entityId && !latest.has(a.entityId)) latest.set(a.entityId, a);
-    }
-
-    const ids = [...latest.keys()];
-    if (ids.length === 0) return [];
-
     const invoices = await this.prisma.invoice.findMany({
-      where: { id: { in: ids }, status: 'PAID' },
+      where: { status: 'PAID', invoiceNumber: { startsWith: 'ENG-' } },
       select: {
         id: true, invoiceNumber: true, amount: true, currency: true,
         caseId: true, receiptMethod: true, paidAt: true,
         contact: { select: { fullName: true } },
       },
     });
+    if (invoices.length === 0) return [];
+
+    // Finance-confirm audits give the human confirmer's name for the
+    // bank/exchange rows. Keyed by invoice id, newest audit wins.
+    const financeAudits = await this.prisma.auditLog.findMany({
+      where: { eventType: 'PAYMENT_CONFIRMED_BY_FINANCE', entityId: { in: invoices.map((i) => i.id) } },
+      orderBy: { createdAt: 'desc' },
+      select: { entityId: true, actorNameSnapshot: true, createdAt: true },
+    });
+    const auditByInvoice = new Map<string, { actorNameSnapshot: string | null; createdAt: Date }>();
+    for (const a of financeAudits) {
+      if (a.entityId && !auditByInvoice.has(a.entityId)) {
+        auditByInvoice.set(a.entityId, { actorNameSnapshot: a.actorNameSnapshot, createdAt: a.createdAt });
+      }
+    }
 
     return invoices.map((inv) => {
-      const a = latest.get(inv.id)!;
-      const method = (a.newValue as any)?.method ?? inv.receiptMethod ?? null;
+      const rm = inv.receiptMethod;
+      const isReceipt = rm === 'bank' || rm === 'exchange';
+      const method: 'bank' | 'exchange' | 'card' = isReceipt ? (rm as 'bank' | 'exchange') : 'card';
+      const audit = auditByInvoice.get(inv.id);
+      const confirmedBy = isReceipt ? (audit?.actorNameSnapshot ?? 'Finance') : 'Stripe (automatic)';
+      const confirmedAt = inv.paidAt ?? audit?.createdAt ?? null;
       return {
         invoiceId: inv.id,
         invoiceNumber: inv.invoiceNumber,
@@ -267,11 +278,11 @@ export class StaffPaymentsService {
         currency: inv.currency,
         amountCents: Math.round(Number(inv.amount) * 100),
         amountLabel: `${inv.currency.toUpperCase()} ${inv.amount.toString()}`,
-        method, // 'bank' | 'exchange'
-        confirmedAt: a.createdAt,
-        confirmedBy: a.actorNameSnapshot ?? 'Finance',
+        method, // 'bank' | 'exchange' | 'card'
+        confirmedAt,
+        confirmedBy,
       };
-    }).sort((x, y) => y.confirmedAt.getTime() - x.confirmedAt.getTime());
+    }).sort((x, y) => (y.confirmedAt?.getTime() ?? 0) - (x.confirmedAt?.getTime() ?? 0));
   }
 
   // GET /staff/finance/dashboard — read-only overview.
@@ -292,7 +303,7 @@ export class StaffPaymentsService {
       }));
     };
 
-    const thisWeek = rows.filter((r) => r.confirmedAt >= weekAgo);
+    const thisWeek = rows.filter((r) => r.confirmedAt !== null && r.confirmedAt >= weekAgo);
     return {
       pendingCount,
       confirmedThisWeek: { count: thisWeek.length, totals: totalsByCurrency(thisWeek) },

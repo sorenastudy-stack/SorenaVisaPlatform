@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Landmark, Globe, Loader2, FileText } from 'lucide-react';
+import { CheckCircle2, Landmark, Globe, Loader2, FileText, CreditCard } from 'lucide-react';
 import { api } from '@/lib/api';
 
 // Finance portal — finalised (confirmed) payments ledger. Read-only list of
-// engagement payments an accountant confirmed PAID. Data from
-// GET /staff/finance/finalised (FINANCE/OWNER-gated server-side).
+// EVERY confirmed engagement payment regardless of method — Stripe card
+// (auto-reconciled) AND bank / partner-exchange (accountant-confirmed) — each
+// labeled by method. Data from GET /staff/finance/finalised (FINANCE/OWNER-gated).
 
 interface Row {
   invoiceId:     string;
@@ -14,12 +15,17 @@ interface Row {
   clientName:    string;
   caseId:        string | null;
   amountLabel:   string;
-  method:        string | null; // 'bank' | 'exchange'
+  method:        string | null; // 'bank' | 'exchange' | 'card'
   confirmedAt:   string | null;
   confirmedBy:   string | null;
 }
 
-const METHOD_LABEL: Record<string, string> = { bank: 'Bank transfer', exchange: 'Partner exchange' };
+const METHOD_LABEL: Record<string, string> = {
+  bank: 'Bank transfer',
+  exchange: 'Partner exchange',
+  card: 'Card',
+};
+const METHOD_ICON = { bank: Landmark, exchange: Globe, card: CreditCard } as const;
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -43,7 +49,7 @@ export function FinanceFinalisedClient() {
         <h1 className="text-2xl font-bold text-sorena-navy">Finalised payments</h1>
       </div>
       <p className="mb-6 text-sm text-sorena-text/70">
-        Engagement payments you’ve confirmed as received. Read-only.
+        Every confirmed engagement payment — card, bank transfer, and partner exchange. Read-only.
       </p>
 
       {error && <p className="text-sm text-red-600">Couldn’t load payments. Please refresh.</p>}
@@ -61,7 +67,7 @@ export function FinanceFinalisedClient() {
 
       <div className="space-y-2">
         {rows?.map((r) => {
-          const MethodIcon = r.method === 'exchange' ? Globe : Landmark;
+          const MethodIcon = METHOD_ICON[r.method as keyof typeof METHOD_ICON] ?? Landmark;
           return (
             <div key={r.invoiceId} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
