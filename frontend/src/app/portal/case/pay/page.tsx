@@ -73,6 +73,13 @@ export default async function PayPage({
     );
   }
 
+  // Display-only: hide the raw ENG-<caseId> id from clients. The engagement
+  // invoice reads as a friendly "Engagement fee"; any other invoice keeps its
+  // number as before. Nothing about the invoice, amount, or pay-link changes.
+  const invoiceLabel = opts.invoiceNumber.startsWith('ENG-')
+    ? 'Engagement fee'
+    : `Engagement invoice ${opts.invoiceNumber}`;
+
   // Piece #3 — the invoice is PAID (accountant confirmed a bank/exchange
   // receipt, or Stripe reconciled a card payment). Show a settled "Payment
   // received" state. Takes precedence over the processing state below.
@@ -94,7 +101,7 @@ export default async function PayPage({
             to do here.
           </p>
           <p className="mt-3 text-xs text-[#4A4A4A]/55">
-            Engagement invoice {opts.invoiceNumber} · {money(opts.baseCents, opts.currency)}
+            {invoiceLabel} · {money(opts.baseCents, opts.currency)}
           </p>
         </section>
       </div>
@@ -122,7 +129,7 @@ export default async function PayPage({
             within a few business days. Your full access opens then.
           </p>
           <p className="mt-3 text-xs text-[#4A4A4A]/55">
-            Engagement invoice {opts.invoiceNumber} · {money(opts.baseCents, opts.currency)}
+            {invoiceLabel} · {money(opts.baseCents, opts.currency)}
           </p>
         </section>
       </div>
@@ -160,7 +167,7 @@ export default async function PayPage({
             Your payment is secure. Your full access opens once we&apos;ve confirmed your payment.
           </p>
           <p className="mt-2 text-xs text-[#4A4A4A]/55">
-            Engagement invoice {opts.invoiceNumber} · {money(opts.baseCents, opts.currency)}
+            {invoiceLabel} · {money(opts.baseCents, opts.currency)}
           </p>
         </div>
       </header>

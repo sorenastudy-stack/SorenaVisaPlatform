@@ -436,7 +436,12 @@ export class PortalService {
       } else {
         steps.push({
           kind: 'INVOICE',
-          label: `Pay invoice ${inv.invoiceNumber}`,
+          // Display-only: hide the raw ENG-<caseId> id from clients. Engagement
+          // invoices read as a friendly "Pay engagement fee"; other invoice
+          // types keep their number. Amount/due/invoiceId are unchanged.
+          label: inv.invoiceNumber.startsWith('ENG-')
+            ? 'Pay engagement fee'
+            : `Pay invoice ${inv.invoiceNumber}`,
           detail: `${inv.currency} ${inv.amount.toString()}${inv.dueDate ? ` · due ${inv.dueDate.toISOString().slice(0, 10)}` : ''}`,
           invoiceId: inv.id,
         });
