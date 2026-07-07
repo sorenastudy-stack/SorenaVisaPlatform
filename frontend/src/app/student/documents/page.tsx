@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { apiServer } from '@/lib/apiServer';
 import { VisaFormShell } from '@/components/student/visa/VisaFormShell';
+import { PaymentGatePanel } from '@/components/portal/PaymentGatePanel';
 import type {
   VisaApplication,
   VisaReadonly,
@@ -42,9 +43,27 @@ interface InitialResponse {
 // PR that renamed the user-facing label). Server-side fetches the existing
 // visa row (or returns "exists: false" with a readonly snapshot). When the
 // row doesn't exist yet the client shell POSTs to create it on mount.
+interface AccessState { paid: boolean; processing: boolean; payInvoiceId: string | null }
+
 export default async function StudentVisaSectionPage() {
   const session = await getSession();
   if (!session) redirect('/login?next=/student/documents');
+
+  // Piece #4 payment gate — render the calm gate (not a raw error toast) when
+  // locked, BEFORE the form shell fetches/creates against the payment-gated
+  // visa endpoint. Fail-safe: any error → locked. Server-side 403 stays intact.
+  let access: AccessState = { paid: false, processing: false, payInvoiceId: null };
+  try {
+    access = await apiServer.get<AccessState>('/portal/me/access');
+  } catch {
+    /* fail-safe: locked */
+  }
+  if (!access.paid) {
+    const payHref = access.payInvoiceId
+      ? `/portal/case/pay?invoiceId=${access.payInvoiceId}`
+      : '/portal/case';
+    return <PaymentGatePanel processing={access.processing} payHref={payHref} />;
+  }
 
   let initialData:
     | {

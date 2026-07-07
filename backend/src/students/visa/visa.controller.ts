@@ -22,6 +22,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { EngagementPaidGuard } from '../../common/guards/engagement-paid.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { MulterExceptionFilter } from '../admission/multer-exception.filter';
 import { VisaService } from './visa.service';
@@ -84,7 +85,7 @@ const visaMulterOptions = {
 // touching visa_applications, so a student can only ever read/write their
 // own row.
 @Controller('students/me/visa')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EngagementPaidGuard)
 @Roles('STUDENT', 'AGENT')
 export class VisaController {
   constructor(private visaService: VisaService) {}

@@ -22,6 +22,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
+import { EngagementPaidGuard } from '../../common/guards/engagement-paid.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { AdmissionService } from './admission.service';
 import { MulterExceptionFilter } from './multer-exception.filter';
@@ -59,7 +60,7 @@ const multerOptions = {
 };
 
 @Controller('students/me/admission')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, EngagementPaidGuard)
 @Roles('STUDENT', 'AGENT')
 export class AdmissionController {
   constructor(private admissionService: AdmissionService) {}

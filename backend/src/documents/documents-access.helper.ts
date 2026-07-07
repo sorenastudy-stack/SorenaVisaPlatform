@@ -1,4 +1,5 @@
 import { PrismaService } from '../prisma/prisma.service';
+import { isEngagementPaid } from '../common/engagement-payment.helper';
 
 // Documents step 3 — per-case documents access control.
 //
@@ -65,7 +66,15 @@ export async function checkCaseDocumentsAccess(
     CLIENT_ROLES.has(actor.role) &&
     !!clientUserId &&
     clientUserId === actor.userId;
-  if (isClient) return mode === 'delete' ? 'deny' : 'allow';
+  if (isClient) {
+    if (mode === 'delete') return 'deny';
+    // Piece #4 — payment gate: the owning client may only access documents
+    // once their engagement fee is PAID. Fail-safe (isEngagementPaid resolves
+    // to false on any error / missing invoice) → 'deny'. Staff (admin tier +
+    // slot holders) already returned 'allow' above and are unaffected.
+    const paid = await isEngagementPaid(prisma, caseId);
+    return paid ? 'allow' : 'deny';
+  }
 
   return 'deny';
 }

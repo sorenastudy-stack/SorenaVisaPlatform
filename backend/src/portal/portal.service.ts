@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { createSignedDownloadToken } from '../common/signed-url.util';
+import { getEngagementGateState } from '../common/engagement-payment.helper';
 
 // Client portal step 2 — service for the signed-in client's OWN case.
 //
@@ -253,6 +254,18 @@ export class PortalService {
       mimeType: invoice.receiptMimeType ?? 'application/octet-stream',
     });
     return { url: `/files/signed/${token}`, expiresInSeconds: 300 };
+  }
+
+  // GET /portal/me/access — the engagement-payment gate state for the caller's
+  // own case. Never throws; fail-safe to locked (paid:false) when there's no
+  // case / no engagement invoice / any error (delegated to the helper).
+  async getAccessState(userId: string) {
+    const c = await this.prisma.case.findFirst({
+      where:   { lead: { contact: { userId } } },
+      orderBy: { createdAt: 'desc' },
+      select:  { id: true },
+    }).catch(() => null);
+    return getEngagementGateState(this.prisma, c?.id ?? null);
   }
 
   async getMyCase(userId: string) {

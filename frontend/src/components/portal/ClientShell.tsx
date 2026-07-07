@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import {
   Briefcase, FileText, Wallet, MessageSquare,
   LayoutDashboard, ClipboardList, CreditCard, Plane,
-  Menu, X, LogOut, Globe, ArrowLeft,
+  Menu, X, LogOut, Globe, ArrowLeft, Lock,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -68,13 +68,15 @@ export interface ClientNavItem {
   exact?:      boolean;   // active-match: strict equality vs startsWith
   stage2Only?: boolean;   // (built-in /portal config) render only at STAGE_2
   badgeCount?: number;    // >0 renders a red unread dot
+  lockedUntilPaid?: boolean; // Piece #4 — show a lock until the engagement fee is PAID
 }
 
 // Built-in /portal config — used when the caller passes no `navItems`.
-// UNCHANGED from slice 1 (same items, order, exact flags, stage gating).
+// UNCHANGED from slice 1 (same items, order, exact flags, stage gating) except
+// Documents is now marked lockedUntilPaid (Piece #4 — payment gate).
 const PORTAL_NAV_ITEMS: ClientNavItem[] = [
   { labelKey: 'portal.nav.myCase',    href: '/portal/case',           iconName: 'briefcase', exact: true },
-  { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText' },
+  { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText', lockedUntilPaid: true },
   { labelKey: 'portal.nav.wallet',    href: '/portal/wallet',         iconName: 'wallet' },
   // STAGE_2 only — links into the STUDENT-only tickets area (middleware-gated).
   { labelKey: 'portal.nav.messages',  href: '/student/tickets',       iconName: 'messageSquare', stage2Only: true },
@@ -87,9 +89,10 @@ interface ClientShellProps {
   navItems?:    ClientNavItem[];  // omitted → built-in /portal config
   backHref?:    string;
   backLabelKey?: string;
+  paymentUnlocked?: boolean;      // Piece #4 — false locks `lockedUntilPaid` items
 }
 
-export function ClientShell({ children, session, portalStage, navItems, backHref, backLabelKey }: ClientShellProps) {
+export function ClientShell({ children, session, portalStage, navItems, backHref, backLabelKey, paymentUnlocked = true }: ClientShellProps) {
   const t = useTranslations();
   const pathname = usePathname();
   const router = useRouter();
@@ -120,8 +123,10 @@ export function ClientShell({ children, session, portalStage, navItems, backHref
         <img src="/brand/logo-mark-white.jpg" alt="Sorena" className="h-8 w-8 flex-shrink-0" />
         <div className="flex flex-col leading-tight">
           <span className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</span>
+          {/* Unified sub-label — "CLIENT PORTAL" everywhere, styled like the
+              Finance Portal's "FINANCE PORTAL" (gold, uppercase, same placement). */}
           <span className="text-sorena-gold text-[10px] font-bold uppercase tracking-wider">
-            {t('portal.headerTitle')}
+            Client Portal
           </span>
         </div>
       </div>
@@ -131,6 +136,10 @@ export function ClientShell({ children, session, portalStage, navItems, backHref
           const active = isActive(item);
           const Icon = ICONS[item.iconName];
           const href = toAbsoluteHref(item.href);
+          // Piece #4 — a lockedUntilPaid item (Documents) shows a lock while the
+          // engagement fee is unpaid. The link still works: it lands on the
+          // calm gate page (the target route renders PaymentGatePanel).
+          const locked = !!item.lockedUntilPaid && !paymentUnlocked;
           return (
             <Link
               key={href}
@@ -146,7 +155,9 @@ export function ClientShell({ children, session, portalStage, navItems, backHref
             >
               <Icon size={18} />
               <span className="flex-1">{t(item.labelKey)}</span>
-              {item.badgeCount ? (
+              {locked ? (
+                <Lock size={14} className="text-white/50" aria-label="Locked until payment is confirmed" />
+              ) : item.badgeCount ? (
                 <span
                   className="inline-block w-2 h-2 rounded-full bg-red-500"
                   aria-label={`${item.badgeCount} unread`}

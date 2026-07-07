@@ -3,6 +3,13 @@ import { getTranslations } from 'next-intl/server';
 import { ArrowLeft } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { CaseDocumentsPanel } from '@/components/cases/CaseDocumentsPanel';
+import { PaymentGatePanel } from '@/components/portal/PaymentGatePanel';
+
+interface AccessState {
+  paid: boolean;
+  processing: boolean;
+  payInvoiceId: string | null;
+}
 
 // Client portal step 3 — the client's documents page.
 //
@@ -58,6 +65,34 @@ export default async function MyDocumentsPage() {
           {t('portal.case.loadError.body')}
         </p>
       </section>
+    );
+  }
+
+  // Piece #4 — payment gate. Documents are locked until the engagement fee is
+  // PAID. Fail-safe: any error resolving access → treat as LOCKED (show gate),
+  // never expose documents. The backend endpoints enforce this too (this is the
+  // calm UX layer, not the security boundary).
+  let access: AccessState = { paid: false, processing: false, payInvoiceId: null };
+  try {
+    access = await apiServer.get<AccessState>('/portal/me/access');
+  } catch {
+    /* fail-safe: locked */
+  }
+  if (!access.paid) {
+    const payHref = access.payInvoiceId
+      ? `/portal/case/pay?invoiceId=${access.payInvoiceId}`
+      : '/portal/case';
+    return (
+      <div className="space-y-5">
+        <Link
+          href="/portal/case"
+          className="inline-flex items-center gap-1.5 text-sm text-[#1e3a5f]/70 hover:text-[#1e3a5f] transition-colors"
+        >
+          <ArrowLeft size={16} />
+          {t('portal.documents.backLink')}
+        </Link>
+        <PaymentGatePanel processing={access.processing} payHref={payHref} />
+      </div>
     );
   }
 

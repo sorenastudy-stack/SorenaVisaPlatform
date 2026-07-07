@@ -82,6 +82,16 @@ export class PortalController {
     return this.service.getPortalStage(userId);
   }
 
+  // GET /portal/me/access → { paid, processing, payInvoiceId }
+  // Piece #4 — the client's engagement-payment gate state. ALWAYS allowed
+  // (never gated) so the shell + gate page can render correctly while locked.
+  // Fail-safe to locked (paid:false) on any error.
+  @Get('me/access')
+  getAccessState(@Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.service.getAccessState(userId);
+  }
+
   // GET /portal/me/payments → the caller's OWN payment history (read-only).
   @Get('me/payments')
   getMyPayments(@Req() req: any) {

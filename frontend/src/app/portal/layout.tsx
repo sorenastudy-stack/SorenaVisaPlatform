@@ -1,19 +1,19 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
-import { apiServer } from '@/lib/apiServer';
 import { ClientShell } from '@/components/portal/ClientShell';
+import { getClientShellData } from '@/lib/clientShellData';
 
-// Client portal step 3 — /portal/* layout (role-gated).
+// Client portal — /portal/* layout (role-gated).
 //
 // Server-component cookie-bound role gate, mirroring /staff/layout.tsx.
 // Only LEAD and STUDENT may enter. Anyone else (staff role, or missing
 // session) is bounced before any portal content renders.
 //
-// CLIENT-SHELL slice 1: renders the unified ClientShell (navy sidebar +
-// header) instead of the old top-only ClientPortalHeader. We still do NOT
-// reuse the shared /student PortalLayout — that shell pulls /students/me/*
-// endpoints which 403 for LEAD users. The shell's stage-gated "Messages"
-// item is UX only; /student/tickets stays protected by middleware.
+// UNIFIED CLIENT SHELL: renders the SAME ClientShell + the SAME sidebar as
+// /student/* (resolved by getClientShellData) so a client never bounces between
+// a short and a full sidebar. STUDENT clients get the fuller sidebar here too;
+// LEAD clients get the reachable /portal subset. Piece #4 payment gating flows
+// through unchanged (paymentUnlocked → lock icon; server 403s untouched).
 
 const CLIENT_ROLES = new Set(['LEAD', 'STUDENT']);
 
@@ -26,19 +26,15 @@ export default async function ClientPortalLayout({
   if (!session) redirect('/login?next=/portal');
   if (!CLIENT_ROLES.has(session.role)) redirect('/unauthorized');
 
-  // Stage signal for the shell's nav (STAGE_2 unlocks the Messages item).
-  // Reuses the existing endpoint; defaults to STAGE_1 on any error so the
-  // nav never over-exposes.
-  let portalStage: 'STAGE_1' | 'STAGE_2' = 'STAGE_1';
-  try {
-    const s = await apiServer.get<{ portalStage: 'STAGE_1' | 'STAGE_2' }>('/portal/me/stage');
-    portalStage = s.portalStage;
-  } catch {
-    /* default STAGE_1 */
-  }
+  const { navItems, portalStage, paymentUnlocked } = await getClientShellData(session);
 
   return (
-    <ClientShell session={session} portalStage={portalStage}>
+    <ClientShell
+      session={session}
+      portalStage={portalStage}
+      navItems={navItems}
+      paymentUnlocked={paymentUnlocked}
+    >
       {children}
     </ClientShell>
   );
