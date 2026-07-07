@@ -133,7 +133,12 @@ export class PortalService {
     });
     if (!ownedCase) throw new NotFoundException('Invoice not found');
 
-    if (!['SENT', 'OVERDUE'].includes(invoice.status)) {
+    // Piece #3 — a PAID invoice is a valid terminal state the pay screen must
+    // render calmly (the accountant confirmed a bank/exchange receipt, or Stripe
+    // reconciled a card payment). Only genuinely non-terminal-yet-unpayable
+    // states (CANCELLED / REFUNDED / DRAFT / PARTIAL) still 409.
+    const isPaid = invoice.status === 'PAID';
+    if (!isPaid && !['SENT', 'OVERDUE'].includes(invoice.status)) {
       throw new ConflictException('Invoice not payable');
     }
 
@@ -147,9 +152,11 @@ export class PortalService {
       surchargeCents,
       cardCents:     baseCents + surchargeCents,  // Stripe card total
       clientName:    ownedCase.lead?.contact?.fullName ?? null,
-      // Piece #2 — when a receipt has been uploaded, the pay screen shows the
-      // "we're confirming it" state instead of the payment methods.
-      processing:      invoice.receiptUploadedAt !== null,
+      // Piece #3 — once confirmed/reconciled the screen shows "Payment received".
+      paid:            isPaid,
+      // Piece #2 — a receipt uploaded but not yet confirmed → "we're confirming
+      // it". Never true once PAID (the paid card takes precedence).
+      processing:      !isPaid && invoice.receiptUploadedAt !== null,
       receiptMethod:   invoice.receiptMethod ?? null,
     };
   }

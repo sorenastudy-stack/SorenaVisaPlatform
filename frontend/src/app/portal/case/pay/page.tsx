@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, CreditCard, Landmark, Globe, ExternalLink, ShieldCheck, Check, Clock } from 'lucide-react';
+import { ArrowLeft, CreditCard, Landmark, Globe, ExternalLink, ShieldCheck, Check, Clock, CheckCircle2 } from 'lucide-react';
 import { apiServer } from '@/lib/apiServer';
 import { PayInvoiceButton } from '@/components/portal/PayInvoiceButton';
 import { CopyButton } from '@/components/portal/CopyButton';
@@ -22,6 +22,7 @@ interface PayOptions {
   surchargeCents: number;
   cardCents:      number;
   clientName:     string | null;
+  paid:           boolean;
   processing:     boolean;
   receiptMethod:  string | null;
 }
@@ -66,6 +67,34 @@ export default async function PayPage({
         <section className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
           <p className="text-sm text-[#4A4A4A]/75">
             We couldn&apos;t load your payment options. Please go back to your case and try again.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
+  // Piece #3 — the invoice is PAID (accountant confirmed a bank/exchange
+  // receipt, or Stripe reconciled a card payment). Show a settled "Payment
+  // received" state. Takes precedence over the processing state below.
+  if (opts.paid) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        {backLink}
+        <section className="rounded-2xl border border-sorena-jade/40 bg-[#f4faf7] p-6 shadow-sm ring-1 ring-sorena-jade/10 md:p-7">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-sorena-jade/15">
+              <CheckCircle2 size={22} className="text-sorena-jade" />
+            </div>
+            <h1 className="text-xl font-bold leading-tight text-[#1e3a5f]">
+              Payment received
+            </h1>
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-[#4A4A4A]/80">
+            Thanks — your payment is confirmed. Your full access is open. There&apos;s nothing more
+            to do here.
+          </p>
+          <p className="mt-3 text-xs text-[#4A4A4A]/55">
+            Engagement invoice {opts.invoiceNumber} · {money(opts.baseCents, opts.currency)}
           </p>
         </section>
       </div>

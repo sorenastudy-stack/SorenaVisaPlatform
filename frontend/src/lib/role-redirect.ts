@@ -23,7 +23,7 @@ export const ROLE_REDIRECT: Record<string, string> = {
   LIA:         '/staff',
   CONSULTANT:  '/staff',
   SUPPORT:     '/staff',
-  FINANCE:     '/staff',
+  FINANCE:     '/staff/finance',
   STUDENT:     '/student/dashboard',
   LEAD:        '/portal/case',
 };

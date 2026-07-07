@@ -11,6 +11,7 @@ import { TeamModule } from './team/team.module';
 import { StaffLeaveModule } from './leave/staff-leave.module';
 import { StaffHrModule } from './hr/staff-hr.module';
 import { StaffBookingsModule } from './bookings/staff-bookings.module';
+import { StaffPaymentsModule } from './payments/staff-payments.module';
 
 // PR-CONSULT-1 — Staff root module.
 //
@@ -44,6 +45,9 @@ import { StaffBookingsModule } from './bookings/staff-bookings.module';
     // PR-WALLET slice 2: /staff/bookings + /staff/consultations/:id/status —
     // consultation list + No-Show/Completed/Cancel marker (tiered wallet credit).
     StaffBookingsModule,
+    // Piece #3: /staff/payments/* — accountant confirm of bank/exchange
+    // receipts (SENT→PAID). FINANCE + OWNER only.
+    StaffPaymentsModule,
   ],
   exports: [
     AssignmentsModule,

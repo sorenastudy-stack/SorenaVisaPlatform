@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
-  Settings, CreditCard, BadgeCheck, CalendarClock, CalendarOff, FileText,
+  Settings, CreditCard, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
+  Clock, BookOpen,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -37,6 +38,9 @@ const MARKETING_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'] as const;
 // Wix payments is broader (adds FINANCE for reconciliation).
 const SETTINGS_ROLES   = ['OWNER', 'SUPER_ADMIN'] as const;
 const WIX_PAYMENT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'FINANCE'] as const;
+// Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
+// OWNER only. Additive; no existing role's access changes.
+const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;
 // PR-CRM-LEADS: same role set as Wix payments + CONSULTANT.
 // LIA is excluded — they work from the case-side portal, not the
 // lead funnel.
@@ -83,10 +87,27 @@ const NAV: NavItem[] = [
   // every staff role. Replaces the old standalone "My leave" item.
   { label: 'HR',                       href: '/staff/hr',             icon: <CalendarOff size={18} /> },
   { label: 'staff.nav.marketing',         href: '/staff/marketing',          icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },
+  // Piece #3: accountant confirm-payments queue — bank/exchange receipts to
+  // verify → mark PAID. FINANCE + OWNER only. Inline English label (matches the
+  // other non-translated items on this surface).
+  { label: 'Payments to confirm',         href: '/staff/payments',           icon: <CheckCircle2 size={18} />, roleGate: PAYMENTS_CONFIRM_ROLES },
   // PR-SCORECARD-4: Wix payments visible to OWNER/SUPER_ADMIN/ADMIN/FINANCE.
   { label: 'staff.nav.wixPayments',       href: '/staff/wix-payments',       icon: <CreditCard size={18} />,  roleGate: WIX_PAYMENT_ROLES },
   // PR-SCORECARD-4: OWNER-editable booking URLs + Wix webhook secret.
   { label: 'staff.nav.platformSettings',  href: '/staff/platform-settings',  icon: <Settings size={18} />,    roleGate: SETTINGS_ROLES },
+];
+
+// Finance portal (option a) — a role-filtered sidebar for FINANCE users. When
+// the signed-in user is FINANCE we render EXACTLY these items under a "Finance
+// Portal" header, instead of the general staff NAV. Every other role is
+// completely unaffected (they take the NAV path below). HR + Processing reuse
+// the existing routes; Dashboard / Finalised / Training are finance routes.
+const FINANCE_NAV: NavItem[] = [
+  { label: 'Dashboard',        href: '/staff/finance',           icon: <LayoutDashboard size={18} /> },
+  { label: 'Processing',       href: '/staff/payments',          icon: <Clock size={18} /> },
+  { label: 'Finalised',        href: '/staff/finance/finalised', icon: <CheckCircle2 size={18} /> },
+  { label: 'HR',               href: '/staff/hr',                icon: <CalendarOff size={18} /> },
+  { label: 'Training & News',  href: '/staff/finance/training',  icon: <BookOpen size={18} /> },
 ];
 
 export function StaffSidebar() {
@@ -94,11 +115,18 @@ export function StaffSidebar() {
   const t = useTranslations();
   const { permissions, me } = useStaff();
 
-  const items = NAV.filter((n) => {
-    if (n.gate && !permissions[n.gate]) return false;
-    if (n.roleGate && !n.roleGate.includes(me?.role ?? '')) return false;
-    return true;
-  });
+  const isFinance = me?.role === 'FINANCE';
+  const subtitle = isFinance ? 'Finance Portal' : 'Staff Portal';
+
+  // FINANCE gets a fixed, role-specific nav (labels are already English, so no
+  // t() lookup); everyone else gets the permission/role-filtered general NAV.
+  const items = isFinance
+    ? FINANCE_NAV
+    : NAV.filter((n) => {
+        if (n.gate && !permissions[n.gate]) return false;
+        if (n.roleGate && !n.roleGate.includes(me?.role ?? '')) return false;
+        return true;
+      });
 
   return (
     <aside className="hidden lg:flex w-60 flex-col bg-[#1e3a5f] text-white">
@@ -107,7 +135,7 @@ export function StaffSidebar() {
         <div className="leading-tight">
           <div className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</div>
           <div className="text-[#b8941f] text-[10px] font-bold uppercase tracking-wider">
-            Staff Portal
+            {subtitle}
           </div>
         </div>
       </div>
