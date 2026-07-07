@@ -1,8 +1,47 @@
-import { Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller, Get, Param, Post, Req, UseGuards, UseFilters,
+  UseInterceptors, UnsupportedMediaTypeException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as fs from 'fs';
+import * as path from 'path';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { MulterExceptionFilter } from '../students/admission/multer-exception.filter';
 import { PortalService } from './portal.service';
+
+// Piece #2 — payment-receipt upload. Local-disk storage under ./uploads/receipts
+// with a random filename, mirroring the visa/admission upload pattern
+// (visa.controller.ts:40-79). Layer hooks: size cap + type allowlist + random
+// filename enforced at the multer boundary so a rejected file never reaches the
+// service; MulterExceptionFilter maps LIMIT_FILE_SIZE → 413.
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
+const RECEIPTS_DIR = path.join(UPLOAD_DIR, 'receipts');
+const RECEIPT_ALLOWED_MIMES = ['application/pdf', 'image/jpeg', 'image/png'];
+
+const receiptMulterOptions = {
+  storage: diskStorage({
+    destination: (_req: any, _file: any, cb: any) => {
+      fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+      cb(null, RECEIPTS_DIR);
+    },
+    filename: (_req: any, file: any, cb: any) => {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      cb(null, `${unique}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req: any, file: any, cb: any) => {
+    if (RECEIPT_ALLOWED_MIMES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      req.fileTypeRejected = true;
+      cb(null, false);
+    }
+  },
+};
 
 // Client portal step 2 — client-only routes.
 //
@@ -57,6 +96,32 @@ export class PortalController {
   getInvoicePayOptions(@Param('invoiceId') invoiceId: string, @Req() req: any) {
     const userId = req.user?.userId ?? req.user?.id;
     return this.service.getInvoicePayOptions(userId, invoiceId);
+  }
+
+  // POST /portal/me/invoices/:invoiceId/receipt → upload a payment receipt for
+  // the caller's OWN invoice (bank transfer / partner exchange). Moves the
+  // invoice into "processing" (receiptUploadedAt set) — NOT paid. Multipart:
+  // `file` (pdf/jpeg/png ≤10MB) + `method` ('bank' | 'exchange').
+  @Post('me/invoices/:invoiceId/receipt')
+  @UseFilters(MulterExceptionFilter)
+  @UseInterceptors(FileInterceptor('file', receiptMulterOptions))
+  uploadReceipt(@Param('invoiceId') invoiceId: string, @Req() req: any) {
+    if (req.fileTypeRejected) {
+      throw new UnsupportedMediaTypeException('Only PDF, JPEG, and PNG files are accepted.');
+    }
+    if (!req.file) {
+      throw new UnsupportedMediaTypeException('No file provided.');
+    }
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.service.uploadInvoiceReceipt(userId, invoiceId, req.file, req.body?.method);
+  }
+
+  // GET /portal/me/invoices/:invoiceId/receipt/download → signed-token URL for
+  // the caller's OWN uploaded receipt (owner-gated mint → /files/signed/:token).
+  @Get('me/invoices/:invoiceId/receipt/download')
+  getReceiptDownload(@Param('invoiceId') invoiceId: string, @Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.service.getInvoiceReceiptDownloadUrl(userId, invoiceId);
   }
 
   // POST /portal/me/invoices/:invoiceId/pay-link → { url }

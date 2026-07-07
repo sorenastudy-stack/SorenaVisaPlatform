@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { ArrowLeft, CreditCard, Landmark, Globe, ExternalLink, ShieldCheck, Check } from 'lucide-react';
+import { ArrowLeft, CreditCard, Landmark, Globe, ExternalLink, ShieldCheck, Check, Clock } from 'lucide-react';
 import { apiServer } from '@/lib/apiServer';
 import { PayInvoiceButton } from '@/components/portal/PayInvoiceButton';
 import { CopyButton } from '@/components/portal/CopyButton';
+import { ReceiptUpload } from '@/components/portal/ReceiptUpload';
 
 // Client "choose how to pay" screen for one unpaid engagement invoice.
 //
@@ -21,6 +22,8 @@ interface PayOptions {
   surchargeCents: number;
   cardCents:      number;
   clientName:     string | null;
+  processing:     boolean;
+  receiptMethod:  string | null;
 }
 
 const REBIT_URL = 'https://my.rebitmoney.com/auth/register?code=SORENA';
@@ -63,6 +66,34 @@ export default async function PayPage({
         <section className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
           <p className="text-sm text-[#4A4A4A]/75">
             We couldn&apos;t load your payment options. Please go back to your case and try again.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
+  // Piece #2 — a receipt has been uploaded: replace the payment methods with a
+  // calm "we're confirming it" state (the invoice is NOT paid yet — an
+  // accountant confirms later).
+  if (opts.processing) {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        {backLink}
+        <section className="rounded-2xl border border-[#c9a961]/40 bg-[#faf8f3] p-6 shadow-sm ring-1 ring-[#c9a961]/10 md:p-7">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-[#c9a961]/20">
+              <Clock size={22} className="text-[#b8941f]" />
+            </div>
+            <h1 className="text-xl font-bold leading-tight text-[#1e3a5f]">
+              Payment received — we&apos;re confirming it
+            </h1>
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-[#4A4A4A]/80">
+            Thanks — we&apos;ve got your receipt. We&apos;ll confirm once the funds land, usually
+            within a few business days. Your full access opens then.
+          </p>
+          <p className="mt-3 text-xs text-[#4A4A4A]/55">
+            Engagement invoice {opts.invoiceNumber} · {money(opts.baseCents, opts.currency)}
           </p>
         </section>
       </div>
@@ -166,6 +197,11 @@ export default async function PayPage({
           from 1 to 10 business days depending on your bank — your booking is confirmed once the funds
           have settled.
         </p>
+
+        <div className="mt-4 border-t border-[#c9a961]/20 pt-4">
+          <p className="text-sm font-semibold text-[#1e3a5f]">Already paid by bank transfer?</p>
+          <ReceiptUpload invoiceId={opts.invoiceId} method="bank" />
+        </div>
       </section>
 
       {/* ── Option 3 — Partner exchange (Rebit), lightest ─────────────── */}
@@ -192,6 +228,11 @@ export default async function PayPage({
           <ExternalLink size={16} />
           Pay via partner exchange
         </a>
+
+        <div className="mt-4 border-t border-gray-100 pt-4">
+          <p className="text-sm font-semibold text-[#1e3a5f]">Already paid via partner exchange?</p>
+          <ReceiptUpload invoiceId={opts.invoiceId} method="exchange" />
+        </div>
       </section>
     </div>
   );

@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as fs from 'fs';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
+import { createSignedDownloadToken } from '../common/signed-url.util';
 
 // Client portal step 2 — service for the signed-in client's OWN case.
 //
@@ -117,7 +119,10 @@ export class PortalService {
   async getInvoicePayOptions(userId: string, invoiceId: string) {
     const invoice = await this.prisma.invoice.findUnique({
       where:  { id: invoiceId },
-      select: { id: true, invoiceNumber: true, amount: true, currency: true, status: true, caseId: true },
+      select: {
+        id: true, invoiceNumber: true, amount: true, currency: true, status: true, caseId: true,
+        receiptUploadedAt: true, receiptMethod: true,
+      },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     if (!invoice.caseId) throw new BadRequestException('Invoice not payable');
@@ -142,7 +147,105 @@ export class PortalService {
       surchargeCents,
       cardCents:     baseCents + surchargeCents,  // Stripe card total
       clientName:    ownedCase.lead?.contact?.fullName ?? null,
+      // Piece #2 — when a receipt has been uploaded, the pay screen shows the
+      // "we're confirming it" state instead of the payment methods.
+      processing:      invoice.receiptUploadedAt !== null,
+      receiptMethod:   invoice.receiptMethod ?? null,
     };
+  }
+
+  // POST /portal/me/invoices/:invoiceId/receipt — client uploads a payment
+  // receipt (bank transfer / partner exchange) for their OWN invoice. Moves the
+  // invoice into "processing" (receiptUploadedAt set) — NOT paid; an accountant
+  // confirms later. Ownership from the JWT (foreign invoice → 404 no-leak). The
+  // file is already on local disk (multer) at file.path; we persist a pointer
+  // and serve it only via signed token. Never touches InvoiceStatus, so the
+  // Stripe reconciliation is unaffected.
+  async uploadInvoiceReceipt(
+    userId: string,
+    invoiceId: string,
+    file: { path: string; originalname: string; mimetype: string; size: number },
+    method: unknown,
+  ): Promise<{ ok: true; status: 'processing' }> {
+    // Multer already wrote the file; delete it on any rejection below.
+    const cleanup = () => { try { if (file?.path) fs.unlinkSync(file.path); } catch { /* best-effort */ } };
+
+    if (method !== 'bank' && method !== 'exchange') {
+      cleanup();
+      throw new BadRequestException("method must be 'bank' or 'exchange'");
+    }
+
+    const invoice = await this.prisma.invoice.findUnique({
+      where:  { id: invoiceId },
+      select: { id: true, status: true, caseId: true, receiptUploadedAt: true },
+    });
+    if (!invoice) { cleanup(); throw new NotFoundException('Invoice not found'); }
+    if (!invoice.caseId) { cleanup(); throw new BadRequestException('Invoice not payable'); }
+
+    const ownedCase = await this.prisma.case.findFirst({
+      where:  { id: invoice.caseId, lead: { contact: { userId } } },
+      select: { id: true },
+    });
+    if (!ownedCase) { cleanup(); throw new NotFoundException('Invoice not found'); }
+
+    // Guard: one receipt per invoice; only while it's still awaiting payment.
+    if (invoice.receiptUploadedAt) {
+      cleanup();
+      throw new ConflictException('A receipt is already under review for this invoice.');
+    }
+    if (!['SENT', 'OVERDUE'].includes(invoice.status)) {
+      cleanup();
+      throw new ConflictException('Invoice not payable');
+    }
+
+    await this.prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        receiptFileUrl:      file.path,          // relative path; /files/signed resolves it
+        receiptOriginalName: file.originalname,
+        receiptMimeType:     file.mimetype,
+        receiptSizeBytes:    file.size,
+        receiptMethod:       method,
+        receiptUploadedAt:   new Date(),
+      },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        action:     'RECEIPT_UPLOADED',
+        eventType:  'RECEIPT_UPLOADED',
+        entityType: 'Invoice',
+        entityId:   invoiceId,
+        newValue:   { method, mimeType: file.mimetype, sizeBytes: file.size } as Prisma.InputJsonValue,
+      },
+    });
+
+    return { ok: true, status: 'processing' };
+  }
+
+  // GET /portal/me/invoices/:invoiceId/receipt/download — owner-gated signed URL
+  // for the caller's OWN uploaded receipt (5-min TTL via /files/signed/:token).
+  async getInvoiceReceiptDownloadUrl(userId: string, invoiceId: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where:  { id: invoiceId },
+      select: { caseId: true, receiptFileUrl: true, receiptOriginalName: true, receiptMimeType: true },
+    });
+    if (!invoice || !invoice.caseId) throw new NotFoundException('Receipt not found');
+
+    const ownedCase = await this.prisma.case.findFirst({
+      where:  { id: invoice.caseId, lead: { contact: { userId } } },
+      select: { id: true },
+    });
+    if (!ownedCase) throw new NotFoundException('Receipt not found');
+    if (!invoice.receiptFileUrl) throw new NotFoundException('Receipt not found');
+
+    const token = createSignedDownloadToken({
+      fileUrl:  invoice.receiptFileUrl,
+      fileName: invoice.receiptOriginalName ?? 'receipt',
+      mimeType: invoice.receiptMimeType ?? 'application/octet-stream',
+    });
+    return { url: `/files/signed/${token}`, expiresInSeconds: 300 };
   }
 
   async getMyCase(userId: string) {
@@ -277,7 +380,7 @@ export class PortalService {
       }),
       this.prisma.invoice.findMany({
         where:  { caseId, status: { in: ['SENT', 'OVERDUE'] } },
-        select: { id: true, invoiceNumber: true, amount: true, currency: true, dueDate: true },
+        select: { id: true, invoiceNumber: true, amount: true, currency: true, dueDate: true, receiptUploadedAt: true },
       }),
     ]);
 
@@ -300,12 +403,24 @@ export class PortalService {
     }
 
     for (const inv of invoices) {
-      steps.push({
-        kind: 'INVOICE',
-        label: `Pay invoice ${inv.invoiceNumber}`,
-        detail: `${inv.currency} ${inv.amount.toString()}${inv.dueDate ? ` · due ${inv.dueDate.toISOString().slice(0, 10)}` : ''}`,
-        invoiceId: inv.id,
-      });
+      if (inv.receiptUploadedAt) {
+        // Piece #2 — a receipt has been uploaded: suppress "Pay now" and show a
+        // calm "we're confirming it" step instead. Status stays SENT/OVERDUE
+        // (not PAID) until an accountant confirms.
+        steps.push({
+          kind: 'INVOICE_PROCESSING',
+          label: "Payment received — we're confirming it",
+          detail: "Thanks — we'll confirm once the funds land, usually within a few business days.",
+          invoiceId: inv.id,
+        });
+      } else {
+        steps.push({
+          kind: 'INVOICE',
+          label: `Pay invoice ${inv.invoiceNumber}`,
+          detail: `${inv.currency} ${inv.amount.toString()}${inv.dueDate ? ` · due ${inv.dueDate.toISOString().slice(0, 10)}` : ''}`,
+          invoiceId: inv.id,
+        });
+      }
     }
 
     return steps;

@@ -2126,6 +2126,20 @@ model Invoice {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  // Piece #2 — client payment-receipt upload (bank transfer / partner exchange).
+  // Denormalised onto Invoice (mirrors Case.inzReceipt* — there's only ever one
+  // engagement-fee receipt per invoice). `receiptUploadedAt IS NOT NULL` is the
+  // "processing / awaiting accountant confirmation" state — NOT paid; no new
+  // InvoiceStatus value, so the Stripe reconciliation (SENT/OVERDUE→PAID) is
+  // untouched. File lives on local disk under ./uploads/receipts/, served via
+  // the signed-token /files/signed/:token route (owner-gated at the mint step).
+  receiptFileUrl      String?
+  receiptOriginalName String?
+  receiptMimeType     String?
+  receiptSizeBytes    Int?
+  receiptMethod       String?
+  receiptUploadedAt   DateTime?
+
   case            Case?          @relation(fields: [caseId], references: [id])
   contact         Contact        @relation(fields: [contactId], references: [id])
 
