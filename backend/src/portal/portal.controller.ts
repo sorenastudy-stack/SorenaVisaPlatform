@@ -50,6 +50,15 @@ export class PortalController {
     return this.service.getMyPayments(userId);
   }
 
+  // GET /portal/me/invoices/:invoiceId/pay-options → read-only pay-screen data
+  // (base amount, card total incl. server-derived surcharge, currency, client
+  // name). Ownership from the JWT; a foreign invoice returns the same 404.
+  @Get('me/invoices/:invoiceId/pay-options')
+  getInvoicePayOptions(@Param('invoiceId') invoiceId: string, @Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.service.getInvoicePayOptions(userId, invoiceId);
+  }
+
   // POST /portal/me/invoices/:invoiceId/pay-link → { url }
   // Generates a Stripe pay link for the caller's OWN unpaid invoice. The
   // amount is read server-side from the Invoice; the client only supplies

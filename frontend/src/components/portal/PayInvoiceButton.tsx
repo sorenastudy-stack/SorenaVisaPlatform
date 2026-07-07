@@ -15,7 +15,7 @@ import { api } from '@/lib/api';
 //
 // Strings are hardcoded English to match the surrounding next-steps section
 // (its heading + the "Open" link are hardcoded too — no lone i18n call).
-export function PayInvoiceButton({ invoiceId }: { invoiceId: string }) {
+export function PayInvoiceButton({ invoiceId, label = 'Pay now' }: { invoiceId: string; label?: string }) {
   const [busy, setBusy] = useState(false);
 
   const handlePay = async () => {
@@ -40,7 +40,7 @@ export function PayInvoiceButton({ invoiceId }: { invoiceId: string }) {
       className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-6 text-[#faf8f3] font-semibold min-h-[48px] hover:bg-[#162d4a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >
       {busy ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-      {busy ? 'Redirecting…' : 'Pay now'}
+      {busy ? 'Redirecting…' : label}
     </button>
   );
 }

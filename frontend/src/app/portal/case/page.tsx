@@ -6,7 +6,6 @@ import { getSession } from '@/lib/auth';
 import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
 import { ReloginBanner } from '@/components/portal/ReloginBanner';
 import { AssessmentPdfButton } from '@/components/portal/AssessmentPdfButton';
-import { PayInvoiceButton } from '@/components/portal/PayInvoiceButton';
 import { formatDate as fmtDate } from '@/lib/date';
 
 // Client portal step 3 — the client's case overview.
@@ -208,7 +207,12 @@ export default async function MyCasePage() {
                   </Link>
                 )}
                 {s.kind === 'INVOICE' && s.invoiceId && (
-                  <PayInvoiceButton invoiceId={s.invoiceId} />
+                  <Link
+                    href={`/portal/case/pay?invoiceId=${s.invoiceId}`}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-[#faf8f3] text-sm font-semibold min-h-[44px] hover:bg-[#162d4a] transition-colors"
+                  >
+                    Pay now
+                  </Link>
                 )}
               </li>
             ))}

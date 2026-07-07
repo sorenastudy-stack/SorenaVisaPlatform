@@ -64,16 +64,23 @@ export class PortalService {
       throw new ConflictException('Invoice not payable');
     }
 
-    // Amount is authoritative from the Invoice; convert Decimal → integer
-    // cents the same way the staff custom-link path does.
-    const cents = Math.round(invoice.amount.toNumber() * 100);
-    if (cents <= 0) {
+    // Amount is authoritative from the Invoice. This endpoint is the CARD
+    // (Stripe) path, so a fixed card-processing surcharge (config
+    // CARD_SURCHARGE_CENTS, default 2000 = $20) is added SERVER-SIDE — the
+    // client never supplies an amount, so they cannot alter the charge. The
+    // stored Invoice amount is NOT mutated: only the Stripe charge is grossed
+    // up. Bank transfer / partner exchange pay the un-surcharged invoice
+    // amount (they don't hit this endpoint).
+    const invoiceCents = Math.round(invoice.amount.toNumber() * 100);
+    if (invoiceCents <= 0) {
       throw new BadRequestException('Invoice amount is not payable');
     }
+    const surchargeCents = this.cardSurchargeCents();
+    const chargeCents = invoiceCents + surchargeCents;
 
     const { url } = await this.payments.createCustomLinkForCase(
       invoice.caseId,
-      cents,
+      chargeCents,
       invoice.currency.toLowerCase(),
       invoiceId, // stamped into Stripe metadata for later webhook reconciliation
     );
@@ -86,11 +93,56 @@ export class PortalService {
         eventType:  'INVOICE_PAY_LINK_CREATED',
         entityType: 'Invoice',
         entityId:   invoiceId,
-        newValue:   { caseId: invoice.caseId, cents } as Prisma.InputJsonValue,
+        newValue:   { caseId: invoice.caseId, invoiceCents, surchargeCents, chargeCents } as Prisma.InputJsonValue,
       },
     });
 
     return { url };
+  }
+
+  // Fixed card-processing surcharge (config; default 2000 = $20). Added to the
+  // Stripe charge only — never persisted onto the Invoice. Read in one place so
+  // the pay-link (charge) and pay-options (display) always agree.
+  private cardSurchargeCents(): number {
+    const raw = Number(process.env.CARD_SURCHARGE_CENTS ?? 2000);
+    return Number.isFinite(raw) && raw >= 0 ? Math.round(raw) : 2000;
+  }
+
+  // GET /portal/me/invoices/:invoiceId/pay-options — read-only display data for
+  // the client's pay screen. Ownership-checked exactly like the pay-link path
+  // (foreign invoice → same 404). Returns the invoice (base) amount, the card
+  // total (base + surcharge, derived server-side), the currency, and the
+  // client's name for the bank-transfer reference. NO money-write; the Invoice
+  // is not changed.
+  async getInvoicePayOptions(userId: string, invoiceId: string) {
+    const invoice = await this.prisma.invoice.findUnique({
+      where:  { id: invoiceId },
+      select: { id: true, invoiceNumber: true, amount: true, currency: true, status: true, caseId: true },
+    });
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (!invoice.caseId) throw new BadRequestException('Invoice not payable');
+
+    const ownedCase = await this.prisma.case.findFirst({
+      where:  { id: invoice.caseId, lead: { contact: { userId } } },
+      select: { lead: { select: { contact: { select: { fullName: true } } } } },
+    });
+    if (!ownedCase) throw new NotFoundException('Invoice not found');
+
+    if (!['SENT', 'OVERDUE'].includes(invoice.status)) {
+      throw new ConflictException('Invoice not payable');
+    }
+
+    const baseCents = Math.round(invoice.amount.toNumber() * 100);
+    const surchargeCents = this.cardSurchargeCents();
+    return {
+      invoiceId:     invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      currency:      invoice.currency.toUpperCase(),
+      baseCents,                                  // bank / partner-exchange amount
+      surchargeCents,
+      cardCents:     baseCents + surchargeCents,  // Stripe card total
+      clientName:    ownedCase.lead?.contact?.fullName ?? null,
+    };
   }
 
   async getMyCase(userId: string) {
