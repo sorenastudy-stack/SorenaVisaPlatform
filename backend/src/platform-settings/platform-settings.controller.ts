@@ -4,7 +4,6 @@ import {
   Get,
   Param,
   Patch,
-  Post,
   Query,
   Req,
   UseGuards,
@@ -19,9 +18,7 @@ import { UpdateSettingDto } from './dto/platform-settings.dto';
 //
 // Mounted under /staff/platform-settings/*. Locked to OWNER and
 // SUPER_ADMIN only — even ADMIN cannot edit these. The booking URLs
-// drive every scorecard CTA and the Wix webhook secret is the only
-// thing standing between an attacker and the payment-log table, so
-// the role gate is deliberately tight.
+// drive every scorecard CTA, so the role gate is deliberately tight.
 //
 // All routes use req.user?.userId ?? req.user?.id per d95640d.
 
@@ -50,12 +47,6 @@ export class PlatformSettingsController {
     @Req() req: any,
   ) {
     return this.service.update(key, dto.value, this.actor(req));
-  }
-
-  @Post('wix-webhook-secret/regenerate')
-  @Roles('OWNER', 'SUPER_ADMIN')
-  regenerateSecret(@Req() req: any) {
-    return this.service.regenerateWebhookSecret(this.actor(req));
   }
 
   private actor(req: any) {

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
-  Settings, CreditCard, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
+  Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
   Clock, BookOpen,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
@@ -34,10 +34,8 @@ interface NavItem {
 }
 
 const MARKETING_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'] as const;
-// PR-SCORECARD-4: platform settings is tighter (OWNER/SUPER_ADMIN only),
-// Wix payments is broader (adds FINANCE for reconciliation).
+// PR-SCORECARD-4: platform settings is OWNER/SUPER_ADMIN only.
 const SETTINGS_ROLES   = ['OWNER', 'SUPER_ADMIN'] as const;
-const WIX_PAYMENT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'FINANCE'] as const;
 // Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
 // OWNER only. Additive; no existing role's access changes.
 const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;
@@ -91,9 +89,7 @@ const NAV: NavItem[] = [
   // verify → mark PAID. FINANCE + OWNER only. Inline English label (matches the
   // other non-translated items on this surface).
   { label: 'Payments to confirm',         href: '/staff/payments',           icon: <CheckCircle2 size={18} />, roleGate: PAYMENTS_CONFIRM_ROLES },
-  // PR-SCORECARD-4: Wix payments visible to OWNER/SUPER_ADMIN/ADMIN/FINANCE.
-  { label: 'staff.nav.wixPayments',       href: '/staff/wix-payments',       icon: <CreditCard size={18} />,  roleGate: WIX_PAYMENT_ROLES },
-  // PR-SCORECARD-4: OWNER-editable booking URLs + Wix webhook secret.
+  // PR-SCORECARD-4: OWNER-editable booking URLs.
   { label: 'staff.nav.platformSettings',  href: '/staff/platform-settings',  icon: <Settings size={18} />,    roleGate: SETTINGS_ROLES },
 ];
 

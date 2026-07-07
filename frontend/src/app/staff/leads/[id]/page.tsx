@@ -21,7 +21,6 @@ import {
   ScorecardBandChip,
   type ScorecardBand,
 } from '@/components/scorecard/ScorecardBandChip';
-import { LeadWixPayments } from '@/app/sales/leads/[id]/LeadWixPayments';
 
 // PR-CRM-LEADS — Staff lead detail page.
 //
@@ -65,15 +64,6 @@ interface LeadDetail {
     executionEligible: boolean;
     hardStopsCount: number;
   } | null;
-  wixPayments: Array<{
-    id: string;
-    paymentType: string;
-    amount: string;
-    currency: string;
-    status: string;
-    receivedAt: string;
-  }>;
-  totalPaidNzd: number;
   statusHistory: Array<{
     status: LeadStatus;
     changedAt: string;
@@ -219,8 +209,6 @@ export default function StaffLeadDetailPage({
         {/* ─── Right column ────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-4">
           <ScorecardCard scorecard={lead.scorecard} />
-
-          <LeadWixPayments leadId={lead.id} />
 
           <AttributionCard
             attributedAgent={lead.attributedAgent}

@@ -40,7 +40,6 @@ import { ImmigrationOfficersModule } from './immigration-officers/immigration-of
 import { ScorecardModule } from './scorecard/scorecard.module';
 import { MarketingModule } from './marketing/marketing.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
-import { WixIntegrationModule } from './wix-integration/wix-integration.module';
 import { BookingModule } from './booking/booking.module';
 import { WalletModule } from './wallet/wallet.module';
 
@@ -130,11 +129,6 @@ import { WalletModule } from './wallet/wallet.module';
     // PR-SCORECARD-4: OWNER-editable platform settings (booking URLs,
     // webhook secrets). Mounted under /staff/platform-settings/*.
     PlatformSettingsModule,
-    // PR-SCORECARD-4: Wix Automation payment webhook listener +
-    // staff-side payments browser. Public webhook at
-    // POST /webhooks/wix/payment (shared-secret authenticated),
-    // staff CRUD at /staff/wix-payments/*.
-    WixIntegrationModule,
     // PR-BOOKING-3: native in-portal booking. Stage 3 = FREE_15 flow
     // (GET /booking/slots, POST /booking/confirm, GET /booking/mine),
     // gated to LEAD/STUDENT.

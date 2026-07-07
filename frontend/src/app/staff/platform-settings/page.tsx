@@ -1,22 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import {
-  Settings, ExternalLink, Copy, Check, RefreshCcw, AlertTriangle, Pencil, X,
+  Settings, ExternalLink, Pencil, X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
 
 // PR-SCORECARD-4 — OWNER-editable platform settings.
 //
-// Two sections:
-//   1. Booking URLs (3 rows, edit-in-modal)
-//   2. Wix integration (webhook secret + endpoint URL)
-//
-// Role gate happens at /staff/layout.tsx (StaffLayout). The backend
-// independently enforces OWNER/SUPER_ADMIN on every route — defence
-// in depth.
+// Booking URLs (3 rows, edit-in-modal) that drive the scorecard result-page
+// CTAs. Role gate happens at /staff/layout.tsx (StaffLayout); the backend
+// independently enforces OWNER/SUPER_ADMIN on every route.
 
 interface PlatformSetting {
   id: string;
@@ -43,11 +38,11 @@ const BOOKING_LABELS: Record<string, { title: string; subtitle: string }> = {
   },
   BOOKING_URL_GAP_CLOSING: {
     title: 'Gap-Closing Roadmap Session (NZD 30)',
-    subtitle: 'Band 3, no hard stop — paid Wix booking.',
+    subtitle: 'Band 3, no hard stop — paid booking.',
   },
   BOOKING_URL_LIA_CONSULTATION: {
     title: 'LIA Consultation (NZD 150)',
-    subtitle: 'Any band with hard stop — paid Wix booking.',
+    subtitle: 'Any band with hard stop — paid booking.',
   },
 };
 
@@ -56,17 +51,6 @@ export default function PlatformSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PlatformSetting | null>(null);
-  const [regenOpen, setRegenOpen] = useState(false);
-  const [newSecret, setNewSecret] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
-  const webhookEndpoint = (() => {
-    const base =
-      process.env.NEXT_PUBLIC_BACKEND_URL ||
-      process.env.NEXT_PUBLIC_API_URL ||
-      'http://localhost:3001';
-    return `${base}/webhooks/wix/payment`;
-  })();
 
   async function load() {
     setLoading(true);
@@ -85,14 +69,7 @@ export default function PlatformSettingsPage() {
     load();
   }, []);
 
-  function copyToClipboard(text: string, key: string) {
-    void navigator.clipboard?.writeText(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
-  }
-
   const bookingSettings = settings.filter((s) => BOOKING_KEYS.includes(s.key as any));
-  const secretSetting = settings.find((s) => s.key === 'WIX_WEBHOOK_SECRET');
 
   return (
     <div className="max-w-5xl">
@@ -102,12 +79,7 @@ export default function PlatformSettingsPage() {
           Platform settings
         </h1>
         <p className="text-sm text-[#4A4A4A]/70 mt-1">
-          OWNER-editable configuration: scorecard booking URLs and the Wix Automation webhook secret.
-          See the{' '}
-          <Link href="/staff/platform-settings/wix-setup" className="text-[#1E3A5F] underline font-medium">
-            Wix setup guide
-          </Link>{' '}
-          for how to connect Wix.
+          OWNER-editable configuration: the scorecard booking URLs.
         </p>
       </div>
 
@@ -188,74 +160,6 @@ export default function PlatformSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* ─── Wix integration ──────────────────────────────────── */}
-      <Card>
-        <CardContent>
-          <h2 className="text-lg font-bold text-[#1E3A5F] mb-1">Wix integration</h2>
-          <p className="text-sm text-[#4A4A4A]/70 mb-4">
-            Wix Automations posts a webhook to this endpoint whenever a payment or booking completes.
-            The header value below must match the secret in your Wix Automation configuration.
-          </p>
-
-          <div className="space-y-4">
-            {/* Webhook endpoint */}
-            <div>
-              <div className="text-xs uppercase tracking-wide text-[#4A4A4A]/70 font-semibold mb-1.5">
-                Webhook endpoint URL
-              </div>
-              <div className="flex items-stretch gap-2">
-                <div className="flex-1 text-sm font-mono text-[#1E3A5F] bg-gray-50 rounded px-3 py-2 break-all">
-                  {webhookEndpoint}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(webhookEndpoint, 'endpoint')}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1E3A5F] text-[#1E3A5F] text-sm font-medium hover:bg-[#1E3A5F]/5"
-                >
-                  {copiedKey === 'endpoint'
-                    ? <><Check size={13} /> Copied</>
-                    : <><Copy size={13} /> Copy</>}
-                </button>
-              </div>
-            </div>
-
-            {/* Shared secret */}
-            <div>
-              <div className="text-xs uppercase tracking-wide text-[#4A4A4A]/70 font-semibold mb-1.5">
-                X-Sorena-Webhook-Secret header value
-              </div>
-              <div className="flex items-stretch gap-2">
-                <div className="flex-1 text-sm font-mono text-[#1E3A5F] bg-gray-50 rounded px-3 py-2 break-all">
-                  {secretSetting?.value ?? '●●●●●●●● (not set)'}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRegenOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#F3CE49] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f]"
-                >
-                  <RefreshCcw size={13} /> Regenerate
-                </button>
-              </div>
-              {secretSetting && (
-                <p className="text-xs text-[#4A4A4A]/60 mt-1.5">
-                  Last rotated {new Date(secretSetting.updatedAt).toLocaleString('en-NZ')}
-                  {secretSetting.updatedByName ? ` · by ${secretSetting.updatedByName}` : ''}.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-5 pt-4 border-t border-gray-100 text-sm">
-            <Link
-              href="/staff/platform-settings/wix-setup"
-              className="inline-flex items-center gap-1 text-[#1E3A5F] hover:text-[#b8941f] font-medium"
-            >
-              How to connect Wix Automations → <ExternalLink size={12} />
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
       {editing && (
         <EditUrlModal
           setting={editing}
@@ -263,36 +167,6 @@ export default function PlatformSettingsPage() {
           onSaved={() => {
             setEditing(null);
             load();
-          }}
-        />
-      )}
-
-      {regenOpen && !newSecret && (
-        <ConfirmRegenerateModal
-          onCancel={() => setRegenOpen(false)}
-          onConfirm={async () => {
-            try {
-              const res = await api.post<{
-                key: string;
-                plaintextValue: string;
-                updatedAt: string;
-              }>('/staff/platform-settings/wix-webhook-secret/regenerate', {});
-              setNewSecret(res.plaintextValue);
-              await load();
-            } catch (e: any) {
-              setError(e?.message ?? 'Failed to regenerate secret');
-              setRegenOpen(false);
-            }
-          }}
-        />
-      )}
-
-      {newSecret && (
-        <NewSecretModal
-          secret={newSecret}
-          onClose={() => {
-            setNewSecret(null);
-            setRegenOpen(false);
           }}
         />
       )}
@@ -377,97 +251,6 @@ function EditUrlModal({
             className="px-4 py-2 rounded-lg bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#162d49] disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── ConfirmRegenerateModal ──────────────────────────────────
-
-function ConfirmRegenerateModal({
-  onCancel, onConfirm,
-}: { onCancel: () => void; onConfirm: () => void | Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <AlertTriangle size={22} className="text-amber-600" />
-          <h3 className="text-lg font-bold text-[#1E3A5F]">Regenerate webhook secret?</h3>
-        </div>
-        <p className="text-sm text-[#4A4A4A] leading-relaxed mb-2">
-          This will invalidate the current secret. You&apos;ll need to update the Wix Automation
-          header before the next payment, or webhook calls will be rejected.
-        </p>
-        <p className="text-sm text-[#4A4A4A] leading-relaxed">
-          The new secret is shown once on this screen — copy it immediately. After this dialog
-          closes the secret is masked forever.
-        </p>
-
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="px-4 py-2 rounded-lg text-[#1E3A5F] text-sm font-medium hover:bg-gray-100"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              setBusy(true);
-              await onConfirm();
-            }}
-            disabled={busy}
-            className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-bold hover:bg-amber-700 disabled:opacity-50"
-          >
-            {busy ? 'Regenerating…' : 'Confirm regenerate'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── NewSecretModal ──────────────────────────────────────────
-
-function NewSecretModal({ secret, onClose }: { secret: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6">
-        <h3 className="text-lg font-bold text-[#1E3A5F] mb-2">New webhook secret</h3>
-        <p className="text-sm text-[#4A4A4A] leading-relaxed mb-4">
-          Copy this to your Wix Automation now. It will not be shown again.
-        </p>
-
-        <div className="bg-gray-50 rounded-lg p-3 font-mono text-sm text-[#1E3A5F] break-all border border-gray-200">
-          {secret}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 mt-5">
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard?.writeText(secret);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#F3CE49] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f]"
-          >
-            {copied
-              ? <><Check size={13} /> Copied</>
-              : <><Copy size={13} /> Copy to clipboard</>}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#162d49]"
-          >
-            Done
           </button>
         </div>
       </div>
