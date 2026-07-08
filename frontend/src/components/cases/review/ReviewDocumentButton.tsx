@@ -9,6 +9,10 @@ import { api, ApiError } from '@/lib/api';
 // required reason (10–2000 chars). Re-reviewing replaces the existing
 // verdict (UPSERT on the backend). "Clear review" removes the row,
 // returning the document to UNREVIEWED.
+//
+// Shared by the LIA case detail and the OPS admission-review surface.
+// The backend enforces per-source access (OPS cannot review VISA_SUPPORTING),
+// so this component is source-agnostic and safe to reuse.
 
 type Status = 'APPROVED' | 'REJECTED';
 
@@ -177,7 +181,7 @@ export function ReviewDocumentButton({
               rows={5}
               maxLength={2000}
               disabled={submitting || clearing}
-              placeholder="Notes only the LIA team will see…"
+              placeholder="Notes only the review team will see…"
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none resize-y disabled:bg-gray-50"
             />
             <div className="text-xs text-[#4A4A4A]/60 mt-1">{trimmedLen} / 2000</div>

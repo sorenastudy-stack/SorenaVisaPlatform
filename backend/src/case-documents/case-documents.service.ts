@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -54,6 +55,20 @@ export interface CaseDocumentRow {
   liaReviewReason: string | null;
 }
 
+// OPS cross-case review queue row (one unreviewed document).
+export interface OpsUnreviewedDocumentRow {
+  caseId: string;
+  caseReference: string | null;   // inzApplicationNumber when present
+  caseLabel: string;              // reference, or a short "Case xxxxxxxx" fallback
+  clientName: string | null;
+  source: CaseDocumentReviewSource;
+  sourceRowId: string;
+  fileName: string;
+  uploaderId: string | null;
+  uploaderName: string | null;
+  createdAt: Date;
+}
+
 @Injectable()
 export class CaseDocumentsService {
   constructor(
@@ -63,7 +78,10 @@ export class CaseDocumentsService {
 
   // ─── List ──────────────────────────────────────────────────────────────
 
-  async listAllDocumentsForCase(caseId: string): Promise<CaseDocumentRow[]> {
+  async listAllDocumentsForCase(
+    caseId: string,
+    viewerRole?: string | null,
+  ): Promise<CaseDocumentRow[]> {
     await this.ensureCaseExists(caseId);
 
     // 1. Admission documents — Case → AdmissionApplication → AdmissionDocument.
@@ -240,6 +258,119 @@ export class CaseDocumentsService {
     }
 
     rows.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+
+    // Tighter isolation: OPERATIONS never even sees VISA_SUPPORTING (legal)
+    // documents in the list. LIA + admin tier see everything.
+    const visible =
+      viewerRole === 'OPERATIONS'
+        ? rows.filter((r) => r.source !== 'VISA_SUPPORTING')
+        : rows;
+    return visible;
+  }
+
+  // ─── OPS cross-case review queue ─────────────────────────────────────────
+  // Every uploaded document across ACTIVE cases (stage not COMPLETED/WITHDRAWN)
+  // that has NO CaseDocumentReview verdict yet. "Unreviewed" = no review row
+  // (rows only ever exist as APPROVED/REJECTED). Only documents that actually
+  // have an uploaded file are surfaced (ADMISSION always; APPLICATION where
+  // fileUrl is set; VISA_SUPPORTING where >=1 file) — an empty placeholder has
+  // nothing to review. Oldest-first so the longest-waiting doc is at the top.
+  // Reuses the same three sources as listAllDocumentsForCase; adds no models.
+  // Access is enforced at the controller (OPERATIONS + admin tier) — this
+  // deliberately reads across all cases.
+  async listUnreviewedAcrossCases(): Promise<OpsUnreviewedDocumentRow[]> {
+    const cases = await this.prisma.case.findMany({
+      where: { stage: { notIn: ['COMPLETED', 'WITHDRAWN'] } },
+      select: {
+        id: true,
+        inzApplicationNumber: true,
+        lead: { select: { contact: { select: { userId: true, fullName: true } } } },
+      },
+    });
+    if (cases.length === 0) return [];
+
+    const meta = new Map<
+      string,
+      { clientName: string | null; clientUserId: string | null; caseReference: string | null }
+    >();
+    for (const c of cases) {
+      meta.set(c.id, {
+        clientName: c.lead?.contact?.fullName ?? null,
+        clientUserId: c.lead?.contact?.userId ?? null,
+        caseReference: c.inzApplicationNumber ?? null,
+      });
+    }
+    const activeCaseIds = cases.map((c) => c.id);
+
+    // A document is "reviewed" iff a CaseDocumentReview row exists for its
+    // (source, sourceRowId). Build the exclusion set in one query.
+    const reviews = await this.prisma.caseDocumentReview.findMany({
+      where: { caseId: { in: activeCaseIds } },
+      select: { source: true, sourceRowId: true },
+    });
+    const reviewed = new Set(reviews.map((r) => this.reviewKey(r.source, r.sourceRowId)));
+
+    const rows: OpsUnreviewedDocumentRow[] = [];
+    const push = (
+      caseId: string,
+      source: CaseDocumentReviewSource,
+      sourceRowId: string,
+      fileName: string,
+      createdAt: Date,
+    ) => {
+      const m = meta.get(caseId);
+      if (!m) return;
+      rows.push({
+        caseId,
+        caseReference: m.caseReference,
+        caseLabel: m.caseReference ?? `Case ${caseId.slice(0, 8)}`,
+        clientName: m.clientName,
+        source,
+        sourceRowId,
+        fileName,
+        uploaderId: m.clientUserId,
+        uploaderName: m.clientName,
+        createdAt,
+      });
+    };
+
+    // 1. ADMISSION — AdmissionDocument (fileName/fileUrl are required — always a real file).
+    const admissions = await this.prisma.admissionApplication.findMany({
+      where: { caseId: { in: activeCaseIds } },
+      select: {
+        caseId: true,
+        documents: { select: { id: true, fileName: true, uploadedAt: true } },
+      },
+    });
+    for (const a of admissions) {
+      for (const d of a.documents) {
+        if (reviewed.has(this.reviewKey('ADMISSION', d.id))) continue;
+        push(a.caseId, 'ADMISSION', d.id, d.fileName, d.uploadedAt);
+      }
+    }
+
+    // 2. APPLICATION — only rows with an actual file (MISSING placeholders have
+    //    nothing to review).
+    const applications = await this.prisma.application.findMany({
+      where: { caseId: { in: activeCaseIds } },
+      select: {
+        caseId: true,
+        documents: { select: { id: true, fileName: true, fileUrl: true, createdAt: true } },
+      },
+    });
+    for (const app of applications) {
+      for (const d of app.documents) {
+        if (!d.fileUrl) continue;
+        if (reviewed.has(this.reviewKey('APPLICATION', d.id))) continue;
+        push(app.caseId, 'APPLICATION', d.id, d.fileName ?? '(unnamed)', d.createdAt);
+      }
+    }
+
+    // NOTE: VISA_SUPPORTING is intentionally EXCLUDED from the OPS queue —
+    // visa (legal) documents are the LIA's review scope, not Operations'. This
+    // queue only surfaces ADMISSION + APPLICATION (admission-specialist) work.
+
+    rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()); // oldest-first
     return rows;
   }
 
@@ -251,6 +382,8 @@ export class CaseDocumentsService {
     sourceRowId: string,
     actor: Actor,
   ): Promise<{ url: string; expiresInSeconds: number }> {
+    // Source gate first (fail fast, no existence leak): OPS cannot download visa docs.
+    this.assertCanAccessSource(actor.role, source);
     const row = await this.resolveSourceRow(caseId, source, sourceRowId);
     if (!row.fileUrl) {
       throw new BadRequestException(
@@ -293,6 +426,8 @@ export class CaseDocumentsService {
     dto: ReviewDocumentDto,
     actor: Actor,
   ) {
+    // Source gate first (fail fast, no existence leak): OPS cannot review visa docs.
+    this.assertCanAccessSource(actor.role, source);
     // Verify the source row belongs to this case before we attach a review.
     await this.resolveSourceRow(caseId, source, sourceRowId);
 
@@ -373,6 +508,8 @@ export class CaseDocumentsService {
     sourceRowId: string,
     actor: Actor,
   ) {
+    // Source gate first (fail fast, no existence leak): OPS cannot clear visa reviews.
+    this.assertCanAccessSource(actor.role, source);
     const existing = await this.prisma.caseDocumentReview.findUnique({
       where: { source_sourceRowId: { source, sourceRowId } },
     });
@@ -511,6 +648,23 @@ export class CaseDocumentsService {
 
   private reviewKey(source: CaseDocumentReviewSource, sourceRowId: string) {
     return `${source}:${sourceRowId}`;
+  }
+
+  // Source-based access gate. OPERATIONS (Admission Specialists) may only touch
+  // ADMISSION/APPLICATION documents; VISA_SUPPORTING (legal review) stays with
+  // LIA + admin tier. The role is passed in from the VERIFIED JWT (req.user.role
+  // via the controller's actor()), never from client input — so an OPS user
+  // cannot review, download, or list a visa document by crafting a request.
+  // LIA + admin tier are unrestricted (no regression).
+  private assertCanAccessSource(
+    role: string | null | undefined,
+    source: CaseDocumentReviewSource,
+  ) {
+    if (role === 'OPERATIONS' && source === 'VISA_SUPPORTING') {
+      throw new ForbiddenException(
+        'Operations may only access admission documents (ADMISSION / APPLICATION).',
+      );
+    }
   }
 
   private shapeRow(args: {

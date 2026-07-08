@@ -19,8 +19,8 @@ import { RecordDecisionButton } from './RecordDecisionButton';
 import { SendMessageButton } from './SendMessageButton';
 import { RequestDocumentButton } from './RequestDocumentButton';
 import { ReassignLiaButton } from './ReassignLiaButton';
-import { DownloadDocumentButton } from './DownloadDocumentButton';
-import { ReviewDocumentButton } from './ReviewDocumentButton';
+import { DownloadDocumentButton } from '@/components/cases/review/DownloadDocumentButton';
+import { ReviewDocumentButton } from '@/components/cases/review/ReviewDocumentButton';
 import { SubmitToInzButton } from './SubmitToInzButton';
 import { EditInzSubmissionButton } from './EditInzSubmissionButton';
 import { RevertInzSubmissionButton } from './RevertInzSubmissionButton';
@@ -209,7 +209,7 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
       // Non-fatal; show the message thread empty if it fails.
     }
     try {
-      caseDocuments = await apiServer.get<CaseDocumentRow[]>(`/cases/${params.id}/documents`);
+      caseDocuments = await apiServer.get<CaseDocumentRow[]>(`/cases/${params.id}/document-reviews`);
     } catch {
       // Non-fatal; show the documents card empty if it fails.
     }

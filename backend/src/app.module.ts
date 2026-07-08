@@ -97,19 +97,15 @@ import { WalletModule } from './wallet/wallet.module';
     // Phase 8: weekly client digest, data-gathering layer only. No
     // consumers yet — cron + email composer land in later prompts.
     DigestModule,
-    // Documents step 3: R2-backed case attachments. Must be registered
-    // BEFORE CaseDocumentsModule because both controllers declare
-    // @Controller('cases') with @Get(':caseId/documents'); Express's
-    // first-match-wins ordering would otherwise route the GET to the
-    // PR-LIA-5 read-side overlay below (legacy admission/application/
-    // visa-supporting tables, no R2-backed Documents) and the new list
-    // endpoint would be unreachable.
+    // Documents step 3: R2-backed case attachments (System A). Owns
+    // GET :caseId/documents. No longer collides with CaseDocumentsModule
+    // below (its list route was renamed to :caseId/document-reviews).
     DocumentsModule,
-    // PR-LIA-5: unified LIA view of client-uploaded documents on a
-    // CRM Case, with download + internal-only review verdicts. The
-    // GET :caseId/documents route here is now shadowed by DocumentsModule
-    // above; the other 3 routes (review POST/DELETE, source-specific
-    // download-url) have distinct path segments and remain reachable.
+    // PR-LIA-5: unified review view of client-uploaded documents on a CRM
+    // Case (admission/application/visa-supporting source tables), with
+    // download + internal-only review verdicts. List route is
+    // GET :caseId/document-reviews (distinct from System A). Also hosts the
+    // OPS cross-case unreviewed queue (GET /ops/documents/unreviewed).
     CaseDocumentsModule,
     // PR-LIA-6: consolidated read-only INZ application data viewer.
     InzDataModule,

@@ -25,13 +25,17 @@ import { ReviewDocumentDto } from './dto/case-documents.dto';
 
 @Controller('cases')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
+@Roles('OPERATIONS', 'LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
 export class CaseDocumentsController {
   constructor(private readonly service: CaseDocumentsService) {}
 
-  @Get(':caseId/documents')
-  list(@Param('caseId') caseId: string) {
-    return this.service.listAllDocumentsForCase(caseId);
+  // Renamed from ':caseId/documents' to avoid the route collision with the
+  // System-A R2 documents controller (DocumentsController @Controller('cases')),
+  // which was shadowing this list. Now a distinct path.
+  @Get(':caseId/document-reviews')
+  list(@Param('caseId') caseId: string, @Req() req: any) {
+    // Pass the VERIFIED JWT role so OPS never sees VISA_SUPPORTING (legal) docs.
+    return this.service.listAllDocumentsForCase(caseId, this.actor(req).role);
   }
 
   @Get(':caseId/documents/:source/:sourceRowId/download-url')
