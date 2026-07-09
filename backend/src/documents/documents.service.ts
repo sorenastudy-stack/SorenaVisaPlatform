@@ -190,6 +190,15 @@ export class DocumentsService {
   // download is separately gated by getDownloadUrl → checkCaseDocumentsAccess.
   // Never leaks r2Key.
   async listMyDocuments(actor: Actor) {
+    // Phase 5c — the CONSULTANT (Admission Specialist) is denied System A
+    // attachments (leak-close, see documents-access.helper.ts). This cross-case
+    // list doesn't go through checkCaseDocumentsAccess (it filters by slot
+    // columns inline, and CONSULTANT would otherwise match via ownerId), so the
+    // same deny is applied here explicitly: they see none. Their typed P1 view
+    // arrives via System B (Phase 5d). Enforced server-side regardless of the
+    // controller @StaffRoles allowing CONSULTANT.
+    if (actor.role === 'CONSULTANT') return [];
+
     const isAdmin = !!actor.role && ['OWNER', 'SUPER_ADMIN', 'ADMIN'].includes(actor.role);
     const where: Prisma.DocumentWhereInput = {
       status: DocumentUploadStatus.UPLOADED,

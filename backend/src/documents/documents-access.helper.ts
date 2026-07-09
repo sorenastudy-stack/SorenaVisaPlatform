@@ -46,6 +46,17 @@ export async function checkCaseDocumentsAccess(
   // 1. Admin tier — every mode allowed.
   if (actor.role && ADMIN_TIER.has(actor.role)) return 'allow';
 
+  // Phase 5c — leak-close for System A (this generic R2 attachment store).
+  // The CONSULTANT (Admission Specialist) is denied READ/DOWNLOAD here even when
+  // they hold the owner slot: these attachments are OPAQUE (no documentType /
+  // priority — `category` is never populated), so a Priority-2 file (police /
+  // bank / medical) uploaded as a generic attachment cannot be filtered out.
+  // The Admission Specialist's proper, typed Priority-1 view comes via System B
+  // (deferred to Phase 5d). Placed BEFORE the slot allow below so the owner-slot
+  // match cannot re-grant it. Only read modes (list + download-url) are blocked;
+  // write/delete and every other role/client path are unaffected.
+  if (mode === 'read' && actor.role === 'CONSULTANT') return 'deny';
+
   // 2. Staff slot — any of the 4 slots, checked by userId only.
   //    A user holding the slot has standing on the case regardless
   //    of any subsequent role demotion.

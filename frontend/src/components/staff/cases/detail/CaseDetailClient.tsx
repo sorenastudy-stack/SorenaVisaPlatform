@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { api } from '@/lib/api';
+import { useStaff } from '@/contexts/StaffContext';
 import { CaseHeader } from './CaseHeader';
 import { CaseAssignmentsPanel } from './CaseAssignmentsPanel';
 import { SendContractPanel } from './SendContractPanel';
@@ -28,6 +29,12 @@ import type { CaseDetail } from './types';
 // false), so no extra wiring is needed to hide it for OPS.
 export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?: boolean }) {
   const t = useTranslations();
+  const { me } = useStaff();
+  // Phase 5c (cosmetic): the CONSULTANT (Admission Specialist) is denied System A
+  // attachments server-side (documents-access.helper.ts). Hide the Documents tab
+  // for them so they don't hit a 403 panel. This is UX only — NOT the security
+  // boundary. Their typed P1 view arrives via System B (Phase 5d).
+  const isConsultant = me?.role === 'CONSULTANT';
   const [data, setData] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<CaseTab>('overview');
@@ -71,11 +78,11 @@ export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?
       <SendContractPanel caseId={data.id} onSent={refresh} />
 
       <div>
-        <CaseTabs active={tab} onChange={setTab} />
+        <CaseTabs active={tab} onChange={setTab} hiddenTabs={isConsultant ? ['documents'] : undefined} />
         <div className="pt-5">
           {tab === 'overview'  && <CaseOverviewTab data={data} canEdit={canEdit} onSaved={refresh} />}
           {tab === 'activity'  && <CaseActivityTab caseId={data.id} />}
-          {tab === 'documents' && <CaseDocumentsPanel caseId={data.id} canDelete={true} />}
+          {tab === 'documents' && !isConsultant && <CaseDocumentsPanel caseId={data.id} canDelete={true} />}
           {tab === 'payments'  && <CasePaymentsPanel caseId={data.id} />}
           {tab === 'meetings'  && <PlaceholderPanel section={t('staff.cases.detail.tabs.meetings')} />}
           {tab === 'tickets'   && <PlaceholderPanel section={t('staff.cases.detail.tabs.tickets')} />}

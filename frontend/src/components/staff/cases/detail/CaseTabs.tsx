@@ -22,15 +22,21 @@ const TABS: { id: CaseTab; labelKey: string }[] = [
 export function CaseTabs({
   active,
   onChange,
+  hiddenTabs,
 }: {
   active:   CaseTab;
   onChange: (tab: CaseTab) => void;
+  // Phase 5c — cosmetic: tabs to omit for the current viewer (e.g. the
+  // Documents/System-A tab is hidden for CONSULTANT). The backend is the real
+  // access boundary; this only tidies the UI.
+  hiddenTabs?: CaseTab[];
 }) {
   const t = useTranslations();
+  const tabs = hiddenTabs?.length ? TABS.filter((tab) => !hiddenTabs.includes(tab.id)) : TABS;
   return (
     <div className="border-b border-gray-200 -mx-1 overflow-x-auto">
       <div className="flex gap-1 px-1 min-w-max">
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const on = tab.id === active;
           return (
             <button
