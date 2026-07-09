@@ -17,7 +17,7 @@ export class StaffCasesController {
   constructor(private readonly cases: StaffCasesService) {}
 
   @Get()
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
+  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
   list(@Req() req: any, @Query() query: StaffCasesListQueryDto) {
     return this.cases.listCases(
       { userId: req.user.userId, role: req.user.role as StaffAccessRole },
@@ -55,7 +55,7 @@ export class StaffCasesController {
   }
 
   @Get(':id')
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
+  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
   detail(@Req() req: any, @Param('id') id: string) {
     return this.cases.getCaseDetail(
       { userId: req.user.userId, role: req.user.role as StaffAccessRole },
@@ -64,7 +64,7 @@ export class StaffCasesController {
   }
 
   @Get(':id/activity')
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
+  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
   activity(@Req() req: any, @Param('id') id: string) {
     return this.cases.getCaseActivity(
       { userId: req.user.userId, role: req.user.role as StaffAccessRole },

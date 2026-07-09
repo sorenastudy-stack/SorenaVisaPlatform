@@ -144,17 +144,23 @@ export class StaffCasesService {
     return { items, total, page, pageSize };
   }
 
-  // List-only visibility (does NOT replace assertVisible used by
-  // detail/activity, which still target VisaCase).
-  //   - admin tier               → {} (no scoping)
-  //   - LIA                      → { liaId:   caller.userId }
-  //   - CONSULTANT               → { ownerId: caller.userId }
-  //   - SUPPORT / FINANCE / else → 'none' (caller sees zero rows)
+  // List-only visibility. Each non-admin role is scoped to the cases where
+  // they hold THEIR slot column (the auto-assignment slots):
+  //   - admin tier + OPERATIONS  → {} (no scoping)
+  //   - LIA                      → { liaId:        caller.userId }
+  //   - CONSULTANT (Admission)   → { ownerId:      caller.userId }
+  //   - SUPPORT (Pastoral Care)  → { supportId:    caller.userId }   (Phase 5b)
+  //   - FINANCE                  → { financeId:    caller.userId }   (Phase 5b)
+  //   - CLIENT_CONSULTANT        → { consultantId: caller.userId }   (Phase 5b)
+  //   - anything else            → 'none' (caller sees zero rows)
   private caseListVisibilityWhere(caller: CallerCtx): Record<string, unknown> | 'none' {
     // Admin tier + OPERATIONS see every case (no scoping).
     if (SEE_ALL_TIER.includes(caller.role)) return {};
-    if (caller.role === 'LIA')        return { liaId:   caller.userId };
-    if (caller.role === 'CONSULTANT') return { ownerId: caller.userId };
+    if (caller.role === 'LIA')               return { liaId:        caller.userId };
+    if (caller.role === 'CONSULTANT')        return { ownerId:      caller.userId };
+    if (caller.role === 'SUPPORT')           return { supportId:    caller.userId };
+    if (caller.role === 'FINANCE')           return { financeId:    caller.userId };
+    if (caller.role === 'CLIENT_CONSULTANT') return { consultantId: caller.userId };
     return 'none';
   }
 
@@ -251,18 +257,45 @@ export class StaffCasesService {
       if (!own) throw new NotFoundException('Case not found');
       return;
     }
-    if (caller.role === 'SUPPORT' || caller.role === 'FINANCE') {
-      // No Case-side claim possible — surface as 404 to match the
-      // non-leak behaviour of the existing assertVisible() rather
-      // than distinguishing "exists but not yours" from "doesn't exist".
-      throw new NotFoundException('Case not found');
+    // Phase 5b — SUPPORT / FINANCE / CLIENT_CONSULTANT are now scoped to their
+    // own Case slot column (matching the list). 404 (not 403) when the case
+    // isn't theirs, mirroring the LIA/CONSULTANT non-leak behaviour above.
+    if (caller.role === 'SUPPORT') {
+      const own = await this.prisma.case.findFirst({
+        where:  { id: caseId, supportId: caller.userId },
+        select: { id: true },
+      });
+      if (!own) throw new NotFoundException('Case not found');
+      return;
+    }
+    if (caller.role === 'FINANCE') {
+      const own = await this.prisma.case.findFirst({
+        where:  { id: caseId, financeId: caller.userId },
+        select: { id: true },
+      });
+      if (!own) throw new NotFoundException('Case not found');
+      return;
+    }
+    if (caller.role === 'CLIENT_CONSULTANT') {
+      const own = await this.prisma.case.findFirst({
+        where:  { id: caseId, consultantId: caller.userId },
+        select: { id: true },
+      });
+      if (!own) throw new NotFoundException('Case not found');
+      return;
     }
     throw new ForbiddenException('Role cannot access staff cases');
   }
 
   // ── Activity ──────────────────────────────────────────────────────
   async getCaseActivity(caller: CallerCtx, caseId: string) {
-    await this.assertVisible(caller, caseId);
+    // Phase 5b — gate on the Case slot columns (assertVisibleCase), matching
+    // list + detail, instead of the legacy assertVisible() which scoped via the
+    // visaCaseAssignment table. This makes list/detail/activity agree on one
+    // source and also fixes the pre-existing case where a LIA/CONSULTANT could
+    // see + open a case (via Case.liaId/ownerId) yet 404 on its activity for
+    // lack of a visaCaseAssignment row. The same :id is a Case.id in both.
+    await this.assertVisibleCase(caller, caseId);
 
     // Audit rows for this case live in two patterns:
     //   1. entityType = 'VisaCase' AND entityId = caseId
