@@ -205,16 +205,32 @@ export class AssignmentsService {
   }
 
   // For the staff workload view. Returns total + per-slot counts.
+  //
+  // Phase 2a: the CLIENT_CONSULTANT slot lives on Case.consultantId (a scalar
+  // FK added in Phase 1), NOT in the VisaCaseAssignment table (whose roleSlot
+  // enum has no CLIENT_CONSULTANT value). So its count is sourced directly from
+  // open cases where this user is the consultant, mirroring the "open case" =
+  // stage NOT IN (COMPLETED, WITHDRAWN) definition used by the auto-assigner.
   async getStaffWorkload(staffId: string) {
     const rows = await this.prisma.visaCaseAssignment.findMany({
       where:  { staffId, unassignedAt: null },
       select: { roleSlot: true },
     });
-    const byRoleSlot: Record<RoleSlot, number> = {
+    const consultantOpenCases = await this.prisma.case.count({
+      where: {
+        consultantId: staffId,
+        stage: { notIn: ['COMPLETED', 'WITHDRAWN'] },
+      },
+    });
+    const byRoleSlot: Record<RoleSlot | 'CLIENT_CONSULTANT', number> = {
       LIA: 0, CONSULTANT: 0, SUPPORT: 0, FINANCE: 0,
+      CLIENT_CONSULTANT: consultantOpenCases,
     };
     for (const r of rows) byRoleSlot[r.roleSlot as RoleSlot]++;
-    return { activeCount: rows.length, byRoleSlot };
+    return {
+      activeCount: rows.length + consultantOpenCases,
+      byRoleSlot,
+    };
   }
 
   // For the "reassign" UI dropdown — list every active staff user

@@ -1585,6 +1585,7 @@
       "ADMIN": "ادمین",
       "LIA": "وکیل مهاجرت",
       "CONSULTANT": "مشاور",
+      "CLIENT_CONSULTANT": "مشاور موکل",
       "SUPPORT": "پشتیبانی",
       "FINANCE": "مالی"
     },

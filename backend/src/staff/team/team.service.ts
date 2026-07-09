@@ -6,6 +6,7 @@ import {
   UpdateStaffProfileDto, AvailabilityWindowDto, CreateStaffLeaveDto,
 } from './dto/team.dto';
 import { zonedWallTimeToUtc } from '../../booking/slot-engine';
+import { normalizeLanguageCodes } from '../../common/language-codes';
 
 // PR-BOOKING-ADMIN-A — adviser management service.
 //
@@ -15,7 +16,12 @@ import { zonedWallTimeToUtc } from '../../booking/slot-engine';
 // create users — that's /staff/users.
 
 // Adviser-eligible roles.
-const BOOKABLE_STAFF_ROLES = ['LIA', 'CONSULTANT'] as const;
+// Phase 2a: CLIENT_CONSULTANT is included so the real client Consultant appears
+// in the /staff/team roster and their `languages` become editable — the input
+// that drives consultant auto-assignment's language matching. They don't have
+// to offer bookable sessions (bookingActive defaults off); the profile editor
+// (languages / timezone) is what matters here.
+const BOOKABLE_STAFF_ROLES = ['LIA', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 
 @Injectable()
 export class TeamService {
@@ -114,7 +120,9 @@ export class TeamService {
       await tx.user.update({
         where: { id },
         data: {
-          ...(dto.languages !== undefined ? { languages: dto.languages } : {}),
+          // Phase 2a: normalise to lowercase, de-duped, valid ISO 639-1 codes
+          // so staff languages line up exactly with client preferredLanguage.
+          ...(dto.languages !== undefined ? { languages: normalizeLanguageCodes(dto.languages) } : {}),
           ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
           ...(dto.bookableSessionTypes !== undefined ? { bookableSessionTypes: dto.bookableSessionTypes } : {}),
           ...(dto.bookingActive !== undefined ? { bookingActive: dto.bookingActive } : {}),

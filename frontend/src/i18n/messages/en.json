@@ -1585,6 +1585,7 @@
       "ADMIN": "Admin",
       "LIA": "Immigration Adviser",
       "CONSULTANT": "Consultant",
+      "CLIENT_CONSULTANT": "Client Consultant",
       "SUPPORT": "Support",
       "FINANCE": "Finance"
     },

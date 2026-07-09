@@ -20,6 +20,7 @@ const STYLES: Record<StaffRole, string> = {
   ADMIN:       'bg-slate-700 text-white',
   LIA:         'bg-gray-100 text-gray-800',
   CONSULTANT:  'bg-gray-100 text-gray-800',
+  CLIENT_CONSULTANT: 'bg-gray-100 text-gray-800',
   SUPPORT:     'bg-gray-100 text-gray-800',
   FINANCE:     'bg-gray-100 text-gray-800',
 };

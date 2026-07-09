@@ -34,6 +34,8 @@ export const ASSIGNABLE_ROLES: StaffRole[] = [
   'ADMIN',
   'LIA',
   'CONSULTANT',
+  // Phase 2a: the real client Consultant slot (Case.consultantId).
+  'CLIENT_CONSULTANT',
   'SUPPORT',
   'FINANCE',
 ];

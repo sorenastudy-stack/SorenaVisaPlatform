@@ -69,6 +69,14 @@ interface AssignResult {
   liaName: string | null;
 }
 
+// Phase 2a — result of consultant auto-assignment. Mirrors AssignResult.
+interface ConsultantAssignResult {
+  status: 'assigned' | 'no_candidates' | 'already_assigned';
+  consultantId: string | null;
+  consultantName: string | null;
+  langMatched: boolean;
+}
+
 @Injectable()
 export class LiaAssignmentService {
   private readonly logger = new Logger(LiaAssignmentService.name);
@@ -183,6 +191,131 @@ export class LiaAssignmentService {
       .catch((err) => this.logger.error(`Failed to email new LIA: ${err?.message ?? err}`));
 
     return { status: 'assigned', liaId: pick.id, liaName: pick.name };
+  }
+
+  // ─── Auto-assign the client Consultant (Phase 2a) ─────────────────────
+  //
+  // Mirrors assignLiaToCase, but for the Case.consultantId slot (role
+  // CLIENT_CONSULTANT). Two deliberate differences from the LIA path:
+  //
+  //   1. NEVER throws. The LIA path throws on no-candidates at contract
+  //      send (blocking the send is desirable there). This runs off the
+  //      lead→QUALIFIED / case-creation trigger and must NEVER block that
+  //      flow — an empty pool logs an audit row and returns quietly.
+  //   2. Language preference. When the client has a non-default language
+  //      AND at least one active consultant speaks it, the pool narrows to
+  //      those speakers; otherwise it stays the full pool. Today client
+  //      preferredLanguage is 'en' everywhere (until 2b captures a real
+  //      value), so this is a guarded no-op and selection is pure workload.
+  //
+  // COMPLIANCE: selection keys on LANGUAGE ONLY. Nationality is never read
+  // or considered here.
+  async assignConsultantToCase(
+    caseId: string,
+    triggerActor?: Actor,
+  ): Promise<ConsultantAssignResult> {
+    const existing = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        consultantId: true,
+        lead: {
+          select: {
+            contact: { select: { fullName: true, preferredLanguage: true } },
+          },
+        },
+      },
+    });
+    if (!existing) {
+      this.logger.warn(`assignConsultantToCase: case ${caseId} not found`);
+      return { status: 'no_candidates', consultantId: null, consultantName: null, langMatched: false };
+    }
+    if (existing.consultantId) {
+      // Idempotency + continuity: never replace an existing consultant.
+      // A re-opened case keeps its original consultant (consultantId is
+      // sticky — nothing nulls it on close), so this short-circuit is what
+      // makes "same consultant returns" hold automatically.
+      return {
+        status: 'already_assigned',
+        consultantId: existing.consultantId,
+        consultantName: null,
+        langMatched: false,
+      };
+    }
+
+    const candidates = await this.findActiveConsultants();
+    if (candidates.length === 0) {
+      this.logger.warn(
+        `assignConsultantToCase: no active consultants for case ${caseId} — leaving unassigned`,
+      );
+      await this.prisma.auditLog.create({
+        data: {
+          userId: triggerActor?.id ?? null,
+          action: 'AUTO_ASSIGN',
+          eventType: 'CONSULTANT_AUTO_ASSIGN_NO_CANDIDATES',
+          entityType: 'CASE',
+          entityId: caseId,
+          newValue: { reason: 'no_active_consultants' } as Prisma.InputJsonValue,
+          actorNameSnapshot: triggerActor?.name ?? 'System',
+          actorRoleSnapshot: triggerActor?.role ?? 'SYSTEM',
+        },
+      });
+      return { status: 'no_candidates', consultantId: null, consultantName: null, langMatched: false };
+    }
+
+    // Language preference (guarded no-op while clientLang is 'en'). Compare
+    // lowercase ISO 639-1 codes on both sides. Staff `languages` are stored
+    // normalised lowercase (team.service); lowercase the client value too.
+    const clientLang = (existing.lead?.contact?.preferredLanguage ?? 'en').trim().toLowerCase();
+    const langAware = candidates.filter((c) =>
+      (c.languages ?? []).map((l) => l.toLowerCase()).includes(clientLang),
+    );
+    const useLangPool = clientLang !== 'en' && langAware.length > 0;
+    const pool = useLangPool ? langAware : candidates;
+
+    // Lowest open-case count wins; ties broken by createdAt ASC (DB order).
+    let pick = pool[0]!;
+    for (const c of pool) {
+      if (c.consultantCases.length < pick.consultantCases.length) pick = c;
+    }
+
+    const candidatesAudit = pool.map((c) => ({
+      id: c.id,
+      name: c.name,
+      openCases: c.consultantCases.length,
+    }));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.case.update({
+        where: { id: caseId },
+        data: { consultantId: pick.id },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: triggerActor?.id ?? null,
+          action: 'AUTO_ASSIGN',
+          eventType: 'CONSULTANT_AUTO_ASSIGNED',
+          entityType: 'CASE',
+          entityId: caseId,
+          newValue: {
+            consultantId: pick.id,
+            consultantName: pick.name,
+            clientLang,
+            langMatched: useLangPool,
+            candidates: candidatesAudit,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: triggerActor?.name ?? 'System (eligible)',
+          actorRoleSnapshot: triggerActor?.role ?? 'SYSTEM',
+        },
+      });
+    });
+
+    return {
+      status: 'assigned',
+      consultantId: pick.id,
+      consultantName: pick.name,
+      langMatched: useLangPool,
+    };
   }
 
   // ─── Manual reassignment (OWNER / ADMIN / SUPER_ADMIN) ────────────────
@@ -643,6 +776,37 @@ export class LiaAssignmentService {
         email: true,
         createdAt: true,
         liaCases: {
+          where: {
+            stage: { notIn: ['COMPLETED', 'WITHDRAWN'] },
+          },
+          select: { id: true },
+        },
+      },
+    });
+  }
+
+  // Phase 2a mirror of findActiveLias for the CLIENT_CONSULTANT pool.
+  // Same active/archived filter and createdAt-ASC ordering; preloads each
+  // candidate's open `consultantCases` (Case.consultantId) for the workload
+  // count, plus `languages` for the language-preference filter.
+  private async findActiveConsultants() {
+    return this.prisma.user.findMany({
+      where: {
+        role: 'CLIENT_CONSULTANT',
+        isActive: true,
+        OR: [
+          { staffActiveStatus: null },
+          { staffActiveStatus: { isActive: true } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        languages: true,
+        consultantCases: {
           where: {
             stage: { notIn: ['COMPLETED', 'WITHDRAWN'] },
           },

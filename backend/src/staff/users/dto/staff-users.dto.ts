@@ -24,6 +24,9 @@ export enum StaffRoleDto {
   ADMIN       = 'ADMIN',
   LIA         = 'LIA',
   CONSULTANT  = 'CONSULTANT',
+  // Phase 2a: the real client Consultant slot (Case.consultantId). Distinct
+  // from CONSULTANT (the Admission Specialist on Case.ownerId).
+  CLIENT_CONSULTANT = 'CLIENT_CONSULTANT',
   SUPPORT     = 'SUPPORT',
   FINANCE     = 'FINANCE',
 }

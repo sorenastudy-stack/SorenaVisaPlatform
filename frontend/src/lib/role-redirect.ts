@@ -22,6 +22,8 @@ export const ROLE_REDIRECT: Record<string, string> = {
   SALES:       '/sales',
   LIA:         '/staff',
   CONSULTANT:  '/staff',
+  // Phase 2a: the real client Consultant lands on the general staff portal.
+  CLIENT_CONSULTANT: '/staff',
   SUPPORT:     '/staff',
   FINANCE:     '/staff/finance',
   STUDENT:     '/student/dashboard',

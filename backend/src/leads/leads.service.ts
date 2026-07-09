@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { MailService } from '../mail/mail.service';
+import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadStatusDto, isValidTransition } from './dto/update-lead-status.dto';
 import { UpdateLeadNotesDto } from './dto/update-lead-notes.dto';
@@ -23,6 +24,9 @@ export class LeadsService {
     private prisma: PrismaService,
     private eventsService: EventsService,
     private mail: MailService,
+    // Phase 2a: consultant auto-assignment, triggered when a qualified lead's
+    // Case is created below.
+    private liaAssignments: LiaAssignmentService,
   ) {}
 
   async create(dto: CreateLeadDto) {
@@ -194,13 +198,31 @@ export class LeadsService {
     });
 
     if (!existingCase) {
-      await this.prisma.case.create({
+      const newCase = await this.prisma.case.create({
         data: {
           leadId,
           stage: 'ADMISSION',
           status: 'active',
         },
       });
+
+      // Phase 2a: auto-assign the client Consultant at the eligibility moment
+      // (lead→QUALIFIED, when the Case is first created). This MUST NOT block
+      // qualification — assignConsultantToCase never throws, but we also wrap
+      // it defensively so any unexpected failure only logs and returns.
+      try {
+        const result = await this.liaAssignments.assignConsultantToCase(newCase.id);
+        this.logger.log(
+          `Consultant auto-assign for case ${newCase.id}: ${result.status}` +
+            (result.consultantId ? ` → ${result.consultantId}` : ''),
+        );
+      } catch (err) {
+        this.logger.error(
+          `Consultant auto-assign failed for case ${newCase.id} (non-fatal): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
 
     // Send welcome email — failure is non-fatal

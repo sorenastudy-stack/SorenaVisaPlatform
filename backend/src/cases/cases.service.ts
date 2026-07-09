@@ -7,6 +7,7 @@ import { CreateCaseDto } from './dto/create-case.dto';
 import { UpdateCaseDto } from './dto/update-case.dto';
 import { CaseListQueryDto } from './dto/case-list-filter.dto';
 import { OverrideRiskDto, ClearHardStopDto } from './dto/lia-actions.dto';
+import { LiaAssignmentService } from './lia-assignment.service';
 
 interface LiaActor {
   id: string;
@@ -20,6 +21,8 @@ export class CasesService {
     private prisma: PrismaService,
     private eventsService: EventsService,
     private crypto: CryptoService,
+    // Phase 2a: consultant auto-assignment for API-created cases.
+    private liaAssignments: LiaAssignmentService,
   ) {}
 
   async createCase(dto: CreateCaseDto, actorId: string | null) {
@@ -64,6 +67,15 @@ export class CasesService {
       actorId,
       { leadId: dto.leadId },
     );
+
+    // Phase 2a: auto-assign the client Consultant. Non-fatal — a missing
+    // consultant (or any failure) must not fail case creation. The method
+    // itself never throws; the wrapper is defence-in-depth.
+    try {
+      await this.liaAssignments.assignConsultantToCase(caseRecord.id);
+    } catch {
+      /* consultant auto-assign is best-effort; case creation still succeeds */
+    }
 
     return caseRecord;
   }

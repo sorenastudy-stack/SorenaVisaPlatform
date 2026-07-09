@@ -22,6 +22,10 @@ export type StaffAccessRole =
   | 'ADMIN'
   | 'LIA'
   | 'CONSULTANT'
+  // Phase 2a: the real client Consultant (owns the client from eligibility to
+  // visa result). DISTINCT from CONSULTANT, which is the "Admission Specialist"
+  // on Case.ownerId. Lands on the general /staff portal like the other slots.
+  | 'CLIENT_CONSULTANT'
   | 'SUPPORT'
   | 'FINANCE'
   // PR-OPS-CASES: operations staff — read-all cases + edit stage/notes only

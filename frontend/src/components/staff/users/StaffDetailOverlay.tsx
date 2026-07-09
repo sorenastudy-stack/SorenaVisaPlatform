@@ -27,7 +27,9 @@ import type { StaffUserRow, StaffUserDetail } from './types';
 
 interface Workload {
   activeCount: number;
-  byRoleSlot:  Record<'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE', number>;
+  // Phase 2a: CLIENT_CONSULTANT is the real client Consultant slot (counted
+  // from Case.consultantId, server-side).
+  byRoleSlot:  Record<'LIA' | 'CONSULTANT' | 'CLIENT_CONSULTANT' | 'SUPPORT' | 'FINANCE', number>;
 }
 
 export function StaffDetailOverlay({
@@ -152,7 +154,7 @@ export function StaffDetailOverlay({
                 {t('staff.users.detail.totalAssignments', { count: workload.activeCount })}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                {(['LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'] as const).map((slot) => (
+                {(['LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE'] as const).map((slot) => (
                   <div key={slot} className="rounded-lg bg-gray-50 px-2 py-1.5 text-center">
                     <div className="text-gray-500 text-[10px] uppercase tracking-wide">{slot}</div>
                     <div className="text-gray-900 font-semibold">{workload.byRoleSlot[slot] ?? 0}</div>

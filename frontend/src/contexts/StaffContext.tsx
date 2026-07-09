@@ -17,7 +17,9 @@ import { api } from '@/lib/api';
 
 export type StaffRole =
   | 'OWNER' | 'SUPER_ADMIN' | 'ADMIN'
-  | 'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE';
+  // Phase 2a: CLIENT_CONSULTANT is the real client Consultant slot, distinct
+  // from CONSULTANT (the Admission Specialist).
+  | 'LIA' | 'CONSULTANT' | 'CLIENT_CONSULTANT' | 'SUPPORT' | 'FINANCE';
 
 export interface StaffPermissions {
   canManageStaff:   boolean;
