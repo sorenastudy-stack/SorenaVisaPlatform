@@ -22,6 +22,7 @@ import { ManualReassignLiaDto } from './dto/lia-assignment.dto';
 import { ManualReassignOwnerDto } from './dto/owner-assignment.dto';
 import { ManualReassignSupportDto } from './dto/support-assignment.dto';
 import { ManualReassignFinanceDto } from './dto/finance-assignment.dto';
+import { ManualReassignConsultantDto } from './dto/consultant-assignment.dto';
 
 @Controller('cases')
 @UseGuards(JwtAuthGuard)
@@ -179,6 +180,28 @@ export class CasesController {
     return this.liaAssignments.reassignFinance(
       id,
       { financeId: dto.financeId ?? null, reason: dto.reason },
+      {
+        id: req.user?.userId ?? req.user?.id,
+        name: req.user?.name ?? null,
+        role: req.user?.role ?? null,
+      },
+    );
+  }
+
+  // Phase 1 (auto-assignment) — Mirror of /support for the CONSULTANT slot,
+  // which lives on Case.consultantId. Admin-tier only for manual override;
+  // validates the target's role is CLIENT_CONSULTANT in the service.
+  @Patch(':id/consultant')
+  @UseGuards(RolesGuard)
+  @Roles('OWNER', 'ADMIN', 'SUPER_ADMIN')
+  reassignConsultant(
+    @Param('id') id: string,
+    @Body() dto: ManualReassignConsultantDto,
+    @Req() req: any,
+  ) {
+    return this.liaAssignments.reassignConsultant(
+      id,
+      { consultantId: dto.consultantId ?? null, reason: dto.reason },
       {
         id: req.user?.userId ?? req.user?.id,
         name: req.user?.name ?? null,

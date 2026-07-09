@@ -58,6 +58,11 @@ interface ManualReassignFinanceDto {
   reason: string;
 }
 
+interface ManualReassignConsultantDto {
+  consultantId: string | null;
+  reason: string;
+}
+
 interface AssignResult {
   status: 'assigned' | 'no_candidates' | 'already_assigned';
   liaId: string | null;
@@ -519,6 +524,88 @@ export class LiaAssignmentService {
           newValue: {
             financeId: newFinance?.id ?? null,
             financeName: newFinance?.name ?? null,
+            reason: dto.reason,
+            reasonLength: dto.reason.length,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+      return u;
+    });
+
+    return updated;
+  }
+
+  // ─── Consultant manual reassignment ──────────────────────────────────
+  //
+  // Phase 1 (auto-assignment) — mirror of reassignSupport() for the new
+  // CONSULTANT slot, which lives on Case.consultantId. Validates the target's
+  // role === 'CLIENT_CONSULTANT' (the real client Consultant — DISTINCT from the
+  // CONSULTANT auth role, which is the "Admission Specialist" on ownerId). Same
+  // shape as reassignSupport: no timestamp column, no emails in v1.
+  async reassignConsultant(
+    caseId: string,
+    dto: ManualReassignConsultantDto,
+    actor: Actor,
+  ) {
+    const existing = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        consultantId: true,
+        lead: { select: { contact: { select: { fullName: true } } } },
+        consultant: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (!existing) throw new NotFoundException('Case not found');
+
+    let newConsultant: { id: string; name: string; email: string } | null = null;
+    if (dto.consultantId) {
+      const target = await this.prisma.user.findUnique({
+        where: { id: dto.consultantId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          staffActiveStatus: { select: { isActive: true } },
+        },
+      });
+      if (!target) throw new NotFoundException('Target user not found');
+      if (target.role !== 'CLIENT_CONSULTANT') {
+        throw new BadRequestException('Target user is not a Consultant');
+      }
+      if (!target.isActive) {
+        throw new BadRequestException('Target Consultant is not active');
+      }
+      if (target.staffActiveStatus && target.staffActiveStatus.isActive === false) {
+        throw new BadRequestException('Target Consultant is archived');
+      }
+      newConsultant = { id: target.id, name: target.name, email: target.email };
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.case.update({
+        where: { id: caseId },
+        data:  { consultantId: newConsultant?.id ?? null },
+        include: { consultant: { select: { id: true, name: true, email: true } } },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.id,
+          action: 'MANUAL_REASSIGN',
+          eventType: 'CONSULTANT_MANUAL_REASSIGNED',
+          entityType: 'CASE',
+          entityId: caseId,
+          oldValue: {
+            consultantId: existing.consultantId ?? null,
+            consultantName: existing.consultant?.name ?? null,
+          } as Prisma.InputJsonValue,
+          newValue: {
+            consultantId: newConsultant?.id ?? null,
+            consultantName: newConsultant?.name ?? null,
             reason: dto.reason,
             reasonLength: dto.reason.length,
           } as Prisma.InputJsonValue,
