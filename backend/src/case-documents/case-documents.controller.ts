@@ -32,13 +32,21 @@ export class CaseDocumentsController {
   // Renamed from ':caseId/documents' to avoid the route collision with the
   // System-A R2 documents controller (DocumentsController @Controller('cases')),
   // which was shadowing this list. Now a distinct path.
+  // Phase 5d — CONSULTANT (Admission Specialist) is granted READ access here
+  // (this route + download-url below only), then filtered to Priority-1 docs in
+  // the service. The per-route @Roles OVERRIDES the class-level list (RolesGuard
+  // uses getAllAndOverride), so CONSULTANT is NOT admitted to the review/verdict
+  // routes below — they keep the class @Roles and 403 a CONSULTANT (view-only).
   @Get(':caseId/document-reviews')
+  @Roles('OPERATIONS', 'LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'CONSULTANT')
   list(@Param('caseId') caseId: string, @Req() req: any) {
-    // Pass the VERIFIED JWT role so OPS never sees VISA_SUPPORTING (legal) docs.
+    // Pass the VERIFIED JWT role so OPS never sees VISA_SUPPORTING (legal) docs
+    // and CONSULTANT sees Priority-1 only.
     return this.service.listAllDocumentsForCase(caseId, this.actor(req).role);
   }
 
   @Get(':caseId/documents/:source/:sourceRowId/download-url')
+  @Roles('OPERATIONS', 'LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'CONSULTANT')
   download(
     @Param('caseId') caseId: string,
     @Param('source') source: string,

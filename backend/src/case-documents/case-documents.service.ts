@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { createSignedDownloadToken } from '../common/signed-url.util';
 import { ReviewDocumentDto } from './dto/case-documents.dto';
+import { documentPriority } from './document-priority';
 
 // PR-LIA-5 — Cross-source document listing + signed-URL downloads +
 // internal-only review verdicts.
@@ -259,12 +260,18 @@ export class CaseDocumentsService {
 
     rows.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
 
-    // Tighter isolation: OPERATIONS never even sees VISA_SUPPORTING (legal)
-    // documents in the list. LIA + admin tier see everything.
-    const visible =
-      viewerRole === 'OPERATIONS'
-        ? rows.filter((r) => r.source !== 'VISA_SUPPORTING')
-        : rows;
+    // Role-scoped visibility. LIA + admin tier see everything.
+    //   • OPERATIONS never sees VISA_SUPPORTING (legal) docs.
+    //   • Phase 5d — CONSULTANT (Admission Specialist) sees Priority-1
+    //     (educational) docs ONLY, classified by document TYPE (never by source),
+    //     so a P2 type in the ADMISSION source (e.g. VISA_POLICE_CERTIFICATE) is
+    //     hidden while a P1 type in the visa source (e.g. OFFER_OF_PLACE) shows.
+    let visible = rows;
+    if (viewerRole === 'OPERATIONS') {
+      visible = rows.filter((r) => r.source !== 'VISA_SUPPORTING');
+    } else if (viewerRole === 'CONSULTANT') {
+      visible = rows.filter((r) => documentPriority(r.source, r.docType) === 'P1');
+    }
     return visible;
   }
 
@@ -368,7 +375,10 @@ export class CaseDocumentsService {
 
     // NOTE: VISA_SUPPORTING is intentionally EXCLUDED from the OPS queue —
     // visa (legal) documents are the LIA's review scope, not Operations'. This
-    // queue only surfaces ADMISSION + APPLICATION (admission-specialist) work.
+    // queue only surfaces ADMISSION + APPLICATION work for the OPERATIONS
+    // read-all role. (The Admission Specialist is auth role CONSULTANT, gated
+    // separately by document priority in listAllDocumentsForCase — not this
+    // OPS queue.)
 
     rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()); // oldest-first
     return rows;
@@ -385,6 +395,16 @@ export class CaseDocumentsService {
     // Source gate first (fail fast, no existence leak): OPS cannot download visa docs.
     this.assertCanAccessSource(actor.role, source);
     const row = await this.resolveSourceRow(caseId, source, sourceRowId);
+    // Phase 5d — Priority gate for the Admission Specialist (CONSULTANT): they may
+    // download Priority-1 (educational) documents only. Enforced by document TYPE
+    // (not source), so a hand-crafted download-url for a P2 doc — including a
+    // VISA_POLICE_CERTIFICATE that sits in the ADMISSION source — is denied here,
+    // BEFORE any token is minted. LIA/admin/OPERATIONS are unaffected.
+    if (actor.role === 'CONSULTANT' && documentPriority(source, row.documentType) === 'P2') {
+      throw new ForbiddenException(
+        'Admission Specialists may only access Priority-1 (educational) documents.',
+      );
+    }
     if (!row.fileUrl) {
       throw new BadRequestException(
         'This document is metadata-only — file bytes have not been collected.',
@@ -562,7 +582,7 @@ export class CaseDocumentsService {
     caseId: string,
     source: CaseDocumentReviewSource,
     sourceRowId: string,
-  ): Promise<{ fileUrl: string | null; fileName: string; mimeType: string }> {
+  ): Promise<{ fileUrl: string | null; fileName: string; mimeType: string; documentType: string }> {
     if (source === 'ADMISSION') {
       const d = await this.prisma.admissionDocument.findUnique({
         where: { id: sourceRowId },
@@ -571,7 +591,9 @@ export class CaseDocumentsService {
       if (!d || d.admissionApplication.caseId !== caseId) {
         throw new NotFoundException('Document not found on this case.');
       }
-      return { fileUrl: d.fileUrl, fileName: d.fileName, mimeType: d.mimeType };
+      // Phase 5d — documentType returned so the download gate can apply the
+      // Priority-1/2 classification for CONSULTANT.
+      return { fileUrl: d.fileUrl, fileName: d.fileName, mimeType: d.mimeType, documentType: String(d.documentType) };
     }
     if (source === 'APPLICATION') {
       const d = await this.prisma.applicationDocument.findUnique({
@@ -585,6 +607,9 @@ export class CaseDocumentsService {
         fileUrl: d.fileUrl ?? null,
         fileName: d.fileName ?? '(unnamed)',
         mimeType: 'application/octet-stream',
+        // APPLICATION.type is a free string; documentPriority treats the whole
+        // APPLICATION source as P2 regardless, but we pass the real value.
+        documentType: d.type,
       };
     }
     // VISA_SUPPORTING — Case → AdmissionApplication → VisaApplication
@@ -597,6 +622,7 @@ export class CaseDocumentsService {
       where: { id: sourceRowId },
       select: {
         visaApplicationId: true,
+        documentType: true,
         files: {
           orderBy: { uploadedAt: 'desc' },
           take: 1,
@@ -621,12 +647,13 @@ export class CaseDocumentsService {
     if (!latest) {
       // Parent exists but no files yet — caller's download endpoint
       // rejects with the existing "metadata-only" path.
-      return { fileUrl: null, fileName: '(no file)', mimeType: 'application/octet-stream' };
+      return { fileUrl: null, fileName: '(no file)', mimeType: 'application/octet-stream', documentType: String(parent.documentType) };
     }
     return {
       fileUrl: latest.fileUrl,
       fileName: latest.originalFilename,
       mimeType: latest.mimeType,
+      documentType: String(parent.documentType),
     };
   }
 
@@ -650,12 +677,18 @@ export class CaseDocumentsService {
     return `${source}:${sourceRowId}`;
   }
 
-  // Source-based access gate. OPERATIONS (Admission Specialists) may only touch
-  // ADMISSION/APPLICATION documents; VISA_SUPPORTING (legal review) stays with
-  // LIA + admin tier. The role is passed in from the VERIFIED JWT (req.user.role
-  // via the controller's actor()), never from client input — so an OPS user
-  // cannot review, download, or list a visa document by crafting a request.
-  // LIA + admin tier are unrestricted (no regression).
+  // Source-based access gate for the OPERATIONS read-all role: OPERATIONS may
+  // only touch ADMISSION/APPLICATION documents; VISA_SUPPORTING (legal review)
+  // stays with LIA + admin tier. The role is passed in from the VERIFIED JWT
+  // (req.user.role via the controller's actor()), never from client input — so
+  // an OPS user cannot review, download, or list a visa document by crafting a
+  // request. LIA + admin tier are unrestricted (no regression).
+  //
+  // NOTE: OPERATIONS is a distinct read-all operations role — NOT the Admission
+  // Specialist. The Admission Specialist is auth role CONSULTANT, gated by
+  // document PRIORITY (Priority-1 only), not by this source gate — which is why
+  // an educational doc that lives in the visa source (e.g. OFFER_OF_PLACE) is
+  // still visible to a CONSULTANT while VISA_SUPPORTING stays blocked for OPS.
   private assertCanAccessSource(
     role: string | null | undefined,
     source: CaseDocumentReviewSource,
