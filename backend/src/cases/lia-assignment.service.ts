@@ -77,6 +77,23 @@ interface ConsultantAssignResult {
   langMatched: boolean;
 }
 
+// Phase 3 — result of Admission-Specialist (owner slot) auto-assignment.
+// `replacedStrayOwner` is true when a non-CONSULTANT owner (e.g. a CRM/sales
+// owner pre-set on the case) was replaced by a real Admission Specialist.
+interface AdmissionAssignResult {
+  status: 'assigned' | 'no_candidates' | 'already_assigned';
+  ownerId: string | null;
+  ownerName: string | null;
+  replacedStrayOwner: boolean;
+}
+
+// Phase 3 — result of Finance-officer (finance slot) auto-assignment.
+interface FinanceAssignResult {
+  status: 'assigned' | 'no_candidates' | 'already_assigned';
+  financeId: string | null;
+  financeName: string | null;
+}
+
 @Injectable()
 export class LiaAssignmentService {
   private readonly logger = new Logger(LiaAssignmentService.name);
@@ -316,6 +333,184 @@ export class LiaAssignmentService {
       consultantName: pick.name,
       langMatched: useLangPool,
     };
+  }
+
+  // ─── Auto-assign the Admission Specialist (Phase 3) ───────────────────
+  //
+  // Mirrors assignLiaToCase for the Case.ownerId slot (auth role CONSULTANT,
+  // semantically the "Admission Specialist"). Fires at the same trigger as the
+  // LIA (contract created / SIGNED webhook / ACCOUNT_OPENING payment).
+  //
+  //   * NEVER throws — an empty pool logs an audit and returns; callers are
+  //     also try/catch-wrapped so this can't block contract send / the webhook.
+  //   * Selection is WORKLOAD ONLY (lowest open owner-cases, createdAt tiebreak)
+  //     — no language matching for Admission (per the manual).
+  //   * Idempotency uses OPTION (b): skip only when the existing owner is a
+  //     real Admission Specialist (role CONSULTANT). If ownerId is null OR
+  //     points at a stray non-CONSULTANT owner (e.g. a CRM/sales owner copied
+  //     from lead.ownerId at case creation), assign a real specialist and flag
+  //     `replacedStrayOwner` in the audit. Continuity: a CONSULTANT owner is
+  //     sticky (never nulled on close), so re-opens keep the same specialist.
+  async assignAdmissionToCase(
+    caseId: string,
+    triggerActor?: Actor,
+  ): Promise<AdmissionAssignResult> {
+    const existing = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        ownerId: true,
+        owner: { select: { id: true, name: true, role: true } },
+        lead: { select: { contact: { select: { fullName: true } } } },
+      },
+    });
+    if (!existing) {
+      this.logger.warn(`assignAdmissionToCase: case ${caseId} not found`);
+      return { status: 'no_candidates', ownerId: null, ownerName: null, replacedStrayOwner: false };
+    }
+    // Option (b): only a real Admission Specialist (role CONSULTANT) counts as
+    // "already assigned". A stray non-CONSULTANT owner is replaceable.
+    if (existing.ownerId && existing.owner?.role === 'CONSULTANT') {
+      return {
+        status: 'already_assigned',
+        ownerId: existing.ownerId,
+        ownerName: existing.owner?.name ?? null,
+        replacedStrayOwner: false,
+      };
+    }
+    const replacedStrayOwner = !!existing.ownerId && existing.owner?.role !== 'CONSULTANT';
+
+    const candidates = await this.findActiveAdmissionSpecialists();
+    if (candidates.length === 0) {
+      this.logger.warn(
+        `assignAdmissionToCase: no active Admission Specialists for case ${caseId} — leaving unassigned`,
+      );
+      await this.prisma.auditLog.create({
+        data: {
+          userId: triggerActor?.id ?? null,
+          action: 'AUTO_ASSIGN',
+          eventType: 'ADMISSION_AUTO_ASSIGN_NO_CANDIDATES',
+          entityType: 'CASE',
+          entityId: caseId,
+          newValue: { reason: 'no_active_admission_specialists' } as Prisma.InputJsonValue,
+          actorNameSnapshot: triggerActor?.name ?? 'System',
+          actorRoleSnapshot: triggerActor?.role ?? 'SYSTEM',
+        },
+      });
+      return { status: 'no_candidates', ownerId: null, ownerName: null, replacedStrayOwner: false };
+    }
+
+    // Lowest open owner-case count wins; ties broken by createdAt ASC.
+    let pick = candidates[0]!;
+    for (const c of candidates) {
+      if (c.cases.length < pick.cases.length) pick = c;
+    }
+    const candidatesAudit = candidates.map((c) => ({ id: c.id, name: c.name, openCases: c.cases.length }));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.case.update({ where: { id: caseId }, data: { ownerId: pick.id } });
+      await tx.auditLog.create({
+        data: {
+          userId: triggerActor?.id ?? null,
+          action: 'AUTO_ASSIGN',
+          eventType: 'ADMISSION_AUTO_ASSIGNED',
+          entityType: 'CASE',
+          entityId: caseId,
+          oldValue: {
+            ownerId: existing.ownerId ?? null,
+            ownerName: existing.owner?.name ?? null,
+            ownerRole: existing.owner?.role ?? null,
+          } as Prisma.InputJsonValue,
+          newValue: {
+            ownerId: pick.id,
+            ownerName: pick.name,
+            // 'replaced-stray-owner' when we bumped a non-CONSULTANT owner,
+            // 'fresh' when the slot was empty.
+            assignment: replacedStrayOwner ? 'replaced-stray-owner' : 'fresh',
+            replacedStrayOwner,
+            candidates: candidatesAudit,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: triggerActor?.name ?? 'System (contract signed)',
+          actorRoleSnapshot: triggerActor?.role ?? 'SYSTEM',
+        },
+      });
+    });
+
+    return { status: 'assigned', ownerId: pick.id, ownerName: pick.name, replacedStrayOwner };
+  }
+
+  // ─── Auto-assign the Finance officer (Phase 3) ────────────────────────
+  //
+  // Mirrors assignLiaToCase for the Case.financeId slot (role FINANCE). Same
+  // trigger set as LIA/Admission. Workload only, never throws, idempotent
+  // (skip if financeId already set). Continuity: financeId is sticky.
+  //
+  // 💰 This ONLY sets Case.financeId + writes an audit row. It does not create
+  // or modify invoices, payments, refunds, or approvals — no financial side
+  // effects whatsoever.
+  async assignFinanceToCase(
+    caseId: string,
+    triggerActor?: Actor,
+  ): Promise<FinanceAssignResult> {
+    const existing = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      select: { id: true, financeId: true, lead: { select: { contact: { select: { fullName: true } } } } },
+    });
+    if (!existing) {
+      this.logger.warn(`assignFinanceToCase: case ${caseId} not found`);
+      return { status: 'no_candidates', financeId: null, financeName: null };
+    }
+    if (existing.financeId) {
+      return { status: 'already_assigned', financeId: existing.financeId, financeName: null };
+    }
+
+    const candidates = await this.findActiveFinanceStaff();
+    if (candidates.length === 0) {
+      this.logger.warn(
+        `assignFinanceToCase: no active Finance staff for case ${caseId} — leaving unassigned`,
+      );
+      await this.prisma.auditLog.create({
+        data: {
+          userId: triggerActor?.id ?? null,
+          action: 'AUTO_ASSIGN',
+          eventType: 'FINANCE_AUTO_ASSIGN_NO_CANDIDATES',
+          entityType: 'CASE',
+          entityId: caseId,
+          newValue: { reason: 'no_active_finance_staff' } as Prisma.InputJsonValue,
+          actorNameSnapshot: triggerActor?.name ?? 'System',
+          actorRoleSnapshot: triggerActor?.role ?? 'SYSTEM',
+        },
+      });
+      return { status: 'no_candidates', financeId: null, financeName: null };
+    }
+
+    let pick = candidates[0]!;
+    for (const c of candidates) {
+      if (c.financeCases.length < pick.financeCases.length) pick = c;
+    }
+    const candidatesAudit = candidates.map((c) => ({ id: c.id, name: c.name, openCases: c.financeCases.length }));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.case.update({ where: { id: caseId }, data: { financeId: pick.id } });
+      await tx.auditLog.create({
+        data: {
+          userId: triggerActor?.id ?? null,
+          action: 'AUTO_ASSIGN',
+          eventType: 'FINANCE_AUTO_ASSIGNED',
+          entityType: 'CASE',
+          entityId: caseId,
+          newValue: {
+            financeId: pick.id,
+            financeName: pick.name,
+            candidates: candidatesAudit,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: triggerActor?.name ?? 'System (contract signed)',
+          actorRoleSnapshot: triggerActor?.role ?? 'SYSTEM',
+        },
+      });
+    });
+
+    return { status: 'assigned', financeId: pick.id, financeName: pick.name };
   }
 
   // ─── Manual reassignment (OWNER / ADMIN / SUPER_ADMIN) ────────────────
@@ -807,6 +1002,65 @@ export class LiaAssignmentService {
         createdAt: true,
         languages: true,
         consultantCases: {
+          where: {
+            stage: { notIn: ['COMPLETED', 'WITHDRAWN'] },
+          },
+          select: { id: true },
+        },
+      },
+    });
+  }
+
+  // Phase 3 mirror of findActiveLias for the Admission-Specialist pool (auth
+  // role CONSULTANT). Preloads each candidate's open owner-slot cases for the
+  // workload count — the CaseOwner back-relation is named `cases` (NOT
+  // `ownerCases`), see schema.prisma.
+  private async findActiveAdmissionSpecialists() {
+    return this.prisma.user.findMany({
+      where: {
+        role: 'CONSULTANT',
+        isActive: true,
+        OR: [
+          { staffActiveStatus: null },
+          { staffActiveStatus: { isActive: true } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        cases: {
+          where: {
+            stage: { notIn: ['COMPLETED', 'WITHDRAWN'] },
+          },
+          select: { id: true },
+        },
+      },
+    });
+  }
+
+  // Phase 3 mirror of findActiveLias for the Finance pool (role FINANCE).
+  // Preloads each candidate's open finance-slot cases (CaseFinance back-relation
+  // `financeCases`) for the workload count.
+  private async findActiveFinanceStaff() {
+    return this.prisma.user.findMany({
+      where: {
+        role: 'FINANCE',
+        isActive: true,
+        OR: [
+          { staffActiveStatus: null },
+          { staffActiveStatus: { isActive: true } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        financeCases: {
           where: {
             stage: { notIn: ['COMPLETED', 'WITHDRAWN'] },
           },

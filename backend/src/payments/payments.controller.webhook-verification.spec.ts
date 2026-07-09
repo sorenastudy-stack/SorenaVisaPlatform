@@ -40,7 +40,7 @@ function makeController() {
     sendConsultationConfirmation: jest.fn().mockResolvedValue(undefined),
     sendNewLiaAssignment:         jest.fn().mockResolvedValue(undefined),
   };
-  const liaAssignmentsMock:  any = { assignLiaToCase: jest.fn() };
+  const liaAssignmentsMock:  any = { assignLiaToCase: jest.fn(), assignAdmissionToCase: jest.fn(), assignFinanceToCase: jest.fn() };
   const bookingConfirmationMock: any = { onConfirmed: jest.fn().mockResolvedValue(undefined) };
 
   const controller = new PaymentsController(

@@ -176,7 +176,7 @@ describe('ContractsService.handleWebhook (PR-DOCUSIGN-1 step 5 piece 3)', () => 
     getSigningUrl:  jest.Mock;
     getAccessToken: jest.Mock;
   };
-  let liaMock: { assignLiaToCase: jest.Mock };
+  let liaMock: { assignLiaToCase: jest.Mock; assignAdmissionToCase: jest.Mock; assignFinanceToCase: jest.Mock };
   let notificationsMock: { sendContractReady: jest.Mock };
 
   beforeAll(async () => {
@@ -198,6 +198,15 @@ describe('ContractsService.handleWebhook (PR-DOCUSIGN-1 step 5 piece 3)', () => 
         status: 'already_assigned',
         liaId:  'fake-lia',
         liaName: null,
+      }),
+      // Phase 3: Admission + Finance auto-assign fire alongside the LIA at the
+      // same hooks. Mocked to no-op ('already_assigned') so these unit tests
+      // don't exercise their DB paths.
+      assignAdmissionToCase: jest.fn().mockResolvedValue({
+        status: 'already_assigned', ownerId: 'fake-owner', ownerName: null, replacedStrayOwner: false,
+      }),
+      assignFinanceToCase: jest.fn().mockResolvedValue({
+        status: 'already_assigned', financeId: 'fake-finance', financeName: null,
       }),
     };
     notificationsMock = {

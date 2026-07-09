@@ -47,7 +47,7 @@ function makeController(opts: {
   const bookingConfirmationMock: any = { onConfirmed: jest.fn().mockResolvedValue(undefined) };
   const controller = new PaymentsController(
     {} as any, {} as any, { activateSubscription: jest.fn() } as any, eventsMock,
-    prismaMock, { sendConsultationConfirmation: jest.fn() } as any, { assignLiaToCase: jest.fn() } as any,
+    prismaMock, { sendConsultationConfirmation: jest.fn() } as any, { assignLiaToCase: jest.fn(), assignAdmissionToCase: jest.fn(), assignFinanceToCase: jest.fn() } as any,
     bookingConfirmationMock,
   );
 

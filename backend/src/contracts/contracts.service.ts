@@ -144,6 +144,36 @@ export class ContractsService {
         `LIA assignment returned status=${assignResult.status} but no liaId — inconsistent state`,
       );
     }
+
+    // Phase 3 — auto-assign the Admission Specialist + Finance officer at the
+    // same trigger as the LIA. Placed AFTER the LIA assign so the existing
+    // no-LIA UnprocessableException still governs whether the send proceeds.
+    // Unlike the LIA, a missing Admission/Finance staffer must NOT block the
+    // send — the methods never throw, but each call is try/catch-wrapped as
+    // defence-in-depth.
+    try {
+      const adm = await this.liaAssignments.assignAdmissionToCase(dto.caseId);
+      this.logger.log(
+        `Admission auto-assign for case ${dto.caseId}: ${adm.status}` +
+          (adm.ownerId ? ` → ${adm.ownerId}${adm.replacedStrayOwner ? ' (replaced stray owner)' : ''}` : ''),
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `Admission auto-assign failed for case ${dto.caseId} (non-fatal): ${err?.message ?? err}`,
+      );
+    }
+    try {
+      const fin = await this.liaAssignments.assignFinanceToCase(dto.caseId);
+      this.logger.log(
+        `Finance auto-assign for case ${dto.caseId}: ${fin.status}` +
+          (fin.financeId ? ` → ${fin.financeId}` : ''),
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `Finance auto-assign failed for case ${dto.caseId} (non-fatal): ${err?.message ?? err}`,
+      );
+    }
+
     // PR-DOCUSIGN-1 step 5 piece 5c — load liaProfile alongside the
     // user so the LIA's IAA licence number can pre-fill the Clause 2.1
     // + page-11 IAA tabs the 5b tab map emits. liaProfile is an
@@ -523,6 +553,34 @@ export class ContractsService {
       } catch (err: any) {
         this.logger.error(
           `LIA auto-assignment failed for case ${contract.caseId}: ${err?.message ?? err}`,
+        );
+      }
+      // Phase 3 — Admission + Finance auto-assign at the same SIGNED safety-net
+      // hook, in lockstep with the LIA above. Idempotent + never-throw; wrapped
+      // so a failure never blocks the webhook response.
+      try {
+        const adm = await this.liaAssignments.assignAdmissionToCase(contract.caseId);
+        if (adm.status === 'assigned') {
+          this.logger.log(
+            `Admission Specialist ${adm.ownerName} (${adm.ownerId}) auto-assigned to case ${contract.caseId} on contract sign` +
+              (adm.replacedStrayOwner ? ' (replaced stray owner)' : ''),
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Admission auto-assignment failed for case ${contract.caseId}: ${err?.message ?? err}`,
+        );
+      }
+      try {
+        const fin = await this.liaAssignments.assignFinanceToCase(contract.caseId);
+        if (fin.status === 'assigned') {
+          this.logger.log(
+            `Finance officer ${fin.financeName} (${fin.financeId}) auto-assigned to case ${contract.caseId} on contract sign`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Finance auto-assignment failed for case ${contract.caseId}: ${err?.message ?? err}`,
         );
       }
     }

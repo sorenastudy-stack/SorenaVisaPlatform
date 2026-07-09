@@ -455,6 +455,34 @@ export class PaymentsController {
                 `ACCOUNT_OPENING payment for case ${targetCaseId} confirmed but no active LIAs available — case left unassigned`,
               );
             }
+            // Phase 3 — Admission + Finance auto-assign at the same
+            // ACCOUNT_OPENING backstop, in lockstep with the LIA. Idempotent +
+            // never-throw; each wrapped so a failure never affects the webhook.
+            try {
+              const adm = await this.liaAssignments.assignAdmissionToCase(targetCaseId);
+              if (adm.status === 'assigned') {
+                this.logger.log(
+                  `Admission Specialist ${adm.ownerName} (${adm.ownerId}) auto-assigned to case ${targetCaseId} on ACCOUNT_OPENING payment` +
+                    (adm.replacedStrayOwner ? ' (replaced stray owner)' : ''),
+                );
+              }
+            } catch (err: any) {
+              this.logger.error(
+                `Admission auto-assignment failed for case ${targetCaseId}: ${err?.message ?? err}`,
+              );
+            }
+            try {
+              const fin = await this.liaAssignments.assignFinanceToCase(targetCaseId);
+              if (fin.status === 'assigned') {
+                this.logger.log(
+                  `Finance officer ${fin.financeName} (${fin.financeId}) auto-assigned to case ${targetCaseId} on ACCOUNT_OPENING payment`,
+                );
+              }
+            } catch (err: any) {
+              this.logger.error(
+                `Finance auto-assignment failed for case ${targetCaseId}: ${err?.message ?? err}`,
+              );
+            }
           } else {
             this.logger.warn(
               `ACCOUNT_OPENING payment received but contract not yet signed for case ${targetCaseId} — assignment deferred`,
