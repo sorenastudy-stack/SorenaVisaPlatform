@@ -37,14 +37,26 @@ export class CasesController {
     return this.casesService.createCase(dto, req.user?.id ?? null);
   }
 
+  // Phase 5a — slot-scoped reads. The viewer's identity + role come from the
+  // verified JWT (JwtStrategy returns { userId, email, role }). Admin tier + LIA
+  // see all; CONSULTANT/CLIENT_CONSULTANT/SUPPORT/FINANCE see only their own-slot
+  // cases; everyone else is filtered out (list) / 403 (detail). NOTE: use
+  // req.user.userId — req.user.id is undefined here (see createCase's separate
+  // pre-existing bug, deliberately left untouched in this phase).
   @Get()
-  findAll(@Query() query: CaseListQueryDto) {
-    return this.casesService.findAll(query);
+  findAll(@Query() query: CaseListQueryDto, @Req() req: any) {
+    return this.casesService.findAll(query, {
+      userId: req.user?.userId,
+      role: req.user?.role,
+    });
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.casesService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.casesService.findOne(id, {
+      userId: req.user?.userId,
+      role: req.user?.role,
+    });
   }
 
   // PR-OPS-CASES — was guarded by JwtAuthGuard only (any authenticated user

@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, RiskLevel } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService, EventSource } from '../events/events.service';
@@ -8,6 +13,15 @@ import { UpdateCaseDto } from './dto/update-case.dto';
 import { CaseListQueryDto } from './dto/case-list-filter.dto';
 import { OverrideRiskDto, ClearHardStopDto } from './dto/lia-actions.dto';
 import { LiaAssignmentService } from './lia-assignment.service';
+import { canReadCase } from './case-access.helper';
+
+// Phase 5a — the verified-JWT viewer passed from the controller for read
+// scoping. Roles that see every case (no slot filter).
+interface CaseViewer {
+  userId: string;
+  role: string;
+}
+const SEE_ALL_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN', 'LIA'];
 
 interface LiaActor {
   id: string;
@@ -80,7 +94,7 @@ export class CasesService {
     return caseRecord;
   }
 
-  async findAll(query: CaseListQueryDto) {
+  async findAll(query: CaseListQueryDto, viewer: CaseViewer) {
     const where: any = {};
 
     if (query.stage) {
@@ -88,6 +102,20 @@ export class CasesService {
     }
     if (query.ownerId) {
       where.ownerId = query.ownerId;
+    }
+
+    // Phase 5a — slot-scope the list for non-see-all roles. Admin tier + LIA
+    // stay unfiltered (current behaviour). Everyone else only sees cases where
+    // they hold a slot (owner/lia/support/finance/consultant). ANDed with the
+    // stage/ownerId query filters above.
+    if (!SEE_ALL_ROLES.includes(viewer.role)) {
+      where.OR = [
+        { ownerId: viewer.userId },
+        { liaId: viewer.userId },
+        { supportId: viewer.userId },
+        { financeId: viewer.userId },
+        { consultantId: viewer.userId },
+      ];
     }
 
     return this.prisma.case.findMany({
@@ -106,7 +134,7 @@ export class CasesService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, viewer: CaseViewer) {
     const caseRecord = await this.prisma.case.findUnique({
       where: { id },
       include: {
@@ -135,6 +163,13 @@ export class CasesService {
 
     if (!caseRecord) {
       throw new NotFoundException('Case not found');
+    }
+
+    // Phase 5a — slot-scoped read gate. 404-if-missing above stays first; a
+    // found-but-unauthorised viewer gets a 403 (not existence-masking, per the
+    // locked decision). The five slot scalars come back on the findUnique.
+    if (!canReadCase(caseRecord, viewer)) {
+      throw new ForbiddenException('You do not have access to this case.');
     }
 
     // PR-LIA-8: decrypt the decline reason at the boundary so the
