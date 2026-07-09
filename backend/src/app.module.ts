@@ -31,6 +31,7 @@ import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
 import { LegalNotesModule } from './legal-notes/legal-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
+import { OpsHandoffsModule } from './ops-handoffs/ops-handoffs.module';
 import { DocumentsModule } from './documents/documents.module';
 import { PortalModule } from './portal/portal.module';
 import { DigestModule } from './digest/digest.module';
@@ -107,6 +108,7 @@ import { WalletModule } from './wallet/wallet.module';
     // GET :caseId/document-reviews (distinct from System A). Also hosts the
     // OPS cross-case unreviewed queue (GET /ops/documents/unreviewed).
     CaseDocumentsModule,
+    OpsHandoffsModule,
     // PR-LIA-6: consolidated read-only INZ application data viewer.
     InzDataModule,
     // PR-LIA-9: daily 09:00 NZ cron + dashboard endpoint for visa
