@@ -9,6 +9,9 @@ import {
   ALL_QUESTIONS, FORM_SCHEMA, getQuestionLabel, isQuestionVisible, QuestionDef,
 } from '@/lib/scorecard/questions';
 import { fillHiddenAnswers } from '@/lib/scorecard/submit-helpers';
+import { LanguageSelect } from '@/components/scorecard/LanguageSelect';
+import { localeToLanguageCode } from '@/lib/languages';
+import { useLocaleStore } from '@/lib/stores/localeStore';
 
 // PR-SCORECARD-2 — Multi-step scorecard form.
 //
@@ -77,8 +80,16 @@ function readAttribution(): Attribution {
 
 export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | null }) {
   const router = useRouter();
+  const locale = useLocaleStore((s) => s.locale);
 
-  const [answers, setAnswers] = useState<Record<string, string>>(initialDraft?.answers ?? {});
+  // Phase 2b: pre-select the first language from the site locale (Farsi site →
+  // 'fa'), but only when the user hasn't already got one from a resumed draft.
+  // Purely a default — the field stays optional and the user can change it.
+  const [answers, setAnswers] = useState<Record<string, string>>(() => {
+    const seed = { ...(initialDraft?.answers ?? {}) };
+    if (!seed.first_language) seed.first_language = localeToLanguageCode(locale);
+    return seed;
+  });
   const [currentStep, setCurrentStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -389,7 +400,13 @@ function FieldRow({
         {q.required && <span className="text-red-500 ml-1">*</span>}
       </label>
 
-      {q.type === 'select' ? (
+      {q.helper && (
+        <p className="text-xs text-[#4A4A4A]/60 mb-1.5 -mt-0.5">{q.helper}</p>
+      )}
+
+      {q.type === 'language' ? (
+        <LanguageSelect value={value} onChange={onChange} className={inputClasses} />
+      ) : q.type === 'select' ? (
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}

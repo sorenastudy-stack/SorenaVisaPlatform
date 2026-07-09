@@ -8,6 +8,10 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+// Phase 2b — validate preferredLanguage as a lowercase ISO 639-1 code (shared
+// with the staff-languages DTO) so intake can't store display names like
+// "English"/"Farsi". Keeps client language comparable to staff User.languages.
+import { IsLanguageCode } from '../../common/validators/is-language-code.decorator';
 
 // PR-AUDIT-4 — typed body for POST /public/intake. Validates the
 // known field shape (length-caps + type checks) so an unauth caller
@@ -56,9 +60,10 @@ export class SubmitIntakeDto {
   @MaxLength(100)
   nationality?: string;
 
+  // Phase 2b: must be a lowercase ISO 639-1 code (e.g. 'en', 'fa') — display
+  // names are rejected. Optional; absent → the service defaults to 'en'.
   @IsOptional()
-  @IsString()
-  @MaxLength(20)
+  @IsLanguageCode()
   preferredLanguage?: string;
 
   @IsOptional()

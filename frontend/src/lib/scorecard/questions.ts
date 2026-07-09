@@ -29,7 +29,11 @@
 // scoring engine receives a complete answer set (matches the Maryam
 // Karimi test case which passes "Not applicable" for skipped fields).
 
-export type QuestionType = 'text' | 'email' | 'phone' | 'select' | 'longtext';
+// 'language' (Phase 2b) renders a custom picker (common languages + an
+// "Other…" searchable list); its stored answer value is a lowercase ISO 639-1
+// code. It is NOT a scoring question — the engine ignores it, like the other
+// contact fields.
+export type QuestionType = 'text' | 'email' | 'phone' | 'select' | 'longtext' | 'language';
 
 export interface QuestionDef {
   id: string;
@@ -57,6 +61,16 @@ export const CONTACT_QUESTIONS: QuestionDef[] = [
   { id: 'email',            type: 'email', label: 'Email address',                              required: true },
   { id: 'phone',            type: 'phone', label: 'Phone (with country code, e.g. +98 …)',     required: true },
   { id: 'current_country',  type: 'text',  label: 'Current country of residence',               required: true },
+  // Phase 2b: optional first language — captured so we can match you with a
+  // consultant who speaks it. Stored as an ISO 639-1 code; NOT a scoring
+  // question and NEVER required (submission works without it).
+  {
+    id: 'first_language',
+    type: 'language',
+    label: 'First language',
+    required: false,
+    helper: 'Optional — helps us pair you with a consultant who speaks your language.',
+  },
 ];
 
 // ─── SECTION 1 — PROFILE & MIGRATION STABILITY ───────────────────────

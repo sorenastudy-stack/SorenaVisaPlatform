@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
+import { isValidLanguageCode } from '../common/language-codes';
 import { score, ScoreResult } from './scoring/engine';
 import { determineRouting, NextActionContent } from './scoring/routing';
 import {
@@ -206,6 +207,18 @@ export class ScorecardService {
       const email = (answers.email ?? user.email ?? '').trim() || null;
       const phone = (answers.phone ?? '').trim() || null;
       const country = (answers.current_country ?? '').trim() || null;
+      // Phase 2b: the optional first-language answer. `capturedLang` is a valid
+      // lowercase ISO 639-1 code ONLY when the user actually picked one — it is
+      // null when the field was left empty or holds an invalid value. On CREATE
+      // we default a missing value to 'en'; on UPDATE (returning lead) we leave
+      // any existing value untouched when nothing was captured, so an empty
+      // field never clobbers a previously-chosen non-'en' language. This is the
+      // value consultant auto-assignment reads for language matching (Phase 2a).
+      // COMPLIANCE: language only — nationality is NOT captured or written into
+      // the assignment path.
+      const rawLang = (answers.first_language ?? '').trim().toLowerCase();
+      const capturedLang = isValidLanguageCode(rawLang) ? rawLang : null;
+      const preferredLanguage = capturedLang ?? 'en';
 
       // Find-or-create Contact by email (best-effort dedupe). If no
       // email is provided we always create a new Contact rather than
@@ -215,6 +228,14 @@ export class ScorecardService {
         const existing = await tx.contact.findFirst({ where: { email } });
         if (existing) {
           contactId = existing.id;
+          // Refresh the returning lead's language to what they just selected —
+          // but only when they actually selected one (capturedLang non-null).
+          if (capturedLang) {
+            await tx.contact.update({
+              where: { id: existing.id },
+              data: { preferredLanguage: capturedLang },
+            });
+          }
         }
       }
       if (!contactId) {
@@ -224,7 +245,7 @@ export class ScorecardService {
             email,
             phone,
             countryOfResidence: country,
-            preferredLanguage: 'en',
+            preferredLanguage,
           },
         });
         contactId = c.id;

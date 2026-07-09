@@ -1,37 +1,16 @@
 import {
   IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsNotEmpty,
   Max, Min, ValidateNested, ArrayMaxSize, Matches, MaxLength,
-  registerDecorator, ValidationOptions,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { isValidLanguageCode } from '../../../common/language-codes';
+// Phase 2b — the per-element ISO 639-1 validator that was local to this file
+// in Phase 2a is now shared so the client intake DTO reuses the exact same
+// rule (keeps staff User.languages and client Contact.preferredLanguage on one
+// lowercase ISO format for consultant language-matching).
+import { IsLanguageCode } from '../../../common/validators/is-language-code.decorator';
 
 // YYYY-MM-DD calendar date (the format the slot engine consumes directly).
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
-
-// Phase 2a — per-element ISO 639-1 validator, mirroring the IsCountryCode
-// pattern in staff-users.dto.ts. Applied with `{ each: true }` so every entry
-// in the `languages` array must be a valid lowercase two-letter code. This
-// keeps staff `User.languages` in the same format as client
-// `Contact.preferredLanguage` so consultant auto-assignment can compare them.
-function IsLanguageCode(options?: ValidationOptions) {
-  return function (object: object, propertyName: string) {
-    registerDecorator({
-      name: 'isLanguageCode',
-      target: object.constructor,
-      propertyName,
-      options,
-      validator: {
-        validate(value: unknown) {
-          return isValidLanguageCode(value);
-        },
-        defaultMessage() {
-          return `${propertyName} must be a valid ISO 639-1 language code (lowercase, e.g. "en", "fa")`;
-        },
-      },
-    });
-  };
-}
 
 // PR-BOOKING-ADMIN-A — adviser config DTOs.
 
