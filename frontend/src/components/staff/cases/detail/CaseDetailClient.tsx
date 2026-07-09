@@ -11,6 +11,7 @@ import { CaseTabs, type CaseTab } from './CaseTabs';
 import { CaseOverviewTab } from './CaseOverviewTab';
 import { CaseActivityTab } from './CaseActivityTab';
 import { CaseDocumentsPanel } from '@/components/cases/CaseDocumentsPanel';
+import { ConsultantDocumentsPanel } from '@/components/cases/ConsultantDocumentsPanel';
 import { CasePaymentsPanel } from '@/components/cases/CasePaymentsPanel';
 import { PlaceholderPanel } from '@/components/staff/PlaceholderPanel';
 import type { CaseDetail } from './types';
@@ -30,10 +31,11 @@ import type { CaseDetail } from './types';
 export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?: boolean }) {
   const t = useTranslations();
   const { me } = useStaff();
-  // Phase 5c (cosmetic): the CONSULTANT (Admission Specialist) is denied System A
-  // attachments server-side (documents-access.helper.ts). Hide the Documents tab
-  // for them so they don't hit a 403 panel. This is UX only — NOT the security
-  // boundary. Their typed P1 view arrives via System B (Phase 5d).
+  // The CONSULTANT (Admission Specialist) is denied System A attachments
+  // server-side (Phase 5c). Instead of hiding the Documents tab, Phase 5e shows
+  // them a read-only System B Priority-1 view (ConsultantDocumentsPanel) — the
+  // backend (Phase 5d) filters that endpoint to educational docs for this role.
+  // UI only; the P1/P2 boundary is enforced server-side.
   const isConsultant = me?.role === 'CONSULTANT';
   const [data, setData] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,11 +80,15 @@ export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?
       <SendContractPanel caseId={data.id} onSent={refresh} />
 
       <div>
-        <CaseTabs active={tab} onChange={setTab} hiddenTabs={isConsultant ? ['documents'] : undefined} />
+        <CaseTabs active={tab} onChange={setTab} />
         <div className="pt-5">
           {tab === 'overview'  && <CaseOverviewTab data={data} canEdit={canEdit} onSaved={refresh} />}
           {tab === 'activity'  && <CaseActivityTab caseId={data.id} />}
-          {tab === 'documents' && !isConsultant && <CaseDocumentsPanel caseId={data.id} canDelete={true} />}
+          {/* Phase 5e — CONSULTANT gets the read-only System B P1 view; every
+              other role keeps the System A attachment panel (unchanged). */}
+          {tab === 'documents' && (isConsultant
+            ? <ConsultantDocumentsPanel caseId={data.id} />
+            : <CaseDocumentsPanel caseId={data.id} canDelete={true} />)}
           {tab === 'payments'  && <CasePaymentsPanel caseId={data.id} />}
           {tab === 'meetings'  && <PlaceholderPanel section={t('staff.cases.detail.tabs.meetings')} />}
           {tab === 'tickets'   && <PlaceholderPanel section={t('staff.cases.detail.tabs.tickets')} />}
