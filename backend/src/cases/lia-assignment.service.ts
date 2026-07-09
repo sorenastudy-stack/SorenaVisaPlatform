@@ -94,6 +94,15 @@ interface FinanceAssignResult {
   financeName: string | null;
 }
 
+// Phase 4 — result of Pastoral-Care (support slot) auto-assignment. Mirrors
+// ConsultantAssignResult (language-matched, like the consultant).
+interface PastoralAssignResult {
+  status: 'assigned' | 'no_candidates' | 'already_assigned';
+  supportId: string | null;
+  supportName: string | null;
+  langMatched: boolean;
+}
+
 @Injectable()
 export class LiaAssignmentService {
   private readonly logger = new Logger(LiaAssignmentService.name);
@@ -511,6 +520,110 @@ export class LiaAssignmentService {
     });
 
     return { status: 'assigned', financeId: pick.id, financeName: pick.name };
+  }
+
+  // ─── Auto-assign Pastoral Care (Phase 4) ──────────────────────────────
+  //
+  // Mirrors assignConsultantToCase for the Case.supportId slot (role SUPPORT).
+  // Fires when the visa is approved (issueApprovedVisa) — the "Stage 2 offered
+  // within 4h" moment. Like the consultant, Pastoral Care is client-facing, so
+  // selection is language-first then workload.
+  //
+  //   * NEVER throws — an empty pool logs an audit and returns; the caller is
+  //     also try/catch-wrapped so this can't block the visa-approval flow.
+  //   * Idempotent: skip if supportId already set. Continuity: supportId is
+  //     sticky (never nulled on close), so a re-opened case keeps its officer.
+  //   * WORKLOAD SOURCE (Phase 4 option b): counted from supportCases by
+  //     Case.status:'active' (NOT stage), because issueApprovedVisa flips this
+  //     case's stage → COMPLETED in the same transaction. Counting by stage
+  //     would make every SUPPORT candidate's pastoral load read as 0; status
+  //     stays 'active' for cases a SUPPORT officer is actively handling, so
+  //     load-balancing actually works. (WITHDRAWN cases are status-closed.)
+  //
+  // COMPLIANCE: language only — nationality is never read or considered.
+  async assignPastoralCareToCase(
+    caseId: string,
+    triggerActor?: Actor,
+  ): Promise<PastoralAssignResult> {
+    const existing = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      select: {
+        id: true,
+        supportId: true,
+        lead: {
+          select: {
+            contact: { select: { fullName: true, preferredLanguage: true } },
+          },
+        },
+      },
+    });
+    if (!existing) {
+      this.logger.warn(`assignPastoralCareToCase: case ${caseId} not found`);
+      return { status: 'no_candidates', supportId: null, supportName: null, langMatched: false };
+    }
+    if (existing.supportId) {
+      return { status: 'already_assigned', supportId: existing.supportId, supportName: null, langMatched: false };
+    }
+
+    const candidates = await this.findActiveSupportStaff();
+    if (candidates.length === 0) {
+      this.logger.warn(
+        `assignPastoralCareToCase: no active Support staff for case ${caseId} — leaving unassigned`,
+      );
+      await this.prisma.auditLog.create({
+        data: {
+          userId: triggerActor?.id ?? null,
+          action: 'AUTO_ASSIGN',
+          eventType: 'PASTORAL_AUTO_ASSIGN_NO_CANDIDATES',
+          entityType: 'CASE',
+          entityId: caseId,
+          newValue: { reason: 'no_active_support_staff' } as Prisma.InputJsonValue,
+          actorNameSnapshot: triggerActor?.name ?? 'System',
+          actorRoleSnapshot: triggerActor?.role ?? 'SYSTEM',
+        },
+      });
+      return { status: 'no_candidates', supportId: null, supportName: null, langMatched: false };
+    }
+
+    // Language preference (guarded no-op while clientLang is 'en'), same as the
+    // consultant. Lowercase ISO-639-1 compare on both sides.
+    const clientLang = (existing.lead?.contact?.preferredLanguage ?? 'en').trim().toLowerCase();
+    const langAware = candidates.filter((c) =>
+      (c.languages ?? []).map((l) => l.toLowerCase()).includes(clientLang),
+    );
+    const useLangPool = clientLang !== 'en' && langAware.length > 0;
+    const pool = useLangPool ? langAware : candidates;
+
+    // Lowest active-case count wins; ties broken by createdAt ASC.
+    let pick = pool[0]!;
+    for (const c of pool) {
+      if (c.supportCases.length < pick.supportCases.length) pick = c;
+    }
+    const candidatesAudit = pool.map((c) => ({ id: c.id, name: c.name, openCases: c.supportCases.length }));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.case.update({ where: { id: caseId }, data: { supportId: pick.id } });
+      await tx.auditLog.create({
+        data: {
+          userId: triggerActor?.id ?? null,
+          action: 'AUTO_ASSIGN',
+          eventType: 'PASTORAL_AUTO_ASSIGNED',
+          entityType: 'CASE',
+          entityId: caseId,
+          newValue: {
+            supportId: pick.id,
+            supportName: pick.name,
+            clientLang,
+            langMatched: useLangPool,
+            candidates: candidatesAudit,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: triggerActor?.name ?? 'System (visa approved)',
+          actorRoleSnapshot: triggerActor?.role ?? 'SYSTEM',
+        },
+      });
+    });
+
+    return { status: 'assigned', supportId: pick.id, supportName: pick.name, langMatched: useLangPool };
   }
 
   // ─── Manual reassignment (OWNER / ADMIN / SUPER_ADMIN) ────────────────
@@ -1063,6 +1176,43 @@ export class LiaAssignmentService {
         financeCases: {
           where: {
             stage: { notIn: ['COMPLETED', 'WITHDRAWN'] },
+          },
+          select: { id: true },
+        },
+      },
+    });
+  }
+
+  // Phase 4 mirror of findActiveConsultants for the Support / Pastoral-Care pool
+  // (role SUPPORT). Preloads each candidate's active support-slot cases plus
+  // `languages` for the language-preference filter.
+  //
+  // WORKLOAD SOURCE (option b): filter supportCases by Case.status:'active', NOT
+  // by stage. Pastoral Care is assigned at visa approval, which flips the case's
+  // stage → COMPLETED in the same transaction — so a stage-based filter would
+  // count every SUPPORT officer's pastoral load as 0. `status` stays 'active'
+  // for cases a SUPPORT officer is actively handling (WITHDRAWN cases are
+  // status-closed), so this is the source where load-balancing actually works.
+  private async findActiveSupportStaff() {
+    return this.prisma.user.findMany({
+      where: {
+        role: 'SUPPORT',
+        isActive: true,
+        OR: [
+          { staffActiveStatus: null },
+          { staffActiveStatus: { isActive: true } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        createdAt: true,
+        languages: true,
+        supportCases: {
+          where: {
+            status: 'active',
           },
           select: { id: true },
         },

@@ -11,6 +11,8 @@ import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { MailService } from '../../mail/mail.service';
+// Phase 4 — Pastoral Care (SUPPORT slot) auto-assigns when the visa is approved.
+import { LiaAssignmentService } from '../lia-assignment.service';
 import {
   DeclineVisaDto,
   EditVisaDto,
@@ -60,6 +62,8 @@ export class VisaService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly mail: MailService,
+    // Phase 4 — auto-assign Pastoral Care on visa approval.
+    private readonly liaAssignments: LiaAssignmentService,
   ) {}
 
   // ─── Issue (APPROVED) ──────────────────────────────────────────────────
@@ -227,6 +231,22 @@ export class VisaService {
     } else {
       this.logger.warn(
         `Visa issued for case ${caseId} but no client email on file.`,
+      );
+    }
+
+    // Phase 4 — auto-assign Pastoral Care (SUPPORT slot) at visa approval, in
+    // lockstep with the client email above. This is the single authoritative
+    // approval hook. assignPastoralCareToCase never throws, but wrap it so a
+    // failure can NEVER block or undo the already-committed visa approval.
+    try {
+      const pastoral = await this.liaAssignments.assignPastoralCareToCase(caseId, actor);
+      this.logger.log(
+        `Pastoral Care auto-assign for case ${caseId}: ${pastoral.status}` +
+          (pastoral.supportId ? ` → ${pastoral.supportId} (langMatched=${pastoral.langMatched})` : ''),
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `Pastoral Care auto-assign failed for case ${caseId} (non-fatal): ${err?.message ?? err}`,
       );
     }
 
