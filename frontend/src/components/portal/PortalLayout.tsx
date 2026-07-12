@@ -34,14 +34,16 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     { label: 'Users',      href: '/admin/users',      icon: <Users size={18} /> },
     { label: 'Cases',      href: '/admin/cases',      icon: <Briefcase size={18} /> },
     { label: 'Providers',  href: '/admin/providers',  icon: <School size={18} /> },
-    { label: 'Audit Log',  href: '/admin/audit',      icon: <FileText size={18} /> },
+    // OWNER audit-log browser — sensitive access history, gated above ADMIN.
+    // Backend endpoint enforces OWNER/SUPER_ADMIN too; this hides the tab from ADMIN.
+    { label: 'Audit Log',  href: '/admin/audit',      icon: <FileText size={18} />,
+      requiresRoleIn: ['OWNER', 'SUPER_ADMIN'] },
     { label: 'Settings',   href: '/admin/settings',   icon: <Settings size={18} /> },
   ],
   ops: [
     { label: 'Dashboard',   href: '/ops',              icon: <LayoutDashboard size={18} /> },
     { label: 'Cases',       href: '/ops/cases',        icon: <Briefcase size={18} /> },
     { label: 'Documents',   href: '/ops/documents',    icon: <FileText size={18} /> },
-    { label: 'Compliance',  href: '/ops/compliance',   icon: <Shield size={18} /> },
     { label: 'Handoffs',    href: '/ops/handoffs',     icon: <ArrowRightLeft size={18} /> },
   ],
   sales: [

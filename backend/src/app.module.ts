@@ -43,6 +43,7 @@ import { MarketingModule } from './marketing/marketing.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { BookingModule } from './booking/booking.module';
 import { WalletModule } from './wallet/wallet.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -134,6 +135,9 @@ import { WalletModule } from './wallet/wallet.module';
     // PR-WALLET slice 1: client store-credit wallet + ledger (GET /wallet)
     // and proof-of-acceptance capture used by the paid-booking checkout.
     WalletModule,
+    // OWNER audit-log browser — read-only view over the existing AuditLog
+    // (GET /admin/audit + /:id). OWNER/SUPER_ADMIN only. No new audit machinery.
+    AuditModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`
