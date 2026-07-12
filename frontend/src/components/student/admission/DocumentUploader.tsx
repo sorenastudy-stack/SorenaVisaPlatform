@@ -7,6 +7,8 @@ import { Upload, FileText, Eye, Download, Trash2 } from 'lucide-react';
 import { useAdmission } from './AdmissionFormContext';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/date';
+import { useDocumentReviewStatuses } from '@/components/documents/useDocumentReviewStatuses';
+import { DocumentReviewBadge } from '@/components/documents/DocumentReviewBadge';
 
 const ALLOWED_MIMES = [
   'application/pdf',
@@ -49,6 +51,7 @@ export function DocumentUploader({
 }) {
   const t = useTranslations();
   const { documents, uploadDocument, deleteDocument } = useAdmission();
+  const { statusFor } = useDocumentReviewStatuses();
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver]   = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -144,6 +147,14 @@ export function DocumentUploader({
             <p className="text-xs text-sorena-navy/40">
               {fmtBytes(doc.fileSizeBytes)} · {formatDate(doc.uploadedAt)}
             </p>
+            {(() => {
+              const review = statusFor('ADMISSION', doc.id);
+              return review ? (
+                <div className="mt-1.5">
+                  <DocumentReviewBadge status={review.status} reason={review.reason} />
+                </div>
+              ) : null;
+            })()}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button

@@ -4,6 +4,8 @@ import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Trash2, Upload, Download, Loader2, AlertCircle, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useDocumentReviewStatuses } from '@/components/documents/useDocumentReviewStatuses';
+import { DocumentReviewBadge } from '@/components/documents/DocumentReviewBadge';
 
 // PR-FILES-2 — Multi-file picker for a single document REQUIREMENT.
 // Each parent VisaSupportingDocument requirement can now hold many
@@ -103,6 +105,8 @@ export function DocumentMetadataPicker({
   ariaInvalid,
 }: Props) {
   const t = useTranslations();
+  const { statusFor } = useDocumentReviewStatuses();
+  const review = metadata ? statusFor('VISA_SUPPORTING', metadata.id) : null;
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [pending, setPending] = useState<PendingUpload[]>([]);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -260,6 +264,12 @@ export function DocumentMetadataPicker({
       </label>
       {helpText && (
         <p className="mb-2 text-xs text-sorena-navy/50">{helpText}</p>
+      )}
+
+      {review && (
+        <div className="mb-2">
+          <DocumentReviewBadge status={review.status} reason={review.reason} />
+        </div>
       )}
 
       <input
