@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { FileText, Trash2, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/date';
+import { useDocumentReviewStatuses } from '@/components/documents/useDocumentReviewStatuses';
+import { DocumentReviewBadge } from '@/components/documents/DocumentReviewBadge';
 
 // Generic Visa Section document uploader. Reuses the admission documents
 // pipeline (same endpoints, same signed-URL pattern), keyed on the
@@ -57,6 +59,7 @@ export function VisaDocumentUploader({
   single?: boolean;
 }) {
   const t = useTranslations();
+  const { statusFor } = useDocumentReviewStatuses();
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -136,6 +139,14 @@ export function VisaDocumentUploader({
             <p className="text-xs text-sorena-navy/40">
               {fmtBytes(doc.fileSizeBytes)} · {formatDate(doc.uploadedAt)}
             </p>
+            {(() => {
+              const review = statusFor('ADMISSION', doc.id);
+              return review ? (
+                <div className="mt-1.5">
+                  <DocumentReviewBadge status={review.status} reason={review.reason} />
+                </div>
+              ) : null;
+            })()}
           </div>
           <button
             onClick={() => handleDelete(doc.id)}
