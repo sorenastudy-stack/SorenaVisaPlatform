@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Users, Briefcase, School, FileText, Settings,
+  LayoutDashboard, Users, Briefcase, FileText,
   ArrowRightLeft, Shield, FileSearch, CheckSquare, BarChart2,
   Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
   ClipboardList, LineChart, Clock, UserSquare2, BarChart3,
@@ -31,14 +31,13 @@ interface NavItem {
 const NAV_CONFIG: Record<Portal, NavItem[]> = {
   admin: [
     { label: 'Dashboard',  href: '/admin',            icon: <LayoutDashboard size={18} /> },
-    { label: 'Users',      href: '/admin/users',      icon: <Users size={18} /> },
-    { label: 'Cases',      href: '/admin/cases',      icon: <Briefcase size={18} /> },
-    { label: 'Providers',  href: '/admin/providers',  icon: <School size={18} /> },
+    // Users / Cases / Settings were "coming soon" stubs duplicating the staff
+    // and OPS portals — their routes now redirect there, so the nav items are
+    // removed. Providers had no UI and was removed. Real admin surfaces only.
     // OWNER audit-log browser — sensitive access history, gated above ADMIN.
     // Backend endpoint enforces OWNER/SUPER_ADMIN too; this hides the tab from ADMIN.
     { label: 'Audit Log',  href: '/admin/audit',      icon: <FileText size={18} />,
       requiresRoleIn: ['OWNER', 'SUPER_ADMIN'] },
-    { label: 'Settings',   href: '/admin/settings',   icon: <Settings size={18} /> },
   ],
   ops: [
     { label: 'Dashboard',   href: '/ops',              icon: <LayoutDashboard size={18} /> },

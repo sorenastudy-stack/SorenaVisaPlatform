@@ -8,6 +8,7 @@ import { LeadStatusActions } from './LeadStatusActions';
 import { LeadProgressTimeline } from './LeadProgressTimeline';
 import { LeadStatusHistory } from './LeadStatusHistory';
 import { AdminOverridePanel } from './AdminOverridePanel';
+import { ConsultationLinkGenerator } from './ConsultationLinkGenerator';
 import { getSession } from '@/lib/auth';
 import { InfoTip } from '@/components/ui/InfoTip';
 import { LEAD_STATUS_GLOSSARY } from '@/lib/glossary';
@@ -289,6 +290,15 @@ export default async function LeadDetailPage({
         </CardHeader>
         <CardContent>
           <LeadStatusActions leadId={lead.id} currentStatus={lead.leadStatus} />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle className="text-[#1E3A5F]">Consultation Payment Link</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ConsultationLinkGenerator leadId={lead.id} recommendedRoute={lead.recommendedRoute} />
         </CardContent>
       </Card>
 

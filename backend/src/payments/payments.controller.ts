@@ -48,7 +48,13 @@ export class PaymentsController {
    * gap noted in the Phase 6 doc.
    */
   @Post('consultation-link')
-  @UseGuards(JwtAuthGuard)
+  // Staff-only: matches the Sales-portal audience that hosts the tool
+  // (ConsultationLinkGenerator on the lead-detail page). Previously
+  // auth-only, so any authenticated user — including a client — could
+  // mint a prospect payment link; this closes that UI-only-protection gap.
+  // The case-keyed variant below keeps its own (wider) staff role list.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SALES', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
   async createConsultationLink(@Body() dto: CreatePaymentLinkDto) {
     return this.paymentsService.createConsultationPaymentLink(
       dto.leadId,
