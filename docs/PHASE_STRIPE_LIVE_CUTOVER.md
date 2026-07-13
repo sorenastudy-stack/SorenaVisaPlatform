@@ -23,7 +23,7 @@ None. Existing `Payment` table used. Idempotency relies on the existing `stripeP
 No new variables. Uses existing `STRIPE_SECRET_KEY` (sk_live_…) and `STRIPE_WEBHOOK_SECRET` (whsec_… live), both stored in Railway.
 
 ## 5. Third-party services connected
-- **Stripe (live mode).** Account used for production is the "Sorena Visa / WIX.com" Stripe account (secret key ends `ibqW`). Payouts go to Kiwibank ending 8001. Live webhook endpoint "Sorena production backend" → `https://sorenavisaplatform-production.up.railway.app/payments/webhook`, listening to `payment_intent.succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`. Managed in the Stripe Dashboard (Workbench → Webhooks).
+- **Stripe (live mode).** Account used for production is the "Sorena Visa / WIX.com" Stripe account (secret key: [live key configured in Railway]). Payouts go to [bank account on file]. Live webhook endpoint "Sorena production backend" → `[prod webhook URL]`, listening to `payment_intent.succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`. Managed in the Stripe Dashboard (Workbench → Webhooks).
 
 ## 6. How to test it works
 1. Staff portal → a case → Payments tab → "Create payment link" (fixed price) OR "Custom-amount link" (type an amount).

@@ -3,8 +3,8 @@
 > Handover document. Written so a developer joining in 6 months can read **only this file** and understand the entire Payments system completely.
 >
 > **Status:** ✅ Done and live in production.
-> **Live frontend:** https://sorena-visa-platform-aawd.vercel.app
-> **Live backend:** https://sorenavisaplatform-production.up.railway.app
+> **Live frontend:** [prod frontend URL]
+> **Live backend:** [prod backend URL]
 > **Final commit on `main`:** `d981862` (Phase 6.5 frontend — verification UI)
 > **Date completed:** 2026-06-18
 >
@@ -168,7 +168,7 @@ Set in **Railway → SorenaVisaPlatform → Variables**:
 | **Stripe** | Payment Link generation, hosted checkout, card processing, webhooks | https://dashboard.stripe.com — **currently in TEST mode**. Switch to Live mode in the dashboard's top-left dropdown to see / configure live keys + webhooks. |
 | **Cloudflare R2** | Receipt file storage (inherited from Phase 5 — manual-payment receipts are just Phase 5 documents) | Cloudflare dashboard → R2 → existing Phase 5 bucket. No bucket/CORS change for Phase 6.5. |
 
-The Stripe webhook URL configured in the Stripe Dashboard points to `POST https://sorenavisaplatform-production.up.railway.app/payments/webhook` (no JWT — protected by Stripe signature verification using `STRIPE_WEBHOOK_SECRET`). When swapping to live mode, register the live webhook URL too and copy its signing secret into Railway.
+The Stripe webhook URL configured in the Stripe Dashboard points to `POST [prod webhook URL]` (no JWT — protected by Stripe signature verification using `STRIPE_WEBHOOK_SECRET`). When swapping to live mode, register the live webhook URL too and copy its signing secret into Railway.
 
 ---
 
@@ -231,7 +231,7 @@ The Stripe webhook URL configured in the Stripe Dashboard points to `POST https:
 
 - **Switch Stripe to live mode (go-live checklist):**
   1. ✅ Confirm Railway Postgres backups are enabled (Pro plan + PITR). **Do this first.**
-  2. In Stripe Dashboard, register a new webhook against the live mode pointing to `https://sorenavisaplatform-production.up.railway.app/payments/webhook` and listen for `payment_intent.succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`. Copy the new signing secret.
+  2. In Stripe Dashboard, register a new webhook against the live mode pointing to `[prod webhook URL]` and listen for `payment_intent.succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`. Copy the new signing secret.
   3. In Railway → SorenaVisaPlatform → Variables, update `STRIPE_SECRET_KEY = sk_live_…` and `STRIPE_WEBHOOK_SECRET = whsec_…`.
   4. Trigger a no-op redeploy (or wait for the next push). The backend reads `process.env.STRIPE_SECRET_KEY` on cold boot.
   5. Sanity: create a $1 consultation link via the staff UI, pay it with a real card you control, confirm the Payment row lands, Confirm it from a FINANCE account, verify the Stripe Dashboard shows the charge.
