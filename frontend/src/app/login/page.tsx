@@ -22,7 +22,7 @@ type FormValues = z.infer<typeof schema>;
 // browser to follow the Google redirect chain.
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  'https://sorenavisaplatform-production.up.railway.app';
+  'https://api.sorenavisa.com';
 
 function LoginForm() {
   const router = useRouter();

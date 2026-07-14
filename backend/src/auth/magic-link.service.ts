@@ -35,7 +35,7 @@ import { MailService } from '../mail/mail.service';
 
 const TOKEN_BYTES        = 32;                  // 256-bit random secret
 const TOKEN_TTL_MS       = 15 * 60 * 1000;      // 15 minutes
-const FALLBACK_BACKEND   = 'https://sorenavisaplatform-production.up.railway.app';
+const FALLBACK_BACKEND   = 'https://api.sorenavisa.com';
 
 @Injectable()
 export class MagicLinkService {

@@ -65,7 +65,6 @@ async function bootstrap() {
     'http://localhost:3001',
     'http://localhost:3002',
     'https://app.sorenavisa.com',
-    'https://ample-dream-production-1005.up.railway.app',
     ...extraOrigins.filter(s => s !== '*'),
   ];
   app.enableCors({

@@ -16,6 +16,12 @@ const OFF_WHITE = '#FAF8F3';
 const BODY      = '#4A4A4A';
 const MUTED     = '#8B8B8B';
 
+// Absolute base for email image assets (the header logo). Email clients need
+// fully-qualified URLs; the logo is served from the frontend's public/ dir
+// (frontend/public/sorena_logo_white.png). Env-driven so it tracks the
+// deployed frontend host instead of a hardcoded (now-dead) one.
+const ASSET_BASE = (process.env.APP_URL || 'https://app.sorenavisa.com').replace(/\/+$/, '');
+
 interface WrapOpts {
   /** Big gold heading above the body. Optional — most emails set it. */
   heading?: string;
@@ -50,7 +56,7 @@ export function wrapHtml(bodyHtml: string, opts: WrapOpts = {}): string {
                     <div style="color:${GOLD};font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin-top:2px;">Education &amp; Immigration</div>
                   </td>
                   <td align="right" valign="middle" width="40" style="vertical-align:middle;width:40px;">
-                    <img src="https://sorena-visa-platform-aawd.vercel.app/sorena_logo_white.png" alt="Sorena Visa" width="140" height="140" border="0" style="display:block;border:0;outline:none;text-decoration:none;height:140px;width:140px;" />
+                    <img src="${ASSET_BASE}/sorena_logo_white.png" alt="Sorena Visa" width="140" height="140" border="0" style="display:block;border:0;outline:none;text-decoration:none;height:140px;width:140px;" />
                   </td>
                 </tr>
               </table>

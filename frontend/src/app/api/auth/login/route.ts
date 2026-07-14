@@ -3,7 +3,7 @@ import { COOKIE_NAME } from '@/lib/auth';
 
 const BACKEND =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  'https://sorenavisaplatform-production.up.railway.app';
+  'https://api.sorenavisa.com';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
