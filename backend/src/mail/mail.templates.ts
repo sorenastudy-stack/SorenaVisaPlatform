@@ -90,7 +90,11 @@ export function wrapHtml(bodyHtml: string, opts: WrapOpts = {}): string {
 // Shared primary button. Inline-styled so it survives email-client
 // rewrites. Renders as a navy pill with a gold border accent.
 export function primaryButton(text: string, href: string): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px;"><tr><td style="background:${NAVY};border-radius:8px;"><a href="${href}" style="display:inline-block;padding:12px 24px;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:0.3px;">${text}</a></td></tr></table>`;
+  // HTML-escape the href — a URL's `&` between query params MUST be written
+  // as `&amp;` in an HTML attribute, or strict email clients/proxies can drop
+  // everything after the first `&` (e.g. the magic-link ?email= param),
+  // producing an "invalid link". `esc` is hoisted (declared below).
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px;"><tr><td style="background:${NAVY};border-radius:8px;"><a href="${esc(href)}" style="display:inline-block;padding:12px 24px;color:#FFFFFF;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:0.3px;">${text}</a></td></tr></table>`;
 }
 
 // Small typed escape for user-supplied substitutions. Email content

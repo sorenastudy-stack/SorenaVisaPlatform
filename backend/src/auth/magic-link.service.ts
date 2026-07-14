@@ -94,10 +94,41 @@ export class MagicLinkService {
   }
 
   /**
+   * READ-ONLY validation for the two-step verify. Checks the token exists,
+   * matches the email, is not yet consumed, is unexpired, and belongs to an
+   * active user — WITHOUT consuming it. The GET /auth/magic-link/verify
+   * landing calls this so an email scanner's prefetch GET can't burn the
+   * single-use token; the actual consume happens later on the user's POST.
+   * Throws the same generic UnauthorizedException on any failure.
+   */
+  async validateToken(rawToken: string, email: string): Promise<void> {
+    if (!rawToken || !email) {
+      throw new UnauthorizedException('Invalid or expired link');
+    }
+    const normalized = String(email).trim().toLowerCase();
+    const tokenHash = createHash('sha256').update(String(rawToken)).digest('hex');
+
+    const row = await this.prisma.magicLinkToken.findFirst({
+      where: { tokenHash },
+      select: { id: true, userId: true, email: true, expiresAt: true, consumedAt: true },
+    });
+    if (!row) throw new UnauthorizedException('Invalid or expired link');
+    if (row.email !== normalized) throw new UnauthorizedException('Invalid or expired link');
+    if (row.consumedAt !== null) throw new UnauthorizedException('Invalid or expired link');
+    if (row.expiresAt.getTime() < Date.now()) throw new UnauthorizedException('Invalid or expired link');
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: row.userId },
+      select: { isActive: true },
+    });
+    if (!user || !user.isActive) throw new UnauthorizedException('Invalid or expired link');
+  }
+
+  /**
    * Consume a magic-link token and mint the existing JWT. Throws
-   * UnauthorizedException with a single generic message on any
-   * failure path so the controller redirect to /login?error=invalid_link
-   * stays consistent.
+   * UnauthorizedException with a single generic message on any failure
+   * path. Reached only by the user-confirmed POST (email scanners GET, they
+   * don't POST) so the single-use token survives prefetch/scanning.
    */
   async verifyAndIssue(
     rawToken: string,

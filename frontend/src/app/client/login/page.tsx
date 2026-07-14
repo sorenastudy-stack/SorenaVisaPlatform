@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -20,6 +20,13 @@ export default function ClientLoginPage() {
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Friendly banner when a magic-link failed/expired (?error=… from the
+  // backend verify redirect). Read via window (avoids a Suspense boundary).
+  const [linkExpired, setLinkExpired] = useState(false);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('error')) setLinkExpired(true);
+  }, []);
 
   const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
 
@@ -59,6 +66,11 @@ export default function ClientLoginPage() {
             </div>
           ) : (
             <form onSubmit={onSubmit} noValidate className="space-y-5">
+              {linkExpired && (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                  That sign-in link has expired or already been used. Enter your email and we&apos;ll send a fresh one.
+                </div>
+              )}
               <p className="text-sm text-[#4A4A4A]/70 leading-relaxed">
                 Enter your email and we&apos;ll send you a one-time link to sign in — no password needed.
               </p>

@@ -153,17 +153,37 @@ export class AuthController {
     @Res()         res:       Response,
   ): Promise<void> {
     try {
-      const { token, role } = await this.magicLinkService.verifyAndIssue(rawToken, email);
-      const params = new URLSearchParams({ token, role });
-      res.redirect(302, this.frontendUrl(`/auth/callback#${params.toString()}`));
+      // TWO-STEP: validate the token WITHOUT consuming it, then hand off to a
+      // user-confirmed POST. Email scanners/prefetchers issue GETs (this
+      // route) but not the confirming POST, so they can no longer burn the
+      // single-use token. On success the raw token + email ride in the URL
+      // fragment (never sent to the server / access logs) to the confirm page.
+      await this.magicLinkService.validateToken(rawToken, email);
+      const params = new URLSearchParams({ token: rawToken, email });
+      res.redirect(302, this.frontendUrl(`/auth/magic-link/confirm#${params.toString()}`));
     } catch (err) {
       this.logger.warn(
-        `magic-link verify failed (redirecting to /login?error=invalid_link): ${
+        `magic-link verify (validate) failed → /client/login?error=invalid_link: ${
           (err as Error)?.message ?? err
         }`,
       );
-      res.redirect(302, this.frontendUrl('/login?error=invalid_link'));
+      // Magic-link is the CLIENT sign-in path (staff use password/Google), so
+      // failures go to the client login, never the staff /login.
+      res.redirect(302, this.frontendUrl('/client/login?error=invalid_link'));
     }
+  }
+
+  // PR-OPTION-C — magic-link CONFIRM: the explicit user action that consumes
+  // the token + mints the JWT. Returns JSON to the same-origin Next route,
+  // which sets the sorena_session cookie. Skip-throttle mirrors the verify
+  // step; replay is prevented by the single-use consume in verifyAndIssue.
+  @SkipThrottle()
+  @Post('magic-link/confirm')
+  async magicLinkConfirm(
+    @Body('token') rawToken: string,
+    @Body('email') email:    string,
+  ): Promise<{ token: string; role: string }> {
+    return this.magicLinkService.verifyAndIssue(rawToken, email);
   }
 
   private frontendUrl(suffix: string): string {
