@@ -54,7 +54,9 @@ export default async function ScorecardResultPage() {
     data = await apiServer.get<ScorecardResultPayload>('/scorecard/me/latest');
   } catch (e) {
     if (e instanceof ApiServerError && e.statusCode === 401) {
-      redirect('/login?returnTo=/scorecard/result');
+      // Path A: send unauthenticated visitors to the CLIENT sign-in (magic
+      // link), never the staff /login.
+      redirect('/client/login');
     }
     if (e instanceof ApiServerError && e.statusCode === 404) {
       redirect('/scorecard/landing');

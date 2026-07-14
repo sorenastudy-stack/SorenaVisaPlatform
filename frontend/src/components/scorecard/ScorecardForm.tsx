@@ -49,6 +49,10 @@ interface Attribution {
 
 const TOTAL_SECTIONS = FORM_SCHEMA.length + 1; // +1 for declaration
 
+// Path A: anonymous visitors have no server draft (that endpoint is
+// auth-gated), so their in-progress answers are persisted client-side here.
+const ANON_DRAFT_KEY = 'sorena_scorecard_draft';
+
 function getCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
   const match = document.cookie
@@ -78,7 +82,13 @@ function readAttribution(): Attribution {
   return out;
 }
 
-export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | null }) {
+export function ScorecardForm({
+  initialDraft,
+  isAuthenticated,
+}: {
+  initialDraft: InitialDraft | null;
+  isAuthenticated: boolean;
+}) {
   const router = useRouter();
   const locale = useLocaleStore((s) => s.locale);
 
@@ -86,10 +96,19 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
   // 'fa'), but only when the user hasn't already got one from a resumed draft.
   // Purely a default — the field stays optional and the user can change it.
   const [answers, setAnswers] = useState<Record<string, string>>(() => {
-    const seed = { ...(initialDraft?.answers ?? {}) };
+    // Authenticated → server draft; anonymous → localStorage draft.
+    let seed: Record<string, string> = { ...(initialDraft?.answers ?? {}) };
+    if (!isAuthenticated && typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(ANON_DRAFT_KEY);
+        if (raw) seed = { ...(JSON.parse(raw) as Record<string, string>) };
+      } catch { /* localStorage unavailable / bad JSON — start fresh */ }
+    }
     if (!seed.first_language) seed.first_language = localeToLanguageCode(locale);
     return seed;
   });
+  // Path A: shown after an EXISTING-account submit (magic-link emailed).
+  const [existingEmailSent, setExistingEmailSent] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -144,6 +163,13 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
           cleaned[q.id] = v;
         }
       }
+      if (!isAuthenticated) {
+        // Anonymous — persist client-side only; the server draft route is
+        // auth-gated and must stay that way (no cross-user reads).
+        try { window.localStorage.setItem(ANON_DRAFT_KEY, JSON.stringify(cleaned)); } catch { /* ignore */ }
+        setSaving(false);
+        return true;
+      }
       await api.post('/scorecard/draft', { answers: cleaned });
       setSaving(false);
       return true;
@@ -196,10 +222,34 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
 
     const attribution = readAttribution();
     try {
-      await api.post('/scorecard/submit', { answers: cleaned, attribution });
+      if (isAuthenticated) {
+        // Returning signed-in client — existing authed path.
+        await api.post('/scorecard/submit', { answers: cleaned, attribution });
+        router.push('/scorecard/result');
+        return;
+      }
+      // Anonymous — submit via the same-origin Next route, which creates the
+      // LEAD server-side and sets sorena_session for NEW accounts. Response:
+      //   • mode 'new'      → session cookie set → go to the result page.
+      //   • mode 'existing' → a magic-link was emailed → show check-your-email.
+      const res = await fetch('/api/scorecard/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers: cleaned, attribution }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { mode?: string; message?: string };
+      if (!res.ok) throw new Error(data?.message || 'Submission failed. Please try again.');
+      try { window.localStorage.removeItem(ANON_DRAFT_KEY); } catch { /* ignore */ }
+      if (data.mode === 'existing') {
+        setExistingEmailSent(true);
+        setSubmitting(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      // mode 'new' — the cookie is now set; land on the result page signed in.
       router.push('/scorecard/result');
     } catch (err) {
-      const msg = err instanceof ApiError
+      const msg = err instanceof ApiError || err instanceof Error
         ? err.message
         : 'Submission failed. Please try again.';
       setSubmitError(msg);
@@ -227,6 +277,22 @@ export function ScorecardForm({ initialDraft }: { initialDraft: InitialDraft | n
     );
     return hiddenInThisSection.length > 0 ? hiddenInThisSection.length : null;
   }, [currentSection, answers]);
+
+  // Path A: existing-account submit → a magic-link was emailed. Generic copy
+  // that reveals nothing about whether the account is a client or staff.
+  if (existingEmailSent) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+          <h2 className="text-xl font-bold text-[#1E3A5F] mb-2">Check your email</h2>
+          <p className="text-sm text-[#4A4A4A] leading-relaxed">
+            Thanks — your assessment has been received. We&apos;ve emailed you a secure link to
+            view your result. Open it on this device to continue.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto">

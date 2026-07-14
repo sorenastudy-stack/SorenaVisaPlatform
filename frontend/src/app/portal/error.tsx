@@ -39,7 +39,7 @@ export default function PortalError({
               Try again
             </button>
             <Link
-              href="/login"
+              href="/client/login"
               className="text-sm text-gray-500 underline hover:text-sorena-navy"
             >
               Back to sign in

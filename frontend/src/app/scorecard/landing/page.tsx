@@ -107,7 +107,7 @@ export default function ScorecardLandingPage() {
 
           <div className="mt-6 text-sm text-white/70">
             {LANDING_STRINGS.signinHint}{' '}
-            <Link href="/login?returnTo=/scorecard" className="font-semibold text-white hover:text-[#F3CE49] underline-offset-4 hover:underline">
+            <Link href="/client/login" className="font-semibold text-white hover:text-[#F3CE49] underline-offset-4 hover:underline">
               {LANDING_STRINGS.signinLink}
             </Link>
           </div>

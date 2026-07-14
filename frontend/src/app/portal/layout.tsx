@@ -23,7 +23,9 @@ export default async function ClientPortalLayout({
   children: React.ReactNode;
 }) {
   const session = await getSession();
-  if (!session) redirect('/login?next=/portal');
+  // Path A: logged-out clients go to the CLIENT sign-in (magic link), never
+  // the staff /login. Wrong-role (staff) still lands on /unauthorized.
+  if (!session) redirect('/client/login');
   if (!CLIENT_ROLES.has(session.role)) redirect('/unauthorized');
 
   const { navItems, portalStage, paymentUnlocked } = await getClientShellData(session);

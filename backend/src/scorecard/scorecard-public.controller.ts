@@ -1,5 +1,8 @@
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { ScorecardService } from './scorecard.service';
+import { SubmitScorecardDto } from './dto/scorecard.dto';
 
 // PR-SCORECARD-4 — Public booking-URL resolver.
 //
@@ -24,7 +27,30 @@ interface BookingUrlsOut {
 export class ScorecardPublicController {
   private cached: { value: BookingUrlsOut; expiresAt: number } | null = null;
 
-  constructor(private readonly settings: PlatformSettingsService) {}
+  constructor(
+    private readonly settings: PlatformSettingsService,
+    private readonly scorecard: ScorecardService,
+  ) {}
+
+  // Path A — public (anonymous) scorecard submit. No auth: the service
+  // resolves-or-creates a LEAD by the email in the answers. Tightly rate
+  // limited (5/min/IP) since it can mint login-capable accounts. The DTO
+  // carries NO role — role is hardcoded LEAD server-side on create.
+  //   • { mode:'new', token }  → the Next route sets sorena_session.
+  //   • { mode:'existing' }    → a magic-link was emailed; no session.
+  @Post('public/submit')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  async publicSubmit(@Body() dto: SubmitScorecardDto, @Req() req: any) {
+    const fwd = req.headers?.['x-forwarded-for'];
+    const ipAddress =
+      (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0]?.trim() || req.ip || null;
+    const userAgent = req.headers?.['user-agent'] ?? null;
+    return this.scorecard.submitScorecardPublic(
+      dto.answers,
+      { ipAddress, userAgent },
+      dto.attribution ?? {},
+    );
+  }
 
   @Get('booking-urls')
   async bookingUrls(): Promise<BookingUrlsOut> {

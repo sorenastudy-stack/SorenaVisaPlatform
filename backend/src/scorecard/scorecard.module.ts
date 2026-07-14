@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
+import { AuthModule } from '../auth/auth.module';
 import { ScorecardService } from './scorecard.service';
 import { ScorecardController } from './scorecard.controller';
 import { ScorecardPublicController } from './scorecard-public.controller';
@@ -17,7 +18,7 @@ import { ScorecardPublicController } from './scorecard-public.controller';
 // booking destinations.
 
 @Module({
-  imports: [PrismaModule, CryptoModule, PlatformSettingsModule],
+  imports: [PrismaModule, CryptoModule, PlatformSettingsModule, AuthModule],
   // ScorecardPublicController FIRST — its literal `booking-urls` path
   // must beat the authenticated controller's `:submissionId/booking-opened`
   // param routes when Nest matches.

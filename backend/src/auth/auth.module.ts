@@ -31,6 +31,6 @@ function requireJwtSecret(): string {
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy, GoogleAuthGuard, MagicLinkService],
-  exports: [AuthService, JwtModule],
+  exports: [AuthService, JwtModule, MagicLinkService],
 })
 export class AuthModule {}

@@ -37,7 +37,7 @@ export default function NewZealandPage() {
             variants={itemVariants}
             className="mt-5 max-w-xl text-base leading-relaxed text-sorena-text/80 sm:text-lg"
           >
-            Your assessment for New Zealand is coming soon. We&apos;re putting the final pieces in place.
+            Your New Zealand readiness assessment is ready — it&apos;s free and takes about 5 minutes.
           </motion.p>
 
           <motion.p

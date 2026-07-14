@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import {
   Prisma,
   ScorecardBand,
@@ -12,6 +14,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
+import { MagicLinkService } from '../auth/magic-link.service';
 import { isValidLanguageCode } from '../common/language-codes';
 import { score, ScoreResult } from './scoring/engine';
 import { determineRouting, NextActionContent } from './scoring/routing';
@@ -112,6 +115,8 @@ export class ScorecardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly jwt: JwtService,
+    private readonly magicLink: MagicLinkService,
   ) {}
 
   // ─── Submit ───────────────────────────────────────────────────────────
@@ -122,6 +127,12 @@ export class ScorecardService {
     meta: SubmissionMetadata,
     actor: Viewer,
     attribution: AttributionInput = {},
+    // Path A (anonymous on-ramp): the public by-email path passes
+    // allowRolePromotion:false so an EXISTING account's role is never
+    // touched (a new account is created as LEAD directly, so promotion
+    // is a no-op there anyway). The authenticated path defaults to true,
+    // preserving the original SALES/SUPPORT/null → LEAD promotion.
+    opts: { allowRolePromotion?: boolean } = {},
   ): Promise<ScorecardResultPayload> {
     const result = score(answers);
     const routing = determineRouting(
@@ -288,7 +299,7 @@ export class ScorecardService {
       // Promote User.role to LEAD ONLY when current role doesn't
       // outrank LEAD. The spec is explicit: do NOT downgrade
       // STUDENT / OWNER / ADMIN / LIA / etc.
-      if (this.shouldPromoteToLead(user.role)) {
+      if (opts.allowRolePromotion !== false && this.shouldPromoteToLead(user.role)) {
         await tx.user.update({
           where: { id: userId },
           data: { role: 'LEAD' },
@@ -342,6 +353,90 @@ export class ScorecardService {
       consultationBookedAt: null,
       includeAnswers: true,
     });
+  }
+
+  // ─── Path A: public (anonymous) submit — account created on submit ──────
+  //
+  // The scorecard is fillable without an account. On submit we resolve the
+  // user by the email in the answers:
+  //   • NEW email  → create User{ role:'LEAD', passwordHash:null } and mint a
+  //     session token so the client lands on /scorecard/result signed in.
+  //   • EXISTING email (client OR staff) → NEVER session, NEVER mutate the
+  //     account. Record the submission against them and email a magic-link so
+  //     the real inbox owner signs in. Returns a generic { mode:'existing' }
+  //     that reveals nothing about the account type.
+  // role is HARDCODED 'LEAD' on create (the DTO has no role); existing roles
+  // are left untouched via allowRolePromotion:false.
+  async submitScorecardPublic(
+    answers: Record<string, string>,
+    meta: SubmissionMetadata,
+    attribution: AttributionInput = {},
+  ): Promise<{ mode: 'new'; token: string } | { mode: 'existing' }> {
+    const email = (answers.email ?? '').trim().toLowerCase() || null;
+    if (!email) {
+      throw new BadRequestException('An email address is required to submit the assessment.');
+    }
+    const fullName = (answers.full_name ?? '').trim() || 'Lead';
+
+    // Case-insensitive match — mirrors the unique(email) + magic-link lookup.
+    const existing = await this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true, name: true, role: true },
+    });
+
+    if (existing) {
+      // Existing account: record the submission, but NEVER session or change
+      // the account (allowRolePromotion:false leaves even a SALES/SUPPORT
+      // default untouched). Then email a sign-in link to the real owner.
+      await this.submitScorecard(
+        existing.id,
+        answers,
+        meta,
+        { userId: existing.id, name: existing.name, role: existing.role },
+        attribution,
+        { allowRolePromotion: false },
+      );
+      await this.magicLink.requestLink(email);
+      return { mode: 'existing' };
+    }
+
+    // Brand-new account — passwordless LEAD (role hardcoded).
+    let created: { id: string; name: string | null; role: string; email: string };
+    try {
+      created = await this.prisma.user.create({
+        data: {
+          email,
+          name: fullName,
+          role: 'LEAD',
+          passwordHash: null,
+          isActive: true,
+        },
+        select: { id: true, name: true, role: true, email: true },
+      });
+    } catch (e) {
+      // Concurrent submit created the account first — treat as existing:
+      // send a sign-in link, no session, generic response.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        await this.magicLink.requestLink(email);
+        return { mode: 'existing' };
+      }
+      throw e;
+    }
+
+    await this.submitScorecard(
+      created.id,
+      answers,
+      meta,
+      { userId: created.id, name: created.name, role: created.role },
+      attribution,
+      { allowRolePromotion: false },
+    );
+
+    // Establish a session (same token shape as magic-link / password login)
+    // so the Next route can set sorena_session and the client lands on the
+    // result page authenticated.
+    const token = this.jwt.sign({ sub: created.id, email: created.email, role: created.role });
+    return { mode: 'new', token };
   }
 
   // ─── Read endpoints ───────────────────────────────────────────────────

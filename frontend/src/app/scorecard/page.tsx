@@ -1,4 +1,3 @@
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
@@ -9,9 +8,11 @@ import { AboutSorenaBrief } from '@/components/scorecard/AboutSorenaBrief';
 // PR-SCORECARD-2 — Public scorecard form page.
 //
 // Server component shell. Loads the user's open draft (if any) so the
-// client form can hydrate with the saved answers. If the user is not
-// authenticated (401), bounces to /login with a returnTo so they come
-// straight back here after signing in.
+// client form can hydrate with the saved answers. Path A (anonymous
+// on-ramp): the scorecard is fillable WITHOUT an account — an
+// unauthenticated visitor (401 on the draft load) is NOT bounced to the
+// staff login; the empty form renders and the LEAD account is created on
+// submit. Anonymous drafts live in localStorage (client-side).
 
 interface InitialDraft {
   id: string;
@@ -21,13 +22,19 @@ interface InitialDraft {
 
 export default async function ScorecardFormPage() {
   let initialDraft: InitialDraft | null = null;
+  let isAuthenticated = false;
   try {
+    // The draft endpoint is auth-gated, so a success (even null draft) means
+    // the caller is signed in; a 401 means an anonymous visitor.
     initialDraft = await apiServer.get<InitialDraft | null>('/scorecard/me/draft');
+    isAuthenticated = true;
   } catch (e) {
     if (e instanceof ApiServerError && e.statusCode === 401) {
-      redirect('/login?returnTo=/scorecard');
+      // Anonymous — render the empty form (account created on submit).
+      initialDraft = null;
+      isAuthenticated = false;
     }
-    // Other errors (e.g. 500) — fall through with no draft.
+    // Other errors (e.g. 500) — fall through, treated as anonymous/no draft.
   }
 
   return (
@@ -44,7 +51,7 @@ export default async function ScorecardFormPage() {
           </Link>
         </div>
 
-        <ScorecardForm initialDraft={initialDraft} />
+        <ScorecardForm initialDraft={initialDraft} isAuthenticated={isAuthenticated} />
       </div>
     </div>
   );
