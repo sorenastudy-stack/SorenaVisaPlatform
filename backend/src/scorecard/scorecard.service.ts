@@ -5,7 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import {
   Prisma,
   ScorecardBand,
@@ -15,6 +14,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { MagicLinkService } from '../auth/magic-link.service';
+import { PasswordSetupService } from '../auth/password-setup.service';
 import { isValidLanguageCode } from '../common/language-codes';
 import { score, ScoreResult } from './scoring/engine';
 import { determineRouting, NextActionContent } from './scoring/routing';
@@ -115,8 +115,8 @@ export class ScorecardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
-    private readonly jwt: JwtService,
     private readonly magicLink: MagicLinkService,
+    private readonly passwordSetup: PasswordSetupService,
   ) {}
 
   // ─── Submit ───────────────────────────────────────────────────────────
@@ -359,8 +359,10 @@ export class ScorecardService {
   //
   // The scorecard is fillable without an account. On submit we resolve the
   // user by the email in the answers:
-  //   • NEW email  → create User{ role:'LEAD', passwordHash:null } and mint a
-  //     session token so the client lands on /scorecard/result signed in.
+  //   • NEW email  → create User{ role:'LEAD', passwordHash:null }, issue a
+  //     first-time set-password token + email the secure "Create Your Password"
+  //     link, and return { mode:'created' }. NO session — the client sets a
+  //     password via the email link, then lands in the portal.
   //   • EXISTING email (client OR staff) → NEVER session, NEVER mutate the
   //     account. Record the submission against them and email a magic-link so
   //     the real inbox owner signs in. Returns a generic { mode:'existing' }
@@ -371,7 +373,7 @@ export class ScorecardService {
     answers: Record<string, string>,
     meta: SubmissionMetadata,
     attribution: AttributionInput = {},
-  ): Promise<{ mode: 'new'; token: string } | { mode: 'existing' }> {
+  ): Promise<{ mode: 'created' } | { mode: 'existing' }> {
     const email = (answers.email ?? '').trim().toLowerCase() || null;
     if (!email) {
       throw new BadRequestException('An email address is required to submit the assessment.');
@@ -432,11 +434,13 @@ export class ScorecardService {
       { allowRolePromotion: false },
     );
 
-    // Establish a session (same token shape as magic-link / password login)
-    // so the Next route can set sorena_session and the client lands on the
-    // result page authenticated.
-    const token = this.jwt.sign({ sub: created.id, email: created.email, role: created.role });
-    return { mode: 'new', token };
+    // First-time onboarding: issue a "create your password" token + email the
+    // secure link. NO session is minted here — the client sets their password
+    // via the email link, then lands in the portal. requestSetup only issues
+    // for the passwordless LEAD we just created and swallows mail failures, so
+    // it never unwinds the submission.
+    await this.passwordSetup.requestSetup(created.id);
+    return { mode: 'created' };
   }
 
   // ─── Read endpoints ───────────────────────────────────────────────────

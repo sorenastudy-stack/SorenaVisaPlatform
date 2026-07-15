@@ -20,15 +20,18 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { MagicLinkService } from './magic-link.service';
+import { PasswordSetupService } from './password-setup.service';
+import { SetPasswordDto } from './dto/set-password.dto';
 
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
   constructor(
-    private readonly authService:      AuthService,
-    private readonly jwtService:       JwtService,
-    private readonly magicLinkService: MagicLinkService,
+    private readonly authService:          AuthService,
+    private readonly jwtService:           JwtService,
+    private readonly magicLinkService:     MagicLinkService,
+    private readonly passwordSetupService: PasswordSetupService,
   ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -184,6 +187,38 @@ export class AuthController {
     @Body('email') email:    string,
   ): Promise<{ token: string; role: string }> {
     return this.magicLinkService.verifyAndIssue(rawToken, email);
+  }
+
+  // Client-onboarding: FIRST-TIME "create your password" flow.
+  //
+  // TWO steps mirror the magic-link two-step so it's scanner-safe:
+  //   GET  /auth/set-password/validate — READ-ONLY, consumes nothing. The
+  //        /set-password page calls it to decide "show form" vs "link expired".
+  //   POST /auth/set-password          — consumes the token + sets the FIRST
+  //        password (never a reset — the service refuses if a password already
+  //        exists or the account isn't a LEAD) and returns the JWT for the
+  //        same-origin Next route to set sorena_session.
+  //
+  // Both throttled: probing a 256-bit token is infeasible, but rate-limit is
+  // defence-in-depth on top of the global default.
+  @Get('set-password/validate')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
+  async setPasswordValidate(
+    @Query('token') rawToken: string,
+    @Query('email') email:    string,
+  ): Promise<{ valid: true }> {
+    await this.passwordSetupService.validateToken(rawToken, email);
+    return { valid: true };
+  }
+
+  @Post('set-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  async setPassword(
+    @Body() dto: SetPasswordDto,
+  ): Promise<{ token: string; role: string }> {
+    return this.passwordSetupService.setPassword(dto.token, dto.email, dto.password);
   }
 
   private frontendUrl(suffix: string): string {

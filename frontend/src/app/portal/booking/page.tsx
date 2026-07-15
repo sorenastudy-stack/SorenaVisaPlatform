@@ -7,10 +7,12 @@ import { CalendarClock, ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 
 // Client portal — booking page.
-//   type=free15 → the real native FREE_15 flow (date → slots → review →
-//                 confirm), backed by /booking/slots + /booking/confirm.
-//   type=gap|lia|unknown → the reassuring placeholder (paid flow lands in
-//                 the next stage).
+//   type=free15  → native FREE_15 flow (date → slots → review → confirm),
+//                  backed by /booking/slots + /booking/confirm.
+//   type=gap     → PaidBookingFlow(GAP_CLOSING): hold → checkout (Stripe) or
+//                  pay-with-wallet. Real, money-safe.
+//   type=lia     → PaidBookingFlow(LIA): same paid flow (NZD 150).
+//   type=unknown → the reassuring placeholder (advisor will be in touch).
 
 // ── Placeholder (gap / lia / unknown) ─────────────────────────────────
 const HEADINGS: Record<string, string> = {

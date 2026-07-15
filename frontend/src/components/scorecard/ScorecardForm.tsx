@@ -109,6 +109,9 @@ export function ScorecardForm({
   });
   // Path A: shown after an EXISTING-account submit (magic-link emailed).
   const [existingEmailSent, setExistingEmailSent] = useState(false);
+  // Path A: shown after a NEW-account submit — the "create your password"
+  // onboarding email was sent. No session, no report on screen.
+  const [submittedCreated, setSubmittedCreated] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -229,8 +232,9 @@ export function ScorecardForm({
         return;
       }
       // Anonymous — submit via the same-origin Next route, which creates the
-      // LEAD server-side and sets sorena_session for NEW accounts. Response:
-      //   • mode 'new'      → session cookie set → go to the result page.
+      // LEAD server-side. NO session is set anymore. Response:
+      //   • mode 'created'  → new LEAD; "Create Your Password" email sent →
+      //                       show the onboarding confirmation (no report).
       //   • mode 'existing' → a magic-link was emailed → show check-your-email.
       const res = await fetch('/api/scorecard/submit', {
         method: 'POST',
@@ -242,12 +246,12 @@ export function ScorecardForm({
       try { window.localStorage.removeItem(ANON_DRAFT_KEY); } catch { /* ignore */ }
       if (data.mode === 'existing') {
         setExistingEmailSent(true);
-        setSubmitting(false);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
+      } else {
+        // mode 'created' (or any success) — show the onboarding confirmation.
+        setSubmittedCreated(true);
       }
-      // mode 'new' — the cookie is now set; land on the result page signed in.
-      router.push('/scorecard/result');
+      setSubmitting(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       const msg = err instanceof ApiError || err instanceof Error
         ? err.message
@@ -277,6 +281,25 @@ export function ScorecardForm({
     );
     return hiddenInThisSection.length > 0 ? hiddenInThisSection.length : null;
   }, [currentSection, answers]);
+
+  // Path A: NEW-account submit → the "create your password" onboarding email
+  // was sent. NO report on screen, NO session — the client sets a password via
+  // the email link, then reviews the report in the portal. Copy is approved.
+  if (submittedCreated) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+          <h2 className="text-xl font-bold text-[#1E3A5F] mb-3">Assessment completed</h2>
+          <p className="text-sm text-[#4A4A4A] leading-relaxed">
+            Your personalised assessment has been completed successfully. Your report is now
+            available in your Sorena Visa Client Portal. Please check your email and follow the
+            secure link to create your password and access your portal. Once signed in, you can
+            review your report, upload supporting documents, and book consultations with our team.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Path A: existing-account submit → a magic-link was emailed. Generic copy
   // that reveals nothing about whether the account is a client or staff.

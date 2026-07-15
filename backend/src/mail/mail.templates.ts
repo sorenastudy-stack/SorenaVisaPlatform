@@ -130,6 +130,29 @@ export function magicLinkLoginBody(name: string, url: string): string {
   `;
 }
 
+// Client-onboarding "create your password" email. First-time access only —
+// the link lands on the frontend /set-password page. Copy is the client's
+// approved wording; button label + subject are fixed by the brief.
+export function passwordSetupBody(url: string): string {
+  return `
+    <p>Hello,</p>
+    <p>Thank you for completing your Sorena Visa assessment. Your personalised assessment report has been prepared and is now available in your Sorena Visa Client Portal.</p>
+    <p>To access your portal for the first time, please click the secure link below and create your password:</p>
+    ${primaryButton('Create Your Password', url)}
+    <p>Once your password has been created, you will be able to:</p>
+    <ul style="margin:8px 0 8px 0;padding-left:20px;color:${BODY};font-size:15px;line-height:1.7;">
+      <li>view your personalised assessment report;</li>
+      <li>upload your CV and supporting documents;</li>
+      <li>book consultations with our team;</li>
+      <li>track your application progress in one place.</li>
+    </ul>
+    <p>For your security, this link is intended for your first-time access. If you experience any issues, simply use the &quot;Request Magic Link&quot; option on the sign-in page or contact our support team.</p>
+    <p>We look forward to supporting you throughout your education and immigration journey.</p>
+    <p style="margin-top:20px;">Kind regards,<br/>Sorena Visa Team — Empowering Your Global Journey</p>
+    <p style="color:${MUTED};font-size:13px;margin-top:24px;">This secure link expires in <strong>24 hours</strong> and can be used <strong>once</strong>. If it expires, use the &quot;Request Magic Link&quot; option on the sign-in page.</p>
+  `;
+}
+
 export function welcomeEmailBody(name: string): string {
   return `
     <p>Welcome to Sorena Visa, ${esc(name)}.</p>

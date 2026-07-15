@@ -2,37 +2,70 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { routeForRole } from '@/lib/role-redirect';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
-// Client sign-in — passwordless magic-link. Distinct from the staff /login,
-// and deliberately OUTSIDE /portal/* (that layout auth-gates + bounces logged-
-// out visitors, so a login page can't live under it). Client accounts are
-// auto-created (passwordless) when a visitor submits the readiness assessment,
-// so they return via a one-time email link.
+// Client sign-in — supports BOTH email+password (primary) and passwordless
+// magic-link (secondary). Distinct from the staff /login, and deliberately
+// OUTSIDE /portal/* (that layout auth-gates + bounces logged-out visitors).
 //
-// The backend /auth/magic-link/request is anti-enumeration (always 200), so we
-// always show the same "check your email" confirmation regardless of whether
-// the address has an account.
+// New clients set a password via the onboarding email (/set-password), then
+// return here with email+password. Clients who never set one (or forget it)
+// use "Email me a magic link". The magic-link request is anti-enumeration
+// (always 200), so the confirmation copy is identical regardless of account.
+
+type Mode = 'password' | 'magic';
 
 export default function ClientLoginPage() {
+  const [mode, setMode] = useState<Mode>('password');
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState('');
+  const [sent, setSent] = useState(false); // magic-link "check your email"
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  // Friendly banner when a magic-link failed/expired (?error=… from the
-  // backend verify redirect). Read via window (avoids a Suspense boundary).
+  // Friendly banner when a magic/set-up link failed/expired (?error=…).
   const [linkExpired, setLinkExpired] = useState(false);
+  // Preserve ?next= across sign-in (validated same-origin path only).
+  const [next, setNext] = useState<string | null>(null);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('error')) setLinkExpired(true);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error')) setLinkExpired(true);
+    const n = params.get('next');
+    if (n && n.startsWith('/') && !n.startsWith('//')) setNext(n);
   }, []);
 
-  const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
+  const emailValid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid || submitting) return;
+    if (!emailValid || !password || submitting) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { role?: string; message?: string };
+      if (!res.ok) {
+        setError('Incorrect email or password. If you haven’t set a password yet, use a magic link below.');
+        setSubmitting(false);
+        return;
+      }
+      // Cookie set by the route handler — hard-nav so the destination reads it.
+      window.location.assign(next ?? routeForRole(data.role, '/portal/case'));
+    } catch {
+      setError('Something went wrong. Please try again.');
+      setSubmitting(false);
+    }
+  };
+
+  const onMagicSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailValid || submitting) return;
     setSubmitting(true);
     setError('');
     try {
@@ -65,36 +98,94 @@ export default function ClientLoginPage() {
               </p>
             </div>
           ) : (
-            <form onSubmit={onSubmit} noValidate className="space-y-5">
+            <>
               {linkExpired && (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                  That sign-in link has expired or already been used. Enter your email and we&apos;ll send a fresh one.
-                </div>
-              )}
-              <p className="text-sm text-[#4A4A4A]/70 leading-relaxed">
-                Enter your email and we&apos;ll send you a one-time link to sign in — no password needed.
-              </p>
-              <div>
-                <label className="block text-sm font-semibold text-sorena-text mb-1.5">Email address</label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                />
-              </div>
-
-              {error && (
-                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                  {error}
+                <div className="mb-5 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                  That link has expired or already been used. Sign in with your password, or request a fresh magic link.
                 </div>
               )}
 
-              <Button type="submit" size="lg" className="w-full mt-2" disabled={!valid || submitting}>
-                {submitting ? 'Sending link…' : 'Email me a sign-in link'}
-              </Button>
-            </form>
+              {mode === 'password' ? (
+                <form onSubmit={onPasswordSubmit} noValidate className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-sorena-text mb-1.5">Email address</label>
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-sorena-text mb-1.5">Password</label>
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Your password"
+                      autoComplete="current-password"
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                      {error}
+                    </div>
+                  )}
+
+                  <Button type="submit" size="lg" className="w-full mt-2" disabled={!emailValid || !password || submitting}>
+                    {submitting ? 'Signing in…' : 'Sign in'}
+                  </Button>
+
+                  <p className="text-center text-sm text-[#4A4A4A]/70">
+                    <button
+                      type="button"
+                      onClick={() => { setMode('magic'); setError(''); }}
+                      className="font-semibold text-sorena-navy underline underline-offset-4 hover:text-[#b8941f]"
+                    >
+                      Email me a magic link instead
+                    </button>
+                  </p>
+                </form>
+              ) : (
+                <form onSubmit={onMagicSubmit} noValidate className="space-y-5">
+                  <p className="text-sm text-[#4A4A4A]/70 leading-relaxed">
+                    Enter your email and we&apos;ll send you a one-time link to sign in — no password needed.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-semibold text-sorena-text mb-1.5">Email address</label>
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                      {error}
+                    </div>
+                  )}
+
+                  <Button type="submit" size="lg" className="w-full mt-2" disabled={!emailValid || submitting}>
+                    {submitting ? 'Sending link…' : 'Email me a sign-in link'}
+                  </Button>
+
+                  <p className="text-center text-sm text-[#4A4A4A]/70">
+                    <button
+                      type="button"
+                      onClick={() => { setMode('password'); setError(''); }}
+                      className="font-semibold text-sorena-navy underline underline-offset-4 hover:text-[#b8941f]"
+                    >
+                      Sign in with a password instead
+                    </button>
+                  </p>
+                </form>
+              )}
+            </>
           )}
         </div>
 

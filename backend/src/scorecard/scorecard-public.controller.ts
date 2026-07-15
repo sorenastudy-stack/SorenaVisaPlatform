@@ -34,10 +34,11 @@ export class ScorecardPublicController {
 
   // Path A — public (anonymous) scorecard submit. No auth: the service
   // resolves-or-creates a LEAD by the email in the answers. Tightly rate
-  // limited (5/min/IP) since it can mint login-capable accounts. The DTO
+  // limited (5/min/IP) since it can create login-capable accounts. The DTO
   // carries NO role — role is hardcoded LEAD server-side on create.
-  //   • { mode:'new', token }  → the Next route sets sorena_session.
-  //   • { mode:'existing' }    → a magic-link was emailed; no session.
+  //   • { mode:'created' }  → new LEAD; a "create your password" link was
+  //                           emailed. NO session (client sets a password first).
+  //   • { mode:'existing' } → a magic-link was emailed; no session.
   @Post('public/submit')
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   async publicSubmit(@Body() dto: SubmitScorecardDto, @Req() req: any) {

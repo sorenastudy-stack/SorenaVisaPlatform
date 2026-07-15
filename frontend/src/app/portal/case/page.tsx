@@ -258,7 +258,13 @@ export default async function MyCasePage() {
           <p className="text-lg font-bold text-[#1e3a5f]">{assessment.bandName}</p>
           <p className="text-sm text-gray-500">{assessment.bandRange}</p>
           <p className="mt-1 text-xs text-gray-400">{t('portal.assessment.completed')} {formatDate(assessment.submittedAt)}</p>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Link
+              href="/portal/report"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#162d4a] transition-colors"
+            >
+              View full report <ArrowRight size={14} />
+            </Link>
             <AssessmentPdfButton submissionId={assessment.submissionId} />
           </div>
         </section>

@@ -478,7 +478,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             applicantName={applicantName}
           />
           <Link
-            href="/student/dashboard"
+            href="/portal/case"
             className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]"
           >
             {RESULT_STRINGS.backToDashboard} <ArrowRight size={14} />

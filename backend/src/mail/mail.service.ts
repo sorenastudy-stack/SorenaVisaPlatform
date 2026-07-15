@@ -5,6 +5,7 @@ import {
   wrapHtml,
   verificationEmailBody,
   magicLinkLoginBody,
+  passwordSetupBody,
   welcomeEmailBody,
   admissionSubmittedToClientBody,
   admissionSubmittedToOwnerBody,
@@ -87,6 +88,17 @@ export class MailService implements OnModuleInit {
       to,
       subject: 'Your Sorena Visa login link',
       html: wrapHtml(magicLinkLoginBody(name, url), { heading: 'Sign in to Sorena Visa' }),
+    });
+  }
+
+  // Client-onboarding first-time password setup. Caller (PasswordSetupService)
+  // builds the FULL frontend /set-password URL (with token + email); we accept
+  // it pre-built, same as sendMagicLinkLogin. Subject + button copy are fixed.
+  async sendPasswordSetup(to: string, url: string): Promise<void> {
+    await this.send({
+      to,
+      subject: 'Welcome to Your Sorena Visa Client Portal',
+      html: wrapHtml(passwordSetupBody(url), { heading: 'Welcome to your Client Portal' }),
     });
   }
 

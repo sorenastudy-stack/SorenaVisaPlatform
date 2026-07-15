@@ -594,6 +594,12 @@ model User {
   // are useless).
   magicLinkTokens         MagicLinkToken[]
 
+  // Client-onboarding step — first-time "create your password" tokens
+  // issued ONLY to brand-new passwordless LEADs from the public scorecard.
+  // Never a reset (the set endpoint refuses if passwordHash is already
+  // set). Cascade on user delete.
+  passwordSetupTokens     PasswordSetupToken[]
+
   // PR-BOOKING-1: OWNER-set weekly working hours for this user as a
   // bookable staff member. Empty for users who aren't bookable.
   staffAvailability       StaffAvailability[]               @relation("StaffAvailabilityStaff")
@@ -656,6 +662,37 @@ model MagicLinkToken {
   @@index([tokenHash])
   @@index([userId])
   @@map("magic_link_tokens")
+}
+
+// Client-onboarding "create your password" token — cloned from
+// MagicLinkToken. Issued ONLY to brand-new passwordless LEADs created by the
+// public scorecard submit; consumed once when the client sets their password.
+//
+// FIRST-TIME ONLY, never a reset: the set-password endpoint re-checks
+// `passwordHash IS NULL` AND `role = 'LEAD'` immediately before writing, so a
+// leaked/replayed token can never overwrite an account that already has a
+// password (nor touch a staff account). Single-use (consumedAt), 24h TTL
+// (expiresAt), scanner-safe (validate is read-only; consume happens on the
+// password POST). Raw token is never stored — only sha256(raw).
+model PasswordSetupToken {
+  id          String    @id @default(cuid())
+  userId      String
+  // Lowercased target email captured at issue time; the set endpoint
+  // verifies the email on the URL matches this before consuming. Stored
+  // alongside userId so a later email change doesn't break in-flight tokens
+  // (authoritative user lookup still uses userId FK).
+  email       String
+  tokenHash   String
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash])
+  @@index([tokenHash])
+  @@index([userId])
+  @@map("password_setup_tokens")
 }
 
 // ─── ACQUISITION (existing — kept and extended) ───────────────────────────────
