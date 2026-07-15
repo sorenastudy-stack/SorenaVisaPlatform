@@ -17,7 +17,7 @@ import {
 //                  backed by /booking/slots + /booking/confirm.
 //   type=gap     → PaidBookingFlow(GAP_CLOSING): hold → checkout (Stripe) or
 //                  pay-with-wallet. Real, money-safe.
-//   type=lia     → PaidBookingFlow(LIA): same paid flow (NZD 150).
+//   type=lia     → PaidBookingFlow(LIA): same paid flow (price from session-config).
 //   type=unknown → the reassuring placeholder (advisor will be in touch).
 
 // ── Chooser (bare /portal/booking) — shows ALL THREE session types, always ────
@@ -467,11 +467,12 @@ interface Hold {
 }
 type GapStep = 'pick' | 'hold' | 'expired' | 'done';
 
-// Display strings only — the authoritative price/duration live in the
-// backend session-config; the hold response carries the real amount.
-const PAID_CONFIG: Record<'GAP_CLOSING' | 'LIA', { label: string; price: number }> = {
-  GAP_CLOSING: { label: 'Gap-Closing session', price: 30 },
-  LIA:         { label: 'LIA Consultation (45 min)', price: 150 },
+// Display LABELS only — the price is NOT hardcoded here: it comes from the
+// server (GET /booking/eligibility, which reads backend session-config), and
+// the hold response carries the real charged amount.
+const PAID_CONFIG: Record<'GAP_CLOSING' | 'LIA', { label: string }> = {
+  GAP_CLOSING: { label: 'Gap-Closing session' },
+  LIA:         { label: 'LIA Consultation (45 min)' },
 };
 
 function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }) {
@@ -492,6 +493,17 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
   const [walletCents, setWalletCents] = useState<number | null>(null);
   const [payingWallet, setPayingWallet] = useState(false);
   const [doneBalanceCents, setDoneBalanceCents] = useState<number | null>(null);
+  // Price for the header — sourced from the server (session-config), never
+  // hardcoded. The authoritative charged amount comes from the hold response.
+  const [priceNzd, setPriceNzd] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getBookingEligibility()
+      .then((e) => { if (!cancelled) setPriceNzd(e.types.find((t) => t.type === sessionType)?.priceNzd ?? null); })
+      .catch(() => { /* header just omits the price on failure; the hold amount is authoritative */ });
+    return () => { cancelled = true; };
+  }, [sessionType]);
 
   async function loadSlots() {
     setLoading(true); setLoadError(false);
@@ -698,7 +710,7 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
   return (
     <Shell>
       <h1 className="text-xl font-bold text-sorena-navy text-center">Book your {cfg.label}</h1>
-      <p className="mt-2 text-center text-sm text-sorena-text/60">NZD {cfg.price} · Pick a day, then a time. You&apos;ll have 15 minutes to pay.</p>
+      <p className="mt-2 text-center text-sm text-sorena-text/60">{priceNzd !== null ? `NZD ${priceNzd} · ` : ''}Pick a day, then a time. You&apos;ll have 15 minutes to pay.</p>
       {pickError && (
         <div className="mt-4 rounded-xl bg-sorena-clay/10 border border-sorena-clay/30 px-4 py-3 text-sm text-sorena-clay text-center">{pickError}</div>
       )}

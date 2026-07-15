@@ -8,7 +8,7 @@ import { BookingEligibilityService } from './booking-eligibility.service';
 import { StripeService } from '../payments/stripe.service';
 import { PolicyAcceptanceService } from '../wallet/policy-acceptance.service';
 import { BookingCancellationService } from './booking-cancellation.service';
-import { getSessionConfig } from './session-config';
+import { getSessionConfig, SESSION_TYPES } from './session-config';
 import {
   SlotsQueryDto, ConfirmBookingDto, HoldBookingDto, CheckoutBookingDto, PayWithWalletDto,
 } from './dto/booking.dto';
@@ -41,6 +41,23 @@ export class BookingController {
   getEligibility(@Req() req: any) {
     const userId = req.user?.userId ?? req.user?.id;
     return this.eligibility.getEligibility(userId);
+  }
+
+  // GET /booking/session-types — the session catalogue (type, price, currency)
+  // for STAFF display surfaces (e.g. platform-settings titles), single-sourced
+  // from backend session-config. Method-level @Roles overrides the class-level
+  // LEAD/STUDENT gate (RolesGuard reads the handler's roles first). Read-only,
+  // rate-limited. Currency is NZD in Step 1; Step 2 sources it from config.
+  @Get('session-types')
+  @Roles('ADMIN', 'SUPER_ADMIN', 'OWNER', 'OPERATIONS')
+  @Throttle({ default: { ttl: 60000, limit: 30 } })
+  sessionTypes() {
+    return Object.values(SESSION_TYPES).map((c) => ({
+      type: c.type,
+      price: c.priceNZD,
+      currency: 'NZD',
+      label: c.label,
+    }));
   }
 
   // GET /booking/slots?type=FREE_15&from=ISO&to=ISO

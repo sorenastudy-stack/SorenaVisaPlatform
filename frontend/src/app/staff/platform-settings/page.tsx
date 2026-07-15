@@ -37,13 +37,22 @@ const BOOKING_LABELS: Record<string, { title: string; subtitle: string }> = {
     subtitle: 'Bands 4-6, no hard stop — primary CTA on the result page.',
   },
   BOOKING_URL_GAP_CLOSING: {
-    title: 'Gap-Closing Roadmap Session (NZD 30)',
-    subtitle: 'Band 3, no hard stop — paid booking.',
+    title: 'Gap-Closing Roadmap Session',
+    subtitle: 'Band 3, no hard stop — paid booking. Price is set in backend session-config.',
   },
   BOOKING_URL_LIA_CONSULTATION: {
-    title: 'LIA Consultation (NZD 150)',
+    title: 'LIA Consultation',
     subtitle: 'Any band with hard stop — paid booking.',
   },
+};
+
+// Maps each booking-URL setting to its session-config type, so the title can
+// show the LIVE price from GET /booking/session-types (single source — no
+// hardcoded price literal on this page).
+const KEY_TO_TYPE: Record<string, string> = {
+  BOOKING_URL_FREE_15MIN:      'FREE_15',
+  BOOKING_URL_GAP_CLOSING:     'GAP_CLOSING',
+  BOOKING_URL_LIA_CONSULTATION: 'LIA',
 };
 
 export default function PlatformSettingsPage() {
@@ -51,6 +60,25 @@ export default function PlatformSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PlatformSetting | null>(null);
+  // Live session prices (single-sourced from backend session-config) for the
+  // booking titles. Falls back to no price suffix if the fetch fails.
+  const [prices, setPrices] = useState<Record<string, { price: number; currency: string }>>({});
+
+  useEffect(() => {
+    api
+      .get<Array<{ type: string; price: number; currency: string }>>('/booking/session-types')
+      .then((rows) => {
+        const m: Record<string, { price: number; currency: string }> = {};
+        rows.forEach((r) => { m[r.type] = { price: r.price, currency: r.currency }; });
+        setPrices(m);
+      })
+      .catch(() => { /* titles fall back to base (no price) */ });
+  }, []);
+
+  const titleFor = (key: string, base: string): string => {
+    const p = prices[KEY_TO_TYPE[key]];
+    return p && p.price > 0 ? `${base} (${p.currency} ${p.price})` : base;
+  };
 
   async function load() {
     setLoading(true);
@@ -115,7 +143,7 @@ export default function PlatformSettingsPage() {
               if (!s) {
                 return (
                   <li key={key} className="rounded-xl border border-gray-200 p-4">
-                    <div className="font-semibold text-[#1E3A5F] mb-1">{meta.title}</div>
+                    <div className="font-semibold text-[#1E3A5F] mb-1">{titleFor(key, meta.title)}</div>
                     <p className="text-xs text-[#4A4A4A]/70">{meta.subtitle}</p>
                     <p className="text-xs text-amber-700 mt-2 italic">Not yet seeded.</p>
                   </li>
@@ -125,7 +153,7 @@ export default function PlatformSettingsPage() {
                 <li key={key} className="rounded-xl border border-gray-200 p-4 hover:border-[#F3CE49]/50 transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-[#1E3A5F] mb-1">{meta.title}</div>
+                      <div className="font-semibold text-[#1E3A5F] mb-1">{titleFor(key, meta.title)}</div>
                       <p className="text-xs text-[#4A4A4A]/70 mb-2">{meta.subtitle}</p>
                       <div className="text-sm font-mono text-[#1E3A5F] bg-gray-50 rounded px-2 py-1.5 break-all">
                         {s.value}
