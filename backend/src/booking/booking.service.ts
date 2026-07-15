@@ -22,6 +22,7 @@ import {
 } from './slot-engine';
 import { BookingConfirmationService } from './booking-confirmation.service';
 import { WalletService } from '../wallet/wallet.service';
+import { BookingEligibilityService } from './booking-eligibility.service';
 
 // PR-BOOKING-1 — booking service (Stage 1+2: data loading + slot engine +
 // commit guard). No controller/endpoints yet — that's the next stage.
@@ -87,6 +88,7 @@ export class BookingService {
     private readonly prisma: PrismaService,
     private readonly bookingConfirmation: BookingConfirmationService,
     private readonly wallet: WalletService,
+    private readonly eligibility: BookingEligibilityService,
   ) {}
 
   /**
@@ -324,6 +326,10 @@ export class BookingService {
     if (isNaN(slotStart.getTime())) throw new BadRequestException('Invalid slotStartUtc');
     const slotEnd = new Date(slotStart.getTime() + cfg.durationMinutes * 60_000);
 
+    // Eligibility gate (server-side) BEFORE any slot is held — an ineligible
+    // GAP/LIA booking is rejected with 403 (reason) and never reserves a slot.
+    await this.eligibility.assertEligible(params.userId, sessionType);
+
     // Release this client's own expired holds before making a new one.
     await this.cancelStaleHoldsForUser(params.userId, now);
 
@@ -545,9 +551,13 @@ export class BookingService {
     const slotStart = new Date(params.slotStartUtc);
     if (isNaN(slotStart.getTime())) throw new BadRequestException('Invalid slotStartUtc');
 
-    // Free-once rule: one FREE_15 per client, ever. ForbiddenException
-    // (403) so the frontend can distinguish "already used" from the 409
-    // "slot just taken" path and show the paid-options message instead.
+    // Eligibility gate (server-side, cannot be bypassed by the UI). Reconciles
+    // band + LIVE hard-stop + free-once and throws ForbiddenException(reason)
+    // → 403, distinct from the 409 slot-taken path below.
+    await this.eligibility.assertEligible(params.userId, sessionType);
+
+    // Free-once rule: one FREE_15 per client, ever. Kept as a backstop even
+    // though assertEligible already covers it (defense in depth).
     if (await this.hasUsedFreeSession(params.userId)) {
       throw new ForbiddenException(
         "You've already used your free consultation. Please choose a paid session to continue.",

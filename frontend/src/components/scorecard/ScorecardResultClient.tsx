@@ -11,42 +11,20 @@ import { api } from '@/lib/api';
 import { formatDate } from '@/lib/date';
 import { BAND_META, CATEGORY_META, RESULT_STRINGS } from '@/lib/scorecard/labels';
 import {
-  FALLBACK_BOOKING_URLS,
-  getBookingUrls,
-  type BookingUrls,
-} from '@/lib/scorecard/booking-urls';
+  getBookingEligibility,
+  findType,
+  type BookingEligibility,
+} from '@/lib/booking/eligibility';
 import { downloadPdf } from '@/lib/scorecard/pdf-download';
 import type { ScorecardResultPayload } from '@/app/scorecard/result/page';
 
-// CTA matrix — band/hard-stop → button(s) + "why this matters" copy.
-// Hard-stop override (this polish PR): any hard stop, ANY band, gets
-// the LIA button. This goes beyond Strategic Session v4.0 Table 12
-// (which baselined Bands 1-2 as nurture-only) because legal
-// complexity must be reviewed by the LIA before nurture content
-// makes sense.
-//
-//   Scenario   Band     Hard stop?   Button(s)
-//   A          1-2      no           — (nurture only, no buttons)
-//   B          3        no           Gap-Closing (NZD 30)
-//   C          3        yes          LIA Consultation (NZD 150)
-//   D          4-6      no           Free 15-min
-//   E          4-6      yes          LIA primary + Free 15-min secondary
-//   F          1-2      yes          LIA Consultation (NZD 150)  ← override
-
-const WHY_GAP_CLOSING =
-  'Your assessment shows real potential, but specific areas need closing before you’re ready for application. This 30-minute session with our Admission Specialist gives you a structured improvement plan tailored to your profile and answers your immediate questions.';
-
-const WHY_LIA_BAND_3 =
-  'Your profile shows legal complexity that must be reviewed by our Licensed Immigration Adviser before we can proceed. This 30-minute session resolves the blocking issue so the rest of your plan can move forward.';
-
-const WHY_FREE_15MIN =
-  'You qualify to start your application journey. This free 15-minute session with our team confirms your pathway, walks you through next steps, and is required before opening your case file.';
-
-const WHY_LIA_HIGH_BAND =
-  'Your assessment shows you’re ready overall — but a specific legal issue must be cleared first by our Licensed Immigration Adviser. This 30-minute session resolves the blocking item so you can move forward to the free 15-minute session below.';
-
-const WHY_LIA_LOW_BAND =
-  'Your assessment shows specific issues that must be reviewed by our Licensed Immigration Adviser before we can recommend any next step. This 30-minute legal session resolves the blocking item — without it, no further pathway can be planned.';
+// Booking CTAs are driven by GET /booking/eligibility (BookingEligibilityService)
+// — the single, LIVE source of truth shared with the standing booking page.
+// The old inline scenario A-F matrix + WHY_* copy moved to the backend so both
+// pages agree by construction; buttons now carry a REAL `disabled` from the
+// endpoint (not grey paint), and the "unlock after the LIA clears it" reason is
+// now live (reads the Case lead's hard-stop, not the frozen submission snapshot).
+// `primaryType` preserves the report's headline-CTA behaviour.
 
 // PR-SCORECARD-2 — Public scorecard result rendering.
 //
@@ -74,45 +52,22 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
   const [bookingClicked, setBookingClicked] = useState(!!data.consultationBookedAt);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
-  // PR-SCORECARD-4: booking URLs are OWNER-editable. Start with the
-  // hard-coded fallback (matches the migration seed) so the buttons
-  // are always usable, then upgrade to the OWNER's edited values
-  // once the GET /scorecard/booking-urls fetch resolves. getBookingUrls()
-  // already swallows network errors and resolves to the fallback,
-  // so there's no error branch to render.
-  const [bookingUrls, setBookingUrls] = useState<BookingUrls>(FALLBACK_BOOKING_URLS);
+  // Live booking eligibility (single source of truth, shared with the booking
+  // page). Null while loading; the CTA area stays quiet until it resolves.
+  const [elig, setElig] = useState<BookingEligibility | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    getBookingUrls().then((urls) => {
-      if (!cancelled) setBookingUrls(urls);
-    });
-    return () => {
-      cancelled = true;
-    };
+    getBookingEligibility()
+      .then((e) => { if (!cancelled) setElig(e); })
+      .catch(() => { /* CTA area simply stays hidden on failure */ });
+    return () => { cancelled = true; };
   }, []);
 
   const bandMeta = BAND_META[data.band];
   const colorClasses = BAND_COLOR_CLASSES[bandMeta?.color ?? 'gray'];
   const applicantName = data.answers?.full_name ?? '';
   const generatedDate = formatDate(data.submittedAt);
-
-  // Derive routing from band + hard-stop state. Hard-stop override
-  // applies regardless of band — even Bands 1 and 2 — because legal
-  // complexity must be reviewed by the LIA before any nurture or
-  // session content makes sense.
-  const hasHardStop = data.hardStops.length > 0;
-  const isLowBand   = data.band === 'BAND_1' || data.band === 'BAND_2';
-  const isBand3     = data.band === 'BAND_3';
-  const isHighBand  = data.band === 'BAND_4' || data.band === 'BAND_5' || data.band === 'BAND_6';
-
-  let scenario: 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
-  if (hasHardStop && isLowBand)        scenario = 'F'; // override: LIA only
-  else if (hasHardStop && isBand3)     scenario = 'C'; // LIA replaces gap-closing
-  else if (hasHardStop && isHighBand)  scenario = 'E'; // LIA + free 15-min
-  else if (isLowBand)                  scenario = 'A'; // nurture only
-  else if (isBand3)                    scenario = 'B'; // gap-closing
-  else                                 scenario = 'D'; // free 15-min
 
   // Shared booking handler: all booking now lives INSIDE the client
   // portal. Each CTA maps to a booking "type" that the portal
@@ -235,109 +190,86 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             </p>
           )}
 
-          {/* Scenario A — Bands 1-2 (any HS state): nurture only, no buttons */}
-          {scenario === 'A' && (
-            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
-              <div className="inline-flex items-center gap-2 mb-2">
-                <BookOpen size={16} className="text-[#1E3A5F]" />
-                <span className="text-sm font-semibold text-[#1E3A5F]">
-                  {RESULT_STRINGS.nurtureTitle}
-                </span>
-              </div>
-              <p className="text-sm text-[#4A4A4A] leading-relaxed">
-                {RESULT_STRINGS.nurtureBody}
-              </p>
-            </div>
-          )}
-
-          {/* Scenario B — Band 3, no hard stop: Gap-Closing Session */}
-          {scenario === 'B' && (
-            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
-              <WhyThisMatters text={WHY_GAP_CLOSING} />
-              <PrimaryBookingButton
-                icon={<CreditCard size={18} />}
-                label="Pay NZD 30 and book your Gap-Closing Session"
-                onClick={() => handleBookingNavigate('gap')}
-              />
-              <BookingFooter
-                clicked={bookingClicked}
-                error={bookingError}
-                clickedText={RESULT_STRINGS.payGapRecorded}
-              />
-            </div>
-          )}
-
-          {/* Scenario C — Band 3 WITH hard stop: LIA replaces Gap-Closing */}
-          {scenario === 'C' && (
-            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
-              <WhyThisMatters text={WHY_LIA_BAND_3} />
-              <LiaConsultationButton
-                onClick={() => handleBookingNavigate('lia')}
-              />
-              <BookingFooter
-                clicked={bookingClicked}
-                error={bookingError}
-                clickedText={RESULT_STRINGS.bookFreeRecorded}
-              />
-            </div>
-          )}
-
-          {/* Scenario D — Bands 4-6, no hard stop: Free 15-min */}
-          {scenario === 'D' && (
-            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
-              <WhyThisMatters text={WHY_FREE_15MIN} />
-              <PrimaryBookingButton
-                icon={<Calendar size={18} />}
-                label="Book your free 15-minute consultation"
-                onClick={() => handleBookingNavigate('free15')}
-              />
-              <BookingFooter
-                clicked={bookingClicked}
-                error={bookingError}
-                clickedText={RESULT_STRINGS.bookFreeRecorded}
-              />
-            </div>
-          )}
-
-          {/* Scenario F — Bands 1-2 WITH hard stop: LIA only (override Table 12) */}
-          {scenario === 'F' && (
-            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30">
-              <WhyThisMatters text={WHY_LIA_LOW_BAND} />
-              <LiaConsultationButton
-                onClick={() => handleBookingNavigate('lia')}
-              />
-              <BookingFooter
-                clicked={bookingClicked}
-                error={bookingError}
-                clickedText={RESULT_STRINGS.bookFreeRecorded}
-              />
-            </div>
-          )}
-
-          {/* Scenario E — Bands 4-6 WITH hard stop: LIA primary + Free 15-min secondary */}
-          {scenario === 'E' && (
+          {/* Booking CTAs — driven by GET /booking/eligibility (live source of
+              truth, shared with the booking page). Buttons carry a REAL
+              `disabled` and the reason copy is server-provided. */}
+          {elig && (
             <div className="mt-4 pt-4 border-t border-[#F3CE49]/30 space-y-6">
-              <div>
-                <WhyThisMatters text={WHY_LIA_HIGH_BAND} />
-                <LiaConsultationButton
-                  onClick={() => handleBookingNavigate('lia')}
-                />
-              </div>
-
-              <div className="pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => handleBookingNavigate('free15')}
-                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-3 rounded-xl bg-gray-100 text-[#1E3A5F]/70 font-semibold text-sm hover:bg-gray-200 transition-colors"
-                >
-                  <Calendar size={14} />
-                  Book your free 15-minute consultation
-                  <ExternalLink size={12} />
-                </button>
-                <p className="mt-2 text-xs text-[#4A4A4A]/60 italic leading-relaxed">
-                  Available after your LIA consultation clears the blocking item.
+              {/* No submission — edge case (the report needs one); stay honest */}
+              {!elig.hasSubmission && (
+                <p className="text-sm text-[#4A4A4A] leading-relaxed">
+                  {findType(elig, 'FREE_15')?.reason ??
+                    'Take your free assessment first to unlock consultations.'}
                 </p>
-              </div>
+              )}
+
+              {/* Nurture — band 1-2, no hard stop: no bookable next step */}
+              {elig.hasSubmission && elig.primaryType === null && (
+                <div>
+                  <div className="inline-flex items-center gap-2 mb-2">
+                    <BookOpen size={16} className="text-[#1E3A5F]" />
+                    <span className="text-sm font-semibold text-[#1E3A5F]">
+                      {RESULT_STRINGS.nurtureTitle}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#4A4A4A] leading-relaxed">
+                    {RESULT_STRINGS.nurtureBody}
+                  </p>
+                </div>
+              )}
+
+              {/* Headline CTA — the recommended next step (primaryType) */}
+              {elig.primaryType && (() => {
+                const primary = findType(elig, elig.primaryType);
+                if (!primary) return null;
+                const isGap = elig.primaryType === 'GAP_CLOSING';
+                return (
+                  <div>
+                    <WhyThisMatters text={primary.reason} />
+                    {elig.primaryType === 'LIA' ? (
+                      <LiaConsultationButton
+                        disabled={!primary.eligible}
+                        onClick={() => handleBookingNavigate('lia')}
+                      />
+                    ) : (
+                      <PrimaryBookingButton
+                        disabled={!primary.eligible}
+                        icon={isGap ? <CreditCard size={18} /> : <Calendar size={18} />}
+                        label={isGap
+                          ? 'Pay NZD 30 and book your Gap-Closing Session'
+                          : 'Book your free 15-minute consultation'}
+                        onClick={() => handleBookingNavigate(isGap ? 'gap' : 'free15')}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Secondary Free 15-min — shown DISABLED when the LIA is the
+                  headline and free-15 is band-eligible but blocked by the live
+                  hard stop. Once the LIA clears it, the endpoint flips this to
+                  eligible (the bug this whole change fixes). */}
+              {elig.primaryType === 'LIA' && (() => {
+                const free = findType(elig, 'FREE_15');
+                const isHighBand =
+                  elig.band === 'BAND_4' || elig.band === 'BAND_5' || elig.band === 'BAND_6';
+                if (!free || free.eligible || !isHighBand) return null;
+                return (
+                  <div className="pt-4 border-t border-gray-100">
+                    <button
+                      type="button"
+                      disabled
+                      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-3 rounded-xl bg-gray-100 text-[#1E3A5F]/70 font-semibold text-sm cursor-not-allowed opacity-60"
+                    >
+                      <Lock size={14} />
+                      Book your free 15-minute consultation
+                    </button>
+                    <p className="mt-2 text-xs text-[#4A4A4A]/60 italic leading-relaxed">
+                      {free.reason}
+                    </p>
+                  </div>
+                );
+              })()}
 
               <BookingFooter
                 clicked={bookingClicked}
@@ -500,33 +432,35 @@ function WhyThisMatters({ text }: { text: string }) {
 }
 
 function PrimaryBookingButton({
-  icon, label, onClick,
-}: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  icon, label, onClick, disabled = false,
+}: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       style={{ minHeight: 56 }}
-      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#F3CE49] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md"
+      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#F3CE49] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#F3CE49]"
     >
-      {icon}
-      {label} →
-      <ExternalLink size={14} />
+      {disabled ? <Lock size={16} /> : icon}
+      {label} {disabled ? '' : '→'}
+      {!disabled && <ExternalLink size={14} />}
     </button>
   );
 }
 
-function LiaConsultationButton({ onClick }: { onClick: () => void }) {
+function LiaConsultationButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       style={{ minHeight: 56 }}
-      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold text-base hover:bg-amber-100 transition-colors shadow-md"
+      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold text-base hover:bg-amber-100 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-amber-50"
     >
-      <Scale size={18} />
-      Book your LIA Consultation (NZD 150) →
-      <ExternalLink size={14} />
+      {disabled ? <Lock size={18} /> : <Scale size={18} />}
+      Book your LIA Consultation (NZD 150) {disabled ? '' : '→'}
+      {!disabled && <ExternalLink size={14} />}
     </button>
   );
 }

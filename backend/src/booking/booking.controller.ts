@@ -1,8 +1,10 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { BookingService } from './booking.service';
+import { BookingEligibilityService } from './booking-eligibility.service';
 import { StripeService } from '../payments/stripe.service';
 import { PolicyAcceptanceService } from '../wallet/policy-acceptance.service';
 import { BookingCancellationService } from './booking-cancellation.service';
@@ -27,7 +29,19 @@ export class BookingController {
     private readonly stripe: StripeService,
     private readonly policyAcceptance: PolicyAcceptanceService,
     private readonly cancellation: BookingCancellationService,
+    private readonly eligibility: BookingEligibilityService,
   ) {}
+
+  // GET /booking/eligibility — per-type booking eligibility for the ACTING
+  // client only (never accepts a userId param). Live: reconciles band + live
+  // hard-stop + booking-flow gates. Tighter throttle on top of the global
+  // baseline (cross-model read).
+  @Get('eligibility')
+  @Throttle({ default: { ttl: 60000, limit: 30 } })
+  getEligibility(@Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.eligibility.getEligibility(userId);
+  }
 
   // GET /booking/slots?type=FREE_15&from=ISO&to=ISO
   // Available slots across the type's adviser pool (UTC + adviser tz).

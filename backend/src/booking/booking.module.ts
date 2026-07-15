@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { BookingController } from './booking.controller';
 import { BookingService } from './booking.service';
+import { BookingEligibilityService } from './booking-eligibility.service';
 import { BookingHoldCleanupService } from './booking-hold-cleanup.service';
 import { BookingConfirmationModule } from './booking-confirmation.module';
 import { WalletModule } from '../wallet/wallet.module';
@@ -14,7 +15,7 @@ import { BookingCancellationModule } from './booking-cancellation.module';
 @Module({
   imports: [PrismaModule, PaymentsModule, BookingConfirmationModule, WalletModule, BookingCancellationModule],
   controllers: [BookingController],
-  providers: [BookingService, BookingHoldCleanupService],
-  exports: [BookingService],
+  providers: [BookingService, BookingEligibilityService, BookingHoldCleanupService],
+  exports: [BookingService, BookingEligibilityService],
 })
 export class BookingModule {}
