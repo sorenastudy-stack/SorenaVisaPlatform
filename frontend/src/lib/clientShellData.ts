@@ -50,6 +50,9 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
       // Persian is frozen; /portal/report already exists (404 → /portal/case).
       { labelKey: 'My Assessment',        href: '/portal/report',         iconName: 'sparkles' },
       { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText', lockedUntilPaid: true },
+      // Inline English label (no dot) — renders literally, skips next-intl.
+      // Bare /portal/booking = the standing chooser (all three types, always).
+      { labelKey: 'Booking',              href: '/portal/booking',        iconName: 'calendar' },
       { labelKey: 'portal.nav.wallet',    href: '/portal/wallet',         iconName: 'wallet' },
     ];
     return { navItems, portalStage, paymentUnlocked };
@@ -85,6 +88,8 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
     // Persian is frozen; /portal/report already exists (404 → /portal/case).
     { labelKey: 'My Assessment',        href: '/portal/report',         iconName: 'sparkles' },
     { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText',      lockedUntilPaid: true },
+    // Inline English label (no dot) — renders literally, skips next-intl.
+    { labelKey: 'Booking',              href: '/portal/booking',        iconName: 'calendar' },
     { labelKey: 'portal.nav.visa',      href: '/student/documents',     iconName: 'visa',          lockedUntilPaid: true },
     ...(hasCase
       ? [{ labelKey: 'portal.nav.apply', href: '/student/admission', iconName: 'clipboard' as const, lockedUntilPaid: true }]

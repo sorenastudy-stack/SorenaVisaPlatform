@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import {
   Briefcase, FileText, Wallet, MessageSquare,
   LayoutDashboard, ClipboardList, CreditCard, Plane,
-  Menu, X, LogOut, Globe, ArrowLeft, Lock, Sparkles,
+  Menu, X, LogOut, Globe, ArrowLeft, Lock, Sparkles, Calendar,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -49,6 +49,7 @@ const ICONS = {
   creditCard:    CreditCard,
   visa:          Plane,
   sparkles:      Sparkles,
+  calendar:      Calendar,
 } as const;
 
 type IconName = keyof typeof ICONS;

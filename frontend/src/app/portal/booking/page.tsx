@@ -3,8 +3,14 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { CalendarClock, ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { Calendar, Scale, Sparkles, ArrowLeft, ArrowRight, Check, Loader2, Lock } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import {
+  getBookingEligibility,
+  type BookingEligibility,
+  type BookingType,
+  type TypeEligibility,
+} from '@/lib/booking/eligibility';
 
 // Client portal — booking page.
 //   type=free15  → native FREE_15 flow (date → slots → review → confirm),
@@ -14,32 +20,119 @@ import { api, ApiError } from '@/lib/api';
 //   type=lia     → PaidBookingFlow(LIA): same paid flow (NZD 150).
 //   type=unknown → the reassuring placeholder (advisor will be in touch).
 
-// ── Placeholder (gap / lia / unknown) ─────────────────────────────────
-const HEADINGS: Record<string, string> = {
-  gap: 'Your Gap-Closing session',
-  lia: 'Your LIA Consultation',
-};
-const DEFAULT_HEADING = 'Book your consultation';
+// ── Chooser (bare /portal/booking) — shows ALL THREE session types, always ────
+// Display-only. Eligibility is ENFORCED server-side (assertEligible at
+// createFreeBooking / createHold), so a dimmed button forced in devtools still
+// gets a 403. Ineligible types render genuinely disabled + the binding reason.
 
-function BookingPlaceholder({ type }: { type: string }) {
-  const heading = HEADINGS[type] ?? DEFAULT_HEADING;
+const CHOOSER_ORDER: BookingType[] = ['FREE_15', 'GAP_CLOSING', 'LIA'];
+const TYPE_META: Record<BookingType, { slug: string; title: string; blurb: string; icon: React.ReactNode }> = {
+  FREE_15:     { slug: 'free15', title: 'Free 15-minute consultation', blurb: 'Confirm your pathway and next steps with our team.', icon: <Calendar size={20} /> },
+  GAP_CLOSING: { slug: 'gap',    title: 'Gap-Closing Session',         blurb: 'A structured improvement plan with an Admission Specialist.', icon: <Sparkles size={20} /> },
+  LIA:         { slug: 'lia',    title: 'LIA Consultation',            blurb: 'Tailored legal guidance from a Licensed Immigration Adviser.', icon: <Scale size={20} /> },
+};
+
+function BookingChooser() {
+  const [elig, setElig] = useState<BookingEligibility | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getBookingEligibility()
+      .then((e) => { if (!cancelled) setElig(e); })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
-    <section className="rounded-2xl bg-white border border-sorena-navy/10 p-8 md:p-12 text-center shadow-sm">
-      <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-sorena-gold/15">
-        <CalendarClock size={26} className="text-sorena-navy" />
+    <div className="mx-auto max-w-xl">
+      <div className="mb-6 text-center">
+        <h1 className="text-2xl md:text-3xl font-bold text-sorena-navy">Book a consultation</h1>
+        <p className="mt-2 text-sm text-sorena-text/70">Choose the session that fits where you are.</p>
       </div>
-      <h1 className="text-2xl md:text-3xl font-bold text-sorena-navy">{heading}</h1>
-      <p className="mt-4 text-base leading-relaxed text-sorena-text/80">
-        Booking is coming to your portal. Your case advisor has been notified
-        and will be in touch to schedule this with you.
-      </p>
-      <div className="mt-10">
-        <Link
-          href="/portal/case"
-          className="group inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-sorena-gold px-8 py-3.5 text-sorena-navy font-semibold shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-sorena-gold/90 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-navy focus-visible:ring-offset-2 focus-visible:ring-offset-sorena-cream"
-        >
-          Back to my case
-        </Link>
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-sorena-clay/30 bg-sorena-clay/10 px-4 py-3 text-sm text-sorena-clay text-center">
+          Couldn’t load your booking options. Please refresh.
+        </div>
+      )}
+
+      {!elig && !error && (
+        <div className="flex items-center justify-center gap-2 py-12 text-sm text-sorena-text/60">
+          <Loader2 size={18} className="animate-spin" /> Loading your options…
+        </div>
+      )}
+
+      {elig && (
+        <>
+          {/* No submission → nudge to the assessment. The three types below are
+              still shown (dimmed) with the server "take your assessment" reason. */}
+          {!elig.hasSubmission && (
+            <div className="mb-5 rounded-2xl border border-sorena-gold/40 bg-sorena-gold/10 p-4 text-center">
+              <p className="text-sm font-semibold text-sorena-navy">Take your free assessment first</p>
+              <p className="mt-1 text-xs text-sorena-text/70">A short assessment unlocks the right consultation for you.</p>
+              <Link
+                href="/scorecard"
+                className="mt-3 inline-flex min-h-[48px] items-center justify-center rounded-xl bg-sorena-navy px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-sorena-navy/90"
+              >
+                Start my assessment
+              </Link>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {CHOOSER_ORDER.map((t) => {
+              const item = elig.types.find((x) => x.type === t);
+              return item ? <BookingTypeCard key={t} item={item} meta={TYPE_META[t]} /> : null;
+            })}
+          </div>
+
+          <div className="mt-8"><BackToCase /></div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BookingTypeCard({
+  item, meta,
+}: { item: TypeEligibility; meta: { slug: string; title: string; blurb: string; icon: React.ReactNode } }) {
+  const priceLabel = item.paid ? `NZD ${item.priceNzd}` : 'Free';
+  return (
+    <section className="rounded-xl border border-sorena-navy/10 bg-white p-5 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className={['flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl', item.eligible ? 'bg-sorena-gold/15 text-sorena-navy' : 'bg-sorena-navy/[0.04] text-sorena-navy/40'].join(' ')}>
+          {meta.icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className={['text-base font-bold', item.eligible ? 'text-sorena-navy' : 'text-sorena-navy/50'].join(' ')}>{meta.title}</h2>
+            <span className={['flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold', item.paid ? 'bg-sorena-navy/5 text-sorena-navy' : 'bg-sorena-jade/15 text-sorena-jade', item.eligible ? '' : 'opacity-60'].join(' ')}>{priceLabel}</span>
+          </div>
+          <p className={['mt-1 text-sm', item.eligible ? 'text-sorena-text/70' : 'text-sorena-text/40'].join(' ')}>{meta.blurb}</p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        {item.eligible ? (
+          <Link
+            href={`/portal/booking?type=${meta.slug}`}
+            className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3 text-sm font-bold text-sorena-navy shadow-sm transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-navy"
+          >
+            {item.paid ? `Book · ${priceLabel}` : 'Book now'} <ArrowRight size={16} />
+          </Link>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled
+              className="inline-flex min-h-[48px] w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-sorena-navy/5 px-6 py-3 text-sm font-bold text-sorena-navy/40"
+            >
+              <Lock size={15} /> Not available yet
+            </button>
+            <p className="mt-2 text-xs italic leading-relaxed text-sorena-text/60">{item.reason}</p>
+          </>
+        )}
       </div>
     </section>
   );
@@ -199,16 +292,8 @@ function FreeBookingFlow() {
       </Shell>
     );
   }
-  if (days.length === 0) {
-    return (
-      <Shell>
-        <p className="text-center text-sm text-sorena-text/70 py-8">
-          There are no open times right now. Please check back soon — your adviser is adding availability.
-        </p>
-        <BackToCase />
-      </Shell>
-    );
-  }
+  // (No zero-slots early-return — the calendar always renders; the "pick" step
+  // below shows the empty scaffold when days.length === 0.)
 
   // ── Step: done ──────────────────────────────────────────────────────
   if (step === 'done' && selectedSlot) {
@@ -278,6 +363,10 @@ function FreeBookingFlow() {
         </div>
       )}
 
+      {days.length === 0 ? (
+        <EmptyCalendarScaffold />
+      ) : (
+        <>
       {/* Date row — horizontal scroll, mobile-first */}
       <div className="mt-6 -mx-1 flex gap-2 overflow-x-auto pb-2">
         {days.map((d) => {
@@ -319,6 +408,8 @@ function FreeBookingFlow() {
           </button>
         ))}
       </div>
+        </>
+      )}
 
       <div className="mt-8"><BackToCase /></div>
     </Shell>
@@ -340,6 +431,32 @@ function BackToCase() {
         Back to my case
       </Link>
     </div>
+  );
+}
+
+// Empty-availability calendar scaffold — the day-row + time-grid still render as
+// a greyed, non-interactive shell (never hidden), with a quiet explanatory line.
+function EmptyCalendarScaffold() {
+  return (
+    <>
+      <div className="mt-6 -mx-1 flex gap-2 overflow-x-auto pb-2" aria-hidden>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex-shrink-0 rounded-xl border border-sorena-navy/10 bg-sorena-navy/[0.03] px-4 py-3 min-w-[5.5rem]">
+            <span className="block h-3.5 w-10 rounded bg-sorena-navy/10" />
+            <span className="mt-1.5 block h-2.5 w-8 rounded bg-sorena-navy/10" />
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 text-xs text-sorena-text/50 text-center">Times shown in New Zealand time</p>
+      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4" aria-hidden>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="h-[42px] rounded-xl border border-sorena-navy/10 bg-sorena-navy/[0.03]" />
+        ))}
+      </div>
+      <p className="mt-4 text-center text-sm text-sorena-text/60">
+        No open times in this period. Please check back soon — your adviser is adding availability.
+      </p>
+    </>
   );
 }
 
@@ -586,7 +703,7 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
         <div className="mt-4 rounded-xl bg-sorena-clay/10 border border-sorena-clay/30 px-4 py-3 text-sm text-sorena-clay text-center">{pickError}</div>
       )}
       {days.length === 0 ? (
-        <p className="mt-8 text-center text-sm text-sorena-text/60">There are no open times right now. Please check back soon.</p>
+        <EmptyCalendarScaffold />
       ) : (
         <>
           <div className="mt-6 -mx-1 flex gap-2 overflow-x-auto pb-2">
@@ -621,11 +738,8 @@ function BookingRouter() {
   if (type === 'free15') return <FreeBookingFlow />;
   if (type === 'gap') return <PaidBookingFlow sessionType="GAP_CLOSING" />;
   if (type === 'lia') return <PaidBookingFlow sessionType="LIA" />;
-  return (
-    <div className="mx-auto max-w-xl">
-      <BookingPlaceholder type={type} />
-    </div>
-  );
+  // Bare /portal/booking (or any unknown type) → the standing chooser.
+  return <BookingChooser />;
 }
 
 export default function PortalBookingPage() {
