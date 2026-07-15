@@ -221,6 +221,31 @@ export class AuthController {
     return this.passwordSetupService.setPassword(dto.token, dto.email, dto.password);
   }
 
+  // Resend the onboarding "create your password" link (the completion screen's
+  // "send it again"). ANTI-ENUMERATION: always 200 with a generic body,
+  // whatever the account state — the service silently no-ops unless the address
+  // is a passwordless LEAD with a pending token (and a fresh token invalidates
+  // the old one). Hard per-IP throttle (3/min) on top of the service's
+  // per-email cooldown, so it can't spam an inbox or probe for accounts.
+  @Post('set-password/resend')
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 3 } })
+  async setPasswordResend(
+    @Body('email') email: string,
+  ): Promise<{ ok: boolean; message: string }> {
+    try {
+      await this.passwordSetupService.resendSetup(email);
+    } catch (err) {
+      this.logger.error(
+        `set-password resend unexpectedly threw — returning generic 200 anyway: ${
+          (err as Error)?.message ?? err
+        }`,
+      );
+    }
+    return { ok: true, message: 'If your assessment is awaiting setup, a fresh link has been sent.' };
+  }
+
   private frontendUrl(suffix: string): string {
     const base = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
     if (!base) return suffix;

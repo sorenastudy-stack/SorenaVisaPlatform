@@ -33,6 +33,7 @@ import { MailService } from '../mail/mail.service';
 const TOKEN_BYTES  = 32;                    // 256-bit random secret
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;   // 24 hours
 const BCRYPT_ROUNDS = 10;                   // matches AuthService.register
+const RESEND_COOLDOWN_MS = 60 * 1000;       // per-email min gap between resends
 
 @Injectable()
 export class PasswordSetupService {
@@ -70,21 +71,78 @@ export class PasswordSetupService {
       return;
     }
 
-    const normalized = user.email.trim().toLowerCase();
-    const rawToken   = randomBytes(TOKEN_BYTES).toString('hex');
-    const tokenHash  = createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt  = new Date(Date.now() + TOKEN_TTL_MS);
+    await this.issueAndSend(user.id, user.email);
+    this.logger.log(`password-setup link issued for user ${user.id} (${user.email})`);
+  }
 
-    await this.prisma.passwordSetupToken.create({
-      data: { userId: user.id, email: normalized, tokenHash, expiresAt },
+  /**
+   * Resend the set-password link — the "send it again" action on the scorecard
+   * completion screen. ANTI-ENUMERATION: never throws and never reveals account
+   * state; the caller (controller) returns a generic success regardless.
+   * Sends ONLY when the address is an active, passwordless LEAD that still has
+   * a PENDING (unconsumed) onboarding token — i.e. someone genuinely mid-
+   * onboarding. A fresh token invalidates the previous one (only the newest
+   * link works), and a per-email cooldown blocks inbox spam. This can't be used
+   * to mail arbitrary inboxes or to probe for accounts.
+   */
+  async resendSetup(email: string): Promise<void> {
+    const normalized = String(email ?? '').trim().toLowerCase();
+    if (!normalized) return;
+
+    const user = await this.prisma.user.findFirst({
+      where:  { email: { equals: normalized, mode: 'insensitive' } },
+      select: { id: true, email: true, role: true, passwordHash: true, isActive: true },
     });
+    // Eligible only: active, passwordless LEAD. Silent otherwise.
+    if (!user || !user.isActive || user.role !== 'LEAD' || user.passwordHash !== null) {
+      this.logger.warn(`password-setup resend — no eligible account for "${normalized}" (silent generic success)`);
+      return;
+    }
 
+    // Only for someone genuinely mid-onboarding: a PENDING (unconsumed) token
+    // must exist. If they never had one, or already used/consumed it, do nothing
+    // — this stops the endpoint from mailing an arbitrary LEAD on demand.
+    const latest = await this.prisma.passwordSetupToken.findFirst({
+      where:   { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      select:  { consumedAt: true, createdAt: true },
+    });
+    if (!latest || latest.consumedAt !== null) {
+      this.logger.warn(`password-setup resend — no pending token for user ${user.id} (silent)`);
+      return;
+    }
+
+    // Per-email cooldown — refuse rapid re-sends (inbox-spam guard), on top of
+    // the controller's per-IP @Throttle.
+    if (Date.now() - latest.createdAt.getTime() < RESEND_COOLDOWN_MS) {
+      this.logger.warn(`password-setup resend — cooldown active for user ${user.id} (silent)`);
+      return;
+    }
+
+    await this.issueAndSend(user.id, user.email);
+    this.logger.log(`password-setup resent for user ${user.id} (${user.email})`);
+  }
+
+  /**
+   * Invalidate any prior unconsumed tokens for the user (so only the newest
+   * link works), mint a fresh single-use token, and email the link. Shared by
+   * requestSetup + resendSetup.
+   */
+  private async issueAndSend(userId: string, email: string): Promise<void> {
+    const normalized = email.trim().toLowerCase();
+    // Invalidate outstanding links — only the freshly-minted one will validate.
+    await this.prisma.passwordSetupToken.updateMany({
+      where: { userId, consumedAt: null },
+      data:  { consumedAt: new Date() },
+    });
+    const rawToken  = randomBytes(TOKEN_BYTES).toString('hex');
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+    await this.prisma.passwordSetupToken.create({
+      data: { userId, email: normalized, tokenHash, expiresAt },
+    });
     const url = this.buildSetupUrl(rawToken, normalized);
-    await this.mailService.sendPasswordSetup(user.email, url);
-
-    this.logger.log(
-      `password-setup link issued for user ${user.id} (${user.email}); expires ${expiresAt.toISOString()}`,
-    );
+    await this.mailService.sendPasswordSetup(email, url);
   }
 
   /**

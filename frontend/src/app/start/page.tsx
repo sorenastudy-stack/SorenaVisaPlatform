@@ -5,7 +5,9 @@ import { motion } from 'framer-motion';
 
 const countries = [
   {
-    href: '/start/new-zealand',
+    // NZ goes straight to the assessment landing — the old /start/new-zealand
+    // interstitial was a redundant extra click and has been removed.
+    href: '/scorecard/landing',
     flag: '🇳🇿',
     name: 'New Zealand',
   },

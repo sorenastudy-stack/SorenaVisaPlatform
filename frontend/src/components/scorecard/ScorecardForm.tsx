@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Loader2, AlertCircle, Save } from 'lucide-react';
+import {
+  ArrowLeft, ArrowRight, Loader2, AlertCircle, Save,
+  Check, Mail, FileText, Upload, CalendarCheck, TrendingUp,
+} from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { FORM_SECTIONS, FORM_UI } from '@/lib/scorecard/labels';
 import {
@@ -112,6 +115,8 @@ export function ScorecardForm({
   // Path A: shown after a NEW-account submit — the "create your password"
   // onboarding email was sent. No session, no report on screen.
   const [submittedCreated, setSubmittedCreated] = useState(false);
+  // Completion-screen "send it again" state.
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [currentStep, setCurrentStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -282,20 +287,102 @@ export function ScorecardForm({
     return hiddenInThisSection.length > 0 ? hiddenInThisSection.length : null;
   }, [currentSection, answers]);
 
+  // Completion "send it again" — hits the anti-enumeration resend endpoint.
+  // Always lands on the same generic "Sent" state (the server enforces the real
+  // eligibility + rate limits), so it can't be used to probe account state.
+  async function resendLink() {
+    if (resendState !== 'idle') return;
+    setResendState('sending');
+    try {
+      await api.post('/auth/set-password/resend', { email: (answers.email ?? '').trim() });
+    } catch { /* generic confirmation regardless — no account-state leak */ }
+    setResendState('sent');
+  }
+
   // Path A: NEW-account submit → the "create your password" onboarding email
-  // was sent. NO report on screen, NO session — the client sets a password via
-  // the email link, then reviews the report in the portal. Copy is approved.
+  // was sent. Full-screen takeover (covers the header / About box / back-link)
+  // so this reads as a proper completion moment. NO report, NO session — the
+  // client sets a password via the email link, then reviews it in the portal.
   if (submittedCreated) {
+    const submittedEmail = (answers.email ?? '').trim();
+    const perks: Array<{ Icon: typeof FileText; label: string }> = [
+      { Icon: FileText,      label: 'Review your personalised report' },
+      { Icon: Upload,        label: 'Upload your CV and documents' },
+      { Icon: CalendarCheck, label: 'Book a consultation with our team' },
+      { Icon: TrendingUp,    label: 'Track your application progress' },
+    ];
     return (
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-          <h2 className="text-xl font-bold text-[#1E3A5F] mb-3">Assessment completed</h2>
-          <p className="text-sm text-[#4A4A4A] leading-relaxed">
-            Your personalised assessment has been completed successfully. Your report is now
-            available in your Sorena Visa Client Portal. Please check your email and follow the
-            secure link to create your password and access your portal. Once signed in, you can
-            review your report, upload supporting documents, and book consultations with our team.
-          </p>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-sorena-cream">
+        <div className="flex min-h-full items-center justify-center px-4 py-10">
+          <div className="w-full max-w-[460px] text-center">
+            {/* Celebration beat — gold circle + white check */}
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-sorena-gold shadow-md">
+              <Check size={32} strokeWidth={3} className="text-white" />
+            </div>
+
+            <h1 className="text-[22px] font-medium text-sorena-navy">Your assessment is complete</h1>
+            <p className="mx-auto mt-2 max-w-[22rem] text-sm leading-relaxed text-sorena-text/70">
+              Your personalised report is ready and waiting in your Sorena Visa Client Portal.
+            </p>
+
+            {/* Check your email */}
+            <div className="mt-6 rounded-2xl border border-sorena-navy/10 bg-white p-5 text-start shadow-sm">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-sorena-gold/15">
+                  <Mail size={20} className="text-sorena-navy" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-sorena-navy">Check your email</p>
+                  <p className="text-xs text-sorena-text/60">We&apos;ve sent a secure link to</p>
+                </div>
+              </div>
+              <p dir="ltr" className="mt-3 break-all text-sm font-semibold text-sorena-navy">
+                {submittedEmail}
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-sorena-text/60">
+                Follow it to create your password and open your portal.
+              </p>
+            </div>
+
+            {/* Once signed in you can */}
+            <div className="mt-4 rounded-2xl border border-sorena-navy/10 bg-white p-5 text-start shadow-sm">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-sorena-text/50">
+                Once signed in you can
+              </p>
+              <ul className="space-y-3">
+                {perks.map(({ Icon, label }) => (
+                  <li key={label} className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-sorena-navy/5">
+                      <Icon size={16} className="text-sorena-navy" />
+                    </span>
+                    <span className="text-sm text-sorena-text">{label}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Resend */}
+            <p className="mt-6 text-xs text-sorena-text/60">
+              {resendState === 'sent' ? (
+                <span className="inline-flex items-center gap-1 font-medium text-sorena-jade">
+                  <Check size={13} /> Sent — check your inbox.
+                </span>
+              ) : (
+                <>
+                  Didn&apos;t get the email? Check your spam folder or{' '}
+                  <button
+                    type="button"
+                    onClick={resendLink}
+                    disabled={resendState === 'sending'}
+                    className="font-semibold text-sorena-navy underline underline-offset-2 hover:text-sorena-gold disabled:opacity-50"
+                  >
+                    {resendState === 'sending' ? 'sending…' : 'send it again'}
+                  </button>
+                  .
+                </>
+              )}
+            </p>
+          </div>
         </div>
       </div>
     );
