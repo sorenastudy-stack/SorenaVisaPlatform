@@ -42,6 +42,14 @@ export class SubmitScorecardDto {
   @ValidateNested()
   @Type(() => AttributionDto)
   attribution?: AttributionDto;
+
+  // Destination country the visitor picked on /start ('NEW_ZEALAND' |
+  // 'MALAYSIA'). Client-supplied → untrusted. Deliberately NOT type-validated
+  // here (no @IsString) so NO value can ever 400 the submit; the service is the
+  // single gate — it whitelists to the enum or persists null. A wrong string,
+  // a non-string, or a missing value all just become null.
+  @IsOptional()
+  targetCountry?: string;
 }
 
 // PR-SCORECARD-2 — autosave payload. Same shape as submit but

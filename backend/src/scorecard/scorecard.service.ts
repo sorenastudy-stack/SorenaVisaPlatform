@@ -10,6 +10,7 @@ import {
   ScorecardBand,
   ScorecardNextAction,
   ScoreBand as LegacyScoreBand,
+  TargetCountry,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
@@ -132,7 +133,7 @@ export class ScorecardService {
     // touched (a new account is created as LEAD directly, so promotion
     // is a no-op there anyway). The authenticated path defaults to true,
     // preserving the original SALES/SUPPORT/null → LEAD promotion.
-    opts: { allowRolePromotion?: boolean } = {},
+    opts: { allowRolePromotion?: boolean; targetCountry?: string | null } = {},
   ): Promise<ScorecardResultPayload> {
     const result = score(answers);
     const routing = determineRouting(
@@ -287,6 +288,10 @@ export class ScorecardService {
           trackingLinkId:    resolvedAttribution.trackingLinkId,
           attributedAgentId: resolvedAttribution.agentId,
           campaignId:        resolvedAttribution.campaignLabel,
+          // Country the visitor picked on /start. Client-supplied → whitelisted
+          // to the enum-or-null here (single trust boundary). Nullable —
+          // deep-links straight to the assessment have none.
+          targetCountry:     this.sanitizeTargetCountry(opts.targetCountry),
         },
       });
 
@@ -373,6 +378,7 @@ export class ScorecardService {
     answers: Record<string, string>,
     meta: SubmissionMetadata,
     attribution: AttributionInput = {},
+    targetCountry?: string,
   ): Promise<{ mode: 'created' } | { mode: 'existing' }> {
     const email = (answers.email ?? '').trim().toLowerCase() || null;
     if (!email) {
@@ -396,7 +402,7 @@ export class ScorecardService {
         meta,
         { userId: existing.id, name: existing.name, role: existing.role },
         attribution,
-        { allowRolePromotion: false },
+        { allowRolePromotion: false, targetCountry },
       );
       await this.magicLink.requestLink(email);
       return { mode: 'existing' };
@@ -431,7 +437,7 @@ export class ScorecardService {
       meta,
       { userId: created.id, name: created.name, role: created.role },
       attribution,
-      { allowRolePromotion: false },
+      { allowRolePromotion: false, targetCountry },
     );
 
     // First-time onboarding: issue a "create your password" token + email the
@@ -441,6 +447,18 @@ export class ScorecardService {
     // it never unwinds the submission.
     await this.passwordSetup.requestSetup(created.id);
     return { mode: 'created' };
+  }
+
+  /**
+   * Whitelist the client-supplied country to the enum or null. Untrusted input
+   * — anything that isn't EXACTLY one of the two allowed values (missing,
+   * 'AUSTRALIA', a coerced object, casing variants, …) becomes null, so a bad
+   * value can never break the submit.
+   */
+  private sanitizeTargetCountry(raw?: string | null): TargetCountry | null {
+    if (raw === 'NEW_ZEALAND') return TargetCountry.NEW_ZEALAND;
+    if (raw === 'MALAYSIA') return TargetCountry.MALAYSIA;
+    return null;
   }
 
   // ─── Read endpoints ───────────────────────────────────────────────────

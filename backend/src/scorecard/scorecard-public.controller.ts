@@ -50,6 +50,7 @@ export class ScorecardPublicController {
       dto.answers,
       { ipAddress, userAgent },
       dto.attribution ?? {},
+      dto.targetCountry,
     );
   }
 

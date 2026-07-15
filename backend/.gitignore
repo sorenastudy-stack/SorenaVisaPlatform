@@ -5,5 +5,6 @@ keys/
 # (which excludes "scripts"), and type-clean so they don't affect tsc.
 scripts/test-password-setup.ts
 scripts/test-resend-security.ts
+scripts/test-target-country.ts
 scripts/e2e-onboarding-smoke.ts
 scripts/send-real-onboarding.ts

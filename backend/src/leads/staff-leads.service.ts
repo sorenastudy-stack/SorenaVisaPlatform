@@ -249,6 +249,9 @@ export class StaffLeadsService {
       email: lead.contact.email ?? '',
       phone: lead.contact.phone ?? null,
       country: lead.contact.countryOfResidence ?? null,
+      // Destination the visitor picked on /start (NEW_ZEALAND | MALAYSIA).
+      // Null for legacy/Wix leads and deep-links straight to the assessment.
+      targetCountry: lead.targetCountry ?? null,
       source: lead.sourceChannel ?? null,
       status: lead.leadStatus,
       createdAt: lead.createdAt,

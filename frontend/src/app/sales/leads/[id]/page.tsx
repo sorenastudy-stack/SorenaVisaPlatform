@@ -42,6 +42,9 @@ interface LeadDetail {
   utmCampaign: string | null;
   createdAt: string;
   updatedAt: string;
+  // Destination the visitor picked on /start. Null for legacy/Wix leads and
+  // deep-links straight to the assessment.
+  targetCountry: 'NEW_ZEALAND' | 'MALAYSIA' | null;
   contact: {
     id: string;
     fullName: string;
@@ -207,6 +210,17 @@ export default async function LeadDetailPage({
                   lead.contact.nationality !== lead.contact.countryOfResidence
                     ? ` (${displayCountry(lead.contact.nationality) ?? lead.contact.nationality})`
                     : ''}
+                </span>
+              </div>
+            )}
+            {lead.targetCountry && (
+              <div className="flex items-center gap-2 text-[#4A4A4A]">
+                <Globe size={14} className="text-[#1E3A5F] flex-shrink-0" />
+                <span>
+                  Target country:{' '}
+                  <span className="font-semibold text-[#1E3A5F]">
+                    {lead.targetCountry === 'NEW_ZEALAND' ? 'New Zealand' : 'Malaysia'}
+                  </span>
                 </span>
               </div>
             )}

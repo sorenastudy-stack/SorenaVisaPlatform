@@ -860,6 +860,14 @@ model Contact {
 
 // ─── LEADS ───────────────────────────────────────────────────────────────────
 
+// Destination country the visitor picked on /start. One assessment serves
+// both. Two stable values — a fresh enum (all values created up front, so the
+// migration is a guarded CREATE TYPE with no ALTER TYPE ADD VALUE).
+enum TargetCountry {
+  NEW_ZEALAND
+  MALAYSIA
+}
+
 model Lead {
   id                      String            @id @default(cuid())
   contactId               String
@@ -922,6 +930,13 @@ model Lead {
   // direct-traffic leads remain valid.
   trackingLinkId          String?
   attributedAgentId       String?
+
+  // Country the visitor picked on /start (NEW_ZEALAND | MALAYSIA). One
+  // assessment covers both countries; the picker records the choice to
+  // sessionStorage (sv_target_country) and it's forwarded with the submit.
+  // Nullable — legacy leads, Wix leads, and deep-links straight to the
+  // assessment have no picked country.
+  targetCountry           TargetCountry?
 
   contact                 Contact           @relation(fields: [contactId], references: [id])
   owner                   User?             @relation("LeadOwner", fields: [ownerId], references: [id])

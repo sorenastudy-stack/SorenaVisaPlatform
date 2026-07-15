@@ -85,6 +85,17 @@ function readAttribution(): Attribution {
   return out;
 }
 
+// Country the visitor picked on /start (written to sessionStorage by the
+// country picker). Undefined if they deep-linked straight to the assessment;
+// the backend whitelists the value and persists null in that case.
+function readTargetCountry(): string | undefined {
+  try {
+    return sessionStorage.getItem('sv_target_country') || undefined;
+  } catch {
+    return undefined; // sessionStorage disabled
+  }
+}
+
 export function ScorecardForm({
   initialDraft,
   isAuthenticated,
@@ -229,10 +240,11 @@ export function ScorecardForm({
     const cleaned = fillHiddenAnswers(visibleOnly);
 
     const attribution = readAttribution();
+    const targetCountry = readTargetCountry();
     try {
       if (isAuthenticated) {
         // Returning signed-in client — existing authed path.
-        await api.post('/scorecard/submit', { answers: cleaned, attribution });
+        await api.post('/scorecard/submit', { answers: cleaned, attribution, targetCountry });
         router.push('/scorecard/result');
         return;
       }
@@ -244,7 +256,7 @@ export function ScorecardForm({
       const res = await fetch('/api/scorecard/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: cleaned, attribution }),
+        body: JSON.stringify({ answers: cleaned, attribution, targetCountry }),
       });
       const data = (await res.json().catch(() => ({}))) as { mode?: string; message?: string };
       if (!res.ok) throw new Error(data?.message || 'Submission failed. Please try again.');

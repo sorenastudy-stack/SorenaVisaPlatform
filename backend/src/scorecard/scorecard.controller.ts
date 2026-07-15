@@ -49,6 +49,9 @@ export class ScorecardController {
       // PR-SCORECARD-2: forward attribution from the body. The client
       // populates this from the sv_attribution cookie + URL params.
       dto.attribution ?? {},
+      // Country picked on /start (sv_target_country) — whitelisted in the
+      // service. Untrusted; a bad value persists as null, never breaks submit.
+      { targetCountry: dto.targetCountry },
     );
   }
 

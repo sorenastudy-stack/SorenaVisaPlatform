@@ -3,18 +3,24 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
+// One assessment covers both countries, so BOTH options route straight to
+// /scorecard/landing (the old /start/new-zealand and /start/malaysia
+// interstitials were redundant and have been removed). The chosen country was
+// never captured before — purely which page you saw — so we record it to
+// sessionStorage here (mirrors the sv_scorecard_attribution pattern) as
+// `sv_target_country` so the selection isn't lost when both routes converge.
 const countries = [
   {
-    // NZ goes straight to the assessment landing — the old /start/new-zealand
-    // interstitial was a redundant extra click and has been removed.
     href: '/scorecard/landing',
     flag: '🇳🇿',
     name: 'New Zealand',
+    country: 'NEW_ZEALAND',
   },
   {
-    href: '/start/malaysia',
+    href: '/scorecard/landing',
     flag: '🇲🇾',
     name: 'Malaysia',
+    country: 'MALAYSIA',
   },
 ] as const;
 
@@ -60,9 +66,14 @@ export default function StartPage() {
             className="mt-12 grid w-full grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6"
           >
             {countries.map((c) => (
-              <motion.div key={c.href} variants={itemVariants}>
+              <motion.div key={c.country} variants={itemVariants}>
                 <Link
                   href={c.href}
+                  onClick={() => {
+                    // Record the choice before both routes converge on the
+                    // shared landing (best-effort; sessionStorage may be off).
+                    try { sessionStorage.setItem('sv_target_country', c.country); } catch { /* ignore */ }
+                  }}
                   className="group flex min-h-[12rem] flex-col items-center justify-center gap-3 rounded-xl border border-sorena-navy/10 bg-white px-6 py-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-sorena-gold/60 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-gold focus-visible:ring-offset-2 focus-visible:ring-offset-sorena-cream"
                 >
                   <span
