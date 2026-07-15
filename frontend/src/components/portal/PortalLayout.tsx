@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, FileText,
-  ArrowRightLeft, Shield, FileSearch, CheckSquare, BarChart2,
+  ArrowRightLeft, Shield, ShieldCheck, FileSearch, CheckSquare, BarChart2,
   Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
   ClipboardList, LineChart, Clock, UserSquare2, BarChart3,
 } from 'lucide-react';
@@ -44,6 +44,7 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     { label: 'Cases',       href: '/ops/cases',        icon: <Briefcase size={18} /> },
     { label: 'Documents',   href: '/ops/documents',    icon: <FileText size={18} /> },
     { label: 'Handoffs',    href: '/ops/handoffs',     icon: <ArrowRightLeft size={18} /> },
+    { label: 'Compliance',  href: '/ops/compliance',   icon: <ShieldCheck size={18} /> },
   ],
   sales: [
     { label: 'Dashboard',     href: '/sales',               icon: <LayoutDashboard size={18} /> },

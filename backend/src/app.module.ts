@@ -32,6 +32,7 @@ import { LegalNotesModule } from './legal-notes/legal-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
 import { OpsHandoffsModule } from './ops-handoffs/ops-handoffs.module';
+import { OpsComplianceModule } from './ops-compliance/ops-compliance.module';
 import { DocumentsModule } from './documents/documents.module';
 import { PortalModule } from './portal/portal.module';
 import { DigestModule } from './digest/digest.module';
@@ -110,6 +111,7 @@ import { AuditModule } from './audit/audit.module';
     // OPS cross-case unreviewed queue (GET /ops/documents/unreviewed).
     CaseDocumentsModule,
     OpsHandoffsModule,
+    OpsComplianceModule,
     // PR-LIA-6: consolidated read-only INZ application data viewer.
     InzDataModule,
     // PR-LIA-9: daily 09:00 NZ cron + dashboard endpoint for visa
