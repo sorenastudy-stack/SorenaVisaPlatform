@@ -157,7 +157,11 @@ export function StaffSidebar() {
                 />
               )}
               {item.icon}
-              {t(item.label)}
+              {/* Dotted labels (`staff.nav.*`) are i18n keys; inline labels
+                  (e.g. 'HR', 'Documents', FINANCE_NAV) are already English and
+                  deliberately skip next-intl — running them through t() only
+                  logged MISSING_MESSAGE and fell back to the same string. */}
+              {item.label.includes('.') ? t(item.label) : item.label}
             </Link>
           );
         })}
