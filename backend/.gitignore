@@ -10,3 +10,4 @@ scripts/e2e-onboarding-smoke.ts
 scripts/send-real-onboarding.ts
 scripts/test-secondary-roles.ts
 scripts/test-ops-compliance.ts
+scripts/test-portal-report-reachability.ts

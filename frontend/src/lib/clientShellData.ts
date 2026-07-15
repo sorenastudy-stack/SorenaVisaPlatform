@@ -46,6 +46,9 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
   if (!isStudent) {
     const navItems: ClientNavItem[] = [
       { labelKey: 'portal.nav.myCase',    href: '/portal/case',           iconName: 'briefcase', exact: true },
+      // Inline English label (no dot) — renders literally, skips next-intl.
+      // Persian is frozen; /portal/report already exists (404 → /portal/case).
+      { labelKey: 'My Assessment',        href: '/portal/report',         iconName: 'sparkles' },
       { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText', lockedUntilPaid: true },
       { labelKey: 'portal.nav.wallet',    href: '/portal/wallet',         iconName: 'wallet' },
     ];
@@ -78,6 +81,9 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
   const navItems: ClientNavItem[] = [
     { labelKey: 'portal.nav.dashboard', href: '/student',               iconName: 'dashboard',     exact: true },
     { labelKey: 'portal.nav.myCase',    href: '/student/case',          iconName: 'briefcase',     exact: true },
+    // Inline English label (no dot) — renders literally, skips next-intl.
+    // Persian is frozen; /portal/report already exists (404 → /portal/case).
+    { labelKey: 'My Assessment',        href: '/portal/report',         iconName: 'sparkles' },
     { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText',      lockedUntilPaid: true },
     { labelKey: 'portal.nav.visa',      href: '/student/documents',     iconName: 'visa',          lockedUntilPaid: true },
     ...(hasCase

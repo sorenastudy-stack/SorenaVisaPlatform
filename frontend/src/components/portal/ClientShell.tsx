@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import {
   Briefcase, FileText, Wallet, MessageSquare,
   LayoutDashboard, ClipboardList, CreditCard, Plane,
-  Menu, X, LogOut, Globe, ArrowLeft, Lock,
+  Menu, X, LogOut, Globe, ArrowLeft, Lock, Sparkles,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -48,6 +48,7 @@ const ICONS = {
   clipboard:     ClipboardList,
   creditCard:    CreditCard,
   visa:          Plane,
+  sparkles:      Sparkles,
 } as const;
 
 type IconName = keyof typeof ICONS;
@@ -154,7 +155,13 @@ export function ClientShell({ children, session, portalStage, navItems, backHref
               )}
             >
               <Icon size={18} />
-              <span className="flex-1">{t(item.labelKey)}</span>
+              {/* Dotted labelKeys (`portal.nav.*`) are i18n keys; an inline
+                  English label (no dot) renders literally and skips next-intl —
+                  same guard as StaffSidebar (e4af37b). Keeps Persian frozen:
+                  no new t() key, no MISSING_MESSAGE. */}
+              <span className="flex-1">
+                {item.labelKey.includes('.') ? t(item.labelKey) : item.labelKey}
+              </span>
               {locked ? (
                 <Lock size={14} className="text-white/50" aria-label="Locked until payment is confirmed" />
               ) : item.badgeCount ? (
