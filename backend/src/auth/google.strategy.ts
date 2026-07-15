@@ -27,6 +27,7 @@ export interface ValidatedGoogleUser {
   id:    string;
   email: string;
   role:  string;
+  secondaryRoles: string[];
   name:  string;
 }
 
@@ -94,12 +95,13 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const user = await this.prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
       select: {
-        id:           true,
-        email:        true,
-        name:         true,
-        role:         true,
-        isActive:     true,
-        googleId:     true,
+        id:             true,
+        email:          true,
+        name:           true,
+        role:           true,
+        secondaryRoles: true,
+        isActive:       true,
+        googleId:       true,
       },
     });
 
@@ -144,6 +146,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       id:    user.id,
       email: user.email,
       role:  user.role,
+      secondaryRoles: user.secondaryRoles,
       name:  user.name,
     };
   }

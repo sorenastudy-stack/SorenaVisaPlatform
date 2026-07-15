@@ -10,6 +10,7 @@ import { PermissionGate } from '@/components/staff/shell/PermissionGate';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 import { getCountryName, countryCodeToFlagEmoji } from '@/lib/country-codes';
 import { ChangeRoleOverlay } from './ChangeRoleOverlay';
+import { SecondaryRolesSection } from './SecondaryRolesSection';
 import { DeactivateConfirmOverlay } from './DeactivateConfirmOverlay';
 import { ReactivateConfirmOverlay } from './ReactivateConfirmOverlay';
 import { EditStaffOverlay } from './EditStaffOverlay';
@@ -143,6 +144,17 @@ export function StaffDetailOverlay({
             <Row label="Created" value={formatRelativeTime(user.createdAt)} />
           </dl>
         </section>
+
+        {/* Secondary roles — OWNER only, never on self, never on an OWNER
+            target. Widens access; the badge (primary role) above is unchanged. */}
+        {me?.role === 'OWNER' && !isSelf && user.role !== 'OWNER' && detail && (
+          <SecondaryRolesSection
+            userId={user.id}
+            primaryRole={user.role}
+            initial={detail.secondaryRoles}
+            onDone={() => { fetchDetail(); onDone(); }}
+          />
+        )}
 
         <section className="rounded-xl border border-gray-200 p-4 mb-5">
           <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-3">

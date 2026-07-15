@@ -17,6 +17,9 @@ export interface StaffUserRow {
 // PR-CONSULT-4 — Staff detail response (decrypted profile fields +
 // archive metadata). Matches GET /api/staff/users/:id.
 export interface StaffUserDetail extends StaffUserRow {
+  // Secondary roles WIDEN access only — the primary `role` (badge/routing)
+  // is unchanged. Empty for most users.
+  secondaryRoles:     string[];
   mobileNumber:       string | null;
   countryOfResidence: string | null;
   address:            string | null;

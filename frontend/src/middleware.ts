@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { hasRole } from '@/lib/roles';
 
 // PR-CONSULT-2 — `/staff/*` is the new combined staff portal that
 // replaces the per-role `/admin`, `/ops`, `/sales`, `/lia` shells
@@ -38,8 +39,11 @@ export async function middleware(request: NextRequest) {
     const secret = new TextEncoder().encode(jwtSecret);
     const { payload } = await jwtVerify(token, secret);
     const role = payload.role as string;
+    const secondaryRoles = (payload.secondaryRoles as string[] | undefined) ?? [];
 
-    if (!ROLE_ROUTES[protectedBase].includes(role)) {
+    // Widen with secondary roles: allowed if the PRIMARY role OR any secondary
+    // role is in the route's allowed set. Never narrows (empty → old check).
+    if (!hasRole(role, secondaryRoles, ROLE_ROUTES[protectedBase])) {
       return NextResponse.redirect(new URL('/unauthorized', request.url));
     }
 

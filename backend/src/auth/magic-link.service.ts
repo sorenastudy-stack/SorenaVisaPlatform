@@ -188,7 +188,7 @@ export class MagicLinkService {
     // Authoritative user lookup by FK — survives a later email change.
     const user = await this.prisma.user.findUnique({
       where:  { id: row.userId },
-      select: { id: true, email: true, name: true, role: true, isActive: true },
+      select: { id: true, email: true, name: true, role: true, secondaryRoles: true, isActive: true },
     });
     if (!user || !user.isActive) {
       this.logger.warn(
@@ -206,6 +206,7 @@ export class MagicLinkService {
       sub:   user.id,
       email: user.email,
       role:  user.role,
+      secondaryRoles: user.secondaryRoles,
     });
     this.logger.log(`magic-link login OK for user ${user.id} (${user.email})`);
     return { token, role: user.role };

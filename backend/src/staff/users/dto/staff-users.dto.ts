@@ -2,6 +2,7 @@
 // PR-CONSULT-4 — extended with staff-profile fields + a custom
 // country-code validator backed by `i18n-iso-countries`.
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsOptional,
@@ -12,6 +13,7 @@ import {
   registerDecorator,
   ValidationOptions,
 } from 'class-validator';
+import { UserRole } from '@prisma/client';
 import { isValidCountryCode } from '../../../common/country-codes';
 
 // Valid staff roles. SALES is intentionally excluded — PR-CONSULT-4
@@ -91,6 +93,18 @@ export class CreateStaffUserDto {
 export class ChangeRoleDto {
   @IsEnum(StaffRoleDto)
   newRole!: StaffRoleDto;
+
+  @IsOptional() @IsString() @MaxLength(2000)
+  reason?: string;
+}
+
+// Secondary roles WIDEN access only — never the primary `role`. Validated
+// against the full UserRole enum (anything else → 400). The service strips the
+// target's primary role and dedupes. OWNER-only endpoint.
+export class SetSecondaryRolesDto {
+  @IsArray()
+  @IsEnum(UserRole, { each: true })
+  secondaryRoles!: UserRole[];
 
   @IsOptional() @IsString() @MaxLength(2000)
   reason?: string;

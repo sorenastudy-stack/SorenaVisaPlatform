@@ -8,3 +8,4 @@ scripts/test-resend-security.ts
 scripts/test-target-country.ts
 scripts/e2e-onboarding-smoke.ts
 scripts/send-real-onboarding.ts
+scripts/test-secondary-roles.ts

@@ -63,6 +63,9 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      // secondaryRoles carried in the payload so the FRONTEND middleware can
+      // widen route access (the backend re-reads them from the DB).
+      secondaryRoles: user.secondaryRoles,
     });
 
     return {
@@ -113,6 +116,9 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      // secondaryRoles carried in the payload so the FRONTEND middleware can
+      // widen route access (the backend re-reads them from the DB).
+      secondaryRoles: user.secondaryRoles,
     });
 
     return {

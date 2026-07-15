@@ -19,6 +19,7 @@ import {
   ChangeRoleDto,
   DeactivateStaffDto,
   UpdateStaffProfileDto,
+  SetSecondaryRolesDto,
 } from './dto/staff-users.dto';
 import {
   UpdateProfileRateLimitGuard,
@@ -141,6 +142,26 @@ export class StaffUsersController {
       actionType: 'CHANGE_STAFF_ROLE',
       payload:    { userId: id, newRole: body.newRole },
       reason:     body.reason,
+    });
+  }
+
+  // Set a staff user's SECONDARY roles (WIDEN access only — never `role`).
+  // OWNER-ONLY: @StaffRoles('OWNER') checks the PRIMARY role, so a secondary
+  // OWNER can't reach this grant surface (no escalation path). Rate-limited.
+  // The service blocks self-grant, whitelists roles to the UserRole enum,
+  // strips the primary role, and audits before→after.
+  @Patch(':id/secondary-roles')
+  @StaffRoles('OWNER')
+  @UseGuards(UpdateProfileRateLimitGuard)
+  setSecondaryRoles(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: SetSecondaryRolesDto,
+  ) {
+    return this.users.setSecondaryRoles({
+      targetId:       id,
+      actorId:        req.user.userId,
+      secondaryRoles: body.secondaryRoles,
     });
   }
 

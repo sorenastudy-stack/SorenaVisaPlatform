@@ -185,7 +185,7 @@ export class PasswordSetupService {
     // existing password nor touch a staff account.
     const user = await this.prisma.user.findUnique({
       where:  { id: row.userId },
-      select: { id: true, email: true, role: true, passwordHash: true, isActive: true },
+      select: { id: true, email: true, role: true, secondaryRoles: true, passwordHash: true, isActive: true },
     });
     if (!user || !user.isActive || user.role !== 'LEAD' || user.passwordHash !== null) {
       this.logger.warn(
@@ -204,6 +204,7 @@ export class PasswordSetupService {
       sub:   user.id,
       email: user.email,
       role:  user.role,
+      secondaryRoles: user.secondaryRoles,
     });
     this.logger.log(`password-setup OK — first password set for user ${user.id} (${user.email})`);
     return { token, role: user.role };

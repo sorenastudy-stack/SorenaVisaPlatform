@@ -416,6 +416,11 @@ model User {
   // binding the same Google account.
   googleId         String?   @unique
   role             UserRole  @default(SALES)
+  // Secondary roles WIDEN access only — they never change `role` (which still
+  // drives login, routing, and the UI badge), never narrow access, and default
+  // to empty so every existing row is unaffected. Permission gates (RolesGuard,
+  // frontend middleware) accept `role` OR any of these.
+  secondaryRoles   UserRole[] @default([])
   // PR-STAFF-RENAME: descriptive staff-portal role. Coexists with `role`
   // (which still drives auth guards + booking's LIA gate). Null for
   // non-staff users (LEAD/STUDENT/AGENT). Backfilled from `role` by

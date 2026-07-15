@@ -94,6 +94,7 @@ export class AuthController {
       sub:   user.id,
       email: user.email,
       role:  user.role,
+      secondaryRoles: user.secondaryRoles,
     });
 
     const params = new URLSearchParams({ token, role: user.role });

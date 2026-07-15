@@ -1,6 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { hasRole } from '../role.util';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -19,7 +20,9 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    if (!user || !requiredRoles.includes(user.role)) {
+    // Widen with secondary roles: allowed if PRIMARY role OR any secondary role
+    // is in requiredRoles. Empty secondaryRoles → identical to the old check.
+    if (!hasRole(user, ...requiredRoles)) {
       throw new ForbiddenException('Insufficient permissions');
     }
 

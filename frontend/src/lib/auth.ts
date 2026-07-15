@@ -6,6 +6,9 @@ const COOKIE_NAME = 'sorena_session';
 export interface Session {
   userId: string;
   role: string;
+  // Secondary roles WIDEN access only — they never change `role` (routing/badge
+  // still use `role`). Sourced from the JWT payload; empty for most users.
+  secondaryRoles: string[];
   email: string;
   name: string;
 }
@@ -27,6 +30,7 @@ export async function getSession(): Promise<Session | null> {
     return {
       userId: (payload.sub as string) ?? '',
       role: (payload.role as string) ?? '',
+      secondaryRoles: (payload.secondaryRoles as string[]) ?? [],
       email: (payload.email as string) ?? '',
       name: (payload.name as string) ?? (payload.email as string) ?? 'User',
     };

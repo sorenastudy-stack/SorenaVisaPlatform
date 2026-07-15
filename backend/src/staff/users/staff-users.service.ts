@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { OwnerApprovalService } from '../owner-approval/owner-approval.service';
@@ -103,6 +104,7 @@ export class StaffUsersService {
       email:              user.email,
       name:               user.name,
       role:               user.role,
+      secondaryRoles:     user.secondaryRoles,
       createdAt:          user.createdAt,
       isActive:           user.staffActiveStatus?.isActive !== false,
       mobileNumber:       this.dec(user.mobileNumber),
@@ -219,6 +221,63 @@ export class StaffUsersService {
   }
 
   // ── Reactivate (non-destructive — OWNER + SUPER_ADMIN inline) ────
+
+  // ── Secondary roles (OWNER only) ──────────────────────────────────
+  //
+  // Secondary roles WIDEN access only — they never touch `role` (login,
+  // routing, badge are unchanged). OWNER-only is enforced by @StaffRoles('OWNER')
+  // on the controller, which checks the PRIMARY role — a secondary OWNER can't
+  // reach this grant surface. A user can NEVER change their own secondary roles
+  // (no self-escalation), submitted values are whitelisted to the UserRole
+  // enum, the target's primary role is stripped (a role is primary xor
+  // secondary), and every change is audited (who, target, before, after, when).
+  async setSecondaryRoles(args: {
+    targetId: string;
+    actorId: string;
+    secondaryRoles: string[];
+  }): Promise<{ userId: string; secondaryRoles: UserRole[] }> {
+    if (args.targetId === args.actorId) {
+      throw new ForbiddenException('You cannot change your own secondary roles');
+    }
+
+    const target = await this.prisma.user.findUnique({
+      where:  { id: args.targetId },
+      select: { id: true, role: true, secondaryRoles: true },
+    });
+    if (!target || target.role === 'STUDENT') throw new ForbiddenException(); // mask existence
+
+    // Whitelist to valid UserRole values, dedupe, and drop the primary role.
+    const valid = new Set<string>(Object.values(UserRole));
+    const cleaned = Array.from(new Set(args.secondaryRoles)).filter(
+      (r) => valid.has(r) && r !== target.role,
+    ) as UserRole[];
+
+    const before = target.secondaryRoles;
+    const updated = await this.prisma.user.update({
+      where:  { id: target.id },
+      data:   { secondaryRoles: { set: cleaned } },
+      select: { id: true, secondaryRoles: true },
+    });
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: args.actorId }, select: { name: true, role: true },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        userId:            args.actorId,
+        action:            'CHANGE_STAFF_SECONDARY_ROLES',
+        eventType:         'CHANGE_STAFF_SECONDARY_ROLES',
+        entityType:        'User',
+        entityId:          target.id,
+        oldValue:          { secondaryRoles: before },
+        newValue:          { secondaryRoles: updated.secondaryRoles },
+        actorNameSnapshot: actor?.name ?? null,
+        actorRoleSnapshot: actor?.role ?? null,
+      },
+    });
+
+    return { userId: updated.id, secondaryRoles: updated.secondaryRoles };
+  }
 
   async reactivate(userId: string, actorId: string) {
     await this.approval.reactivateStaffDirect(userId, actorId);
