@@ -1,5 +1,11 @@
 {
-  "buildCommand": "npm install && npm run build",
-  "startCommand": "bash start.sh",
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "npm install && npm run build"
+  },
+  "deploy": {
+    "startCommand": "node dist/main",
+    "preDeployCommand": "npm run migrate:deploy"
+  },
   "rootDirectory": "backend"
 }
