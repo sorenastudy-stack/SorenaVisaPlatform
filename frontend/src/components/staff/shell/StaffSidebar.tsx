@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
-  Clock, BookOpen,
+  Clock, BookOpen, KeyRound,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -91,6 +91,8 @@ const NAV: NavItem[] = [
   { label: 'Payments to confirm',         href: '/staff/payments',           icon: <CheckCircle2 size={18} />, roleGate: PAYMENTS_CONFIRM_ROLES },
   // PR-SCORECARD-4: OWNER-editable booking URLs.
   { label: 'staff.nav.platformSettings',  href: '/staff/platform-settings',  icon: <Settings size={18} />,    roleGate: SETTINGS_ROLES },
+  // Available to every staff member — inline English label (no dot → literal).
+  { label: 'Account',                      href: '/staff/account',            icon: <KeyRound size={18} /> },
 ];
 
 // Finance portal (option a) — a role-filtered sidebar for FINANCE users. When
@@ -104,6 +106,7 @@ const FINANCE_NAV: NavItem[] = [
   { label: 'Finalised',        href: '/staff/finance/finalised', icon: <CheckCircle2 size={18} /> },
   { label: 'HR',               href: '/staff/hr',                icon: <CalendarOff size={18} /> },
   { label: 'Training & News',  href: '/staff/finance/training',  icon: <BookOpen size={18} /> },
+  { label: 'Account',          href: '/staff/account',           icon: <KeyRound size={18} /> },
 ];
 
 export function StaffSidebar() {

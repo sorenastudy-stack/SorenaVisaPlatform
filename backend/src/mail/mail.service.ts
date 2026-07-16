@@ -6,6 +6,7 @@ import {
   verificationEmailBody,
   magicLinkLoginBody,
   passwordSetupBody,
+  passwordResetBody,
   welcomeEmailBody,
   admissionSubmittedToClientBody,
   admissionSubmittedToOwnerBody,
@@ -99,6 +100,14 @@ export class MailService implements OnModuleInit {
       to,
       subject: 'Welcome to Your Sorena Visa Client Portal',
       html: wrapHtml(passwordSetupBody(url), { heading: 'Welcome to your Client Portal' }),
+    });
+  }
+
+  async sendPasswordResetLink(to: string, name: string | null, url: string): Promise<void> {
+    await this.send({
+      to,
+      subject: 'Reset your Sorena Visa password',
+      html: wrapHtml(passwordResetBody(name, url), { heading: 'Reset your password' }),
     });
   }
 

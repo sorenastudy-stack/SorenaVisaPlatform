@@ -21,7 +21,9 @@ import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
 import { MagicLinkService } from './magic-link.service';
 import { PasswordSetupService } from './password-setup.service';
+import { PasswordResetService } from './password-reset.service';
 import { SetPasswordDto } from './dto/set-password.dto';
+import { ResetPasswordDto, ChangePasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -32,6 +34,7 @@ export class AuthController {
     private readonly jwtService:           JwtService,
     private readonly magicLinkService:     MagicLinkService,
     private readonly passwordSetupService: PasswordSetupService,
+    private readonly passwordResetService: PasswordResetService,
   ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -247,9 +250,75 @@ export class AuthController {
     return { ok: true, message: 'If your assessment is awaiting setup, a fresh link has been sent.' };
   }
 
+  // ─── Phase F — staff self-service password reset + change ──────────────
+
+  // POST /auth/password-reset/request — send a reset link. ANTI-ENUMERATION:
+  // always a generic 200 whatever the account state (mirrors magic-link/request).
+  // Hard per-IP throttle on top of the global default — a credential endpoint.
+  @Post('password-reset/request')
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  async passwordResetRequest(
+    @Body('email') email: string,
+    @Req() req: Request,
+  ): Promise<{ ok: boolean; message: string }> {
+    try {
+      await this.passwordResetService.requestReset(email, { ipAddress: clientIp(req) });
+    } catch (err) {
+      this.logger.error(`password-reset request threw — returning generic 200 anyway: ${(err as Error)?.message ?? err}`);
+    }
+    return { ok: true, message: 'If that email is registered, a password reset link has been sent.' };
+  }
+
+  // GET /auth/password-reset/validate — READ-ONLY (scanner-safe), consumes
+  // nothing. The /reset-password page calls it to decide "show form" vs "expired".
+  @Get('password-reset/validate')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
+  async passwordResetValidate(
+    @Query('token') rawToken: string,
+    @Query('email') email: string,
+  ): Promise<{ valid: true }> {
+    await this.passwordResetService.validateToken(rawToken, email);
+    return { valid: true };
+  }
+
+  // POST /auth/password-reset — consume the single-use token, set the new
+  // password, and mint the JWT (also signs them in). Hard throttle.
+  @Post('password-reset')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  async passwordReset(
+    @Body() dto: ResetPasswordDto,
+    @Req() req: Request,
+  ): Promise<{ token: string; role: string }> {
+    return this.passwordResetService.resetPassword(dto.token, dto.email, dto.password, { ipAddress: clientIp(req) });
+  }
+
+  // POST /auth/change-password — signed-in staff changes their OWN password.
+  // userId comes from the JWT (never a body/param). Current password required.
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard, ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  async changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
+  ): Promise<{ ok: true }> {
+    const userId = (req as any).user?.userId ?? (req as any).user?.id;
+    return this.authService.changePassword(userId, dto.currentPassword, dto.newPassword, clientIp(req));
+  }
+
   private frontendUrl(suffix: string): string {
     const base = (process.env.FRONTEND_URL || '').replace(/\/$/, '');
     if (!base) return suffix;
     return `${base}${suffix.startsWith('/') ? '' : '/'}${suffix}`;
   }
+}
+
+// Best-effort client IP from the proxy chain (Railway sits behind a proxy).
+function clientIp(req: Request): string | null {
+  const fwd = req.headers?.['x-forwarded-for'];
+  const first = Array.isArray(fwd) ? fwd[0] : fwd;
+  return first?.split(',')[0]?.trim() || req.ip || null;
 }

@@ -8,6 +8,7 @@ import { GoogleStrategy } from './google.strategy';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { MagicLinkService } from './magic-link.service';
 import { PasswordSetupService } from './password-setup.service';
+import { PasswordResetService } from './password-reset.service';
 import { PrismaModule } from '../prisma/prisma.module';
 
 // PR-AUDIT-2 — fail-fast at module-init if JWT_SECRET is missing.
@@ -31,7 +32,7 @@ function requireJwtSecret(): string {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, GoogleAuthGuard, MagicLinkService, PasswordSetupService],
-  exports: [AuthService, JwtModule, MagicLinkService, PasswordSetupService],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, GoogleAuthGuard, MagicLinkService, PasswordSetupService, PasswordResetService],
+  exports: [AuthService, JwtModule, MagicLinkService, PasswordSetupService, PasswordResetService],
 })
 export class AuthModule {}

@@ -129,4 +129,56 @@ export class AuthService {
       token,
     };
   }
+
+  /**
+   * Phase F — signed-in staff changes their OWN password. `userId` comes from
+   * the JWT (never a parameter). The CURRENT password is mandatory and verified
+   * with bcrypt before the new one is written — a hijacked session cannot lock
+   * the owner out. Audited (who / when / from where). Google-only accounts (no
+   * passwordHash) can't use this — they have no current password to prove.
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    ipAddress: string | null = null,
+  ): Promise<{ ok: true }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, role: true, passwordHash: true, isActive: true },
+    });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Account not found or inactive.');
+    }
+    if (!user.passwordHash) {
+      // No password set (e.g. Google-only) — nothing to verify against.
+      throw new BadRequestException('This account has no password set. Use "Forgot password" to create one.');
+    }
+
+    const currentMatches = await bcrypt.compare(currentPassword ?? '', user.passwordHash);
+    if (!currentMatches) {
+      throw new UnauthorizedException('Your current password is incorrect.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: 'PASSWORD_CHANGED',
+          eventType: 'PASSWORD_CHANGED',
+          entityType: 'User',
+          entityId: user.id,
+          ipAddress,
+          actorNameSnapshot: user.name,
+          actorRoleSnapshot: user.role,
+        },
+      });
+    } catch {
+      /* audit is best-effort — never block a successful change */
+    }
+    return { ok: true };
+  }
 }

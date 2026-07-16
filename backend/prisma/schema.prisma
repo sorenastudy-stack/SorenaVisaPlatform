@@ -604,6 +604,7 @@ model User {
   // Never a reset (the set endpoint refuses if passwordHash is already
   // set). Cascade on user delete.
   passwordSetupTokens     PasswordSetupToken[]
+  passwordResetTokens     PasswordResetToken[]
 
   // PR-BOOKING-1: OWNER-set weekly working hours for this user as a
   // bookable staff member. Empty for users who aren't bookable.
@@ -698,6 +699,31 @@ model PasswordSetupToken {
   @@index([tokenHash])
   @@index([userId])
   @@map("password_setup_tokens")
+}
+
+// Phase F — staff self-service password RESET token. Same proven shape as
+// PasswordSetupToken (sha256-hashed, single-use via consumedAt, short TTL),
+// but a DISTINCT table on purpose: a reset overwrites an existing password on
+// ANY role, which is the exact opposite of the setup token's LEAD-only /
+// passwordless-only invariant. Keeping them separate means a setup token can
+// never reach the reset code path and vice-versa.
+model PasswordResetToken {
+  id          String    @id @default(cuid())
+  userId      String
+  // Lowercased target email captured at issue time; the reset endpoint verifies
+  // the email on the URL matches before consuming. userId FK is authoritative.
+  email       String
+  tokenHash   String
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash])
+  @@index([tokenHash])
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 // ─── ACQUISITION (existing — kept and extended) ───────────────────────────────

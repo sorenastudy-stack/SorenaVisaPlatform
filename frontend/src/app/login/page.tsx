@@ -140,6 +140,11 @@ function LoginForm() {
               {errors.password && (
                 <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>
               )}
+              <div className="mt-1.5 text-right">
+                <a href="/forgot-password" className="text-xs font-semibold text-[#1e3a5f]/70 hover:text-[#1e3a5f]">
+                  Forgot password?
+                </a>
+              </div>
             </div>
 
             {/* Server error */}

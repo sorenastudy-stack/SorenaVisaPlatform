@@ -153,6 +153,17 @@ export function passwordSetupBody(url: string): string {
   `;
 }
 
+export function passwordResetBody(name: string | null, url: string): string {
+  return `
+    <p>Hello${name ? ` ${esc(name)}` : ''},</p>
+    <p>We received a request to reset the password for your Sorena Visa staff account. Click the secure button below to choose a new password:</p>
+    ${primaryButton('Reset Your Password', url)}
+    <p>If you didn't request this, you can safely ignore this email — your password won't change until you use the link above.</p>
+    <p style="margin-top:20px;">Kind regards,<br/>Sorena Visa Team</p>
+    <p style="color:${MUTED};font-size:13px;margin-top:24px;">This secure link expires in <strong>30 minutes</strong> and can be used <strong>once</strong>. If it expires, request a new one from the sign-in page.</p>
+  `;
+}
+
 export function welcomeEmailBody(name: string): string {
   return `
     <p>Welcome to Sorena Visa, ${esc(name)}.</p>
