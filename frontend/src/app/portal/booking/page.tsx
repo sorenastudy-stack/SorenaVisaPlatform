@@ -7,6 +7,7 @@ import { Calendar, Scale, Sparkles, ArrowLeft, ArrowRight, Check, Loader2, Lock 
 import { api, ApiError } from '@/lib/api';
 import {
   getBookingEligibility,
+  money,
   type BookingEligibility,
   type BookingType,
   type TypeEligibility,
@@ -97,7 +98,7 @@ function BookingChooser() {
 function BookingTypeCard({
   item, meta,
 }: { item: TypeEligibility; meta: { slug: string; title: string; blurb: string; icon: React.ReactNode } }) {
-  const priceLabel = item.paid ? `NZD ${item.priceNzd}` : 'Free';
+  const priceLabel = item.paid ? money(item.priceCents, item.currency) : 'Free';
   return (
     <section className="rounded-xl border border-sorena-navy/10 bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
@@ -112,6 +113,15 @@ function BookingTypeCard({
           <p className={['mt-1 text-sm', item.eligible ? 'text-sorena-text/70' : 'text-sorena-text/40'].join(' ')}>{meta.blurb}</p>
         </div>
       </div>
+
+      {/* Disclosed pricing — card total (incl. fee) + wallet total. Never a
+          silent uplift. Only for eligible PAID types (free shows nothing). */}
+      {item.eligible && item.paid && (
+        <div className="mt-3 rounded-lg bg-sorena-navy/[0.03] px-3 py-2 text-xs text-sorena-text/70">
+          <div><span className="font-semibold text-sorena-navy">{money(item.cardTotalCents, item.currency)}</span> by card — includes {money(item.cardFeeCents, item.currency)} card processing fee</div>
+          <div className="mt-0.5"><span className="font-semibold text-sorena-navy">{money(item.priceCents, item.currency)}</span> from wallet — no fee</div>
+        </div>
+      )}
 
       <div className="mt-4">
         {item.eligible ? (
@@ -463,6 +473,7 @@ function EmptyCalendarScaffold() {
 // ── Paid flow (PR-BOOKING-4): GAP_CLOSING (slice 1) + LIA (slice 2) ────
 interface Hold {
   consultationId: string; holdExpiresAt: string; amountNZD: number;
+  currency: string; cardFeeCents: number; cardTotalCents: number;
   type: string; slotStartUtc: string; staffName: string; timezone: string;
 }
 type GapStep = 'pick' | 'hold' | 'expired' | 'done';
@@ -493,15 +504,16 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
   const [walletCents, setWalletCents] = useState<number | null>(null);
   const [payingWallet, setPayingWallet] = useState(false);
   const [doneBalanceCents, setDoneBalanceCents] = useState<number | null>(null);
-  // Price for the header — sourced from the server (session-config), never
-  // hardcoded. The authoritative charged amount comes from the hold response.
-  const [priceNzd, setPriceNzd] = useState<number | null>(null);
+  // Pricing (currency + base + card fee/total) — sourced from the server
+  // (session-config), never hardcoded. The authoritative charged amount comes
+  // from the hold response; this drives the disclosed fee breakdown.
+  const [pricing, setPricing] = useState<TypeEligibility | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     getBookingEligibility()
-      .then((e) => { if (!cancelled) setPriceNzd(e.types.find((t) => t.type === sessionType)?.priceNzd ?? null); })
-      .catch(() => { /* header just omits the price on failure; the hold amount is authoritative */ });
+      .then((e) => { if (!cancelled) setPricing(e.types.find((t) => t.type === sessionType) ?? null); })
+      .catch(() => { /* header omits the price on failure; the hold amount is authoritative */ });
     return () => { cancelled = true; };
   }, [sessionType]);
 
@@ -638,7 +650,7 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
           <h1 className="text-2xl font-bold text-sorena-navy">You&apos;re booked!</h1>
           <p className="mt-3 text-base text-sorena-text/80">
             Paid with your Sorena wallet credit.
-            {doneBalanceCents != null && ` New balance: NZD ${(doneBalanceCents / 100).toFixed(2)}.`}
+            {doneBalanceCents != null && ` New balance: ${money(doneBalanceCents, hold?.currency ?? pricing?.currency ?? 'USD')}.`}
           </p>
           <p className="mt-1 text-sm text-sorena-text/60">We&apos;ll email your confirmation and meeting link.</p>
           <div className="mt-8"><BackToCase /></div>
@@ -655,7 +667,7 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
       <Shell>
         <h1 className="text-xl font-bold text-sorena-navy text-center">Confirm &amp; pay</h1>
         <div className="mt-6 rounded-2xl bg-sorena-cream border border-sorena-navy/10 p-5 text-center">
-          <p className="text-xs uppercase tracking-wide text-sorena-text/50 font-semibold">{cfg.label} · NZD {hold.amountNZD}</p>
+          <p className="text-xs uppercase tracking-wide text-sorena-text/50 font-semibold">{cfg.label} · {money(Math.round(hold.amountNZD * 100), hold.currency)}</p>
           <p className="mt-2 text-lg font-bold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
           <p className="text-lg font-semibold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true })} NZ</p>
           <p className="mt-1 text-xs text-sorena-text/50">with {hold.staffName} · Times in New Zealand time</p>
@@ -686,10 +698,10 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
           {walletCents != null && walletCents >= Math.round(hold.amountNZD * 100) && (
             <>
               <button onClick={payWithWallet} disabled={payingWallet || paying || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-navy px-6 py-3.5 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-navy/90 disabled:opacity-60 disabled:hover:translate-y-0">
-                {payingWallet ? <><Loader2 size={18} className="animate-spin" /> Paying…</> : `Pay with wallet credit (NZD ${hold.amountNZD})`}
+                {payingWallet ? <><Loader2 size={18} className="animate-spin" /> Paying…</> : `Pay with wallet credit (${money(Math.round(hold.amountNZD * 100), hold.currency)}, no fee)`}
               </button>
               <p className="text-center text-xs text-sorena-text/50">
-                Wallet balance NZD {(walletCents / 100).toFixed(2)} · after this booking NZD {((walletCents - Math.round(hold.amountNZD * 100)) / 100).toFixed(2)}
+                Wallet balance {money(walletCents, hold.currency)} · after this booking {money(walletCents - Math.round(hold.amountNZD * 100), hold.currency)}
               </p>
               <div className="flex items-center gap-3 py-1 text-xs text-sorena-text/40">
                 <span className="h-px flex-1 bg-sorena-navy/10" /> or pay by card <span className="h-px flex-1 bg-sorena-navy/10" />
@@ -697,8 +709,11 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
             </>
           )}
           <button onClick={pay} disabled={paying || payingWallet || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 disabled:opacity-60 disabled:hover:translate-y-0">
-            {paying ? <><Loader2 size={18} className="animate-spin" /> Redirecting…</> : `Pay NZD ${hold.amountNZD}`}
+            {paying ? <><Loader2 size={18} className="animate-spin" /> Redirecting…</> : `Pay ${money(hold.cardTotalCents, hold.currency)} by card`}
           </button>
+          {hold.cardFeeCents > 0 && (
+            <p className="text-center text-xs text-sorena-text/50">Card total includes {money(hold.cardFeeCents, hold.currency)} card processing fee.</p>
+          )}
           {!accepted && <p className="text-center text-xs text-sorena-text/50">Please accept the policy above to continue.</p>}
           <button onClick={resetToPick} disabled={paying || payingWallet} className="flex w-full items-center justify-center gap-1 text-sm font-semibold text-sorena-navy/70 hover:text-sorena-navy"><ArrowLeft size={14} /> Pick a different time</button>
         </div>
@@ -710,7 +725,14 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
   return (
     <Shell>
       <h1 className="text-xl font-bold text-sorena-navy text-center">Book your {cfg.label}</h1>
-      <p className="mt-2 text-center text-sm text-sorena-text/60">{priceNzd !== null ? `NZD ${priceNzd} · ` : ''}Pick a day, then a time. You&apos;ll have 15 minutes to pay.</p>
+      <p className="mt-2 text-center text-sm text-sorena-text/60">Pick a day, then a time. You&apos;ll have 15 minutes to pay.</p>
+      {/* Disclosed pricing — card total (incl. fee) vs wallet. Never a silent uplift. */}
+      {pricing && (
+        <div className="mx-auto mt-3 max-w-sm rounded-lg bg-sorena-navy/[0.03] px-3 py-2 text-center text-xs text-sorena-text/70">
+          <div><span className="font-semibold text-sorena-navy">{money(pricing.cardTotalCents, pricing.currency)}</span> by card — includes {money(pricing.cardFeeCents, pricing.currency)} card processing fee</div>
+          <div className="mt-0.5"><span className="font-semibold text-sorena-navy">{money(pricing.priceCents, pricing.currency)}</span> from wallet — no fee</div>
+        </div>
+      )}
       {pickError && (
         <div className="mt-4 rounded-xl bg-sorena-clay/10 border border-sorena-clay/30 px-4 py-3 text-sm text-sorena-clay text-center">{pickError}</div>
       )}

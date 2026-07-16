@@ -13,6 +13,7 @@ import {
   getSessionConfig,
   BOOKING_HOLD_MINUTES,
 } from './session-config';
+import { cardChargeForHeld } from './session-pricing';
 import {
   computeAvailableSlots,
   AvailableSlot,
@@ -316,6 +317,7 @@ export class BookingService {
     now?: Date;
   }): Promise<{
     consultationId: string; holdExpiresAt: Date; amountNZD: number;
+    currency: string; cardFeeCents: number; cardTotalCents: number;
     type: BookingSessionType; slotStartUtc: string; staffName: string; timezone: string;
   }> {
     const { sessionType } = params;
@@ -379,7 +381,11 @@ export class BookingService {
             data: {
               leadId,
               type: sessionType as any,
-              amountNZD: cfg.priceNZD,
+              // amountNZD is the legacy column name; it now holds the BASE price
+              // in `currency` (USD). Currency is stamped at hold time so the
+              // later charge honours what was quoted, not a re-read of config.
+              amountNZD: cfg.price,
+              currency: cfg.currency,
               paymentStatus: 'PENDING',
               status: 'PENDING',
               assignedToId: staffId,
@@ -394,10 +400,14 @@ export class BookingService {
         });
 
         const adviser = await this.prisma.user.findUnique({ where: { id: staffId }, select: { name: true } });
+        const holdCharge = cardChargeForHeld(Math.round(cfg.price * 100));
         return {
           consultationId: consult.id,
           holdExpiresAt,
-          amountNZD: cfg.priceNZD,
+          amountNZD: cfg.price,
+          currency: cfg.currency,
+          cardFeeCents: holdCharge.cardFeeCents,
+          cardTotalCents: holdCharge.cardTotalCents,
           type: sessionType,
           slotStartUtc: slotStart.toISOString(),
           staffName: adviser?.name ?? 'Your adviser',
@@ -417,11 +427,11 @@ export class BookingService {
    * 409 if already paid/confirmed or the hold expired.
    */
   async getHoldForCheckout(userId: string, consultationId: string, now: Date = new Date()): Promise<{
-    id: string; leadId: string; type: BookingSessionType; amountNZD: number;
+    id: string; leadId: string; type: BookingSessionType; amountNZD: number; currency: string;
   }> {
     const c = await this.prisma.consultation.findFirst({
       where: { id: consultationId, lead: { contact: { userId } } },
-      select: { id: true, leadId: true, type: true, status: true, paymentStatus: true, holdExpiresAt: true, amountNZD: true },
+      select: { id: true, leadId: true, type: true, status: true, paymentStatus: true, holdExpiresAt: true, amountNZD: true, currency: true },
     });
     if (!c) throw new NotFoundException('Hold not found');
     if (c.type !== 'GAP_CLOSING' && c.type !== 'LIA') {
@@ -433,7 +443,7 @@ export class BookingService {
     if (c.status !== 'PENDING' || !c.holdExpiresAt || c.holdExpiresAt <= now) {
       throw new ConflictException('Your hold expired — please pick a time again');
     }
-    return { id: c.id, leadId: c.leadId, type: c.type as BookingSessionType, amountNZD: c.amountNZD };
+    return { id: c.id, leadId: c.leadId, type: c.type as BookingSessionType, amountNZD: c.amountNZD, currency: c.currency };
   }
 
   /**
@@ -456,9 +466,19 @@ export class BookingService {
   ): Promise<{ status: 'CONFIRMED'; paidWith: 'WALLET'; newBalanceCents: number }> {
     // Ownership + still-payable checks BEFORE touching money (404 / 409 / 400).
     const hold = await this.getHoldForCheckout(userId, consultationId, now);
-    const cfg = getSessionConfig(hold.type);
-    const priceCents = Math.round(cfg.priceNZD * 100);
+    // Wallet pays the BASE (no card fee), in the HOLD's currency — never a
+    // re-read of config, so an in-flight hold settles at what it was quoted.
+    const priceCents = Math.round(hold.amountNZD * 100);
     if (priceCents <= 0) throw new BadRequestException('This booking is not payable.');
+
+    // Option-A currency guard: refuse to debit a wallet whose currency differs
+    // from the session's — that would silently mix units. Card still works.
+    const wallet = await this.prisma.wallet.findUnique({ where: { userId }, select: { currency: true } });
+    if (wallet && wallet.currency !== hold.currency) {
+      throw new BadRequestException(
+        `Your wallet is held in ${wallet.currency}, but this session is priced in ${hold.currency}. Please pay by card instead.`,
+      );
+    }
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -586,6 +606,7 @@ export class BookingService {
         leadId,
         type: 'FREE_15',
         amountNZD: 0,
+        currency: getSessionConfig('FREE_15').currency, // stamp currency even at $0
         paymentStatus: 'PAID', // free → nothing to collect
         status: 'PENDING',
       },

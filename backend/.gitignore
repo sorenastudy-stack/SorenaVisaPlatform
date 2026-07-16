@@ -12,3 +12,4 @@ scripts/test-secondary-roles.ts
 scripts/test-ops-compliance.ts
 scripts/test-portal-report-reachability.ts
 scripts/test-booking-eligibility.ts
+scripts/test-session-pricing-usd.ts

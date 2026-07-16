@@ -1,7 +1,8 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ScorecardBand } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { BookingSessionType, getSessionConfig } from './session-config';
+import { BookingSessionType } from './session-config';
+import { getSessionPricing } from './session-pricing';
 
 // Phase C — booking eligibility (live, honest, single source of truth).
 //
@@ -28,7 +29,10 @@ export interface TypeEligibility {
   eligible: boolean;
   reason: string; // human English — why available (eligible) or why blocked
   paid: boolean;
-  priceNzd: number;
+  currency: string;       // ISO 4217, e.g. 'USD'
+  priceCents: number;     // base — the WALLET amount (no fee)
+  cardFeeCents: number;   // disclosed card processing fee (0 when free)
+  cardTotalCents: number; // priceCents + cardFeeCents — the CARD amount
 }
 
 export interface BookingEligibilityResponse {
@@ -138,7 +142,7 @@ export class BookingEligibilityService {
     liveHardStop: boolean,
     freeUsed: boolean,
   ): TypeEligibility {
-    const base = { type: 'FREE_15' as const, paid: false, priceNzd: getSessionConfig('FREE_15').priceNZD };
+    const base = { ...getSessionPricing('FREE_15') };
     if (!hasSubmission)   return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION };
     if (!isHighBand(band)) return { ...base, eligible: false, reason: REASONS.FREE15_BAND };
     if (liveHardStop)     return { ...base, eligible: false, reason: REASONS.FREE15_HARDSTOP };
@@ -151,7 +155,7 @@ export class BookingEligibilityService {
     band: ScorecardBand | null,
     liveHardStop: boolean,
   ): TypeEligibility {
-    const base = { type: 'GAP_CLOSING' as const, paid: true, priceNzd: getSessionConfig('GAP_CLOSING').priceNZD };
+    const base = { ...getSessionPricing('GAP_CLOSING') };
     if (!hasSubmission)      return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION };
     if (band !== 'BAND_3')   return { ...base, eligible: false, reason: `The Gap-Closing session is for Band 3 profiles; your assessment is ${bandLabel(band)}.` };
     if (liveHardStop)        return { ...base, eligible: false, reason: REASONS.GAP_HARDSTOP };
@@ -166,7 +170,7 @@ export class BookingEligibilityService {
     liaAdviserAvailable: boolean,
     liveHardStop: boolean,
   ): TypeEligibility {
-    const base = { type: 'LIA' as const, paid: true, priceNzd: getSessionConfig('LIA').priceNZD };
+    const base = { ...getSessionPricing('LIA') };
     if (!hasSubmission)        return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION };
     if (!liaAdviserAvailable)  return { ...base, eligible: false, reason: REASONS.LIA_NO_ADVISER };
     return { ...base, eligible: true, reason: liveHardStop ? REASONS.LIA_OK_HARDSTOP : REASONS.LIA_OK_GENERAL };

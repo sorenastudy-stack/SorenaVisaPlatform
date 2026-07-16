@@ -284,7 +284,9 @@ export class StripeService {
     consultationId: string;
     leadId: string;
     bookingType: string; // e.g. 'GAP_CLOSING'
-    amountCents: number;
+    currency: string;    // from the hold / session-config (e.g. 'USD')
+    baseCents: number;   // session base (server-computed)
+    cardFeeCents: number; // disclosed card processing fee (0 → single line item)
     productName: string;
   }) {
     this.assertConfigured();
@@ -297,19 +299,27 @@ export class StripeService {
     const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
     // Return the user to the right booking page on cancel (gap / lia).
     const cancelType = params.bookingType === 'LIA' ? 'lia' : 'gap';
+    const ccy = params.currency.toLowerCase();
+    // Currency driven by config (never a hardcoded 'nzd'). The fee is a SEPARATE
+    // disclosed line item so it also shows on the Stripe page (mirrors the
+    // account-opening pay screen's disclosed fee). Stripe's amount_total = base
+    // + fee, which the webhook trusts as the captured amount.
+    const line_items = [
+      {
+        price_data: { currency: ccy, product_data: { name: params.productName }, unit_amount: params.baseCents },
+        quantity: 1,
+      },
+      ...(params.cardFeeCents > 0
+        ? [{
+            price_data: { currency: ccy, product_data: { name: 'Card processing fee' }, unit_amount: params.cardFeeCents },
+            quantity: 1,
+          }]
+        : []),
+    ];
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
-      line_items: [
-        {
-          price_data: {
-            currency: 'nzd',
-            product_data: { name: params.productName },
-            unit_amount: params.amountCents,
-          },
-          quantity: 1,
-        },
-      ],
+      line_items,
       metadata,
       payment_intent_data: { metadata },
       success_url: `${frontend}/payment/success?session_id={CHECKOUT_SESSION_ID}`,

@@ -14,7 +14,16 @@ export interface TypeEligibility {
   eligible: boolean;
   reason: string;
   paid: boolean;
-  priceNzd: number;
+  currency: string;       // ISO 4217, e.g. 'USD'
+  priceCents: number;     // base — the WALLET amount (no fee)
+  cardFeeCents: number;   // disclosed card processing fee (0 when free)
+  cardTotalCents: number; // priceCents + cardFeeCents — the CARD amount
+}
+
+// Format integer cents in `currency` — the ONLY money formatter for sessions.
+// No bare '$', no hardcoded currency code.
+export function money(cents: number, currency: string): string {
+  return `${currency.toUpperCase()} ${(cents / 100).toFixed(2)}`;
 }
 
 export interface BookingEligibility {

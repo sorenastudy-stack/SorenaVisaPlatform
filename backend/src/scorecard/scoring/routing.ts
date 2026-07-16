@@ -27,6 +27,7 @@
 // the backend's job here is just to produce the content payload.
 
 import type { BandEnum } from './bands';
+import { getSessionConfig } from '../../booking/session-config';
 import type { HardStop } from './hard-stops';
 
 export type ScorecardNextActionValue =
@@ -97,8 +98,9 @@ export function determineRouting(
   }
 
   if (band === 'BAND_3') {
+    const gap = getSessionConfig('GAP_CLOSING');
     return decision('PAY_GAP_CLOSING_SESSION', {
-      heading: 'Your next step is a NZD 30 Gap-Closing Roadmap Session.',
+      heading: `Your next step is a ${gap.currency} ${gap.price} Gap-Closing Roadmap Session.`,
       bullets: [
         'On payment, an AI-generated improvement plan tailored to your profile is sent to you immediately.',
         "You'll receive a booking link with a language-matched Admission Specialist for a 30-minute session.",

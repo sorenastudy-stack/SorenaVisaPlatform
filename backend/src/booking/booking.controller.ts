@@ -9,6 +9,7 @@ import { StripeService } from '../payments/stripe.service';
 import { PolicyAcceptanceService } from '../wallet/policy-acceptance.service';
 import { BookingCancellationService } from './booking-cancellation.service';
 import { getSessionConfig, SESSION_TYPES } from './session-config';
+import { cardChargeForHeld } from './session-pricing';
 import {
   SlotsQueryDto, ConfirmBookingDto, HoldBookingDto, CheckoutBookingDto, PayWithWalletDto,
 } from './dto/booking.dto';
@@ -54,8 +55,8 @@ export class BookingController {
   sessionTypes() {
     return Object.values(SESSION_TYPES).map((c) => ({
       type: c.type,
-      price: c.priceNZD,
-      currency: 'NZD',
+      price: c.price,
+      currency: c.currency,
       label: c.label,
     }));
   }
@@ -126,11 +127,16 @@ export class BookingController {
       userAgent: req.headers?.['user-agent'] ?? null,
     });
     const cfg = getSessionConfig(hold.type);
+    // Fee computed SERVER-SIDE off the hold's base — never a client-sent total.
+    const baseCents = Math.round(hold.amountNZD * 100);
+    const { cardFeeCents } = cardChargeForHeld(baseCents);
     const session = await this.stripe.createBookingCheckoutSession({
       consultationId: hold.id,
       leadId: hold.leadId,
       bookingType: hold.type,
-      amountCents: Math.round(hold.amountNZD * 100),
+      currency: hold.currency,
+      baseCents,
+      cardFeeCents,
       productName: `Sorena Visa — ${cfg.label}`,
     });
     return { url: session.url };

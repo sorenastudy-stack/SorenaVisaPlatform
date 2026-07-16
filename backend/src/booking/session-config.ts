@@ -18,8 +18,11 @@ export const BOOKING_HOLD_MINUTES = 15;
 export interface SessionTypeConfig {
   type: BookingSessionType;
   durationMinutes: number;
-  /** Price in NZD (whole dollars). 0 = free. */
-  priceNZD: number;
+  /** Base price in whole units of `currency`. 0 = free. This is the SINGLE
+   *  source of truth for the amount charged (card + wallet) and every display. */
+  price: number;
+  /** ISO 4217 currency for `price` (e.g. 'USD'). Drives Stripe + every display. */
+  currency: string;
   /** Whether a Stripe payment must succeed before slot selection. */
   requiresPayment: boolean;
   /** Whether the adviser must be a User(role=LIA) with a verified LiaProfile. */
@@ -32,7 +35,8 @@ export const SESSION_TYPES: Record<BookingSessionType, SessionTypeConfig> = {
   FREE_15: {
     type: 'FREE_15',
     durationMinutes: 15,
-    priceNZD: 0,
+    price: 0,
+    currency: 'USD',
     requiresPayment: false,
     requiresLia: false,
     label: 'Free 15-minute consultation',
@@ -40,7 +44,8 @@ export const SESSION_TYPES: Record<BookingSessionType, SessionTypeConfig> = {
   GAP_CLOSING: {
     type: 'GAP_CLOSING',
     durationMinutes: 30,
-    priceNZD: 30,
+    price: 20,
+    currency: 'USD',
     requiresPayment: true,
     requiresLia: false,
     label: 'Gap-Closing session',
@@ -48,7 +53,8 @@ export const SESSION_TYPES: Record<BookingSessionType, SessionTypeConfig> = {
   LIA: {
     type: 'LIA',
     durationMinutes: 45,
-    priceNZD: 150,
+    price: 58,
+    currency: 'USD',
     requiresPayment: true,
     requiresLia: true,
     label: 'LIA Consultation',

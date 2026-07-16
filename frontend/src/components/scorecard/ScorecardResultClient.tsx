@@ -13,6 +13,7 @@ import { BAND_META, CATEGORY_META, RESULT_STRINGS } from '@/lib/scorecard/labels
 import {
   getBookingEligibility,
   findType,
+  money,
   type BookingEligibility,
 } from '@/lib/booking/eligibility';
 import { downloadPdf } from '@/lib/scorecard/pdf-download';
@@ -228,7 +229,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                     <WhyThisMatters text={primary.reason} />
                     {elig.primaryType === 'LIA' ? (
                       <LiaConsultationButton
-                        priceNzd={primary.priceNzd}
+                        priceLabel={money(primary.priceCents, primary.currency)}
                         disabled={!primary.eligible}
                         onClick={() => handleBookingNavigate('lia')}
                       />
@@ -237,7 +238,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                         disabled={!primary.eligible}
                         icon={isGap ? <CreditCard size={18} /> : <Calendar size={18} />}
                         label={isGap
-                          ? `Pay NZD ${primary.priceNzd} and book your Gap-Closing Session`
+                          ? `Book your Gap-Closing Session (${money(primary.priceCents, primary.currency)})`
                           : 'Book your free 15-minute consultation'}
                         onClick={() => handleBookingNavigate(isGap ? 'gap' : 'free15')}
                       />
@@ -450,7 +451,7 @@ function PrimaryBookingButton({
   );
 }
 
-function LiaConsultationButton({ onClick, priceNzd, disabled = false }: { onClick: () => void; priceNzd: number; disabled?: boolean }) {
+function LiaConsultationButton({ onClick, priceLabel, disabled = false }: { onClick: () => void; priceLabel: string; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -460,7 +461,7 @@ function LiaConsultationButton({ onClick, priceNzd, disabled = false }: { onClic
       className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold text-base hover:bg-amber-100 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-amber-50"
     >
       {disabled ? <Lock size={18} /> : <Scale size={18} />}
-      Book your LIA Consultation (NZD {priceNzd}) {disabled ? '' : '→'}
+      Book your LIA Consultation ({priceLabel}) {disabled ? '' : '→'}
       {!disabled && <ExternalLink size={14} />}
     </button>
   );

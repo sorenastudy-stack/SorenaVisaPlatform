@@ -14,6 +14,7 @@
 //     legacy report renderer); the new routing.ts file produces the
 //     structured action enum + Persian text for the API response.
 
+import { getSessionConfig } from '../../booking/session-config';
 import {
   CATEGORY_MAX,
   CATEGORY_NAMES,
@@ -106,7 +107,7 @@ export function score(answers: Record<string, string>): ScoreResult {
   } else if (execution.eligible) {
     nextAction = 'Book free 15-minute session, then Account Opening (USD 200).';
   } else if (band.number === '3') {
-    nextAction = 'Offer Gap-Closing Session (NZD 30) + Admission Consultation (NZD 50).';
+    nextAction = `Offer Gap-Closing Session (${getSessionConfig('GAP_CLOSING').currency} ${getSessionConfig('GAP_CLOSING').price}) + Admission Consultation (NZD 50).`;
   } else if (band.number === '4') {
     nextAction = 'Offer free 15-minute session to qualify for Account Opening.';
   } else if (band.number === '1' || band.number === '2') {

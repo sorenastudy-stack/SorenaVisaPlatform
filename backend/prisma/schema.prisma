@@ -1242,7 +1242,10 @@ model Wallet {
   id           String              @id @default(cuid())
   userId       String              @unique
   balanceCents Int                 @default(0)
-  currency     String              @default("NZD")
+  // Phase E: sessions are priced in USD; wallets follow. Existing empty NZD
+  // wallets are migrated to USD (0 funded at migration time — verified). The
+  // payWithWallet currency guard refuses any wallet.currency ≠ session currency.
+  currency     String              @default("USD")
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 

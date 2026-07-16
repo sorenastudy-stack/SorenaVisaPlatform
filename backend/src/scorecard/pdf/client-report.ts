@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import type { NextActionContent } from '../scoring/routing';
+import { getSessionConfig } from '../../booking/session-config';
 import { BRAND } from './branding';
 import {
   drawSectionTitle, drawProgressBar, drawBullet,
@@ -272,7 +273,7 @@ function drawPathwayNotes(doc: PDFKit.PDFDocument, data: ClientReportData): void
 
   let note: string | null = null;
   if (data.hasHardStops) {
-    note = 'Your LIA Consultation (NZD 150) is the gate that unlocks the rest. The adviser will review your full history confidentially and identify the safest pathway. Once cleared, every onward step opens up.';
+    note = `Your LIA Consultation (${getSessionConfig('LIA').currency} ${getSessionConfig('LIA').price}) is the gate that unlocks the rest. The adviser will review your full history confidentially and identify the safest pathway. Once cleared, every onward step opens up.`;
   } else if (data.band === 'BAND_1' || data.band === 'BAND_2') {
     note = 'The free webinar series and tailored preparation content are no cost to you. We re-assess in 3 to 6 months, when foundations are stronger - so the moment you\'re ready, your path opens.';
   } else if (data.band === 'BAND_3') {
