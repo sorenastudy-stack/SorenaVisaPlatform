@@ -72,7 +72,17 @@ const numberSchema = z.object({
 });
 type NumberFormValues = z.infer<typeof numberSchema>;
 
-export function LicencePageClient() {
+// The same component serves two shells: the legacy `/lia` portal (Screen A)
+// and the unified `/staff` portal (`/staff/lia-profile`, where LIA advisers
+// actually land post-login). The back-link target differs per shell, so it's
+// a prop — defaults preserve the original `/lia` behaviour.
+export function LicencePageClient({
+  backHref = '/lia',
+  backLabel = 'Back to dashboard',
+}: {
+  backHref?: string;
+  backLabel?: string;
+} = {}) {
   const [profile, setProfile] = useState<LiaProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -207,7 +217,7 @@ export function LicencePageClient() {
 
   return (
     <div className="max-w-3xl">
-      <BackLink href="/lia" label="Back to dashboard" />
+      <BackLink href={backHref} label={backLabel} />
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-sorena-navy">My IAA Licence</h1>

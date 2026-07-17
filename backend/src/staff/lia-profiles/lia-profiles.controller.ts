@@ -12,6 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -77,12 +78,17 @@ export class LiaProfilesController {
     return this.service.getOwnProfile(this.userId(req));
   }
 
+  // Tighter than the global 60/min baseline: credential writes are
+  // low-frequency by nature — 20/min/IP is generous for a human yet caps
+  // abuse of the file-upload + audit-write path.
   @Put('licence-number')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   updateLicenceNumber(@Body() dto: UpdateLicenceNumberDto, @Req() req: any) {
     return this.service.updateOwnLicenceNumber(this.userId(req), dto, this.actor(req));
   }
 
   @Post('licence-file')
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
   @UseFilters(MulterExceptionFilter)
   @UseInterceptors(FileInterceptor('file', licenceFileMulterOptions))
   async uploadLicenceFile(

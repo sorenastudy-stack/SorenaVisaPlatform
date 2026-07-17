@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
-  Clock, BookOpen, KeyRound,
+  Clock, BookOpen, KeyRound, Award,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -59,6 +59,11 @@ const BOOKINGS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT'] as
 // PR-STAFF-DOCS: "My case documents" — assignment-based. Slot-holding roles +
 // admin tier (admin sees all; others see only their currently-assigned cases).
 const DOCS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'] as const;
+// PR-LIA-LICENCE: LIA self-service "My Licence" — the adviser's own IAA
+// credential upload + verification status. LIA role ONLY (OWNER/ADMIN verify
+// from /staff/lia-verification, not here). Launch-blocking: an LIA must be
+// able to upload + get verified before LIA sessions become bookable.
+const LIA_SELF_ROLES = ['LIA'] as const;
 
 const NAV: NavItem[] = [
   { label: 'staff.nav.overview',          href: '/staff',                    icon: <LayoutDashboard size={18} /> },
@@ -84,6 +89,9 @@ const NAV: NavItem[] = [
   // PR-STAFF-HR (Phase 3): self-service HR (leave + contract + job desc) —
   // every staff role. Replaces the old standalone "My leave" item.
   { label: 'HR',                       href: '/staff/hr',             icon: <CalendarOff size={18} /> },
+  // PR-LIA-LICENCE: LIA self-service IAA licence upload + verification status.
+  // LIA role only — inline English label (no dot → rendered literally).
+  { label: 'My Licence',               href: '/staff/lia-profile',    icon: <Award size={18} />,       roleGate: LIA_SELF_ROLES },
   { label: 'staff.nav.marketing',         href: '/staff/marketing',          icon: <Megaphone size={18} />,   roleGate: MARKETING_ROLES },
   // Piece #3: accountant confirm-payments queue — bank/exchange receipts to
   // verify → mark PAID. FINANCE + OWNER only. Inline English label (matches the
