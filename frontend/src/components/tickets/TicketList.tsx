@@ -57,12 +57,9 @@ export function TicketList({ tickets }: { tickets: TicketRow[] }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-sorena-navy md:text-3xl">
-            {t('tickets.list.header')}
-          </h1>
-          <p className="mt-1 text-sm text-[#4A4A4A]/70">Your support conversations with the Sorena team.</p>
-        </div>
+        <h1 className="text-2xl font-bold text-sorena-navy md:text-3xl">
+          {t('tickets.list.header')}
+        </h1>
         <Link
           href="/student/tickets/new"
           className="inline-flex h-12 items-center justify-center rounded-xl bg-sorena-gold px-6 text-base font-semibold text-white transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sorena-gold focus-visible:ring-offset-2"

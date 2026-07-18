@@ -40,8 +40,9 @@ per-portal icons. The client shell already showed "Client Portal" — left as-is
 ## 3. Part 2 — section briefs
 
 The sweep found **75 section pages; 28 lacked a brief**. Briefs were added to the
-**14 nav-level section pages** that lacked one; the other 14 are
-intentionally excluded (see §7). Added (title → brief):
+nav-level section pages that lacked one; record-detail pages are excluded (see §7),
+and the **client/portal/student briefs were then reverted** (§7) — leaving the
+staff-side set below. Added (title → brief):
 - **Cases** (shared staff+ops) → "Every client case — search, filter, and open one to see its stage, team, and documents."
 - **Staff** (users) → "Everyone on the team — add members, set roles, and manage access."
 - **Approvals** → "Owner sign-off queue for sensitive staff actions."
@@ -51,11 +52,10 @@ intentionally excluded (see §7). Added (title → brief):
 - **Training & News** → "Finance training guides and company news, in one place."
 - **Operations Dashboard** (`/ops`) → upgraded the bare label to "Active cases by stage, what needs attention, and recent activity."
 - **Sales Dashboard** (`/sales`) → "Your leads, pipeline, and consultations at a glance."
-- **My wallet** → "Your Sorena credit — top-ups, refunds, and what you've spent."
-- **Meetings** (student) → "Your booked sessions with the Sorena team."
-- **Support tickets** (student) → "Your support conversations with the Sorena team."
-- **New ticket** → "Tell us what you need help with and we'll get back to you."
-- **Consultant meetings** → "Your scheduled client sessions."
+- **Consultant meetings** → "Your scheduled client sessions." (staff surface)
+
+*(The client/portal/student briefs — wallet, student meetings, student tickets,
+new ticket — were added then reverted; see §7.)*
 
 Treatment is consistent: navy `#1e3a5f` title, a muted warm-gray brief
 (`text-[#4A4A4A]/70`, `text-gray-400` on the ops dashboard to match its shell),
@@ -101,12 +101,17 @@ remain**; the branding fn has **no permission/gate logic**; and StaffSidebar's
   `/portal/case` (already carries stage-specific descriptions), and the LIA
   case-scoped views (`file-note`, `inz-data`, which show applicant/audit
   metadata) are excluded for the same reason.
-- **Client/student briefs are English** (`/portal/wallet`, `/student/*`,
-  consultant): the brief text is an inline English literal because the brief was
-  to add **no new t() keys** (Persian frozen). On a Persian-toggled client page
-  the title (a `t()` key) renders in Persian while the new brief stays English.
-  This is the accepted tradeoff of the no-new-keys constraint — translate these
-  when Persian unfreezes (add subtitle keys next to the title keys).
+- **Client/portal/student briefs were REVERTED** (follow-up). Briefs were removed
+  from `/portal/wallet`, `/student/meetings`, `/student/tickets`, and
+  `/student/tickets/new` — on a bilingual client page a Persian-toggled title with
+  an English brief reads as broken, and with Persian frozen (no new t() keys) an
+  English brief can't be translated. These client pages are left brief-less until
+  Persian unfreezes and translated subtitle keys can be added. The
+  **`/consultant/meetings`** brief is KEPT — `/consultant` is a staff surface, not
+  a client/portal page (though it shares the `meetings.title` key; revert it too
+  if you prefer). All staff-portal briefs (Cases, Staff, Approvals, HR, My
+  Meetings, Bookings, Training & News, ops/sales dashboards) are kept — staff
+  surfaces are English-primary and the brief is acceptable there per the brief.
 
 ## 8. How to extend
 

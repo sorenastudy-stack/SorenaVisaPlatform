@@ -53,11 +53,10 @@ export function WalletClient() {
     <div className="mx-auto max-w-2xl px-4 py-6 md:px-6 md:py-8">
       <Link href="/portal/case" className="mb-4 inline-flex items-center gap-1 text-sm text-sorena-text/60 hover:text-sorena-navy"><ArrowLeft size={14} /> My case</Link>
 
-      <div className="mb-1 flex items-center gap-2">
+      <div className="mb-6 flex items-center gap-2">
         <WalletIcon size={20} className="text-sorena-navy" />
         <h1 className="text-2xl font-bold text-sorena-navy">My wallet</h1>
       </div>
-      <p className="mb-6 text-sm text-[#4A4A4A]/70">Your Sorena credit — top-ups, refunds, and what you&apos;ve spent.</p>
 
       {/* Balance card */}
       <section className="rounded-2xl border border-sorena-navy/10 bg-white p-6 shadow-sm">
