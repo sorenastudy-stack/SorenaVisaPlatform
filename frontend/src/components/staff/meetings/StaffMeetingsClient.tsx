@@ -71,9 +71,12 @@ export function StaffMeetingsClient() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-6 flex items-center gap-2">
-        <CalendarClock size={20} className="text-[#1e3a5f]" />
-        <h1 className="text-2xl font-bold text-[#1e3a5f]">My Meetings</h1>
+      <div className="mb-6">
+        <div className="flex items-center gap-2">
+          <CalendarClock size={20} className="text-[#1e3a5f]" />
+          <h1 className="text-2xl font-bold text-[#1e3a5f]">My Meetings</h1>
+        </div>
+        <p className="mt-1 text-sm text-[#4A4A4A]/70">Your upcoming and past consultation sessions.</p>
       </div>
 
       {state === 'loading' && (

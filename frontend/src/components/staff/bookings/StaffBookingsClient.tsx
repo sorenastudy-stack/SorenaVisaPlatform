@@ -86,9 +86,12 @@ export function StaffBookingsClient() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-6 flex items-center gap-2">
-        <CalendarClock size={20} className="text-sorena-navy" />
-        <h1 className="text-2xl font-bold text-sorena-navy">Bookings</h1>
+      <div className="mb-6">
+        <div className="flex items-center gap-2">
+          <CalendarClock size={20} className="text-sorena-navy" />
+          <h1 className="text-2xl font-bold text-sorena-navy">Bookings</h1>
+        </div>
+        <p className="mt-1 text-sm text-[#4A4A4A]/70">Consultation bookings to run — mark each no-show, completed, or cancelled.</p>
       </div>
 
       {msg && (

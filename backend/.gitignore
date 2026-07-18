@@ -21,3 +21,4 @@ scripts/test-fail-closed-auth.ts
 scripts/test-staff-guard-and-amount.ts
 scripts/test-remove-legacy-checkout.ts
 scripts/test-staff-photos.ts
+scripts/test-portal-branding-briefs.ts

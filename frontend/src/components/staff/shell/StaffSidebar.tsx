@@ -9,6 +9,7 @@ import {
   Clock, BookOpen, KeyRound, Award,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
+import { portalBrand } from '@/lib/portal-branding';
 
 // PR-CONSULT-2 — Staff sidebar (desktop).
 //
@@ -123,7 +124,8 @@ export function StaffSidebar() {
   const { permissions, me } = useStaff();
 
   const isFinance = me?.role === 'FINANCE';
-  const subtitle = isFinance ? 'Finance Portal' : 'Staff Portal';
+  // Per-role portal name + icon (single source: lib/portal-branding).
+  const { label: portalLabel, Icon: PortalIcon } = portalBrand(me?.role);
 
   // FINANCE gets a fixed, role-specific nav (labels are already English, so no
   // t() lookup); everyone else gets the permission/role-filtered general NAV.
@@ -138,11 +140,13 @@ export function StaffSidebar() {
   return (
     <aside className="hidden lg:flex w-60 flex-col bg-[#1e3a5f] text-white">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
-        <img src="/brand/logo-mark-white.jpg" alt="Sorena" className="h-8 w-8" />
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#c9a961]/20">
+          <PortalIcon size={18} className="text-[#c9a961]" />
+        </div>
         <div className="leading-tight">
           <div className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</div>
           <div className="text-[#b8941f] text-[10px] font-bold uppercase tracking-wider">
-            {subtitle}
+            {portalLabel}
           </div>
         </div>
       </div>

@@ -49,7 +49,7 @@ export default async function OpsDashboard() {
         <h1 className="text-2xl font-bold text-[#1e3a5f] mb-1">
           Welcome back, {session?.name || 'there'}
         </h1>
-        <p className="text-sm text-gray-400">Operations Dashboard</p>
+        <p className="text-sm text-gray-400">Active cases by stage, what needs attention, and recent activity.</p>
       </div>
 
       {failed && (

@@ -59,9 +59,12 @@ export function ConsultantMeetingsList({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <h1 className="text-2xl font-bold text-sorena-navy md:text-3xl">
-          {t('meetings.title')}
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-sorena-navy md:text-3xl">
+            {t('meetings.title')}
+          </h1>
+          <p className="mt-1 text-sm text-[#4A4A4A]/70">Your scheduled client sessions.</p>
+        </div>
         <button
           type="button"
           onClick={() => setDialog({ kind: 'create' })}

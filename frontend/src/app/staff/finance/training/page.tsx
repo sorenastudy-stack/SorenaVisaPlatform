@@ -14,10 +14,11 @@ export default async function FinanceTrainingPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-1 flex items-center gap-2">
         <BookOpen size={20} className="text-sorena-navy" />
         <h1 className="text-2xl font-bold text-sorena-navy">Training &amp; News</h1>
       </div>
+      <p className="text-sm text-[#4A4A4A]/70">Finance training guides and company news, in one place.</p>
       <div className="mt-6 rounded-2xl border border-dashed border-sorena-gold/40 bg-[#faf8f3] py-16 text-center">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-sorena-gold/15">
           <BookOpen size={26} className="text-[#b8941f]" />

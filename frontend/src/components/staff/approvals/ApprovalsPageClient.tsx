@@ -43,7 +43,10 @@ export function ApprovalsPageClient() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 md:py-10 space-y-6">
-      <h1 className="text-2xl font-bold text-[#1e3a5f]">{t('staff.approvals.title')}</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-[#1e3a5f]">{t('staff.approvals.title')}</h1>
+        <p className="mt-1 text-sm text-[#4A4A4A]/70">Owner sign-off queue for sensitive staff actions.</p>
+      </div>
 
       <div className="border-b border-gray-200 -mx-1 overflow-x-auto">
         <div className="flex gap-1 px-1 min-w-max">

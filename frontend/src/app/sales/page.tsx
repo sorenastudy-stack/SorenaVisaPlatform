@@ -40,7 +40,7 @@ export default async function SalesDashboard() {
       <h1 className="text-2xl font-bold text-[#1E3A5F] mb-1">
         Welcome back, {session?.name || 'there'}
       </h1>
-      <p className="text-sm text-[#4A4A4A]/70 mb-8">Sales Dashboard</p>
+      <p className="text-sm text-[#4A4A4A]/70 mb-8">Your leads, pipeline, and consultations at a glance.</p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <Link href="/sales/leads">

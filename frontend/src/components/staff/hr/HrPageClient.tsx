@@ -22,10 +22,11 @@ export function HrPageClient() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-1 flex items-center gap-2">
         <Users size={20} className="text-sorena-navy" />
         <h1 className="text-2xl font-bold text-sorena-navy">HR</h1>
       </div>
+      <p className="mb-5 text-sm text-[#4A4A4A]/70">Your leave requests, employment contract, and job description.</p>
 
       <div className="-mx-1 mb-6 overflow-x-auto border-b border-gray-200">
         <div className="flex min-w-max gap-1 px-1">

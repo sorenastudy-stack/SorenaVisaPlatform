@@ -8,6 +8,7 @@ import {
   ArrowRightLeft, Shield, ShieldCheck, FileSearch, CheckSquare, BarChart2,
   Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
   ClipboardList, LineChart, Clock, UserSquare2, BarChart3,
+  Scale, Cog, type LucideIcon,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -95,10 +96,20 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
 
 const PORTAL_TITLES: Record<Portal, string> = {
   admin:   'Admin Portal',
-  ops:     'Operations',
-  sales:   'Sales',
-  lia:     'LIA Portal',
+  ops:     'Operations Portal',
+  sales:   'Sales Portal',
+  lia:     'Legal Portal',
   student: 'My Portal',
+};
+
+// PR-PORTAL-BRANDING — per-portal icon shown top-left (matches the staff shell's
+// role-driven icons). Presentation only.
+const PORTAL_ICONS: Record<Portal, LucideIcon> = {
+  admin:   ShieldCheck,
+  ops:     Cog,
+  sales:   BarChart2,
+  lia:     Scale,
+  student: UserSquare2,
 };
 
 interface PortalLayoutProps {
@@ -146,11 +157,9 @@ export function PortalLayout({ children, portal, session, hasCase, studentUnread
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       <div className="px-6 py-5 border-b border-white/10 flex items-center gap-3">
-        <img
-          src="/brand/logo-mark-white.jpg"
-          alt="Sorena"
-          className="h-8 w-8 flex-shrink-0"
-        />
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-sorena-gold/20">
+          {(() => { const Icon = PORTAL_ICONS[portal]; return <Icon size={18} className="text-sorena-gold" />; })()}
+        </div>
         <div className="flex flex-col leading-tight">
           <span className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</span>
           <span className="text-sorena-gold text-[10px] font-bold uppercase tracking-wider">
