@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest, Logger, BadRequestException } from '@nestjs/common';
-import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { SkipThrottle } from '@nestjs/throttler';
 import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
@@ -18,7 +18,6 @@ import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { RejectPaymentDto } from './dto/reject-payment.dto';
 import { Prisma } from '@prisma/client';
-import Stripe from 'stripe';
 
 @Controller('payments')
 export class PaymentsController {
@@ -188,80 +187,11 @@ export class PaymentsController {
     return this.paymentsService.rejectPayment(paymentId, actor, dto.note);
   }
 
-  /**
-   * Create checkout session for subscription
-   */
-  @Post('subscription/checkout')
-  @UseGuards(JwtAuthGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 15 } })
-  async createSubscriptionCheckout(
-    @Body('leadId') leadId: string,
-    @Body('plan') plan: 'BASIC' | 'PRO' | 'PREMIUM',
-    @Body('amountNZD') amountNZD: number,
-    @Req() req: any,
-  ) {
-    const actor = {
-      id:   req.user?.userId ?? req.user?.id,
-      name: req.user?.name ?? null,
-      role: req.user?.role ?? null,
-    };
-
-    // Lead-ownership / staff check (service-layer, audited on failure) BEFORE
-    // any subscription row or Stripe session is created.
-    await this.paymentsService.assertLeadCheckoutAllowed(leadId, actor);
-
-    // Price is derived server-side from the plan (single-sourced from config);
-    // `amountNZD` is accepted only to DETECT tampering — a mismatch is audited
-    // and rejected. The client can never choose the price.
-    const price = await this.paymentsService.resolveSubscriptionPrice(plan, amountNZD, actor);
-
-    // Create subscription record
-    await this.subscriptionsService.createSubscription(leadId, plan);
-
-    // Create Stripe checkout session with the server-derived price
-    const session = await this.stripeService.createCheckoutSession(leadId, plan, price);
-
-    return {
-      sessionId: session.id,
-      url: session.url,
-    };
-  }
-
-  /**
-   * Create checkout session for consultation
-   */
-  @Post('consultation/checkout')
-  @UseGuards(JwtAuthGuard)
-  @Throttle({ default: { ttl: 60_000, limit: 15 } })
-  async createConsultationCheckout(
-    @Body('leadId') leadId: string,
-    @Body('type') type: 'ADMISSION' | 'LIA',
-    @Req() req: any,
-  ) {
-    // Lead-ownership / staff check (service-layer, audited on failure) BEFORE
-    // any Stripe session is created.
-    await this.paymentsService.assertLeadCheckoutAllowed(leadId, {
-      id:   req.user?.userId ?? req.user?.id,
-      name: req.user?.name ?? null,
-      role: req.user?.role ?? null,
-    });
-
-    const amounts = {
-      ADMISSION: 50,
-      LIA: 200,
-    };
-
-    const session = await this.stripeService.createOneTimePayment(
-      leadId,
-      type,
-      amounts[type],
-    );
-
-    return {
-      sessionId: session.id,
-      url: session.url,
-    };
-  }
+  // PR-REMOVE-LEGACY-CHECKOUT — the two caller-less checkout endpoints
+  // (`POST /payments/subscription/checkout` and `/consultation/checkout`) were
+  // removed. They had zero callers (frontend, backend, scripts, Stripe config);
+  // the live paid-booking flow uses `POST /booking/checkout` +
+  // `createConsultationPaymentLink`, and the Stripe webhook below is unchanged.
 
   /**
    * Handle Stripe webhooks

@@ -9,59 +9,11 @@ export class SubscriptionsService {
     private eventsService: EventsService,
   ) {}
 
-  /**
-   * Create a new subscription record
-   */
-  async createSubscription(
-    leadId: string,
-    plan: 'BASIC' | 'PRO' | 'PREMIUM',
-  ) {
-    // Verify lead exists
-    const lead = await this.prisma.lead.findUnique({
-      where: { id: leadId },
-    });
-
-    if (!lead) {
-      throw new NotFoundException('Lead not found');
-    }
-
-    // Check if subscription already exists
-    let subscription = await this.prisma.subscription.findFirst({
-      where: { leadId, status: 'ACTIVE' },
-    });
-
-    if (subscription) {
-      // Update existing subscription to new plan
-      subscription = await this.prisma.subscription.update({
-        where: { id: subscription.id },
-        data: { plan },
-      });
-    } else {
-      // Create new subscription
-      subscription = await this.prisma.subscription.create({
-        data: {
-          leadId,
-          plan,
-          status: 'ACTIVE',
-          stage: 'STAGE_1',
-          startDate: new Date(),
-        },
-      });
-    }
-
-    // Emit event
-    await this.eventsService.emit(
-      'SUBSCRIPTION_CREATED',
-      'SUBSCRIPTION',
-      subscription.id,
-      leadId,
-      'SYSTEM',
-      null,
-      { plan },
-    );
-
-    return subscription;
-  }
+  // PR-REMOVE-LEGACY-CHECKOUT — `createSubscription` was removed with the
+  // caller-less `POST /payments/subscription/checkout` endpoint (its only
+  // caller). `activateSubscription` / `expireSubscription` below are STILL used
+  // by the live Stripe webhook (customer.subscription.updated/deleted), so this
+  // service and the `subscriptions` table remain in use.
 
   /**
    * Activate a subscription after payment

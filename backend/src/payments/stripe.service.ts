@@ -1,5 +1,4 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
-import { PlanPrice } from './subscription-config';
 
 const Stripe = require('stripe');
 
@@ -24,51 +23,14 @@ export class StripeService {
   }
 
   /**
-   * Create a checkout session for subscription
-   */
-  // `price` is server-derived from the plan (subscription-config) and validated
-  // in PaymentsService — the amount is never taken from the request body, and
-  // the currency comes from config (no longer a hardcoded 'nzd').
-  async createCheckoutSession(
-    leadId: string,
-    plan: string,
-    price: PlanPrice,
-  ) {
-    this.assertConfigured();
-
-    const session = await this.stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'subscription',
-      line_items: [
-        {
-          price_data: {
-            currency: price.currency,
-            product_data: {
-              name: `${plan} Subscription`,
-              description: `Sorena Visa Platform - ${plan} Plan`,
-            },
-            unit_amount: price.amountCents,
-            recurring: {
-              interval: 'month',
-              interval_count: 1,
-            },
-          },
-          quantity: 1,
-        },
-      ],
-      metadata: {
-        leadId,
-        plan,
-      },
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/cancel`,
-    });
-
-    return session;
-  }
-
-  /**
-   * Create one-time payment for consultation
+   * Create one-time payment for consultation.
+   *
+   * NOTE (PR-REMOVE-LEGACY-CHECKOUT): the only caller of this method — the
+   * removed `POST /payments/consultation/checkout` endpoint — is gone, so this
+   * is currently unreferenced. It was deliberately KEPT (not deleted) because
+   * the task explicitly ring-fenced `createOneTimePayment`. The live paid-
+   * booking flow uses `createConsultationPaymentLink` (below), not this. Safe to
+   * remove in a follow-up if confirmed unwanted.
    */
   async createOneTimePayment(
     leadId: string,

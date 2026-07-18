@@ -19,3 +19,4 @@ scripts/test-placeholder-pages.ts
 scripts/test-endpoint-scoping.ts
 scripts/test-fail-closed-auth.ts
 scripts/test-staff-guard-and-amount.ts
+scripts/test-remove-legacy-checkout.ts

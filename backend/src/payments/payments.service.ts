@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,7 +9,6 @@ import { randomUUID } from 'crypto';
 import { StripeService } from './stripe.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
-import { getPlanPrice, PlanPrice } from './subscription-config';
 
 const CONSULTATION_AMOUNTS: Record<string, number> = {
   GAP_CLOSING: 30,
@@ -32,97 +30,6 @@ export class PaymentsService {
     private stripeService: StripeService,
     private prisma: PrismaService,
   ) {}
-
-  // Staff who may create a checkout against ANY client's lead (they run the
-  // funnel / handle client payments). A client (LEAD/STUDENT) may only check
-  // out against a lead whose Contact is linked to their OWN user account
-  // (Lead.contact.userId === JWT user id). Any other role, or a client whose
-  // lead isn't theirs, is refused. Fail-closed: unknown roles fall through to
-  // the ownership check and are denied unless they own the lead.
-  private static readonly CHECKOUT_STAFF_ROLES = [
-    'OWNER', 'SUPER_ADMIN', 'ADMIN', 'SALES', 'OPERATIONS',
-    'CONSULTANT', 'CLIENT_CONSULTANT', 'FINANCE', 'SUPPORT', 'LIA',
-  ];
-
-  // Authorize a checkout for `leadId` by the JWT `actor`. Enforced in the
-  // service so the controller can never mint a session for a lead the caller
-  // neither owns nor is staff for. Ownership-check failures are audit-logged —
-  // an attempt to check out against someone else's lead is exactly what a
-  // security review wants to see.
-  async assertLeadCheckoutAllowed(leadId: string, actor: PaymentActor): Promise<void> {
-    if (!leadId) throw new BadRequestException('leadId is required.');
-
-    const lead = await this.prisma.lead.findUnique({
-      where: { id: leadId },
-      select: { id: true, contact: { select: { userId: true } } },
-    });
-    if (!lead) throw new NotFoundException('Lead not found.');
-
-    const isStaff = PaymentsService.CHECKOUT_STAFF_ROLES.includes(actor.role ?? '');
-    const ownsLead = !!lead.contact?.userId && lead.contact.userId === actor.id;
-    if (isStaff || ownsLead) return;
-
-    await this.prisma.auditLog.create({
-      data: {
-        userId: actor.id ?? null,
-        action: 'DENY',
-        eventType: 'PAYMENT_CHECKOUT_OWNERSHIP_DENIED',
-        entityType: 'Lead',
-        entityId: leadId,
-        newValue: {
-          attemptedLeadId: leadId,
-          leadOwnerUserId: lead.contact?.userId ?? null,
-        } as Prisma.InputJsonValue,
-        actorNameSnapshot: actor.name ?? null,
-        actorRoleSnapshot: actor.role ?? null,
-      },
-    });
-    throw new ForbiddenException('You cannot create a checkout for this lead.');
-  }
-
-  // Resolve the server-side price for a subscription plan. The amount is NEVER
-  // taken from the request body — only the plan identifier is trusted, and the
-  // price is single-sourced from subscription-config. If the client ALSO sent an
-  // amount and it doesn't match the canonical price, that's a tampering attempt:
-  // audit it (money) and reject. Enforced in the service so the controller can
-  // never charge a client-chosen amount.
-  async resolveSubscriptionPrice(
-    plan: string,
-    submittedAmountNZD: number | null | undefined,
-    actor: PaymentActor,
-  ): Promise<PlanPrice> {
-    const price = getPlanPrice(plan);
-    if (!price) {
-      throw new BadRequestException(`Unknown subscription plan: ${plan}`);
-    }
-
-    if (submittedAmountNZD !== undefined && submittedAmountNZD !== null) {
-      const submittedCents = Math.round(Number(submittedAmountNZD) * 100);
-      if (!Number.isFinite(submittedCents) || submittedCents !== price.amountCents) {
-        await this.prisma.auditLog.create({
-          data: {
-            userId: actor.id ?? null,
-            action: 'DENY',
-            eventType: 'PAYMENT_AMOUNT_TAMPER_ATTEMPT',
-            entityType: 'Subscription',
-            newValue: {
-              plan,
-              submittedAmountCents: Number.isFinite(submittedCents) ? submittedCents : null,
-              serverAmountCents: price.amountCents,
-              currency: price.currency,
-            } as Prisma.InputJsonValue,
-            actorNameSnapshot: actor.name ?? null,
-            actorRoleSnapshot: actor.role ?? null,
-          },
-        });
-        throw new BadRequestException(
-          'The submitted amount does not match the plan price.',
-        );
-      }
-    }
-
-    return price;
-  }
 
   async createConsultationPaymentLink(
     leadId: string,
