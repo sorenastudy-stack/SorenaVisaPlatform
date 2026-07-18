@@ -5,6 +5,15 @@ had zero callers and were legacy. This removes them and everything that became
 dead with them, **without touching** the live paid-booking flow, the Stripe
 webhook, or any database table.
 
+> **Follow-up (same PR series): `createOneTimePayment` deleted.** It was kept in
+> the first pass only because the task ring-fenced it; the scan proved it was
+> ONLY the removed `consultation/checkout` helper (not the booking flow). Re-
+> confirmed at runtime as having **zero callers** (frontend, backend, scripts,
+> webhook branches) after the endpoints went, then deleted. No dangling imports;
+> `nest build` clean; booking-webhook spec 3/3; PHASE-I/J/K + the removal test
+> all green. The `test-remove-legacy-checkout` assertion for it flipped from
+> "present" to "gone". See §3/§7.
+
 ## 1. What this PR does
 
 - Deletes the two checkout endpoints and their now-dead dependency graph.

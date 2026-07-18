@@ -22,56 +22,10 @@ export class StripeService {
     }
   }
 
-  /**
-   * Create one-time payment for consultation.
-   *
-   * NOTE (PR-REMOVE-LEGACY-CHECKOUT): the only caller of this method — the
-   * removed `POST /payments/consultation/checkout` endpoint — is gone, so this
-   * is currently unreferenced. It was deliberately KEPT (not deleted) because
-   * the task explicitly ring-fenced `createOneTimePayment`. The live paid-
-   * booking flow uses `createConsultationPaymentLink` (below), not this. Safe to
-   * remove in a follow-up if confirmed unwanted.
-   */
-  async createOneTimePayment(
-    leadId: string,
-    type: 'ADMISSION' | 'LIA',
-    amountNZD: number,
-  ) {
-    this.assertConfigured();
-    const amounts: Record<string, number> = {
-      ADMISSION: 5000, // $50 NZD in cents
-      LIA: 20000, // $200 NZD in cents
-    };
-
-    const amount = amounts[type] || amountNZD * 100;
-
-    const session = await this.stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'payment',
-      line_items: [
-        {
-          price_data: {
-            currency: 'nzd',
-            product_data: {
-              name: `${type} Consultation`,
-              description: `Sorena Visa Platform - ${type} Consultation Fee`,
-            },
-            unit_amount: amount,
-          },
-          quantity: 1,
-        },
-      ],
-      metadata: {
-        leadId,
-        type,
-        paymentType: 'consultation',
-      },
-      success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/cancel`,
-    });
-
-    return session;
-  }
+  // PR-REMOVE-LEGACY-CHECKOUT (follow-up): `createOneTimePayment` was removed.
+  // Its only caller was the deleted `POST /payments/consultation/checkout`
+  // endpoint; the live paid-booking flow uses `createConsultationPaymentLink`
+  // (below) and `createBookingCheckoutSession`, not this.
 
   /**
    * Create a Stripe Payment Link for a consultation booking
