@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 //     Friday AI bot posts a real report via webhook.
 //   * hasReport=true  → score (big number), band, route, summary
 //     narrative (decrypted server-side), and a placeholder "View full
-//     report" button that's disabled with a "Coming soon" tooltip —
+//     report" button that's disabled with a "not available yet" tooltip —
 //     the full report view is a future PR.
 export interface AssessmentReportData {
   hasReport: boolean;

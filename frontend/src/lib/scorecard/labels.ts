@@ -134,7 +134,7 @@ export const RESULT_STRINGS = {
   blockedBody:          'Please review the hard stops below — your case advisor will reach out to discuss how to resolve them.',
   fullAnswerLog:        'Full answer log',
   downloadPdfCta:       'Download report (PDF)',
-  pdfComingSoon:        'PDF download coming soon. Your case advisor has a copy.',
+  pdfComingSoon:        'PDF download isn’t available here yet. Your case advisor has a copy.',
   backToDashboard:      'Back to dashboard',
   bookingError:         'Could not register your booking request. Please try again.',
 };

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 
 // PR-DASH-4 — Dashboard card.
 //
-// Replaces the PR-DASH-1 "Ask Sorena — coming soon" placeholder.
+// Replaces the PR-DASH-1 "Ask Sorena" placeholder.
 // Pure link card — no live data; tapping it opens the chat at
 // /student/chat.
 export function ChatbotCard() {

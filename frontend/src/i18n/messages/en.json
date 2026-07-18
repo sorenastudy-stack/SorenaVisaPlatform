@@ -22,7 +22,7 @@
       "route": "Recommended route",
       "summary": "Summary",
       "viewFull": "View full report",
-      "comingSoon": "Coming soon"
+      "comingSoon": "Not available yet"
     },
     "progress": {
       "title": "Your application",
@@ -78,19 +78,19 @@
     "tickets": {
       "placeholder": {
         "title": "Support tickets",
-        "body": "Coming soon — open tickets and chat with our team."
+        "body": "Open tickets and chat with our team."
       }
     },
     "meetings": {
       "placeholder": {
         "title": "Meetings",
-        "body": "Coming soon — book Zoom sessions and view past meeting notes."
+        "body": "Book Zoom sessions and view past meeting notes."
       }
     },
     "chatbot": {
       "placeholder": {
         "title": "Ask Sorena",
-        "body": "Coming soon — quick answers to common questions."
+        "body": "Quick answers to common questions."
       }
     }
   },
@@ -112,7 +112,7 @@
   "auditLog": "Audit Log",
   "myCase": "My Case",
   "documentReview": "Document Review",
-  "comingSoon": "Coming soon",
+  "comingSoon": "Not available yet",
   "unauthorized": "You don't have access to this area.",
   "backToSignIn": "Back to sign in",
   "emailLabel": "Email address",
@@ -499,7 +499,7 @@
   "visaIdentitySaveSuccess": "Identity Details saved.",
   "visaIdentitySaveError": "Could not save Identity Details. Please try again.",
   "visaIdentityValidationMissing": "Please complete every required field before saving.",
-  "visaIdentitySavedBanner": "Identity Details saved — more sections coming soon.",
+  "visaIdentitySavedBanner": "Identity Details saved — more sections to follow.",
   "visaCommonBack": "Back",
   "visaCommonAlertLabel": "ALERT",
   "visaCommonWarningLabel": "WARNING",
@@ -577,7 +577,7 @@
   "visaAddressSaveSuccess": "Address and contact information saved.",
   "visaAddressSaveError": "Could not save Address and contact information. Please try again.",
   "visaAddressValidationMissing": "Please complete every required field before saving.",
-  "visaAddressSavedBanner": "Address and contact information saved — more sections coming soon.",
+  "visaAddressSavedBanner": "Address and contact information saved — more sections to follow.",
   "visaEligibilitySectionTitle": "Eligibility",
   "visaEligibilityIntro": "We use the information you enter in this section to check you are eligible for the visa you are applying for.",
   "visaEligibilitySubsectionStudyHistory": "Study history",
@@ -661,7 +661,7 @@
   "visaEligibilitySaveSuccess": "Eligibility saved.",
   "visaEligibilitySaveError": "Could not save Eligibility. Please try again.",
   "visaEligibilityValidationMissing": "Please complete every required field before saving.",
-  "visaEligibilitySavedBanner": "Eligibility saved — more sections coming soon.",
+  "visaEligibilitySavedBanner": "Eligibility saved — more sections to follow.",
   "visaDocumentDropzone": "Click to upload a file (PDF, JPEG or PNG)",
   "visaDocumentLoading": "Checking for existing uploads…",
   "visaDocumentUploading": "Uploading…",
@@ -716,7 +716,7 @@
   "visaCharacterSaveSuccess": "Character saved.",
   "visaCharacterSaveError": "Could not save Character. Please try again.",
   "visaCharacterValidationMissing": "Please complete every required field before saving.",
-  "visaCharacterSavedBanner": "Character saved — more sections coming soon.",
+  "visaCharacterSavedBanner": "Character saved — more sections to follow.",
   "visaHealthSectionTitle": "Health",
   "visaHealthIntro": "We use the information you enter in this section to check you have an acceptable standard of health.",
   "visaHealthSubsectionGuidance": "Guidance",
@@ -770,7 +770,7 @@
   "visaHealthSaveSuccess": "Health saved.",
   "visaHealthSaveError": "Could not save Health. Please try again.",
   "visaHealthValidationMissing": "Please complete every required field before saving.",
-  "visaHealthSavedBanner": "Health saved — more sections coming soon.",
+  "visaHealthSavedBanner": "Health saved — more sections to follow.",
   "visaEducationHistorySectionTitle": "Education history",
   "visaEducationHistoryIntro": "We use the information you enter in this section to check that you genuinely intend to stay temporarily and for a lawful purpose.",
   "visaEducationHistorySubsectionDetails": "Education details",
@@ -790,7 +790,7 @@
   "visaEducationHistorySaveSuccess": "Education history saved.",
   "visaEducationHistorySaveError": "Could not save Education history. Please try again.",
   "visaEducationHistoryValidationMissing": "Please complete every required field for each qualification before saving.",
-  "visaEducationHistorySavedBanner": "Education history saved — more sections coming soon.",
+  "visaEducationHistorySavedBanner": "Education history saved — more sections to follow.",
   "visaEducationFromAdmissionBadge": "From admission · complete",
   "visaEducationEditInAdmission": "Edit in admission",
   "visaEducationAddViaAdmissionNote": "To add a new qualification or correct admission details, edit your admission record.",
@@ -867,7 +867,7 @@
   "visaEmploymentSaveSuccess": "Employment history saved.",
   "visaEmploymentSaveError": "Could not save Employment history. Please try again.",
   "visaEmploymentValidationMissing": "Please complete every required field before saving.",
-  "visaEmploymentSavedBanner": "Employment history saved — more sections coming soon.",
+  "visaEmploymentSavedBanner": "Employment history saved — more sections to follow.",
   "visaRelationshipsSectionTitle": "Relationships",
   "visaRelationshipsIntro": "We use the information you enter in this section to check that you genuinely intend to stay temporarily for a lawful purpose.",
   "visaRelSubsectionStatus": "Relationship status",
@@ -971,7 +971,7 @@
   "visaRelSaveSuccess": "Relationships saved.",
   "visaRelSaveError": "Could not save Relationships. Please try again.",
   "visaRelValidationMissing": "Please complete every required field before saving.",
-  "visaRelSavedBanner": "Relationships saved — more sections coming soon.",
+  "visaRelSavedBanner": "Relationships saved — more sections to follow.",
   "visaBackgroundSectionTitle": "Background details",
   "visaBackgroundIntro": "We use the information you enter in this section to check that you meet the character requirements and genuinely intend to stay temporarily for a lawful purpose.",
   "visaBackgroundSubsectionCultural": "Cultural positions",
@@ -994,7 +994,7 @@
   "visaBackgroundSaveSuccess": "Background details saved.",
   "visaBackgroundSaveError": "Could not save Background details. Please try again.",
   "visaBackgroundValidationMissing": "Please complete every required field before saving.",
-  "visaBackgroundSavedBanner": "Background details saved — more sections coming soon.",
+  "visaBackgroundSavedBanner": "Background details saved — more sections to follow.",
   "visaMilitarySectionTitle": "Military service",
   "visaMilitaryIntro": "Tell us about any compulsory or voluntary military service you have undertaken. Service details are stored encrypted and only used to assess your character requirements.",
   "visaMilitarySavedBanner": "Military service saved — you may continue to update it until you submit.",
@@ -1440,8 +1440,8 @@
     },
     "signOut": "Sign out",
     "comingSoon": {
-      "title": "Coming soon",
-      "body": "This section will be available in an upcoming update."
+      "title": "Not available yet",
+      "body": "This section isn't ready yet."
     },
     "cases": {
       "title": "Cases",

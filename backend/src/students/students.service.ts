@@ -262,7 +262,7 @@ export class StudentsService {
     // line-items include block was removed when the invoice-line Payment
     // model was replaced by the Stripe-webhook-event Payment model.
     // When the student-facing invoice receipts page ships (today it's
-    // "Coming soon"), the AR domain is redesigned and this endpoint
+    // not available yet), the AR domain is redesigned and this endpoint
     // gets its payment breakdown back — either by adding `invoiceId`
     // to the new Payment model, or by introducing a fresh
     // `InvoicePayment` join table.

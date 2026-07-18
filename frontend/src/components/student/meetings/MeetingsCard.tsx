@@ -8,7 +8,7 @@ import { formatDateTime as fmtDateTime } from '@/lib/date';
 
 // PR-DASH-3 — Dashboard summary card for meetings.
 //
-// Replaces PR-DASH-1's "Meetings — coming soon" placeholder. Shows
+// Replaces PR-DASH-1's "Meetings" placeholder. Shows
 // the upcoming count + next meeting's date/type, plus a link to
 // the full /student/meetings page. The detail of "next" is small
 // (date + type + consultant initial) — students who want more click

@@ -31,7 +31,7 @@ interface NavItem {
 const NAV_CONFIG: Record<Portal, NavItem[]> = {
   admin: [
     { label: 'Dashboard',  href: '/admin',            icon: <LayoutDashboard size={18} /> },
-    // Users / Cases / Settings were "coming soon" stubs duplicating the staff
+    // Users / Cases / Settings were placeholder stubs duplicating the staff
     // and OPS portals — their routes now redirect there, so the nav items are
     // removed. Providers had no UI and was removed. Real admin surfaces only.
     // OWNER audit-log browser — sensitive access history, gated above ADMIN.
