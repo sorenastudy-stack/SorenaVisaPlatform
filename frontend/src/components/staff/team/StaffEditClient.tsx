@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { StaffAvatar } from '@/components/staff/StaffAvatar';
 import { ArrowLeft, Loader2, Plus, X, BadgeCheck, Clock, CalendarOff, AlertTriangle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/date';
@@ -14,7 +15,7 @@ import {
 
 interface Window { id?: string; dayOfWeek: number; startMinute: number; endMinute: number; }
 interface Staff {
-  id: string; name: string; email: string; role: string; liaVerified: boolean;
+  id: string; name: string; email: string; role: string; liaVerified: boolean; photoUrl: string | null;
   languages: string[]; timezone: string; bookableSessionTypes: string[];
   bookingActive: boolean; windows: Window[];
 }
@@ -228,6 +229,7 @@ export function StaffEditClient({ staffId }: { staffId: string }) {
       <Link href="/staff/team" className="inline-flex items-center gap-1 text-sm text-sorena-text/60 hover:text-sorena-navy mb-4"><ArrowLeft size={14} /> Staff</Link>
 
       <div className="mb-6 flex items-center gap-2">
+        <StaffAvatar name={data.name} photoUrl={data.photoUrl} size={40} />
         <h1 className="text-2xl font-bold text-sorena-navy">{data.name}</h1>
         <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{data.role}</span>
         {data.role === 'LIA' && data.liaVerified && (

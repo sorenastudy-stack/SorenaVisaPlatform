@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { StaffRolesModule } from '../roles/staff-roles.module';
+import { StaffPhotoModule } from '../photos/staff-photo.module';
 import { StaffMeController } from './staff-me.controller';
 import { StaffMeService } from './staff-me.service';
 
 // PR-CONSULT-2 — Tiny module bundling the `/api/staff/me` endpoint.
 @Module({
-  imports:     [PrismaModule, StaffRolesModule],
+  imports:     [PrismaModule, StaffRolesModule, StaffPhotoModule],
   controllers: [StaffMeController],
   providers:   [StaffMeService],
 })

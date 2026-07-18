@@ -50,6 +50,20 @@ export class R2Service {
     return this.bucket;
   }
 
+  // Upload a buffer straight to R2 from the backend (used where the server has
+  // already received + validated the bytes, e.g. staff profile photos — the
+  // server validates type/size on the actual bytes, which a presigned
+  // client-direct PUT can't). Complements getPresignedUploadUrl (client-direct).
+  async putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    });
+    await this.client.send(command);
+  }
+
   async getPresignedUploadUrl(
     key: string,
     contentType: string,

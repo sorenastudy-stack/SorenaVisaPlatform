@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, Search, ChevronRight, BadgeCheck, AlertTriangle } from 'lucide-react';
+import { StaffAvatar } from '@/components/staff/StaffAvatar';
 import { api, ApiError } from '@/lib/api';
 import { langLabel, sessionTypeLabel } from '@/lib/booking/staff-options';
 import { formatDate } from '@/lib/date';
 
 interface StaffSummary {
-  id: string; name: string; email: string; role: string; liaVerified: boolean;
+  id: string; name: string; email: string; role: string; liaVerified: boolean; photoUrl: string | null;
   languages: string[]; timezone: string; bookableSessionTypes: string[];
   bookingActive: boolean; windowCount: number; availabilitySet: boolean; bookable: boolean;
 }
@@ -155,6 +156,7 @@ export function StaffListClient() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
+                  <StaffAvatar name={a.name} photoUrl={a.photoUrl} size={24} />
                   <span className="font-semibold text-sorena-navy">{a.name}</span>
                   <Chip tone="muted">{a.role}</Chip>
                   {a.role === 'LIA' && a.liaVerified && (

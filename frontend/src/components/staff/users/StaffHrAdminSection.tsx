@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Upload, Eye, Trash2, Loader2 } from 'lucide-react';
+import { FileText, Upload, Eye, Trash2, Loader2, Camera } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/date';
+import { StaffAvatar } from '@/components/staff/StaffAvatar';
+
+const PHOTO_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+const PHOTO_MAX = 5 * 1024 * 1024;
 
 // PR-STAFF-HR (Phase 3) — admin HR controls inside the staff detail overlay.
 // ADMIN/OWNER only (rendered under the overlay's canManageStaff gate + the
@@ -29,7 +33,17 @@ function fmtBytes(n?: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function StaffHrAdminSection({ userId }: { userId: string }) {
+export function StaffHrAdminSection({
+  userId,
+  userName,
+  photoUrl,
+  onPhotoChanged,
+}: {
+  userId: string;
+  userName: string;
+  photoUrl?: string | null;
+  onPhotoChanged?: () => void;
+}) {
   const [contract, setContract] = useState<ContractMeta | null>(null);
   const [jd, setJd] = useState('');
   const [jdSetAt, setJdSetAt] = useState<string | null>(null);
@@ -37,6 +51,48 @@ export function StaffHrAdminSection({ userId }: { userId: string }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── Profile photo (admin — audited server-side) ─────────────────────────
+  const [photo, setPhoto] = useState<string | null>(photoUrl ?? null);
+  const [picked, setPicked] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  const onPickPhoto = (f: File | null) => {
+    setMsg(null);
+    if (!f) { setPicked(null); setPreview(null); return; }
+    if (!PHOTO_MIMES.includes(f.type)) { setMsg({ kind: 'err', text: 'Photo must be JPG, PNG, or WebP.' }); return; }
+    if (f.size > PHOTO_MAX) { setMsg({ kind: 'err', text: 'Photo exceeds the 5 MB limit.' }); return; }
+    setPicked(f); setPreview(URL.createObjectURL(f));
+  };
+
+  async function uploadPhoto() {
+    if (!picked) return;
+    setBusy(true); setMsg(null);
+    try {
+      const form = new FormData();
+      form.append('file', picked);
+      const res = await api.upload<{ photoUrl: string | null }>(`/api/staff/users/${userId}/photo`, form);
+      setPhoto(res.photoUrl); setPicked(null); setPreview(null);
+      if (photoRef.current) photoRef.current.value = '';
+      setMsg({ kind: 'ok', text: 'Photo updated.' });
+      onPhotoChanged?.();
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof ApiError ? err.message : 'Photo upload failed.' });
+    } finally { setBusy(false); }
+  }
+
+  async function removePhoto() {
+    setBusy(true); setMsg(null);
+    try {
+      await api.delete(`/api/staff/users/${userId}/photo`);
+      setPhoto(null); setPicked(null); setPreview(null);
+      setMsg({ kind: 'ok', text: 'Photo removed.' });
+      onPhotoChanged?.();
+    } catch (err) {
+      setMsg({ kind: 'err', text: err instanceof ApiError ? err.message : 'Could not remove the photo.' });
+    } finally { setBusy(false); }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +172,25 @@ export function StaffHrAdminSection({ userId }: { userId: string }) {
         <div className="flex items-center gap-2 py-2 text-sm text-gray-500"><Loader2 size={15} className="animate-spin" /> Loading…</div>
       ) : (
         <>
+          {/* Profile photo (admin) */}
+          <div className="mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Profile photo</p>
+            <div className="flex items-center gap-3">
+              <StaffAvatar name={userName} photoUrl={preview ?? photo} size={48} />
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => photoRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold text-[#1e3a5f] hover:bg-gray-50 disabled:opacity-60"><Camera size={13} /> {photo ? 'Replace' : 'Add photo'}</button>
+                {picked && (
+                  <button type="button" onClick={uploadPhoto} disabled={busy} className="inline-flex items-center gap-1 rounded-lg bg-[#1e3a5f] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-60">{busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Upload</button>
+                )}
+                {photo && !picked && (
+                  <button type="button" onClick={removePhoto} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"><Trash2 size={13} /></button>
+                )}
+              </div>
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-400">JPG, PNG, or WebP. Max 5 MB.{picked ? ` · ${picked.name}` : ''}</p>
+            <input ref={photoRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)} className="hidden" />
+          </div>
+
           {/* Contract */}
           <div className="mb-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Employment contract (PDF)</p>

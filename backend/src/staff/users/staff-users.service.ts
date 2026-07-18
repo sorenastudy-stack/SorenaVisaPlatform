@@ -8,6 +8,7 @@ import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { OwnerApprovalService } from '../owner-approval/owner-approval.service';
+import { StaffPhotoService } from '../photos/staff-photo.service';
 
 // PR-CONSULT-1 — Staff-user CRUD service.
 // PR-CONSULT-4 — extended with staff-profile fields, an Update
@@ -28,6 +29,7 @@ export class StaffUsersService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly approval: OwnerApprovalService,
+    private readonly photos: StaffPhotoService,
   ) {}
 
   // ── Crypto helpers (base64 envelope) ──────────────────────────────
@@ -69,14 +71,15 @@ export class StaffUsersService {
       if (archived === 'true')  return !isActive;
       return true;
     });
-    return filtered.map((u) => ({
+    return Promise.all(filtered.map(async (u) => ({
       id:        u.id,
       email:     u.email,
       name:      u.name,
       role:      u.role,
       createdAt: u.createdAt,
       isActive:  u.staffActiveStatus?.isActive !== false,
-    }));
+      photoUrl:  await this.photos.presignedUrl(u.photoKey),
+    })));
   }
 
   // PR-CONSULT-4: detail includes decrypted profile fields + archive
@@ -114,6 +117,7 @@ export class StaffUsersService {
       archivedAt:         user.staffActiveStatus?.deactivatedAt ?? null,
       archivedById:       user.staffActiveStatus?.deactivatedById ?? null,
       archivedByName:     deactivatedByName,
+      photoUrl:           await this.photos.presignedUrl(user.photoKey),
     };
   }
 

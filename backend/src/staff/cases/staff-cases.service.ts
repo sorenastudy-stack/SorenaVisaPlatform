@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StaffPhotoService } from '../photos/staff-photo.service';
 import { summarizeAuditEntry } from '../../common/audit/audit.helper';
 import type { StaffAccessRole } from '../roles/staff-roles.decorator';
 
@@ -50,7 +51,10 @@ export interface CaseListRow {
 
 @Injectable()
 export class StaffCasesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly photos: StaffPhotoService,
+  ) {}
 
   // ── List ──────────────────────────────────────────────────────────
   // Option 1 step 1 — list reads the operational `Case` table (FK to
@@ -186,13 +190,21 @@ export class StaffCasesService {
             },
           },
         },
-        owner:   { select: { id: true, name: true, role: true } },
-        lia:     { select: { id: true, name: true, role: true } },
-        support: { select: { id: true, name: true, role: true } },
-        finance: { select: { id: true, name: true, role: true } },
+        owner:   { select: { id: true, name: true, role: true, photoKey: true } },
+        lia:     { select: { id: true, name: true, role: true, photoKey: true } },
+        support: { select: { id: true, name: true, role: true, photoKey: true } },
+        finance: { select: { id: true, name: true, role: true, photoKey: true } },
       },
     });
     if (!row) throw new NotFoundException('Case not found');
+
+    // Presigned photo URLs for each assignee (null when unset / not staff).
+    const [liaPhoto, ownerPhoto, supportPhoto, financePhoto] = await Promise.all([
+      this.photos.presignedUrl(row.lia?.photoKey),
+      this.photos.presignedUrl(row.owner?.photoKey),
+      this.photos.presignedUrl(row.support?.photoKey),
+      this.photos.presignedUrl(row.finance?.photoKey),
+    ]);
 
     // Split contact.fullName on first whitespace — matches the
     // heuristic the visa-side detail used on User.name.
@@ -217,10 +229,10 @@ export class StaffCasesService {
         phone:     row.lead.contact.phone ?? null,
       },
       assignments: {
-        LIA:        row.lia     ? { id: row.lia.id,     name: row.lia.name,     role: row.lia.role     } : null,
-        CONSULTANT: row.owner   ? { id: row.owner.id,   name: row.owner.name,   role: row.owner.role   } : null,
-        SUPPORT:    row.support ? { id: row.support.id, name: row.support.name, role: row.support.role } : null,
-        FINANCE:    row.finance ? { id: row.finance.id, name: row.finance.name, role: row.finance.role } : null,
+        LIA:        row.lia     ? { id: row.lia.id,     name: row.lia.name,     role: row.lia.role,     photoUrl: liaPhoto     } : null,
+        CONSULTANT: row.owner   ? { id: row.owner.id,   name: row.owner.name,   role: row.owner.role,   photoUrl: ownerPhoto   } : null,
+        SUPPORT:    row.support ? { id: row.support.id, name: row.support.name, role: row.support.role, photoUrl: supportPhoto } : null,
+        FINANCE:    row.finance ? { id: row.finance.id, name: row.finance.name, role: row.finance.role, photoUrl: financePhoto } : null,
       },
     };
   }

@@ -38,6 +38,7 @@ export interface StaffMe {
   fullName:    string;
   role:        StaffRole;
   isActive:    boolean;
+  photoUrl:    string | null;
   permissions: StaffPermissions;
 }
 

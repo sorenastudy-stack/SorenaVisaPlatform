@@ -302,9 +302,15 @@ export function LicencePageClient({
                   <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-200 bg-sorena-cream">
                     <FileText size={18} className="text-sorena-navy flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-sorena-navy truncate">
+                      <button
+                        type="button"
+                        onClick={onDownloadOwn}
+                        disabled={downloading}
+                        title="Open your licence in a new tab"
+                        className="block max-w-full truncate text-left text-sm font-medium text-sorena-navy underline decoration-dotted underline-offset-2 hover:text-[#c9a961] disabled:opacity-60"
+                      >
                         {profile.iaaLicenceFileName}
-                      </div>
+                      </button>
                       <div className="text-xs text-[#4A4A4A]/60">
                         {formatBytes(profile.iaaLicenceSizeBytes)}
                         {profile.iaaLicenceUploadedAt && ` · uploaded ${formatRelative(profile.iaaLicenceUploadedAt)}`}
@@ -316,9 +322,10 @@ export function LicencePageClient({
                       size="sm"
                       onClick={onDownloadOwn}
                       disabled={downloading}
+                      title="Open your licence in a new tab"
                     >
                       <Download size={14} className="mr-1" />
-                      {downloading ? '…' : 'Download'}
+                      {downloading ? '…' : 'Preview'}
                     </Button>
                   </div>
                 ) : (

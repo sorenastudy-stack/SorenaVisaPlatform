@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { KeyRound, CheckCircle2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { KeyRound, CheckCircle2, Camera, Trash2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useStaff } from '@/contexts/StaffContext';
+import { StaffAvatar } from '@/components/staff/StaffAvatar';
 
-// Phase F — signed-in staff change their OWN password. Requires the CURRENT
-// password (verified server-side with bcrypt) before setting a new one — a
-// hijacked session can't lock the owner out. userId comes from the JWT on the
-// backend; nothing identifying is sent from the client. English-only.
+// Phase F — signed-in staff change their OWN password + (PR-STAFF-PHOTOS) their
+// OWN profile photo. Both are own-JWT-only: the backend takes the userId from
+// the token, nothing identifying is sent from the client. English-only.
+
+const PHOTO_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+const PHOTO_MAX = 5 * 1024 * 1024;
 
 export default function StaffAccountPage() {
   const [current, setCurrent] = useState('');
@@ -16,6 +20,51 @@ export default function StaffAccountPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+
+  // ── Profile photo (own) ───────────────────────────────────────────────
+  const { me, refresh } = useStaff();
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [picked, setPicked] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoErr, setPhotoErr] = useState('');
+  const [photoMsg, setPhotoMsg] = useState('');
+
+  const onPick = (f: File | null) => {
+    setPhotoErr(''); setPhotoMsg('');
+    if (!f) { setPicked(null); setPreview(null); return; }
+    if (!PHOTO_MIMES.includes(f.type)) { setPhotoErr('Please choose a JPG, PNG, or WebP image.'); return; }
+    if (f.size > PHOTO_MAX) { setPhotoErr('Image must be under 5 MB.'); return; }
+    setPicked(f); setPreview(URL.createObjectURL(f));
+  };
+
+  const onUploadPhoto = async () => {
+    if (!picked) return;
+    setPhotoBusy(true); setPhotoErr(''); setPhotoMsg('');
+    try {
+      const fd = new FormData();
+      fd.append('file', picked);
+      await api.upload('/api/staff/me/photo', fd);
+      setPicked(null); setPreview(null);
+      if (fileRef.current) fileRef.current.value = '';
+      setPhotoMsg('Photo updated.');
+      await refresh(); // top-right + lists pick up the new photo
+    } catch (e) {
+      setPhotoErr(e instanceof ApiError ? e.message : 'Could not upload your photo.');
+    } finally { setPhotoBusy(false); }
+  };
+
+  const onRemovePhoto = async () => {
+    setPhotoBusy(true); setPhotoErr(''); setPhotoMsg('');
+    try {
+      await api.delete('/api/staff/me/photo');
+      setPicked(null); setPreview(null);
+      setPhotoMsg('Photo removed.');
+      await refresh();
+    } catch (e) {
+      setPhotoErr(e instanceof ApiError ? e.message : 'Could not remove your photo.');
+    } finally { setPhotoBusy(false); }
+  };
 
   const longEnough = next.length >= 10;
   const hasLetter = /[A-Za-z]/.test(next);
@@ -43,7 +92,60 @@ export default function StaffAccountPage() {
   return (
     <div className="max-w-md">
       <h1 className="text-2xl font-bold text-[#1e3a5f] mb-1">Account</h1>
-      <p className="text-sm text-[#4A4A4A]/70 mb-8">Change your password.</p>
+      <p className="text-sm text-[#4A4A4A]/70 mb-8">Your profile photo and password.</p>
+
+      {/* Profile photo (own) */}
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm mb-6">
+        <div className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#1e3a5f]">
+          <Camera size={18} className="text-[#c9a961]" /> Profile photo
+        </div>
+        <div className="flex items-center gap-5">
+          <StaffAvatar name={me?.fullName ?? ''} photoUrl={preview ?? me?.photoUrl} size={80} />
+          <div className="min-w-0 flex-1">
+            <input
+              ref={fileRef}
+              id="photo-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+              className="hidden"
+            />
+            <div className="flex flex-wrap gap-2">
+              <label
+                htmlFor="photo-input"
+                className="inline-flex min-h-[48px] cursor-pointer items-center gap-2 rounded-xl border border-[#1e3a5f]/20 px-4 text-sm font-semibold text-[#1e3a5f] transition-colors hover:bg-[#faf8f3]"
+              >
+                Choose image
+              </label>
+              {picked && (
+                <button
+                  type="button"
+                  disabled={photoBusy}
+                  onClick={onUploadPhoto}
+                  className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-[#1e3a5f] px-5 text-sm font-bold text-white transition-colors hover:bg-[#162d4a] disabled:opacity-50"
+                >
+                  {photoBusy ? 'Uploading…' : 'Upload'}
+                </button>
+              )}
+              {me?.photoUrl && !picked && (
+                <button
+                  type="button"
+                  disabled={photoBusy}
+                  onClick={onRemovePhoto}
+                  className="inline-flex min-h-[48px] items-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                >
+                  <Trash2 size={15} /> Remove
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-[#4A4A4A]/60">
+              JPG, PNG, or WebP. Max 5&nbsp;MB.{picked ? ` · ${picked.name}` : ''}
+            </p>
+            {photoErr && <p className="mt-1 text-xs text-red-600">{photoErr}</p>}
+            {photoMsg && <p className="mt-1 text-xs text-emerald-600">{photoMsg}</p>}
+          </div>
+        </div>
+      </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#1e3a5f]">

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StaffPhotoService } from '../photos/staff-photo.service';
 import { staffPermissions, StaffPermissions } from './staff-permissions';
 import type { StaffAccessRole } from '../roles/staff-roles.decorator';
 
@@ -18,12 +19,16 @@ export interface StaffMeSnapshot {
   fullName:    string;
   role:        StaffAccessRole;
   isActive:    boolean;
+  photoUrl:    string | null;
   permissions: StaffPermissions;
 }
 
 @Injectable()
 export class StaffMeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly photos: StaffPhotoService,
+  ) {}
 
   async getMe(userId: string): Promise<StaffMeSnapshot> {
     const user = await this.prisma.user.findUnique({
@@ -41,6 +46,7 @@ export class StaffMeService {
       fullName:    user.name,
       role,
       isActive,
+      photoUrl:    await this.photos.presignedUrl(user.photoKey),
       permissions: staffPermissions(role),
     };
   }

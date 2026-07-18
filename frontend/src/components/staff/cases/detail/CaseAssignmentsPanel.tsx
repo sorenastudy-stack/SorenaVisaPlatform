@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { PermissionGate } from '@/components/staff/shell/PermissionGate';
+import { StaffAvatar } from '@/components/staff/StaffAvatar';
 import type { CaseDetail, RoleSlot } from './types';
 import { ReassignOverlay } from './ReassignOverlay';
 
@@ -50,12 +51,15 @@ export function CaseAssignmentsPanel({
           const a = data.assignments[slot];
           return (
             <li key={slot} className="py-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
-                  {slotLabel(slot)}
-                </div>
-                <div className={a ? 'text-sm font-medium text-gray-900 truncate' : 'text-sm italic text-gray-400'}>
-                  {a ? a.name : t('staff.cases.notAssigned')}
+              <div className="flex min-w-0 items-center gap-3">
+                {a && <StaffAvatar name={a.name} photoUrl={a.photoUrl} size={32} />}
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
+                    {slotLabel(slot)}
+                  </div>
+                  <div className={a ? 'text-sm font-medium text-gray-900 truncate' : 'text-sm italic text-gray-400'}>
+                    {a ? a.name : t('staff.cases.notAssigned')}
+                  </div>
                 </div>
               </div>
               <PermissionGate require="canReassign">

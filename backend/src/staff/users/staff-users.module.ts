@@ -5,6 +5,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { StaffRolesModule } from '../roles/staff-roles.module';
 import { OwnerApprovalModule } from '../owner-approval/owner-approval.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
+import { StaffPhotoModule } from '../photos/staff-photo.module';
 
 // PR-CONSULT-1 — Staff-users module.
 //
@@ -17,7 +18,7 @@ import { CryptoModule } from '../../common/crypto/crypto.module';
 // emergencyContact) before persist. The hard-delete flow lives on
 // OwnerApprovalService and reuses its AssignmentsService injection.
 @Module({
-  imports:     [PrismaModule, StaffRolesModule, OwnerApprovalModule, CryptoModule],
+  imports:     [PrismaModule, StaffRolesModule, OwnerApprovalModule, CryptoModule, StaffPhotoModule],
   controllers: [StaffUsersController],
   providers:   [StaffUsersService],
 })

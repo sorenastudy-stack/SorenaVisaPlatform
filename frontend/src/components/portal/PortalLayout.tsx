@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -14,6 +14,8 @@ import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/lib/stores/localeStore';
 import type { Session } from '@/lib/auth';
 import { BackToTop } from '@/components/common/BackToTop';
+import { api } from '@/lib/api';
+import { StaffAvatar } from '@/components/staff/StaffAvatar';
 
 type Portal = 'admin' | 'ops' | 'sales' | 'lia' | 'student';
 
@@ -113,6 +115,17 @@ interface PortalLayoutProps {
 
 export function PortalLayout({ children, portal, session, hasCase, studentUnreadMessages }: PortalLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // PR-STAFF-PHOTOS — these portal shells serve staff (lia/ops/sales/admin).
+  // The photoUrl is a short-lived presigned URL, so it's fetched (not in the
+  // JWT session). A 403 (non-staff) or any error → initials fallback.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.get<{ photoUrl: string | null }>('/api/staff/me')
+      .then((m) => { if (alive) setPhotoUrl(m.photoUrl ?? null); })
+      .catch(() => { /* not staff / no photo → fallback */ });
+    return () => { alive = false; };
+  }, []);
   const pathname = usePathname();
   const router = useRouter();
   const { locale, toggleLocale } = useLocaleStore();
@@ -241,9 +254,7 @@ export function PortalLayout({ children, portal, session, hasCase, studentUnread
             </button>
 
             <div className="flex items-center gap-2 pl-3 border-l border-gray-100">
-              <div className="w-7 h-7 rounded-full bg-sorena-navy flex items-center justify-center text-white text-xs font-bold">
-                {(session.name || session.email)?.[0]?.toUpperCase()}
-              </div>
+              <StaffAvatar name={session.name || session.email} photoUrl={photoUrl} size={28} />
               <span className="text-sm text-gray-700 hidden sm:block max-w-[140px] truncate">
                 {session.name || session.email}
               </span>

@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Check, Minus } from 'lucide-react';
 import { StaffRoleBadge } from '@/components/staff/shell/StaffRoleBadge';
+import { StaffAvatar } from '@/components/staff/StaffAvatar';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 import type { StaffUserRow } from './types';
 
@@ -51,7 +52,12 @@ export function StaffUsersTable({
                 u.isActive ? '' : 'opacity-50',
               ].join(' ')}
             >
-              <td className="px-4 py-3 font-medium text-gray-900">{u.name || '—'}</td>
+              <td className="px-4 py-3 font-medium text-gray-900">
+                <span className="flex items-center gap-2.5">
+                  <StaffAvatar name={u.name} photoUrl={u.photoUrl} size={28} />
+                  <span className="truncate">{u.name || '—'}</span>
+                </span>
+              </td>
               <td className="px-4 py-3 text-gray-600 break-all">{u.email}</td>
               <td className="px-4 py-3"><StaffRoleBadge role={u.role} /></td>
               <td className="px-4 py-3">

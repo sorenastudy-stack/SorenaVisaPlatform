@@ -34,6 +34,7 @@ import { CaseDocumentsModule } from './case-documents/case-documents.module';
 import { OpsHandoffsModule } from './ops-handoffs/ops-handoffs.module';
 import { OpsComplianceModule } from './ops-compliance/ops-compliance.module';
 import { DocumentsModule } from './documents/documents.module';
+import { StaffPhotoModule } from './staff/photos/staff-photo.module';
 import { PortalModule } from './portal/portal.module';
 import { DigestModule } from './digest/digest.module';
 import { InzDataModule } from './inz-data/inz-data.module';
@@ -104,6 +105,7 @@ import { AuditModule } from './audit/audit.module';
     // GET :caseId/documents. No longer collides with CaseDocumentsModule
     // below (its list route was renamed to :caseId/document-reviews).
     DocumentsModule,
+    StaffPhotoModule,
     // PR-LIA-5: unified review view of client-uploaded documents on a CRM
     // Case (admission/application/visa-supporting source tables), with
     // download + internal-only review verdicts. List route is

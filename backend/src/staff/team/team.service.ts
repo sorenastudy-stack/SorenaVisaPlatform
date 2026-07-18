@@ -2,6 +2,7 @@ import {
   Injectable, NotFoundException, BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StaffPhotoService } from '../photos/staff-photo.service';
 import {
   UpdateStaffProfileDto, AvailabilityWindowDto, CreateStaffLeaveDto,
 } from './dto/team.dto';
@@ -25,7 +26,10 @@ const BOOKABLE_STAFF_ROLES = ['LIA', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const
 
 @Injectable()
 export class TeamService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly photos: StaffPhotoService,
+  ) {}
 
   /** List adviser-eligible users with booking config + availability summary. */
   async list() {
@@ -33,14 +37,14 @@ export class TeamService {
       where: { role: { in: [...BOOKABLE_STAFF_ROLES] } },
       orderBy: { name: 'asc' },
       select: {
-        id: true, name: true, email: true, role: true, isActive: true,
+        id: true, name: true, email: true, role: true, isActive: true, photoKey: true,
         languages: true, timezone: true, bookableSessionTypes: true, bookingActive: true,
         liaProfile: { select: { iaaLicenceVerifiedAt: true } },
         _count: { select: { staffAvailability: { where: { active: true } } } },
       },
     });
 
-    return users.map((u) => {
+    return Promise.all(users.map(async (u) => {
       const windowCount = u._count.staffAvailability;
       const liaVerified = !!u.liaProfile?.iaaLicenceVerifiedAt;
       const hasTypes = u.bookableSessionTypes.length > 0;
@@ -54,6 +58,7 @@ export class TeamService {
         email: u.email,
         role: u.role,
         liaVerified,
+        photoUrl: await this.photos.presignedUrl(u.photoKey),
         languages: u.languages,
         timezone: u.timezone,
         bookableSessionTypes: u.bookableSessionTypes,
@@ -62,7 +67,7 @@ export class TeamService {
         availabilitySet: windowCount > 0,
         bookable,
       };
-    });
+    }));
   }
 
   /** One adviser's full config: profile + weekly windows + LIA status. */
@@ -70,7 +75,7 @@ export class TeamService {
     const u = await this.prisma.user.findFirst({
       where: { id, role: { in: [...BOOKABLE_STAFF_ROLES] } },
       select: {
-        id: true, name: true, email: true, role: true, isActive: true,
+        id: true, name: true, email: true, role: true, isActive: true, photoKey: true,
         languages: true, timezone: true, bookableSessionTypes: true, bookingActive: true,
         liaProfile: { select: { iaaLicenceVerifiedAt: true } },
         staffAvailability: {
@@ -88,6 +93,7 @@ export class TeamService {
       email: u.email,
       role: u.role,
       liaVerified: !!u.liaProfile?.iaaLicenceVerifiedAt,
+      photoUrl: await this.photos.presignedUrl(u.photoKey),
       languages: u.languages,
       timezone: u.timezone,
       bookableSessionTypes: u.bookableSessionTypes,

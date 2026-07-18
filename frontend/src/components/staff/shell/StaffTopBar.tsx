@@ -7,6 +7,7 @@ import { useStaff } from '@/contexts/StaffContext';
 import { useLocaleStore } from '@/lib/stores/localeStore';
 import { invalidateTokenCache } from '@/lib/api';
 import { StaffRoleBadge } from './StaffRoleBadge';
+import { StaffAvatar } from '@/components/staff/StaffAvatar';
 
 // PR-CONSULT-2 — Staff top bar.
 //
@@ -34,6 +35,9 @@ export function StaffTopBar() {
   return (
     <header className="flex items-center justify-between h-14 px-4 bg-white border-b border-gray-100 flex-shrink-0">
       <div className="flex items-center gap-3 min-w-0">
+        {!loading && me && (
+          <StaffAvatar name={me.fullName} photoUrl={me.photoUrl} size={32} />
+        )}
         <span className="text-sm font-semibold text-[#1e3a5f] hidden sm:block truncate">
           {loading ? '…' : (me?.fullName ?? '')}
         </span>

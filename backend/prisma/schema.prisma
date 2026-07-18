@@ -461,6 +461,10 @@ model User {
   //   bookingActive        — quick on/off without clearing config.
   languages            String[]           @default([])
   timezone             String             @default("Pacific/Auckland")
+  // PR-STAFF-PHOTOS: Cloudflare R2 object key for the staff member's profile
+  // photo. Nullable (no backfill); a presigned download URL is derived at read
+  // time. Additive column — safe, reversible.
+  photoKey             String?
   bookableSessionTypes ConsultationType[] @default([])
   bookingActive        Boolean            @default(true)
 

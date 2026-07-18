@@ -12,6 +12,7 @@ export interface StaffUserRow {
   role:      StaffRole;
   createdAt: string;
   isActive:  boolean;
+  photoUrl:  string | null;
 }
 
 // PR-CONSULT-4 — Staff detail response (decrypted profile fields +

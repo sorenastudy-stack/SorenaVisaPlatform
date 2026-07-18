@@ -158,10 +158,16 @@ function DetailView({
           <span className="font-mono">{row.iaaLicenceNumber}</span>
         </Field>
         <Field label="File">
-          <div className="flex items-center gap-1.5 text-[#4A4A4A]">
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={downloading || submitting}
+            title="Open the licence in a new tab"
+            className="flex items-center gap-1.5 text-left text-[#1e3a5f] underline decoration-dotted underline-offset-2 hover:text-[#c9a961] disabled:opacity-60"
+          >
             <FileText size={14} className="text-[#4A4A4A]/60" />
             <span className="truncate">{row.iaaLicenceFileName}</span>
-          </div>
+          </button>
           <div className="text-xs text-[#4A4A4A]/60 mt-0.5">
             {formatBytes(row.iaaLicenceSizeBytes)} · {row.iaaLicenceFileMime}
           </div>

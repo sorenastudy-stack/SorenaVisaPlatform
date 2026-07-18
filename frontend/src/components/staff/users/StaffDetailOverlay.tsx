@@ -180,7 +180,12 @@ export function StaffDetailOverlay({
         </section>
 
         <PermissionGate require="canManageStaff">
-          <StaffHrAdminSection userId={user.id} />
+          <StaffHrAdminSection
+            userId={user.id}
+            userName={detail?.name ?? user.name}
+            photoUrl={detail?.photoUrl ?? user.photoUrl}
+            onPhotoChanged={() => { fetchDetail(); onDone(); }}
+          />
         </PermissionGate>
 
         <PermissionGate require="canManageStaff">
