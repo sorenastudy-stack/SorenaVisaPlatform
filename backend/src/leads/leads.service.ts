@@ -60,12 +60,28 @@ export class LeadsService {
     return lead;
   }
 
-  async findAll(filters: {
-    status?: string;
-    scoreBand?: string;
-    ownerId?: string;
-    isNurtureCandidate?: boolean;
-  }) {
+  // Who legitimately needs the lead funnel. Matches the modern, already-gated
+  // staff route (staff-leads.controller: OWNER/SUPER_ADMIN/ADMIN/CONSULTANT/
+  // FINANCE) so the two lead surfaces agree on entitlement. SALES is excluded
+  // exactly as it is there. The funnel is a shared resource among these roles
+  // (Lead.ownerId is only a filter, never a per-user access boundary), so this
+  // is a role gate, not per-user scoping. Enforced in the service so no caller
+  // can bypass it.
+  static readonly FUNNEL_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'FINANCE'];
+
+  async findAll(
+    filters: {
+      status?: string;
+      scoreBand?: string;
+      ownerId?: string;
+      isNurtureCandidate?: boolean;
+    },
+    actor: { role?: string | null },
+  ) {
+    if (!actor?.role || !LeadsService.FUNNEL_ROLES.includes(actor.role)) {
+      throw new ForbiddenException('You are not allowed to view the lead funnel.');
+    }
+
     const where: any = {};
 
     if (filters.status) where.leadStatus = filters.status;

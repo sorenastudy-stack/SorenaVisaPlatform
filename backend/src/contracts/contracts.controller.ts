@@ -31,8 +31,13 @@ export class ContractsController {
     });
   }
 
+  // Legal contract data (DocuSign envelope, signer details) for a case. Was
+  // JwtAuthGuard+RolesGuard with NO @Roles → allow-all (any authed user could
+  // read any case's contract by id). Gated to the same staff set that may send
+  // a contract (matches @Post above).
   @Get(':caseId')
   @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA')
   getContract(@Param('caseId') caseId: string) {
     return this.contractsService.getContract(caseId);
   }

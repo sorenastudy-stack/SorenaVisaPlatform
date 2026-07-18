@@ -89,7 +89,34 @@ export class CommissionsService {
     });
   }
 
-  async findAll(query: CommissionListQueryDto) {
+  // Who may read the commission ledger. Commissions have NO per-user owner
+  // field (they hang off application → provider → programme, not a sales rep),
+  // so "your own commissions" is not expressible — the correct scoping is a
+  // role gate: the money-managing tier sees the ledger, everyone else is
+  // refused. Enforced here in the service, not just the controller, so no
+  // future caller (internal or a new route) can bypass it.
+  static readonly VIEW_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS', 'FINANCE'];
+
+  async findAll(
+    query: CommissionListQueryDto,
+    actor: { id?: string | null; name?: string | null; role?: string | null },
+  ) {
+    if (!actor?.role || !CommissionsService.VIEW_ROLES.includes(actor.role)) {
+      throw new ForbiddenException('You are not allowed to view commissions.');
+    }
+
+    // Financial data — record every ledger read (money touch → audit).
+    await this.prisma.auditLog.create({
+      data: {
+        userId: actor.id ?? null,
+        action: 'VIEW',
+        eventType: 'COMMISSIONS_LEDGER_VIEWED',
+        entityType: 'COMMISSION',
+        actorNameSnapshot: actor.name ?? null,
+        actorRoleSnapshot: actor.role ?? null,
+      },
+    });
+
     const where: any = {};
 
     if (query.status) {

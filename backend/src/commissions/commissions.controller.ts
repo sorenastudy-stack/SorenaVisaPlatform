@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -24,6 +25,7 @@ export class CommissionsController {
   constructor(private readonly commissionsService: CommissionsService) {}
 
   @Post()
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS')
   create(@Body() dto: CreateCommissionDto) {
     return this.commissionsService.createCommission(dto);
   }
@@ -51,12 +53,22 @@ export class CommissionsController {
     return this.commissionsService.updateReminderDate(id, dto, req.user?.role);
   }
 
+  // Role-gated at the controller AND enforced again in the service (money data).
+  // Commissions have no per-user owner, so this is a role gate, not per-user
+  // scoping — the entitled tier sees the ledger, everyone else is refused.
   @Get()
-  findAll(@Query() query: CommissionListQueryDto) {
-    return this.commissionsService.findAll(query);
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS', 'FINANCE')
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
+  findAll(@Query() query: CommissionListQueryDto, @Req() req: any) {
+    return this.commissionsService.findAll(query, {
+      id: req.user?.userId ?? req.user?.id ?? null,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    });
   }
 
   @Patch(':id/status')
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS')
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateCommissionStatusDto,

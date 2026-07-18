@@ -22,6 +22,14 @@ import { ProgrammeListQueryDto } from './dto/programme-filter.dto';
 import { ProviderListQueryDto } from './dto/provider-list-filter.dto';
 import { CreateRequirementDto } from './dto/create-requirement.dto';
 
+// Provider/programme catalog — institutional reference data (not user PII), but
+// the reads were allow-all and several writes (faculties/programmes/agreement
+// terms/requirements) were ungated, so any authenticated user could mutate the
+// catalog and commercial agreement terms. Reads → admission-handling staff;
+// writes → admin. (create / approve / reject were already ADMIN-gated.)
+const CATALOG_READ = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS', 'CONSULTANT'] as const;
+const CATALOG_ADMIN = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
+
 @Controller('providers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProvidersController {
@@ -34,21 +42,25 @@ export class ProvidersController {
   }
 
   @Get()
+  @Roles(...CATALOG_READ)
   findAll(@Query() query: ProviderListQueryDto) {
     return this.providersService.findAll(query);
   }
 
   @Get(':id/faculties')
+  @Roles(...CATALOG_READ)
   findFaculties(@Param('id') providerId: string) {
     return this.providersService.findFaculties(providerId);
   }
 
   @Post(':id/faculties')
+  @Roles(...CATALOG_ADMIN)
   addFaculty(@Param('id') providerId: string, @Body() dto: CreateFacultyDto) {
     return this.providersService.addFaculty(providerId, dto);
   }
 
   @Get(':id/programmes')
+  @Roles(...CATALOG_READ)
   findProgrammes(
     @Param('id') providerId: string,
     @Query() query: ProgrammeListQueryDto,
@@ -57,6 +69,7 @@ export class ProvidersController {
   }
 
   @Post(':id/programmes')
+  @Roles(...CATALOG_ADMIN)
   addProgramme(
     @Param('id') providerId: string,
     @Body() dto: CreateProgrammeDto,
@@ -65,11 +78,13 @@ export class ProvidersController {
   }
 
   @Get(':id')
+  @Roles(...CATALOG_READ)
   findOne(@Param('id') providerId: string) {
     return this.providersService.findOne(providerId);
   }
 
   @Patch(':id')
+  @Roles(...CATALOG_ADMIN)
   update(
     @Param('id') providerId: string,
     @Body() dto: UpdateProviderDto,
@@ -78,6 +93,7 @@ export class ProvidersController {
   }
 
   @Patch(':id/agreement')
+  @Roles(...CATALOG_ADMIN)
   updateAgreement(
     @Param('id') providerId: string,
     @Body() dto: UpdateAgreementDto,
@@ -110,6 +126,7 @@ export class ProvidersController {
   }
 
   @Post('programmes/:programmeId/requirements')
+  @Roles(...CATALOG_ADMIN)
   addRequirement(
     @Param('programmeId') programmeId: string,
     @Body() dto: CreateRequirementDto,
@@ -118,6 +135,7 @@ export class ProvidersController {
   }
 
   @Get('programmes/:programmeId/requirements')
+  @Roles(...CATALOG_READ)
   findRequirement(@Param('programmeId') programmeId: string) {
     return this.providersService.findRequirement(programmeId);
   }
