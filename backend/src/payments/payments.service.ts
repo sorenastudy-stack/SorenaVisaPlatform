@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { StripeService } from './stripe.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
+import { getPlanPrice, PlanPrice } from './subscription-config';
 
 const CONSULTATION_AMOUNTS: Record<string, number> = {
   GAP_CLOSING: 30,
@@ -77,6 +78,50 @@ export class PaymentsService {
       },
     });
     throw new ForbiddenException('You cannot create a checkout for this lead.');
+  }
+
+  // Resolve the server-side price for a subscription plan. The amount is NEVER
+  // taken from the request body — only the plan identifier is trusted, and the
+  // price is single-sourced from subscription-config. If the client ALSO sent an
+  // amount and it doesn't match the canonical price, that's a tampering attempt:
+  // audit it (money) and reject. Enforced in the service so the controller can
+  // never charge a client-chosen amount.
+  async resolveSubscriptionPrice(
+    plan: string,
+    submittedAmountNZD: number | null | undefined,
+    actor: PaymentActor,
+  ): Promise<PlanPrice> {
+    const price = getPlanPrice(plan);
+    if (!price) {
+      throw new BadRequestException(`Unknown subscription plan: ${plan}`);
+    }
+
+    if (submittedAmountNZD !== undefined && submittedAmountNZD !== null) {
+      const submittedCents = Math.round(Number(submittedAmountNZD) * 100);
+      if (!Number.isFinite(submittedCents) || submittedCents !== price.amountCents) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId: actor.id ?? null,
+            action: 'DENY',
+            eventType: 'PAYMENT_AMOUNT_TAMPER_ATTEMPT',
+            entityType: 'Subscription',
+            newValue: {
+              plan,
+              submittedAmountCents: Number.isFinite(submittedCents) ? submittedCents : null,
+              serverAmountCents: price.amountCents,
+              currency: price.currency,
+            } as Prisma.InputJsonValue,
+            actorNameSnapshot: actor.name ?? null,
+            actorRoleSnapshot: actor.role ?? null,
+          },
+        });
+        throw new BadRequestException(
+          'The submitted amount does not match the plan price.',
+        );
+      }
+    }
+
+    return price;
   }
 
   async createConsultationPaymentLink(

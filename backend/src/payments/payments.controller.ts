@@ -200,23 +200,26 @@ export class PaymentsController {
     @Body('amountNZD') amountNZD: number,
     @Req() req: any,
   ) {
-    // Lead-ownership / staff check (service-layer, audited on failure) BEFORE
-    // any subscription row or Stripe session is created.
-    await this.paymentsService.assertLeadCheckoutAllowed(leadId, {
+    const actor = {
       id:   req.user?.userId ?? req.user?.id,
       name: req.user?.name ?? null,
       role: req.user?.role ?? null,
-    });
+    };
+
+    // Lead-ownership / staff check (service-layer, audited on failure) BEFORE
+    // any subscription row or Stripe session is created.
+    await this.paymentsService.assertLeadCheckoutAllowed(leadId, actor);
+
+    // Price is derived server-side from the plan (single-sourced from config);
+    // `amountNZD` is accepted only to DETECT tampering — a mismatch is audited
+    // and rejected. The client can never choose the price.
+    const price = await this.paymentsService.resolveSubscriptionPrice(plan, amountNZD, actor);
 
     // Create subscription record
     await this.subscriptionsService.createSubscription(leadId, plan);
 
-    // Create Stripe checkout session
-    const session = await this.stripeService.createCheckoutSession(
-      leadId,
-      plan,
-      amountNZD,
-    );
+    // Create Stripe checkout session with the server-derived price
+    const session = await this.stripeService.createCheckoutSession(leadId, plan, price);
 
     return {
       sessionId: session.id,

@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { PlanPrice } from './subscription-config';
 
 const Stripe = require('stripe');
 
@@ -25,19 +26,15 @@ export class StripeService {
   /**
    * Create a checkout session for subscription
    */
+  // `price` is server-derived from the plan (subscription-config) and validated
+  // in PaymentsService — the amount is never taken from the request body, and
+  // the currency comes from config (no longer a hardcoded 'nzd').
   async createCheckoutSession(
     leadId: string,
-    plan: 'BASIC' | 'PRO' | 'PREMIUM',
-    amountNZD: number,
+    plan: string,
+    price: PlanPrice,
   ) {
     this.assertConfigured();
-    const prices: Record<string, number> = {
-      BASIC: 2999, // $29.99 NZD
-      PRO: 4999, // $49.99 NZD
-      PREMIUM: 9999, // $99.99 NZD
-    };
-
-    const amount = prices[plan] || amountNZD * 100; // Convert to cents
 
     const session = await this.stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -45,12 +42,12 @@ export class StripeService {
       line_items: [
         {
           price_data: {
-            currency: 'nzd',
+            currency: price.currency,
             product_data: {
               name: `${plan} Subscription`,
               description: `Sorena Visa Platform - ${plan} Plan`,
             },
-            unit_amount: amount,
+            unit_amount: price.amountCents,
             recurring: {
               interval: 'month',
               interval_count: 1,

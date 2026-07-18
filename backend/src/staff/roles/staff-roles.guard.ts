@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STAFF_ROLES_KEY, StaffAccessRole } from './staff-roles.decorator';
+import { ROLES_KEY } from '../../auth/decorators/roles.decorator';
 
 // PR-CONSULT-1 — Staff-roles guard.
 //
@@ -31,8 +32,23 @@ export class StaffRolesGuard implements CanActivate {
       STAFF_ROLES_KEY,
       [ctx.getHandler(), ctx.getClass()],
     );
-    // Route doesn't declare any staff-role requirement → allow.
-    if (!required || required.length === 0) return true;
+    // FAIL CLOSED: a route behind StaffRolesGuard with no @StaffRoles/@OwnerOnly/
+    // @AdminTier is denied by default (mirrors the RolesGuard fail-closed fix).
+    // The old `return true` here would have exposed any staff route that forgot
+    // its role decorator.
+    if (!required || required.length === 0) {
+      // Deferral: if the route is governed by @Roles (the separate RolesGuard),
+      // that guard is its authority — don't double-deny. No route combines the
+      // two today; this keeps the flip safe if one ever does.
+      const roles = this.reflector.getAllAndOverride<string[] | undefined>(
+        ROLES_KEY,
+        [ctx.getHandler(), ctx.getClass()],
+      );
+      if (roles && roles.length > 0) return true;
+      throw new ForbiddenException(
+        'This action requires a staff role that has not been granted.',
+      );
+    }
 
     const req = ctx.switchToHttp().getRequest();
     const user = req.user;
