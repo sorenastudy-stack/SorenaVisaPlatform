@@ -43,19 +43,15 @@ The sweep found **75 section pages; 28 lacked a brief**. Briefs were added to th
 nav-level section pages that lacked one; record-detail pages are excluded (see §7),
 and the **client/portal/student briefs were then reverted** (§7) — leaving the
 staff-side set below. Added (title → brief):
-- **Cases** (shared staff+ops) → "Every client case — search, filter, and open one to see its stage, team, and documents."
-- **Staff** (users) → "Everyone on the team — add members, set roles, and manage access."
-- **Approvals** → "Owner sign-off queue for sensitive staff actions."
 - **HR** → "Your leave requests, employment contract, and job description."
 - **My Meetings** → "Your upcoming and past consultation sessions."
 - **Bookings** → "Consultation bookings to run — mark each no-show, completed, or cancelled."
 - **Training & News** → "Finance training guides and company news, in one place."
 - **Operations Dashboard** (`/ops`) → upgraded the bare label to "Active cases by stage, what needs attention, and recent activity."
 - **Sales Dashboard** (`/sales`) → "Your leads, pipeline, and consultations at a glance."
-- **Consultant meetings** → "Your scheduled client sessions." (staff surface)
 
-*(The client/portal/student briefs — wallet, student meetings, student tickets,
-new ticket — were added then reverted; see §7.)*
+Every kept brief sits under an **English-literal `<h1>`** (never a `t()` key).
+Briefs that were added over a **bilingual `t()` title were reverted** — see §7.
 
 Treatment is consistent: navy `#1e3a5f` title, a muted warm-gray brief
 (`text-[#4A4A4A]/70`, `text-gray-400` on the ops dashboard to match its shell),
@@ -101,17 +97,22 @@ remain**; the branding fn has **no permission/gate logic**; and StaffSidebar's
   `/portal/case` (already carries stage-specific descriptions), and the LIA
   case-scoped views (`file-note`, `inz-data`, which show applicant/audit
   metadata) are excluded for the same reason.
-- **Client/portal/student briefs were REVERTED** (follow-up). Briefs were removed
-  from `/portal/wallet`, `/student/meetings`, `/student/tickets`, and
-  `/student/tickets/new` — on a bilingual client page a Persian-toggled title with
-  an English brief reads as broken, and with Persian frozen (no new t() keys) an
-  English brief can't be translated. These client pages are left brief-less until
-  Persian unfreezes and translated subtitle keys can be added. The
-  **`/consultant/meetings`** brief is KEPT — `/consultant` is a staff surface, not
-  a client/portal page (though it shares the `meetings.title` key; revert it too
-  if you prefer). All staff-portal briefs (Cases, Staff, Approvals, HR, My
-  Meetings, Bookings, Training & News, ops/sales dashboards) are kept — staff
-  surfaces are English-primary and the brief is acceptable there per the brief.
+- **RULE: no English brief under any title that can render in Persian** (a
+  bilingual `t()` key) — applied everywhere, regardless of portal. Every brief
+  that sat over a `t()` title was reverted:
+  - client/portal/student: `/portal/wallet`, `/student/meetings`,
+    `/student/tickets`, `/student/tickets/new`;
+  - staff pages with `t()` titles: **Cases** (`staff.cases.title`), **Staff**
+    (`staff.users.title`), **Approvals** (`staff.approvals.title`);
+  - **`/consultant/meetings`** (`meetings.title`).
+
+  All four staff/consultant keys are present in `fa.json` (پرونده‌ها / کارکنان /
+  تأییدها / جلسات) — i.e. they DO render Persian, so an English brief under them
+  would mismatch. These pages stay brief-less until Persian unfreezes and a
+  translated subtitle key can be added next to the title key. **Kept briefs sit
+  ONLY under English-literal `<h1>`s:** HR, My Meetings, Bookings, Training &
+  News, and the `/ops` + `/sales` dashboards ("Welcome back, {name}"). The
+  branding-briefs test enforces this (asserts no kept brief has a `{t(…)}` title).
 
 ## 8. How to extend
 

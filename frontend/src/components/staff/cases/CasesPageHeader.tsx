@@ -43,10 +43,7 @@ export function CasesPageHeader({
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-[#1e3a5f]">{t('staff.cases.title')}</h1>
-        <p className="mt-1 text-sm text-[#4A4A4A]/70">Every client case — search, filter, and open one to see its stage, team, and documents.</p>
-      </div>
+      <h1 className="text-2xl font-bold text-[#1e3a5f]">{t('staff.cases.title')}</h1>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">
