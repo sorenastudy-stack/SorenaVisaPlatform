@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -30,6 +31,53 @@ export class PaymentsService {
     private stripeService: StripeService,
     private prisma: PrismaService,
   ) {}
+
+  // Staff who may create a checkout against ANY client's lead (they run the
+  // funnel / handle client payments). A client (LEAD/STUDENT) may only check
+  // out against a lead whose Contact is linked to their OWN user account
+  // (Lead.contact.userId === JWT user id). Any other role, or a client whose
+  // lead isn't theirs, is refused. Fail-closed: unknown roles fall through to
+  // the ownership check and are denied unless they own the lead.
+  private static readonly CHECKOUT_STAFF_ROLES = [
+    'OWNER', 'SUPER_ADMIN', 'ADMIN', 'SALES', 'OPERATIONS',
+    'CONSULTANT', 'CLIENT_CONSULTANT', 'FINANCE', 'SUPPORT', 'LIA',
+  ];
+
+  // Authorize a checkout for `leadId` by the JWT `actor`. Enforced in the
+  // service so the controller can never mint a session for a lead the caller
+  // neither owns nor is staff for. Ownership-check failures are audit-logged —
+  // an attempt to check out against someone else's lead is exactly what a
+  // security review wants to see.
+  async assertLeadCheckoutAllowed(leadId: string, actor: PaymentActor): Promise<void> {
+    if (!leadId) throw new BadRequestException('leadId is required.');
+
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { id: true, contact: { select: { userId: true } } },
+    });
+    if (!lead) throw new NotFoundException('Lead not found.');
+
+    const isStaff = PaymentsService.CHECKOUT_STAFF_ROLES.includes(actor.role ?? '');
+    const ownsLead = !!lead.contact?.userId && lead.contact.userId === actor.id;
+    if (isStaff || ownsLead) return;
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: actor.id ?? null,
+        action: 'DENY',
+        eventType: 'PAYMENT_CHECKOUT_OWNERSHIP_DENIED',
+        entityType: 'Lead',
+        entityId: leadId,
+        newValue: {
+          attemptedLeadId: leadId,
+          leadOwnerUserId: lead.contact?.userId ?? null,
+        } as Prisma.InputJsonValue,
+        actorNameSnapshot: actor.name ?? null,
+        actorRoleSnapshot: actor.role ?? null,
+      },
+    });
+    throw new ForbiddenException('You cannot create a checkout for this lead.');
+  }
 
   async createConsultationPaymentLink(
     leadId: string,

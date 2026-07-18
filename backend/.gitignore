@@ -17,3 +17,4 @@ scripts/test-staff-password.ts
 scripts/test-lia-licence-nav.ts
 scripts/test-placeholder-pages.ts
 scripts/test-endpoint-scoping.ts
+scripts/test-fail-closed-auth.ts

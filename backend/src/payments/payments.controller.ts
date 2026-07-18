@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest, Logger, BadRequestException } from '@nestjs/common';
-import { SkipThrottle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
@@ -193,11 +193,21 @@ export class PaymentsController {
    */
   @Post('subscription/checkout')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 15 } })
   async createSubscriptionCheckout(
     @Body('leadId') leadId: string,
     @Body('plan') plan: 'BASIC' | 'PRO' | 'PREMIUM',
     @Body('amountNZD') amountNZD: number,
+    @Req() req: any,
   ) {
+    // Lead-ownership / staff check (service-layer, audited on failure) BEFORE
+    // any subscription row or Stripe session is created.
+    await this.paymentsService.assertLeadCheckoutAllowed(leadId, {
+      id:   req.user?.userId ?? req.user?.id,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    });
+
     // Create subscription record
     await this.subscriptionsService.createSubscription(leadId, plan);
 
@@ -219,10 +229,20 @@ export class PaymentsController {
    */
   @Post('consultation/checkout')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { ttl: 60_000, limit: 15 } })
   async createConsultationCheckout(
     @Body('leadId') leadId: string,
     @Body('type') type: 'ADMISSION' | 'LIA',
+    @Req() req: any,
   ) {
+    // Lead-ownership / staff check (service-layer, audited on failure) BEFORE
+    // any Stripe session is created.
+    await this.paymentsService.assertLeadCheckoutAllowed(leadId, {
+      id:   req.user?.userId ?? req.user?.id,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    });
+
     const amounts = {
       ADMISSION: 50,
       LIA: 200,
