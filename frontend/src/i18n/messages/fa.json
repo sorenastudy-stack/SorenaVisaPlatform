@@ -1474,8 +1474,7 @@
           "payments": "پرداخت‌ها",
           "meetings": "جلسات",
           "tickets": "تیکت‌ها",
-          "activity": "فعالیت‌ها",
-          "notes": "یادداشت‌ها"
+          "activity": "فعالیت‌ها"
         },
         "activity": {
           "empty": "فعالیتی ثبت نشده."

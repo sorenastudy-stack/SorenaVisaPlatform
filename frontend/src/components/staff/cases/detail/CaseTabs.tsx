@@ -10,7 +10,10 @@ import { useTranslations } from 'next-intl';
 
 export type CaseTab = 'overview' | 'documents' | 'payments' | 'meetings' | 'tickets' | 'activity' | 'notes';
 
-const TABS: { id: CaseTab; labelKey: string }[] = [
+// Each tab is labelled by a bilingual t() key EXCEPT `notes`, which carries an
+// English literal — the conversation-notes feature is English-only and Persian is
+// frozen, so no fa key is added for it.
+const TABS: { id: CaseTab; labelKey?: string; label?: string }[] = [
   { id: 'overview',  labelKey: 'staff.cases.detail.tabs.overview' },
   { id: 'documents', labelKey: 'staff.cases.detail.tabs.documents' },
   { id: 'payments',  labelKey: 'staff.cases.detail.tabs.payments' },
@@ -18,7 +21,8 @@ const TABS: { id: CaseTab; labelKey: string }[] = [
   { id: 'tickets',   labelKey: 'staff.cases.detail.tabs.tickets' },
   // PR-LIA-CONVO-NOTES — visible only to LIA/OWNER/SUPER_ADMIN (parent passes
   // hiddenTabs=['notes'] for every other viewer). The backend is the real gate.
-  { id: 'notes',     labelKey: 'staff.cases.detail.tabs.notes' },
+  // English literal on purpose (Persian frozen — no fa key).
+  { id: 'notes',     label: 'Notes' },
   { id: 'activity',  labelKey: 'staff.cases.detail.tabs.activity' },
 ];
 
@@ -53,7 +57,7 @@ export function CaseTabs({
                   : 'border-transparent text-gray-500 hover:text-[#1e3a5f]',
               ].join(' ')}
             >
-              {t(tab.labelKey)}
+              {tab.label ?? t(tab.labelKey!)}
             </button>
           );
         })}

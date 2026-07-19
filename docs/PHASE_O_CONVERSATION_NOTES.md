@@ -79,9 +79,9 @@ body — no `userId`/`caseId` is trusted as identity.
 - **Frontend (wiring):** `components/staff/cases/detail/CaseTabs.tsx` (+`notes`
   tab), `.../CaseDetailClient.tsx` (role-gated tab), `app/lia/cases/[id]/page.tsx`
   (panel under the legal-notes card, gated to the 3 roles).
-- **i18n:** `notes` tab label added to `en.json` ("Notes") + `fa.json`
-  ("یادداشت‌ها") so the tab strip stays consistent in both languages. All
-  note-taking copy itself is English-only.
+- **i18n:** none. The `notes` tab is labelled by an **English literal** in
+  `CaseTabs` (not a `t()` key) — the feature is English-only and Persian is
+  frozen, so no `fa`/`en` dictionary keys were added.
 - **Test (gitignored):** `backend/scripts/test-conversation-notes.ts`.
 
 ## 5. Configuration

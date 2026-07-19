@@ -1474,8 +1474,7 @@
           "payments": "Payments",
           "meetings": "Meetings",
           "tickets": "Tickets",
-          "activity": "Activity",
-          "notes": "Notes"
+          "activity": "Activity"
         },
         "activity": {
           "empty": "No activity yet."
