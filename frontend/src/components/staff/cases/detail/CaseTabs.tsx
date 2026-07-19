@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 // tab state. The Documents / Meetings / Tickets tabs render a
 // placeholder until later PRs build them out.
 
-export type CaseTab = 'overview' | 'documents' | 'payments' | 'meetings' | 'tickets' | 'activity';
+export type CaseTab = 'overview' | 'documents' | 'payments' | 'meetings' | 'tickets' | 'activity' | 'notes';
 
 const TABS: { id: CaseTab; labelKey: string }[] = [
   { id: 'overview',  labelKey: 'staff.cases.detail.tabs.overview' },
@@ -16,6 +16,9 @@ const TABS: { id: CaseTab; labelKey: string }[] = [
   { id: 'payments',  labelKey: 'staff.cases.detail.tabs.payments' },
   { id: 'meetings',  labelKey: 'staff.cases.detail.tabs.meetings' },
   { id: 'tickets',   labelKey: 'staff.cases.detail.tabs.tickets' },
+  // PR-LIA-CONVO-NOTES — visible only to LIA/OWNER/SUPER_ADMIN (parent passes
+  // hiddenTabs=['notes'] for every other viewer). The backend is the real gate.
+  { id: 'notes',     labelKey: 'staff.cases.detail.tabs.notes' },
   { id: 'activity',  labelKey: 'staff.cases.detail.tabs.activity' },
 ];
 

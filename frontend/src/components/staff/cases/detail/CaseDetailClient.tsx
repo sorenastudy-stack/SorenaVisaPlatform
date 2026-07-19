@@ -12,6 +12,7 @@ import { CaseActivityTab } from './CaseActivityTab';
 import { CaseDocumentsPanel } from '@/components/cases/CaseDocumentsPanel';
 import { ConsultantDocumentsPanel } from '@/components/cases/ConsultantDocumentsPanel';
 import { CasePaymentsPanel } from '@/components/cases/CasePaymentsPanel';
+import { ConversationNotesPanel } from '@/components/cases/ConversationNotesPanel';
 import Link from 'next/link';
 import { CalendarClock, Inbox, ArrowRight, type LucideIcon } from 'lucide-react';
 import type { CaseDetail } from './types';
@@ -36,6 +37,10 @@ export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?
   // backend (Phase 5d) filters that endpoint to educational docs for this role.
   // UI only; the P1/P2 boundary is enforced server-side.
   const isConsultant = me?.role === 'CONSULTANT';
+  // PR-LIA-CONVO-NOTES — the Conversation Notes tab is for the legal team only.
+  // UI gate by primary role; the backend re-enforces the LIA/OWNER/SUPER_ADMIN
+  // allowlist on every request, so this only tidies the strip.
+  const canSeeNotes = !!me?.role && ['LIA', 'OWNER', 'SUPER_ADMIN'].includes(me.role);
   const [data, setData] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<CaseTab>('overview');
@@ -79,10 +84,15 @@ export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?
       <SendContractPanel caseId={data.id} onSent={refresh} />
 
       <div>
-        <CaseTabs active={tab} onChange={setTab} />
+        <CaseTabs
+          active={tab}
+          onChange={setTab}
+          hiddenTabs={canSeeNotes ? undefined : ['notes']}
+        />
         <div className="pt-5">
           {tab === 'overview'  && <CaseOverviewTab data={data} canEdit={canEdit} onSaved={refresh} />}
           {tab === 'activity'  && <CaseActivityTab caseId={data.id} />}
+          {tab === 'notes'     && canSeeNotes && <ConversationNotesPanel caseId={data.id} />}
           {/* Phase 5e — CONSULTANT gets the read-only System B P1 view; every
               other role keeps the System A attachment panel (unchanged). */}
           {tab === 'documents' && (isConsultant

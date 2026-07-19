@@ -33,6 +33,7 @@ import { DownloadVisaButton } from './DownloadVisaButton';
 import { LinkOfficerButton } from './LinkOfficerButton';
 import { UnlinkOfficerButton } from './UnlinkOfficerButton';
 import { CopyButton } from './inz-data/CopyButton';
+import { ConversationNotesPanel } from '@/components/cases/ConversationNotesPanel';
 
 // PR-LIA-1 — Case detail with action panel + legal-notes timeline.
 
@@ -661,6 +662,16 @@ export default async function LiaCaseDetailPage({ params }: { params: { id: stri
           )}
         </CardContent>
       </Card>
+
+      {/* PR-LIA-CONVO-NOTES — private conversation notes for the legal team only.
+          The /lia portal also admits ADMIN, but these notes are strictly
+          LIA/OWNER/SUPER_ADMIN, so gate the panel to those three (the backend
+          403s anyone else regardless). */}
+      {!!session && ['LIA', 'OWNER', 'SUPER_ADMIN'].includes(session.role) && (
+        <div className="mt-6">
+          <ConversationNotesPanel caseId={caseData.id} />
+        </div>
+      )}
     </div>
   );
 }

@@ -29,6 +29,7 @@ import { EmailHashModule } from './common/email-hash/email-hash.module';
 import { StaffModule } from './staff/staff.module';
 import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
 import { LegalNotesModule } from './legal-notes/legal-notes.module';
+import { CaseConversationNotesModule } from './case-conversation-notes/case-conversation-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
 import { CaseDocumentsModule } from './case-documents/case-documents.module';
 import { OpsHandoffsModule } from './ops-handoffs/ops-handoffs.module';
@@ -93,6 +94,7 @@ import { AuditModule } from './audit/audit.module';
     WixWebhooksModule,
     // PR-LIA-1: LIA notes + decisions + risk overrides on CRM Cases.
     LegalNotesModule,
+    CaseConversationNotesModule,
     // PR-LIA-4: direct LIA ↔ client messaging on CRM Cases.
     CaseMessagesModule,
     // Client portal step 2: client-only /portal/* surface, gated to

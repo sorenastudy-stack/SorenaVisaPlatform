@@ -542,6 +542,8 @@ model User {
   // on CRM-side Cases). LIA / ADMIN / SUPER_ADMIN-gated at the
   // endpoint layer.
   legalNotes              LegalNote[]             @relation("LegalNoteAuthor")
+  // PR-LIA-CONVO-NOTES: conversation notes this user (an LIA) authored.
+  conversationNotes       CaseConversationNote[]  @relation("ConvNoteAuthor")
 
   // PR-LIA-4: CaseMessage rows this user authored (either as the LIA
   // working the case, or as the case's client replying to the thread).
@@ -1412,6 +1414,8 @@ model Case {
   admissionApplications AdmissionApplication[]
   // PR-LIA-1: free-form legal notes + formal decisions on this case.
   legalNotes            LegalNote[]
+  // PR-LIA-CONVO-NOTES: LIA conversation notes on this case (LIA/OWNER/SUPER_ADMIN only).
+  conversationNotes     CaseConversationNote[]
   // PR-LIA-4: direct LIA ↔ client thread for this case.
   caseMessages          CaseMessage[]
   // PR-LIA-5: LIA's internal-only review verdicts on this case's
@@ -1839,6 +1843,32 @@ model LegalNote {
 
   @@index([caseId, createdAt])
   @@map("legal_notes")
+}
+
+// ─── CASE CONVERSATION NOTES (PR-LIA-CONVO-NOTES) ─────────────────────────────
+//
+// Free-form notes an LIA adviser records after speaking with a client, attached
+// to a Case. STRICT visibility: readable/writable ONLY by LIA, OWNER, and
+// SUPER_ADMIN — NOT the consultant/support assigned to the same case, and NEVER
+// the client. Enforced server-side in CaseConversationNotesService, not just the
+// UI. Distinct from LegalNote (which carries formal legal decisions, is encrypted
+// at rest, and is create-only). These are:
+//   * plain sanitized HTML (rich text: bold/italic/lists/links) — NOT encrypted,
+//   * editable + deletable by the author and by OWNER/SUPER_ADMIN,
+//   * always sanitized server-side before persistence (never trust client HTML).
+model CaseConversationNote {
+  id        String   @id @default(cuid())
+  caseId    String
+  authorId  String
+  bodyHtml  String   // sanitized HTML — server-side allowlist, see html-sanitizer.ts
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  case   Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author User @relation("ConvNoteAuthor", fields: [authorId], references: [id])
+
+  @@index([caseId, createdAt])
+  @@map("case_conversation_notes")
 }
 
 // ─── CASE MESSAGES (PR-LIA-4) ────────────────────────────────────────────────
