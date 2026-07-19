@@ -1,16 +1,23 @@
 'use client';
 
-import { Lock } from 'lucide-react';
+import { Lock, FileText, Paperclip } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format-relative-time';
 import { TicketSystemEvent } from '@/components/tickets/TicketSystemEvent';
 
-// PR-SUPPORT-1 — Staff-side message renderer.
+// PR-SUPPORT-1 / PR-TICKETS-RICH — Staff-side message renderer.
 //
-// The client-side TicketMessage component hardcodes "You" for CLIENT
-// messages and has no styling for internal staff notes. Staff need
-// the actual author name on every bubble + a visually distinct
-// amber-tinted style for isInternalNote=true. This component handles
-// both. SYSTEM rows are delegated to the existing TicketSystemEvent.
+// Staff messages are now rich text: when `bodyIsHtml` is true the body is
+// server-sanitized HTML (allowlist: bold/italic/underline/lists/links; no
+// images/scripts) rendered via dangerouslySetInnerHTML. Legacy/plain and client
+// messages (`bodyIsHtml` false) render as escaped text. Attachments (image/PDF)
+// render as a thumbnail/file list under the bubble, each a short-lived signed URL.
+
+export interface TicketAttachment {
+  name: string;
+  mime: string;
+  size: number;
+  url: string | null;
+}
 
 export interface StaffThreadMessage {
   id: string;
@@ -18,9 +25,13 @@ export interface StaffThreadMessage {
   authorName: string | null;
   authorStaffRole?: string | null;
   body: string;
+  bodyIsHtml?: boolean;
+  attachments?: TicketAttachment[];
   isInternalNote: boolean;
   createdAt: string;
 }
+
+const NAVY = '#1E3A5F';
 
 export function StaffTicketMessages({ messages }: { messages: StaffThreadMessage[] }) {
   return (
@@ -31,6 +42,45 @@ export function StaffTicketMessages({ messages }: { messages: StaffThreadMessage
         }
         return <StaffMessageBubble key={m.id} message={m} />;
       })}
+      <style jsx global>{`
+        .rte-content ul { list-style: disc; margin: 0.25rem 0 0.25rem 1.25rem; }
+        .rte-content ol { list-style: decimal; margin: 0.25rem 0 0.25rem 1.25rem; }
+        .rte-content a { color: ${NAVY}; text-decoration: underline; }
+      `}</style>
+    </div>
+  );
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function Attachments({ items }: { items: TicketAttachment[] }) {
+  if (!items?.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {items.map((a, i) => {
+        const isImage = a.mime.startsWith('image/');
+        if (isImage && a.url) {
+          return (
+            <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" title={a.name}
+               className="block overflow-hidden rounded-lg border border-black/10">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={a.url} alt={a.name} className="h-24 w-24 object-cover" />
+            </a>
+          );
+        }
+        return (
+          <a key={i} href={a.url ?? '#'} target="_blank" rel="noopener noreferrer"
+             className="inline-flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs text-[#1E3A5F] hover:bg-[#faf8f3] max-w-[220px]">
+            <FileText size={15} className="shrink-0 text-[#b8941f]" />
+            <span className="truncate font-medium">{a.name}</span>
+            <span className="shrink-0 text-[10px] text-[#4A4A4A]/60">{fmtSize(a.size)}</span>
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -38,10 +88,6 @@ export function StaffTicketMessages({ messages }: { messages: StaffThreadMessage
 function StaffMessageBubble({ message }: { message: StaffThreadMessage }) {
   const isStaff = message.authorRole === 'STAFF';
   const isInternal = message.isInternalNote;
-
-  // STAFF on the right (the viewer is staff — staff messages are
-  // "ours"). CLIENT on the left. Internal notes always get the
-  // amber-tinted bubble regardless of side.
   const align = isStaff ? 'justify-end' : 'justify-start';
 
   const bubbleClasses = isInternal
@@ -49,6 +95,8 @@ function StaffMessageBubble({ message }: { message: StaffThreadMessage }) {
     : isStaff
       ? 'bg-[#e8edf5] text-[#1E3A5F]'
       : 'bg-[#FAF8F3] text-[#1E3A5F]';
+
+  const hasBody = (message.body ?? '').trim().length > 0;
 
   return (
     <div className={`flex ${align}`}>
@@ -71,7 +119,18 @@ function StaffMessageBubble({ message }: { message: StaffThreadMessage }) {
               <Lock size={10} /> Internal note · not visible to client
             </div>
           )}
-          <p className="whitespace-pre-wrap">{message.body}</p>
+          {hasBody && (
+            message.bodyIsHtml
+              // Server-sanitized HTML (rich-text-sanitizer allowlist).
+              ? <div className="rte-content" dangerouslySetInnerHTML={{ __html: message.body }} />
+              : <p className="whitespace-pre-wrap">{message.body}</p>
+          )}
+          {!hasBody && message.attachments?.length ? (
+            <p className="inline-flex items-center gap-1 text-xs text-[#4A4A4A]/60">
+              <Paperclip size={11} /> {message.attachments.length} attachment{message.attachments.length === 1 ? '' : 's'}
+            </p>
+          ) : null}
+          <Attachments items={message.attachments ?? []} />
         </div>
       </div>
     </div>

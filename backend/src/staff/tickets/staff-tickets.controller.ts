@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -7,11 +8,18 @@ import {
   Post,
   Query,
   Req,
+  UnsupportedMediaTypeException,
+  UploadedFile,
+  UseFilters,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
+import { MulterExceptionFilter } from '../../students/admission/multer-exception.filter';
 import { StaffTicketsService } from './staff-tickets.service';
 import {
   AddStaffMessageDto,
@@ -19,6 +27,23 @@ import {
   UpdateTicketStatusDto,
 } from './dto/staff-tickets.dto';
 import { StaffTicketMessageRateLimitGuard } from './guards/staff-ticket-message-rate-limit.guard';
+
+// Attachment upload: image + PDF, 10 MB, held in memory then streamed to R2 in
+// the service. Type rejected at multer AND re-validated on the bytes server-side.
+const ATTACH_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const attachMulter = {
+  storage: memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req: any, file: any, cb: any) => {
+    if (ATTACH_MIMES.includes(file.mimetype)) cb(null, true);
+    else { req.fileTypeRejected = true; cb(null, false); }
+  },
+};
+
+// All ticket-access staff roles — the read/reply/status/assign surface. "Any
+// staff member can reassign" (target is still restricted to the case cycle in
+// the service), so assign now shares this set instead of the old tighter one.
+const TICKET_STAFF_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'CONSULTANT', 'LIA'] as const;
 
 // PR-SUPPORT-1 — Staff-side ticket endpoints.
 //
@@ -61,12 +86,11 @@ export class StaffTicketsController {
     );
   }
 
-  // /assignees must come BEFORE /:id so Nest matches the literal
-  // segment first.
-  @Get('assignees')
-  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'CONSULTANT', 'LIA')
-  assignees() {
-    return this.service.listAssignees();
+  // Candidates are scoped to THIS ticket's case cycle, so the route is per-ticket.
+  @Get(':id/assignees')
+  @Roles(...TICKET_STAFF_ROLES)
+  assignees(@Param('id') id: string) {
+    return this.service.listAssignees(id);
   }
 
   @Get(':id')
@@ -76,7 +100,7 @@ export class StaffTicketsController {
   }
 
   @Post(':id/messages')
-  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'CONSULTANT', 'LIA')
+  @Roles(...TICKET_STAFF_ROLES)
   @UseGuards(StaffTicketMessageRateLimitGuard)
   addMessage(
     @Param('id') id: string,
@@ -84,6 +108,24 @@ export class StaffTicketsController {
     @Req() req: any,
   ) {
     return this.service.addStaffMessage(id, body, this.actor(req));
+  }
+
+  // Upload one attachment (image/PDF) for a ticket → returns { key, name, mime,
+  // size } which the composer includes in its subsequent message POST.
+  @Post(':id/attachments')
+  @Roles(...TICKET_STAFF_ROLES)
+  @UseFilters(MulterExceptionFilter)
+  @UseInterceptors(FileInterceptor('file', attachMulter))
+  uploadAttachment(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req() req: any,
+  ) {
+    if (req.fileTypeRejected) {
+      throw new UnsupportedMediaTypeException('Allowed: JPG, PNG, WebP, or PDF.');
+    }
+    if (!file) throw new BadRequestException('A file is required.');
+    return this.service.uploadAttachment(id, file, this.actor(req));
   }
 
   @Patch(':id/status')
@@ -96,8 +138,10 @@ export class StaffTicketsController {
     return this.service.updateStatus(id, body, this.actor(req));
   }
 
+  // "Any staff member can reassign" — widened from the old admin-tighter set.
+  // The target is still restricted to the ticket's case cycle in the service.
   @Patch(':id/assign')
-  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT')
+  @Roles(...TICKET_STAFF_ROLES)
   assign(
     @Param('id') id: string,
     @Body() body: AssignTicketDto,

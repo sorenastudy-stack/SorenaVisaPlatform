@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, Inbox, Lock, Mail, Send, UserCog, Clock,
+  ArrowLeft, Inbox, Lock, Mail, Send, UserCog, Clock, AlertTriangle, Paperclip, X,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
+import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge';
 import { TicketDepartmentBadge } from '@/components/tickets/TicketDepartmentBadge';
 import {
   StaffTicketMessages,
   type StaffThreadMessage,
+  type TicketAttachment,
 } from '@/components/staff/tickets/StaffTicketMessages';
 import { useStaff } from '@/contexts/StaffContext';
 
@@ -31,6 +33,8 @@ interface TicketMessage {
   authorName: string | null;
   authorStaffRole: string | null;
   body: string;
+  bodyIsHtml?: boolean;
+  attachments?: TicketAttachment[];
   isInternalNote: boolean;
   createdAt: string;
 }
@@ -54,6 +58,7 @@ interface TicketDetail {
   closedAt: string | null;
   lastClientMessageAt: string | null;
   lastStaffMessageAt: string | null;
+  unansweredOver24h?: boolean;
   messages: TicketMessage[];
 }
 
@@ -64,7 +69,10 @@ interface Assignee {
 }
 
 const STATUS_VALUES: TicketStatus[] = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
-const ASSIGN_ROLES = new Set(['OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT']);
+// PR-TICKETS-CYCLE — "any staff member can reassign". The target is still
+// restricted server-side to the ticket's VisaCase cycle (and the picker only
+// lists those), so widening WHO can open the control is safe.
+const ASSIGN_ROLES = new Set(['OWNER', 'SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'CONSULTANT', 'LIA']);
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return '—';
@@ -102,7 +110,8 @@ export default function StaffTicketDetailPage({
 
   useEffect(() => {
     void load();
-    api.get<Assignee[]>('/staff/tickets/assignees')
+    // Candidates are scoped to this ticket's case cycle (per-ticket route).
+    api.get<Assignee[]>(`/staff/tickets/${id}/assignees`)
       .then(setAssignees)
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,6 +137,8 @@ export default function StaffTicketDetailPage({
     authorName: m.authorName,
     authorStaffRole: m.authorStaffRole,
     body: m.body,
+    bodyIsHtml: m.bodyIsHtml,
+    attachments: m.attachments,
     isInternalNote: m.isInternalNote,
     createdAt: m.createdAt,
   }));
@@ -163,6 +174,11 @@ export default function StaffTicketDetailPage({
                 <span className="inline-flex items-center font-semibold rounded-full border px-2 py-0.5 text-[10px] bg-blue-50 text-blue-700 border-blue-200">
                   Priority: {ticket.priority}
                 </span>
+                {ticket.unansweredOver24h && (
+                  <span className="inline-flex items-center gap-1 font-bold rounded-full border px-2 py-0.5 text-[10px] bg-red-50 text-red-700 border-red-300">
+                    <AlertTriangle size={11} /> No reply 24h+
+                  </span>
+                )}
               </div>
             </div>
             <div className="text-xs text-[#4A4A4A]/60 font-mono">
@@ -342,7 +358,7 @@ function AssignmentCard({
       });
       onSaved();
     } catch (e: any) {
-      if (e?.statusCode === 403) setErr('Only OWNER / SUPER_ADMIN / ADMIN / SUPPORT can reassign.');
+      if (e?.statusCode === 403) setErr('A ticket can only be assigned to staff already on its case.');
       else setErr(e?.message ?? 'Failed to save');
     } finally {
       setSaving(false);
@@ -387,29 +403,69 @@ function AssignmentCard({
 
 // ─── ReplyCard ────────────────────────────────────────────────────
 
+const ATTACH_ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf';
+const ATTACH_MAX_BYTES = 10 * 1024 * 1024;
+const MAX_ATTACHMENTS = 5;
+
 function ReplyCard({
   ticketId, onSent,
 }: { ticketId: string; onSent: () => void }) {
   const [body, setBody] = useState('');
   const [isInternalNote, setIsInternalNote] = useState(false);
+  const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // Rich-text body carries HTML tags; "has content" means real text once tags
+  // are stripped. A message may also be attachment-only.
+  const hasText = body.replace(/<[^>]*>/g, '').trim().length > 0;
+  const canSend = (hasText || attachments.length > 0) && !sending && !uploading;
+
+  async function onPickFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setErr(null);
+    const room = MAX_ATTACHMENTS - attachments.length;
+    const picked = Array.from(files).slice(0, Math.max(0, room));
+    if (picked.length === 0) { setErr(`Up to ${MAX_ATTACHMENTS} attachments.`); return; }
+    setUploading(true);
+    try {
+      for (const f of picked) {
+        if (f.size > ATTACH_MAX_BYTES) { setErr(`${f.name} is larger than 10 MB.`); continue; }
+        const fd = new FormData();
+        fd.append('file', f);
+        const meta = await api.upload<TicketAttachment & { key: string }>(
+          `/staff/tickets/${ticketId}/attachments`, fd,
+        );
+        setAttachments((prev) => [...prev, meta]);
+      }
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : 'Upload failed.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  function removeAttachment(i: number) {
+    setAttachments((prev) => prev.filter((_, idx) => idx !== i));
+  }
 
   async function send() {
+    if (!canSend) return;
     setErr(null);
-    const text = body.trim();
-    if (text.length === 0) {
-      setErr('Message body is required.');
-      return;
-    }
     setSending(true);
     try {
       await api.post(`/staff/tickets/${ticketId}/messages`, {
-        body: text,
+        body,
         isInternalNote,
+        // Send back the metadata (incl. the R2 key) the upload returned.
+        attachments,
       });
       setBody('');
       setIsInternalNote(false);
+      setAttachments([]);
       onSent();
     } catch (e: any) {
       setErr(e?.message ?? 'Failed to send reply.');
@@ -424,38 +480,70 @@ function ReplyCard({
         <h2 className="text-sm font-bold text-[#1E3A5F] uppercase tracking-wide mb-3">
           {isInternalNote ? 'New internal note' : 'Reply to client'}
         </h2>
-        <textarea
+
+        <RichTextEditor
           value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={5}
+          onChange={setBody}
+          disabled={sending}
+          ariaLabel={isInternalNote ? 'Internal note' : 'Reply to client'}
           placeholder={
             isInternalNote
               ? 'Internal note — visible only to staff with ticket access.'
-              : 'Reply visible to the client.'
+              : 'Reply visible to the client…'
           }
-          className={[
-            'w-full rounded-lg border px-3 py-2 text-sm focus:outline-none',
-            isInternalNote
-              ? 'border-amber-300 bg-amber-50 focus:border-amber-400'
-              : 'border-gray-300 focus:border-[#F3CE49]',
-          ].join(' ')}
         />
+
+        {/* Attachment chips */}
+        {attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {attachments.map((a, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-[#faf8f3] px-2.5 py-1.5 text-xs text-[#1E3A5F]">
+                <Paperclip size={11} className="text-[#b8941f]" />
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <button type="button" onClick={() => removeAttachment(i)} aria-label={`Remove ${a.name}`}
+                        className="text-gray-400 hover:text-red-600">
+                  <X size={13} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept={ATTACH_ACCEPT}
+          multiple
+          onChange={(e) => onPickFiles(e.target.files)}
+          className="hidden"
+        />
+
         <div className="mt-2 flex items-center justify-between flex-wrap gap-3">
-          <label className="inline-flex items-center gap-2 text-sm text-[#4A4A4A] cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isInternalNote}
-              onChange={(e) => setIsInternalNote(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300"
-            />
-            <span className="inline-flex items-center gap-1">
-              <Lock size={12} /> Internal note (not visible to client)
-            </span>
-          </label>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="inline-flex items-center gap-2 text-sm text-[#4A4A4A] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isInternalNote}
+                onChange={(e) => setIsInternalNote(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <span className="inline-flex items-center gap-1">
+                <Lock size={12} /> Internal note
+              </span>
+            </label>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading || attachments.length >= MAX_ATTACHMENTS}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#1e3a5f]/25 px-3 py-2 text-xs font-semibold text-[#1E3A5F] hover:bg-[#faf8f3] disabled:opacity-50"
+            >
+              <Paperclip size={13} /> {uploading ? 'Uploading…' : 'Attach file'}
+            </button>
+          </div>
           <button
             type="button"
             onClick={send}
-            disabled={sending || body.trim().length === 0}
+            disabled={!canSend}
             style={{ minHeight: 48 }}
             className={[
               'inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50',
@@ -468,6 +556,7 @@ function ReplyCard({
             {sending ? 'Sending…' : isInternalNote ? 'Post internal note' : 'Send reply'}
           </button>
         </div>
+        <p className="mt-1.5 text-[11px] text-[#4A4A4A]/50">JPG, PNG, WebP, or PDF · max 10&nbsp;MB · up to {MAX_ATTACHMENTS} files.</p>
         {err && <p className="mt-2 text-xs text-red-700">{err}</p>}
       </CardContent>
     </Card>

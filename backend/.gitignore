@@ -26,3 +26,4 @@ scripts/test-conversation-notes.ts
 scripts/test-staff-gate-consistency.ts
 scripts/test-client-consultant-slot.ts
 scripts/test-unassign-slots.ts
+scripts/test-tickets-rich.ts

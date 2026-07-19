@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
+import { R2Module } from '../../common/r2/r2.module';
 import { StaffTicketsController } from './staff-tickets.controller';
 import { StaffTicketsService } from './staff-tickets.service';
 import { StaffTicketMessageRateLimitGuard } from './guards/staff-ticket-message-rate-limit.guard';
@@ -13,7 +14,7 @@ import { StaffTicketMessageRateLimitGuard } from './guards/staff-ticket-message-
 // serve /students/me/tickets/*.
 
 @Module({
-  imports:     [PrismaModule, CryptoModule],
+  imports:     [PrismaModule, CryptoModule, R2Module],
   controllers: [StaffTicketsController],
   providers:   [StaffTicketsService, StaffTicketMessageRateLimitGuard],
   exports:     [StaffTicketsService],

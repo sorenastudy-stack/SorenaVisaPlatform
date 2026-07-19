@@ -3,6 +3,7 @@ import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { CryptoModule } from '../../common/crypto/crypto.module';
+import { R2Module } from '../../common/r2/r2.module';
 
 // PR-DASH-2 — Tickets module.
 //
@@ -12,7 +13,7 @@ import { CryptoModule } from '../../common/crypto/crypto.module';
 // reuse the dashboard summary getter without duplicating the
 // ownership chain logic.
 @Module({
-  imports:   [PrismaModule, CryptoModule],
+  imports:   [PrismaModule, CryptoModule, R2Module],
   controllers: [TicketsController],
   providers: [TicketsService],
   exports:   [TicketsService],

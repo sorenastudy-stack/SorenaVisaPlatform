@@ -1,6 +1,6 @@
 'use client';
 
-import { TicketMessage } from './TicketMessage';
+import { TicketMessage, type TicketMessageAttachment } from './TicketMessage';
 import { TicketSystemEvent } from './TicketSystemEvent';
 
 // PR-DASH-2 — Scrollable thread of messages.
@@ -14,6 +14,8 @@ export interface ThreadMessage {
   authorRole: 'CLIENT' | 'STAFF' | 'SYSTEM';
   authorDisplayName: string;
   body: string;
+  bodyIsHtml?: boolean;
+  attachments?: TicketMessageAttachment[];
   createdAt: string;
 }
 
@@ -29,6 +31,8 @@ export function TicketMessageThread({ messages }: { messages: ThreadMessage[] })
             authorRole={m.authorRole}
             authorDisplayName={m.authorDisplayName}
             body={m.body}
+            bodyIsHtml={m.bodyIsHtml}
+            attachments={m.attachments}
             createdAt={m.createdAt}
           />
         ),

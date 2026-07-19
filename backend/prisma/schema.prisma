@@ -3521,6 +3521,15 @@ model VisaSupportTicketMessage {
   authorId        String
   authorRole      VisaTicketMessageAuthorRole
   bodyEncrypted   Bytes
+  // PR-TICKETS-RICH — true when bodyEncrypted holds server-sanitized rich-text
+  // HTML (staff replies via the shared RichTextEditor). false = legacy/plain
+  // text (all pre-existing rows, and client messages), rendered as escaped text.
+  // Distinguishes render mode without re-processing historical encrypted rows.
+  bodyIsHtml      Boolean                         @default(false)
+  // PR-TICKETS-RICH — file attachments (image/PDF). Array of
+  // { key, name, mime, size } objects; the R2 object key is private, reads mint
+  // a short-lived signed URL. NULL/absent = no attachments.
+  attachments     Json?
   isInternalNote  Boolean                         @default(false)
   createdAt       DateTime                        @default(now())
   updatedAt       DateTime                        @updatedAt

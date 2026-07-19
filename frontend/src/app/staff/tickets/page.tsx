@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Inbox, Search, Filter, X, ChevronLeft, ChevronRight, RefreshCcw,
+  Inbox, Search, Filter, X, ChevronLeft, ChevronRight, RefreshCcw, AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -31,6 +31,7 @@ interface TicketRow {
   assignedStaffName: string | null;
   lastClientMessageAt: string | null;
   lastStaffMessageAt: string | null;
+  unansweredOver24h?: boolean;
   messageCount: number;
   createdAt: string;
   updatedAt: string;
@@ -312,8 +313,13 @@ export default function StaffTicketsPage() {
                             >
                               {r.subject}
                             </Link>
-                            <div className="text-xs text-[#4A4A4A]/60 mt-0.5">
-                              {r.messageCount} message{r.messageCount === 1 ? '' : 's'}
+                            <div className="text-xs text-[#4A4A4A]/60 mt-0.5 flex items-center gap-2">
+                              <span>{r.messageCount} message{r.messageCount === 1 ? '' : 's'}</span>
+                              {r.unansweredOver24h && (
+                                <span className="inline-flex items-center gap-1 font-bold rounded-full border px-1.5 py-0.5 text-[10px] bg-red-50 text-red-700 border-red-300">
+                                  <AlertTriangle size={10} /> 24h+
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="py-2.5 pr-3 text-[#1E3A5F]">
@@ -370,6 +376,11 @@ export default function StaffTicketsPage() {
                           <span className={`inline-flex items-center font-semibold rounded-full border px-2 py-0.5 text-[10px] ${PRIORITY_STYLE[r.priority]}`}>
                             {PRIORITY_LABEL[r.priority]}
                           </span>
+                          {r.unansweredOver24h && (
+                            <span className="inline-flex items-center gap-1 font-bold rounded-full border px-2 py-0.5 text-[10px] bg-red-50 text-red-700 border-red-300">
+                              <AlertTriangle size={10} /> No reply 24h+
+                            </span>
+                          )}
                         </div>
                         <div className="mt-1.5 text-xs text-[#4A4A4A]/60">
                           {r.assignedStaffName ?? 'Unassigned'} · {relativeTime(lastActivity)}

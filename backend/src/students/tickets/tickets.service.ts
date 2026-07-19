@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { R2Service } from '../../common/r2/r2.service';
 
 // PR-DASH-2 — Client-facing tickets service.
 //
@@ -22,7 +23,23 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly r2: R2Service,
   ) {}
+
+  // PR-TICKETS-RICH — mint short-lived signed URLs for a message's stored
+  // attachments (image/PDF uploaded by staff). The R2 key is never exposed.
+  private async signAttachments(
+    raw: unknown,
+  ): Promise<Array<{ name: string; mime: string; size: number; url: string | null }>> {
+    if (!Array.isArray(raw)) return [];
+    return Promise.all(
+      (raw as Array<{ key: string; name: string; mime: string; size: number }>).map(async (a) => {
+        let url: string | null = null;
+        try { url = await this.r2.getPresignedDownloadUrl(a.key, 3600); } catch { url = null; }
+        return { name: a.name, mime: a.mime, size: a.size, url };
+      }),
+    );
+  }
 
   private async resolveCase(userId: string) {
     const contact = await this.prisma.contact.findUnique({ where: { userId } });
@@ -142,13 +159,17 @@ export class TicketsService {
       closedAt:            ticket.closedAt,
       lastClientMessageAt: ticket.lastClientMessageAt,
       lastStaffMessageAt:  ticket.lastStaffMessageAt,
-      messages: messages.map((m) => ({
+      messages: await Promise.all(messages.map(async (m) => ({
         id:                m.id,
         authorRole:        m.authorRole,
         body:              this.dec(m.bodyEncrypted),
+        // Staff replies are sanitized HTML (bodyIsHtml=true); client/legacy
+        // messages are plain text. The client UI renders accordingly.
+        bodyIsHtml:        m.bodyIsHtml,
+        attachments:       await this.signAttachments(m.attachments),
         createdAt:         m.createdAt,
         authorDisplayName: this.displayName(m, userId),
-      })),
+      }))),
     };
   }
 
