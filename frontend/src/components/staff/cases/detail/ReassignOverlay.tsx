@@ -45,12 +45,18 @@ export function ReassignOverlay({
   open,
   onClose,
   onDone,
+  currentAssigneeName,
 }: {
   caseId:   string;
   roleSlot: RoleSlot;
   open:     boolean;
   onClose:  () => void;
   onDone:   () => void;
+  // PR-CLIENT-CONSULTANT-SLOT (follow-up) — the person currently in this slot, if
+  // any. When set, an "Unassign" action is offered to clear the slot (all five
+  // slots accept null server-side). Null/undefined → the slot is empty, so there
+  // is nothing to unassign and the action is hidden.
+  currentAssigneeName?: string | null;
 }) {
   const [candidates, setCandidates] = useState<CaseEligibleStaff[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
@@ -58,6 +64,9 @@ export function ReassignOverlay({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Two-step confirm before clearing — removing a person from the case is
+  // destructive, so the "Unassign" button reveals a confirm panel first.
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -65,6 +74,7 @@ export function ReassignOverlay({
     setError(null);
     setSelectedId('');
     setReason('');
+    setConfirmingClear(false);
     api
       .get<CaseEligibleStaff[]>(`/api/staff/cases/eligible-staff?slot=${roleSlot}`)
       .then((rows) => setCandidates(rows))
@@ -96,6 +106,27 @@ export function ReassignOverlay({
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reassign');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Clear the slot → same PATCH endpoint, id field set to null, same required
+  // reason, audited exactly like a reassign. No candidate selection needed.
+  const handleClear = async () => {
+    if (reasonTooShort || submitting) return;
+    setSubmitting(true);
+    try {
+      const { path, bodyKey } = SLOT_CONFIG[roleSlot];
+      await api.patch(path(caseId), {
+        [bodyKey]: null,
+        reason:    reason.trim(),
+      });
+      toast.success('Slot cleared');
+      onDone();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to unassign');
     } finally {
       setSubmitting(false);
     }
@@ -188,6 +219,56 @@ export function ReassignOverlay({
         >
           {submitting ? 'Saving…' : 'Confirm reassignment'}
         </button>
+
+        {/* Unassign — only when someone currently holds the slot. All five slots
+            accept null server-side; the same reason is required and audited. */}
+        {currentAssigneeName && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            {!confirmingClear ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingClear(true)}
+                  disabled={submitting || reasonTooShort}
+                  className="w-full rounded-xl border border-rose-200 text-rose-600 font-semibold py-3 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[48px]"
+                >
+                  Unassign {currentAssigneeName}
+                </button>
+                {reasonTooShort && (
+                  <p className="mt-1 text-xs text-gray-400 text-center">
+                    Add a reason above to unassign.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <p className="text-sm text-rose-800 mb-3">
+                  Remove <span className="font-semibold">{currentAssigneeName}</span> from the{' '}
+                  {slotDisplay} slot? The slot will be left unassigned. This is recorded on the
+                  audit trail.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingClear(false)}
+                    disabled={submitting}
+                    className="flex-1 rounded-xl border border-gray-300 text-gray-600 font-semibold py-2.5 hover:bg-white disabled:opacity-50 transition-colors min-h-[44px]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    disabled={submitting || reasonTooShort}
+                    className="flex-1 rounded-xl bg-rose-600 text-white font-semibold py-2.5 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+                  >
+                    {submitting ? 'Removing…' : 'Confirm removal'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

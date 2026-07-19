@@ -87,6 +87,7 @@ export function CaseAssignmentsPanel({
           open={!!reassigning}
           onClose={() => setReassigning(null)}
           onDone={onChanged}
+          currentAssigneeName={data.assignments[reassigning]?.name ?? null}
         />
       )}
     </section>

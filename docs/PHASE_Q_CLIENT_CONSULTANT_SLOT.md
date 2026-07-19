@@ -94,10 +94,8 @@ to run the test; unrelated to this change and already present in prod.)
 
 ## 7. Known limitations / deliberate exclusions
 
-- **No "unassign / clear" control** — matching the other 4 slots exactly. The
-  `ReassignOverlay` requires selecting a candidate; none of the slots expose a
-  null-clear today. The backend accepts `consultantId: null`, so a cross-slot
-  "Unassign" affordance is a clean future addition for all five at once.
+- **~~No "unassign / clear" control~~ — SHIPPED (follow-up, see §11).** All five
+  slots now offer an "Unassign" action in `ReassignOverlay`.
 - **English-only label** — "Client Consultant" is an English literal (Persian is
   frozen); no `fa`/`en` dictionary key was added, matching how "Admission
   Specialist" is handled.
@@ -132,3 +130,30 @@ to run the test; unrelated to this change and already present in prod.)
   `consultantId` values already written by the new control remain valid (the
   visibility filter and OPS handoffs still read them); nothing is orphaned.
 - Frontend and backend roll back independently; no migration to reverse.
+
+---
+
+## 11. Follow-up — "Unassign" affordance (all slots)
+
+Added the cross-slot **Unassign** control the original §7 flagged. Frontend-only —
+the five reassign endpoints already accept a `null` id.
+
+- **Which slots are nullable:** **all five** — `liaId`, `ownerId`, `consultantId`,
+  `supportId`, `financeId` (every reassign DTO is `@IsOptional() <id>?: string|null`
+  and clears on `null`). None is required, so Unassign shows on every slot.
+- **UI:** `ReassignOverlay` now takes `currentAssigneeName`. When the slot is
+  filled, an "Unassign {name}" button appears below the reassign action; it
+  requires the same reason (≥10 chars) and opens a **two-step confirm panel**
+  (removing a person is destructive) before submitting. It calls the **same**
+  `PATCH /cases/:id/<slot>` with `{ [idField]: null, reason }` — same admin gate
+  (`OWNER/ADMIN/SUPER_ADMIN`), same audit row. Empty slots show no Unassign
+  (nothing to remove). Styling matches the overlay; English only.
+- **Files:** `ReassignOverlay.tsx` (Unassign action + `handleClear` + confirm
+  state), `CaseAssignmentsPanel.tsx` (passes `currentAssigneeName`). No backend or
+  schema change.
+- **Test (gitignored):** `backend/scripts/test-unassign-slots.ts` — **15/15**:
+  each of the five slots clears to `null` + writes its `*_MANUAL_REASSIGNED` audit
+  row; clearing `ownerId` removes that CONSULTANT's visibility of the case;
+  clearing one slot leaves the other four intact. `tsc` clean.
+- **Security:** unchanged — reuses the guarded, audited reassign endpoints; reason
+  required; no client-trusted role. Rollback: revert the commit (frontend-only).
