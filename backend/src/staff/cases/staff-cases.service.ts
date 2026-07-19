@@ -190,20 +190,24 @@ export class StaffCasesService {
             },
           },
         },
-        owner:   { select: { id: true, name: true, role: true, photoKey: true } },
-        lia:     { select: { id: true, name: true, role: true, photoKey: true } },
-        support: { select: { id: true, name: true, role: true, photoKey: true } },
-        finance: { select: { id: true, name: true, role: true, photoKey: true } },
+        owner:      { select: { id: true, name: true, role: true, photoKey: true } },
+        lia:        { select: { id: true, name: true, role: true, photoKey: true } },
+        support:    { select: { id: true, name: true, role: true, photoKey: true } },
+        finance:    { select: { id: true, name: true, role: true, photoKey: true } },
+        // PR-CLIENT-CONSULTANT-SLOT: the CLIENT_CONSULTANT slot (Case.consultantId),
+        // surfaced so the Assignments panel can show + reassign it like the others.
+        consultant: { select: { id: true, name: true, role: true, photoKey: true } },
       },
     });
     if (!row) throw new NotFoundException('Case not found');
 
     // Presigned photo URLs for each assignee (null when unset / not staff).
-    const [liaPhoto, ownerPhoto, supportPhoto, financePhoto] = await Promise.all([
+    const [liaPhoto, ownerPhoto, supportPhoto, financePhoto, consultantPhoto] = await Promise.all([
       this.photos.presignedUrl(row.lia?.photoKey),
       this.photos.presignedUrl(row.owner?.photoKey),
       this.photos.presignedUrl(row.support?.photoKey),
       this.photos.presignedUrl(row.finance?.photoKey),
+      this.photos.presignedUrl(row.consultant?.photoKey),
     ]);
 
     // Split contact.fullName on first whitespace — matches the
@@ -229,10 +233,12 @@ export class StaffCasesService {
         phone:     row.lead.contact.phone ?? null,
       },
       assignments: {
-        LIA:        row.lia     ? { id: row.lia.id,     name: row.lia.name,     role: row.lia.role,     photoUrl: liaPhoto     } : null,
-        CONSULTANT: row.owner   ? { id: row.owner.id,   name: row.owner.name,   role: row.owner.role,   photoUrl: ownerPhoto   } : null,
-        SUPPORT:    row.support ? { id: row.support.id, name: row.support.name, role: row.support.role, photoUrl: supportPhoto } : null,
-        FINANCE:    row.finance ? { id: row.finance.id, name: row.finance.name, role: row.finance.role, photoUrl: financePhoto } : null,
+        LIA:               row.lia        ? { id: row.lia.id,        name: row.lia.name,        role: row.lia.role,        photoUrl: liaPhoto        } : null,
+        CONSULTANT:        row.owner      ? { id: row.owner.id,      name: row.owner.name,      role: row.owner.role,      photoUrl: ownerPhoto      } : null,
+        SUPPORT:           row.support    ? { id: row.support.id,    name: row.support.name,    role: row.support.role,    photoUrl: supportPhoto    } : null,
+        FINANCE:           row.finance    ? { id: row.finance.id,    name: row.finance.name,    role: row.finance.role,    photoUrl: financePhoto    } : null,
+        // PR-CLIENT-CONSULTANT-SLOT — the CLIENT_CONSULTANT (Case.consultantId) slot.
+        CLIENT_CONSULTANT: row.consultant ? { id: row.consultant.id, name: row.consultant.name, role: row.consultant.role, photoUrl: consultantPhoto } : null,
       },
     };
   }
@@ -488,9 +494,38 @@ export class StaffCasesService {
   // CONSULTANT → users with role='CONSULTANT' counted via Case.ownerId.
   // Active-case count excludes COMPLETED/WITHDRAWN stages, matching
   // LiaAssignmentService.findActiveLias() in the cases module.
-  async listEligibleStaff(slot: 'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE') {
-    if (slot !== 'LIA' && slot !== 'CONSULTANT' && slot !== 'SUPPORT' && slot !== 'FINANCE') {
-      throw new BadRequestException('slot must be LIA, CONSULTANT, SUPPORT, or FINANCE');
+  async listEligibleStaff(slot: 'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE' | 'CLIENT_CONSULTANT') {
+    if (slot !== 'LIA' && slot !== 'CONSULTANT' && slot !== 'SUPPORT' && slot !== 'FINANCE' && slot !== 'CLIENT_CONSULTANT') {
+      throw new BadRequestException('slot must be LIA, CONSULTANT, CLIENT_CONSULTANT, SUPPORT, or FINANCE');
+    }
+    if (slot === 'CLIENT_CONSULTANT') {
+      // PR-CLIENT-CONSULTANT-SLOT — candidates for Case.consultantId. Mirrors the
+      // CONSULTANT branch but keys off role CLIENT_CONSULTANT and counts open
+      // cases via the consultantCases relation (Case.consultantId).
+      const users = await this.prisma.user.findMany({
+        where: {
+          role: 'CLIENT_CONSULTANT',
+          isActive: true,
+          OR: [
+            { staffActiveStatus: null },
+            { staffActiveStatus: { isActive: true } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          consultantCases: {
+            where:  { stage: { notIn: ['COMPLETED', 'WITHDRAWN'] } },
+            select: { id: true },
+          },
+        },
+      });
+      return users.map((u) => ({
+        id:              u.id,
+        name:            u.name,
+        activeCaseCount: u.consultantCases.length,
+      }));
     }
     if (slot === 'LIA') {
       const users = await this.prisma.user.findMany({

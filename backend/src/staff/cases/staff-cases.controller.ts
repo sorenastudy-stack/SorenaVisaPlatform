@@ -39,8 +39,8 @@ export class StaffCasesController {
   @Get('eligible-staff')
   @AdminTier()
   eligibleStaff(@Query('slot') slot: string) {
-    if (slot !== 'LIA' && slot !== 'CONSULTANT' && slot !== 'SUPPORT' && slot !== 'FINANCE') {
-      throw new BadRequestException('slot must be LIA, CONSULTANT, SUPPORT, or FINANCE');
+    if (slot !== 'LIA' && slot !== 'CONSULTANT' && slot !== 'SUPPORT' && slot !== 'FINANCE' && slot !== 'CLIENT_CONSULTANT') {
+      throw new BadRequestException('slot must be LIA, CONSULTANT, CLIENT_CONSULTANT, SUPPORT, or FINANCE');
     }
     return this.cases.listEligibleStaff(slot);
   }

@@ -17,14 +17,17 @@ import { ReassignOverlay } from './ReassignOverlay';
 // Display-only relabel: the CONSULTANT code role is the "Admission
 // Specialist" externally. The role enum stays CONSULTANT.
 
-const SLOT_I18N_KEYS: Record<RoleSlot, string> = {
-  LIA:        'staff.roles.LIA',
-  CONSULTANT: 'staff.roles.CONSULTANT',
-  SUPPORT:    'staff.roles.SUPPORT',
-  FINANCE:    'staff.roles.FINANCE',
+// LIA/SUPPORT/FINANCE labels come from the bilingual dictionary. CONSULTANT and
+// CLIENT_CONSULTANT are English literals (see slotLabel) — no fa keys added.
+const SLOT_I18N_KEYS: Partial<Record<RoleSlot, string>> = {
+  LIA:     'staff.roles.LIA',
+  SUPPORT: 'staff.roles.SUPPORT',
+  FINANCE: 'staff.roles.FINANCE',
 };
 
-const SLOTS: RoleSlot[] = ['LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'];
+// PR-CLIENT-CONSULTANT-SLOT — Client Consultant (consultantId) sits next to the
+// Admission Specialist (ownerId) so the two consultant-type roles are adjacent.
+const SLOTS: RoleSlot[] = ['LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE'];
 
 export function CaseAssignmentsPanel({
   data,
@@ -38,7 +41,8 @@ export function CaseAssignmentsPanel({
 
   const slotLabel = (slot: RoleSlot): string => {
     if (slot === 'CONSULTANT') return 'Admission Specialist';
-    return t(SLOT_I18N_KEYS[slot]);
+    if (slot === 'CLIENT_CONSULTANT') return 'Client Consultant';
+    return t(SLOT_I18N_KEYS[slot] as string);
   };
 
   return (

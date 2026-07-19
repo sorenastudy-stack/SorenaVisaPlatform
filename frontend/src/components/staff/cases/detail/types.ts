@@ -4,7 +4,10 @@
 // in one file lets every detail-tab component import a stable type
 // without re-declaring the slot interfaces.
 
-export type RoleSlot = 'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE';
+// PR-CLIENT-CONSULTANT-SLOT — CLIENT_CONSULTANT is the "Client Consultant" slot
+// (Case.consultantId), distinct from CONSULTANT (= "Admission Specialist" on
+// Case.ownerId). Wired to PATCH /cases/:id/consultant.
+export type RoleSlot = 'LIA' | 'CONSULTANT' | 'SUPPORT' | 'FINANCE' | 'CLIENT_CONSULTANT';
 
 export interface SlotAssignee {
   id:   string;
