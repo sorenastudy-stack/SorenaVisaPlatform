@@ -24,32 +24,31 @@ export default function StaffAccountPage() {
   // ── Profile photo (own) ───────────────────────────────────────────────
   const { me, refresh } = useStaff();
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const [picked, setPicked] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoErr, setPhotoErr] = useState('');
   const [photoMsg, setPhotoMsg] = useState('');
 
-  const onPick = (f: File | null) => {
+  // Upload the moment a valid image is chosen. The previous two-step flow
+  // (pick → preview → click a separate "Upload" button) meant a shown preview
+  // was mistaken for a saved photo, so nothing persisted. Auto-upload removes
+  // that gap: selecting the file IS the save.
+  const onPick = async (f: File | null) => {
     setPhotoErr(''); setPhotoMsg('');
-    if (!f) { setPicked(null); setPreview(null); return; }
+    if (!f) return;
     if (!PHOTO_MIMES.includes(f.type)) { setPhotoErr('Please choose a JPG, PNG, or WebP image.'); return; }
     if (f.size > PHOTO_MAX) { setPhotoErr('Image must be under 5 MB.'); return; }
-    setPicked(f); setPreview(URL.createObjectURL(f));
-  };
-
-  const onUploadPhoto = async () => {
-    if (!picked) return;
-    setPhotoBusy(true); setPhotoErr(''); setPhotoMsg('');
+    setPreview(URL.createObjectURL(f));
+    setPhotoBusy(true);
     try {
       const fd = new FormData();
-      fd.append('file', picked);
+      fd.append('file', f);
       await api.upload('/api/staff/me/photo', fd);
-      setPicked(null); setPreview(null);
       if (fileRef.current) fileRef.current.value = '';
       setPhotoMsg('Photo updated.');
       await refresh(); // top-right + lists pick up the new photo
     } catch (e) {
+      setPreview(null);
       setPhotoErr(e instanceof ApiError ? e.message : 'Could not upload your photo.');
     } finally { setPhotoBusy(false); }
   };
@@ -58,7 +57,7 @@ export default function StaffAccountPage() {
     setPhotoBusy(true); setPhotoErr(''); setPhotoMsg('');
     try {
       await api.delete('/api/staff/me/photo');
-      setPicked(null); setPreview(null);
+      setPreview(null);
       setPhotoMsg('Photo removed.');
       await refresh();
     } catch (e) {
@@ -113,21 +112,11 @@ export default function StaffAccountPage() {
             <div className="flex flex-wrap gap-2">
               <label
                 htmlFor="photo-input"
-                className="inline-flex min-h-[48px] cursor-pointer items-center gap-2 rounded-xl border border-[#1e3a5f]/20 px-4 text-sm font-semibold text-[#1e3a5f] transition-colors hover:bg-[#faf8f3]"
+                className={`inline-flex min-h-[48px] items-center gap-2 rounded-xl border border-[#1e3a5f]/20 px-4 text-sm font-semibold text-[#1e3a5f] transition-colors hover:bg-[#faf8f3] ${photoBusy ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
               >
-                Choose image
+                <Camera size={15} /> {photoBusy ? 'Uploading…' : (me?.photoUrl ? 'Change photo' : 'Upload photo')}
               </label>
-              {picked && (
-                <button
-                  type="button"
-                  disabled={photoBusy}
-                  onClick={onUploadPhoto}
-                  className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-[#1e3a5f] px-5 text-sm font-bold text-white transition-colors hover:bg-[#162d4a] disabled:opacity-50"
-                >
-                  {photoBusy ? 'Uploading…' : 'Upload'}
-                </button>
-              )}
-              {me?.photoUrl && !picked && (
+              {me?.photoUrl && (
                 <button
                   type="button"
                   disabled={photoBusy}
@@ -139,7 +128,7 @@ export default function StaffAccountPage() {
               )}
             </div>
             <p className="mt-2 text-xs text-[#4A4A4A]/60">
-              JPG, PNG, or WebP. Max 5&nbsp;MB.{picked ? ` · ${picked.name}` : ''}
+              JPG, PNG, or WebP. Max 5&nbsp;MB. Saves as soon as you choose one.
             </p>
             {photoErr && <p className="mt-1 text-xs text-red-600">{photoErr}</p>}
             {photoMsg && <p className="mt-1 text-xs text-emerald-600">{photoMsg}</p>}

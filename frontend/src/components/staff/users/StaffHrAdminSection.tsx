@@ -54,30 +54,28 @@ export function StaffHrAdminSection({
 
   // ── Profile photo (admin — audited server-side) ─────────────────────────
   const [photo, setPhoto] = useState<string | null>(photoUrl ?? null);
-  const [picked, setPicked] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const photoRef = useRef<HTMLInputElement>(null);
 
-  const onPickPhoto = (f: File | null) => {
+  // Auto-upload on selection (same fix as the Account page): a preview shown
+  // before a separate "Upload" click was being mistaken for a saved photo.
+  async function onPickPhoto(f: File | null) {
     setMsg(null);
-    if (!f) { setPicked(null); setPreview(null); return; }
+    if (!f) return;
     if (!PHOTO_MIMES.includes(f.type)) { setMsg({ kind: 'err', text: 'Photo must be JPG, PNG, or WebP.' }); return; }
     if (f.size > PHOTO_MAX) { setMsg({ kind: 'err', text: 'Photo exceeds the 5 MB limit.' }); return; }
-    setPicked(f); setPreview(URL.createObjectURL(f));
-  };
-
-  async function uploadPhoto() {
-    if (!picked) return;
-    setBusy(true); setMsg(null);
+    setPreview(URL.createObjectURL(f));
+    setBusy(true);
     try {
       const form = new FormData();
-      form.append('file', picked);
+      form.append('file', f);
       const res = await api.upload<{ photoUrl: string | null }>(`/api/staff/users/${userId}/photo`, form);
-      setPhoto(res.photoUrl); setPicked(null); setPreview(null);
+      setPhoto(res.photoUrl); setPreview(null);
       if (photoRef.current) photoRef.current.value = '';
       setMsg({ kind: 'ok', text: 'Photo updated.' });
       onPhotoChanged?.();
     } catch (err) {
+      setPreview(null);
       setMsg({ kind: 'err', text: err instanceof ApiError ? err.message : 'Photo upload failed.' });
     } finally { setBusy(false); }
   }
@@ -86,7 +84,7 @@ export function StaffHrAdminSection({
     setBusy(true); setMsg(null);
     try {
       await api.delete(`/api/staff/users/${userId}/photo`);
-      setPhoto(null); setPicked(null); setPreview(null);
+      setPhoto(null); setPreview(null);
       setMsg({ kind: 'ok', text: 'Photo removed.' });
       onPhotoChanged?.();
     } catch (err) {
@@ -178,16 +176,13 @@ export function StaffHrAdminSection({
             <div className="flex items-center gap-3">
               <StaffAvatar name={userName} photoUrl={preview ?? photo} size={48} />
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => photoRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold text-[#1e3a5f] hover:bg-gray-50 disabled:opacity-60"><Camera size={13} /> {photo ? 'Replace' : 'Add photo'}</button>
-                {picked && (
-                  <button type="button" onClick={uploadPhoto} disabled={busy} className="inline-flex items-center gap-1 rounded-lg bg-[#1e3a5f] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-60">{busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Upload</button>
-                )}
-                {photo && !picked && (
+                <button type="button" onClick={() => photoRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-semibold text-[#1e3a5f] hover:bg-gray-50 disabled:opacity-60">{busy ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />} {busy ? 'Uploading…' : (photo ? 'Replace' : 'Add photo')}</button>
+                {photo && !busy && (
                   <button type="button" onClick={removePhoto} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"><Trash2 size={13} /></button>
                 )}
               </div>
             </div>
-            <p className="mt-1.5 text-[11px] text-gray-400">JPG, PNG, or WebP. Max 5 MB.{picked ? ` · ${picked.name}` : ''}</p>
+            <p className="mt-1.5 text-[11px] text-gray-400">JPG, PNG, or WebP. Max 5 MB. Saves as soon as you choose one.</p>
             <input ref={photoRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => onPickPhoto(e.target.files?.[0] ?? null)} className="hidden" />
           </div>
 
