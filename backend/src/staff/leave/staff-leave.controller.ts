@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../roles/staff-roles.guard';
-import { StaffRoles } from '../roles/staff-roles.decorator';
+import { StaffRoles, STAFF_PORTAL_ROLES } from '../roles/staff-roles.decorator';
 import { StaffLeaveService } from './staff-leave.service';
 import { CreateStaffLeaveDto } from '../team/dto/team.dto';
 
@@ -19,21 +19,21 @@ export class StaffLeaveController {
 
   // POST /staff/me/leave — raise a request (status REQUESTED).
   @Post()
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles(...STAFF_PORTAL_ROLES)
   request(@Body() dto: CreateStaffLeaveDto, @Req() req: any) {
     return this.service.requestOwn(req.user.userId, dto);
   }
 
   // GET /staff/me/leave — the caller's own leave (all statuses).
   @Get()
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles(...STAFF_PORTAL_ROLES)
   listMine(@Req() req: any) {
     return this.service.listOwn(req.user.userId);
   }
 
   // DELETE /staff/me/leave/:id — withdraw own pending request (→ CANCELLED).
   @Delete(':id')
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles(...STAFF_PORTAL_ROLES)
   withdraw(@Param('id') id: string, @Req() req: any) {
     return this.service.withdrawOwn(req.user.userId, id);
   }

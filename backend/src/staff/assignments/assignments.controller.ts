@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../roles/staff-roles.guard';
-import { StaffRoles, AdminTier } from '../roles/staff-roles.decorator';
+import { StaffRoles, AdminTier, STAFF_PORTAL_ROLES } from '../roles/staff-roles.decorator';
 import { AssignmentsService } from './assignments.service';
 import {
   AutoAllocateDto,
@@ -59,13 +59,13 @@ export class AssignmentsController {
   }
 
   @Get('case/:caseId')
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles(...STAFF_PORTAL_ROLES)
   getCaseAssignments(@Param('caseId') caseId: string) {
     return this.assignments.getCaseAssignments(caseId);
   }
 
   @Get('workload')
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles(...STAFF_PORTAL_ROLES)
   async getWorkload(@Req() req: any, @Query() query: WorkloadQueryDto) {
     // Non-admin staff can only see their own workload. Admin-tier
     // can pass ?staffId= to see anyone's.

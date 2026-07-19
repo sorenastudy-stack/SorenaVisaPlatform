@@ -23,3 +23,4 @@ scripts/test-remove-legacy-checkout.ts
 scripts/test-staff-photos.ts
 scripts/test-portal-branding-briefs.ts
 scripts/test-conversation-notes.ts
+scripts/test-staff-gate-consistency.ts

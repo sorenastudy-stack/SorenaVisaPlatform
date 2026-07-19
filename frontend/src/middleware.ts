@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-import { hasRole } from '@/lib/roles';
+import { hasRole, STAFF_PORTAL_ROLES } from '@/lib/roles';
 
 // PR-CONSULT-2 — `/staff/*` is the new combined staff portal that
 // replaces the per-role `/admin`, `/ops`, `/sales`, `/lia` shells
-// going forward. All 7 staff roles (OWNER / SUPER_ADMIN / ADMIN /
-// LIA / CONSULTANT / SUPPORT / FINANCE) can reach `/staff`.
+// going forward. The set of roles that may reach `/staff` is the
+// shared STAFF_PORTAL_ROLES (PR-STAFF-GATE-CONSISTENCY) — the SAME
+// constant the /staff layout gate uses, so the two can't drift.
 const ROLE_ROUTES: Record<string, string[]> = {
   '/admin':   ['ADMIN', 'SUPER_ADMIN', 'OWNER'],
   '/ops':     ['OPERATIONS', 'ADMIN', 'SUPER_ADMIN', 'OWNER'],
   '/sales':   ['SALES', 'ADMIN', 'SUPER_ADMIN', 'OWNER'],
   '/lia':     ['LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER'],
-  '/staff':   ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'],
+  '/staff':   [...STAFF_PORTAL_ROLES],
   '/student': ['STUDENT'],
 };
 

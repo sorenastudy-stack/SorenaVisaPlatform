@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { STAFF_ROLES_KEY, StaffAccessRole } from './staff-roles.decorator';
 import { ROLES_KEY } from '../../auth/decorators/roles.decorator';
+import { hasRole } from '../../auth/role.util';
 
 // PR-CONSULT-1 — Staff-roles guard.
 //
@@ -55,7 +56,13 @@ export class StaffRolesGuard implements CanActivate {
     if (!user?.userId || !user?.role) {
       throw new ForbiddenException('Authentication required');
     }
-    if (!required.includes(user.role as StaffAccessRole)) {
+    // WIDEN with secondary roles — allowed if the PRIMARY role OR any secondary
+    // role is in the allow-list. This matches the edge middleware (which already
+    // widens) and the RolesGuard, so the three /staff gates now agree by
+    // construction. It only LOOSENS for users who already hold a staff secondary
+    // role; a user with no staff role (LEAD/STUDENT, empty/non-staff secondaries)
+    // still matches nothing and is denied.
+    if (!hasRole(user, ...required)) {
       throw new ForbiddenException(
         `Role ${user.role} is not allowed for this action`,
       );

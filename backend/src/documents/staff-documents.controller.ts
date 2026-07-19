@@ -1,7 +1,7 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../staff/roles/staff-roles.guard';
-import { StaffRoles } from '../staff/roles/staff-roles.decorator';
+import { StaffRoles, STAFF_PORTAL_ROLES } from '../staff/roles/staff-roles.decorator';
 import { DocumentsService } from './documents.service';
 
 // PR-STAFF-DOCS — cross-case "My case documents" list.
@@ -18,7 +18,7 @@ export class StaffDocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 
   @Get()
-  @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
+  @StaffRoles(...STAFF_PORTAL_ROLES)
   listMine(@Req() req: any) {
     return this.documents.listMyDocuments({
       id: req.user.userId,

@@ -32,6 +32,31 @@ export type StaffAccessRole =
   // (no reassignment, no risk/legal actions).
   | 'OPERATIONS';
 
+// PR-STAFF-GATE-CONSISTENCY — the single source of truth for "who may use the
+// combined /staff portal". Every route that means "any staff-portal user"
+// references THIS, instead of re-typing the list (the old inline literals drifted
+// and silently omitted CLIENT_CONSULTANT, locking those users out).
+//
+// OPERATIONS is intentionally NOT here: they are routed to /ops, not /staff (see
+// the middleware ROLE_ROUTES map). Routes that legitimately include OPERATIONS
+// (e.g. read-all cases, own-photo upload) list it explicitly and are a different,
+// broader set — not the portal-shell set.
+//
+// This is an ALLOW-LIST of primary-or-secondary roles: StaffRolesGuard widens
+// with secondaryRoles (hasRole), so a staff SECONDARY role also grants access —
+// matching the edge middleware. A user with NO staff role (LEAD/STUDENT) matches
+// nothing here and is denied.
+export const STAFF_PORTAL_ROLES: StaffAccessRole[] = [
+  'OWNER',
+  'SUPER_ADMIN',
+  'ADMIN',
+  'LIA',
+  'CONSULTANT',
+  'CLIENT_CONSULTANT',
+  'SUPPORT',
+  'FINANCE',
+];
+
 // Allow ANY of the listed roles.
 export const StaffRoles = (...roles: StaffAccessRole[]) =>
   SetMetadata(STAFF_ROLES_KEY, roles);
