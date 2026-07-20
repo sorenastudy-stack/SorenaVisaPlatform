@@ -54,6 +54,7 @@ export function CaseOverviewTab({
         <dl className="text-sm space-y-2.5">
           <Row label="Status" value={data.status.replace(/_/g, ' ')} />
           <Row label="Stage" value={data.stage.replace(/_/g, ' ')} />
+          <Row label="Visa type" value={data.visaType ?? '—'} />
           <Row label="Created" value={formatRelativeTime(data.createdAt)} />
           <Row label="Updated" value={formatRelativeTime(data.updatedAt)} />
         </dl>

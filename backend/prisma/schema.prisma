@@ -1347,6 +1347,12 @@ model Case {
   leadId      String
   stage       CaseStage @default(ADMISSION)
   status      String    @default("active")
+  // PR-CONTRACT-CAPTURE — the visa type the LIA selected in the engagement
+  // contract's `visaType` checkbox group, captured from DocuSign on envelope
+  // completion (the webhook reads the LIA's selected tab). NULL until a contract
+  // is fully signed. Free-text (the selected checkbox's label), not an enum, so
+  // it survives template wording changes without a migration.
+  visaType    String?
   ownerId     String?
   // PR-LIA-2: the LIA (Legal & Immigration Adviser) currently
   // responsible for this case. Set automatically when the client

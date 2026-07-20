@@ -21,6 +21,7 @@ export interface CaseDetail {
   status:    string;
   stage:     string;
   notes:     string | null; // PR-OPS-CASES: editable on the overview tab
+  visaType:  string | null; // PR-CONTRACT-CAPTURE — captured from the signed contract (read-only)
   createdAt: string;
   updatedAt: string;
   student: {

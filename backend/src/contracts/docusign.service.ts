@@ -384,6 +384,49 @@ export class DocuSignService {
     return envelopesApi.listRecipients(this.accountId, envelopeId);
   }
 
+  // PR-CONTRACT-CAPTURE — download the FLATTENED, fully-signed PDF (all three
+  // signatures + the audit trail baked in) as bytes. 'combined' is DocuSign's
+  // pseudo-document id for the single merged PDF of the whole envelope. Uses the
+  // same JWT auth + EnvelopesApi as every other call. Returns a Buffer.
+  async getCombinedDocument(envelopeId: string): Promise<Buffer> {
+    const apiClient = await this.makeAuthedApiClient();
+    const envelopesApi = new docusign.EnvelopesApi(apiClient);
+    const result: any = await envelopesApi.getDocument(this.accountId, envelopeId, 'combined');
+    // The SDK returns binary as a latin1/binary string (older builds) or a
+    // Buffer (newer). Normalise to Buffer either way.
+    if (Buffer.isBuffer(result)) return result;
+    return Buffer.from(result, 'binary');
+  }
+
+  // PR-CONTRACT-CAPTURE — read the LIA's `visaType` checkbox-group selection.
+  // The engagement template has 11 visa-type checkboxes grouped as "visaType"
+  // (pick exactly one), filled by the LIA (recipient 2). On completion we ask
+  // DocuSign for the recipients WITH their tabs and return the label of the
+  // selected checkbox. NOTE: the returned string is the checkbox's tabLabel — for
+  // human-readable visa names the template checkboxes must have their tabLabel
+  // set to the visa type (a template-config step; see the PHASE doc). Returns
+  // null if nothing is selected / tabs unavailable.
+  async getSelectedVisaType(envelopeId: string): Promise<string | null> {
+    const apiClient = await this.makeAuthedApiClient();
+    const envelopesApi = new docusign.EnvelopesApi(apiClient);
+    const recips: any = await envelopesApi.listRecipients(this.accountId, envelopeId, {
+      includeTabs: 'true',
+    });
+    const signers: any[] = recips?.signers ?? [];
+    // The LIA is recipient 2 / roleName 'LIA'. Fall back to any signer that
+    // carries the visaType group if the role name differs.
+    const lia =
+      signers.find((s) => s.roleName === TEMPLATE_ROLE_LIA) ??
+      signers.find((s) => s.recipientId === '2') ??
+      signers.find((s) => (s.tabs?.checkboxTabs ?? []).some((t: any) => t.groupName === 'visaType'));
+    const boxes: any[] = lia?.tabs?.checkboxTabs ?? [];
+    const selected = boxes.find(
+      (t) => t.selected === 'true' || t.selected === true,
+    );
+    if (!selected) return null;
+    return (selected.tabLabel ?? selected.value ?? null) || null;
+  }
+
   // ─── Internals ─────────────────────────────────────────────────────
 
   // Per-call new ApiClient. The SDK's addDefaultHeader appends rather

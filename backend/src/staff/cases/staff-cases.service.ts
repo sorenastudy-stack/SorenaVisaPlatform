@@ -222,6 +222,7 @@ export class StaffCasesService {
       status:    row.stage, // display stage in the status field — Case.status is vestigial
       stage:     row.stage,
       notes:     row.notes ?? null, // PR-OPS-CASES: editable on the overview tab
+      visaType:  row.visaType ?? null, // PR-CONTRACT-CAPTURE — from the signed contract
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       student: {

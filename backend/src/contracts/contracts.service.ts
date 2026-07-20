@@ -10,11 +10,14 @@ import {
   ContractSignerRole,
   ContractSignerStatus,
   ContractStatus,
+  DocumentUploadStatus,
   Prisma,
 } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2Service } from '../common/r2/r2.service';
 import {
   DocuSignService,
   EnvelopeDocumentSpec,
@@ -37,6 +40,10 @@ import { stampLiaIdentity } from './engagement-letter-stamp';
 // referenced by nothing in code, kept in case anyone wants to compare
 // the multi-signer scaffolding shape against the real document.
 const ENGAGEMENT_LETTER_PDF_REL_PATH = 'assets/contract-templates/engagement-letter-v1.pdf';
+
+// PR-CONTRACT-CAPTURE — Document.category for the stored signed engagement PDF.
+// Doubles as the idempotency key: at most one signed_contract Document per case.
+const SIGNED_CONTRACT_CATEGORY = 'signed_contract';
 
 // PR-DOCUSIGN-1 step 5 piece 3 — DocuSign recipient status →
 // ContractSignerStatus mapping. Returns null on unrecognized values
@@ -74,6 +81,8 @@ export class ContractsService {
     // The injection is one-directional (Contracts -> Cases-side
     // LiaAssignmentService); no circular import risk.
     private liaAssignments: LiaAssignmentService,
+    // PR-CONTRACT-CAPTURE — store the signed PDF in R2 on completion.
+    private r2: R2Service,
   ) {}
 
   // PR-DOCUSIGN-1 step 5 piece 2 — multi-signer envelope creation.
@@ -583,6 +592,12 @@ export class ContractsService {
           `Finance auto-assignment failed for case ${contract.caseId}: ${err?.message ?? err}`,
         );
       }
+
+      // PR-CONTRACT-CAPTURE — on full completion, store the flattened signed PDF
+      // as a case Document and capture the LIA's visaType selection onto the
+      // case. Idempotent + never-throw (a DocuSign/R2 hiccup must not fail the
+      // webhook — DocuSign would otherwise retry the whole event).
+      await this.captureSignedArtifacts(contract.caseId, envelopeId);
     }
 
     // 7. PR-CLIENT-STAGE — auto-promote the client LEAD → STUDENT once BOTH
@@ -598,6 +613,122 @@ export class ContractsService {
     await this.maybeCreateEngagementInvoice(contract.id, contract.caseId);
 
     return updated;
+  }
+
+  // PR-CONTRACT-CAPTURE — download + persist the signed artifacts once an
+  // envelope is fully signed. Two independent, idempotent, best-effort steps:
+  //   A. the flattened signed PDF → R2 → a case Document (category
+  //      'signed_contract', status UPLOADED) so it appears in the case's
+  //      documents list and is downloadable via the existing signed-URL route.
+  //   B. the LIA's visaType checkbox selection → Case.visaType.
+  // Neither throws: a failure logs and leaves the webhook succeeding.
+  private async captureSignedArtifacts(caseId: string, envelopeId: string): Promise<void> {
+    // ── A. Signed PDF ─────────────────────────────────────────────────
+    try {
+      const already = await this.prisma.document.findFirst({
+        where: { caseId, category: SIGNED_CONTRACT_CATEGORY },
+        select: { id: true },
+      });
+      if (already) {
+        this.logger.log(
+          `captureSignedArtifacts: signed contract already stored for case ${caseId} — skipping PDF`,
+        );
+      } else {
+        const caseRow = await this.prisma.case.findUnique({
+          where: { id: caseId },
+          select: { liaId: true, ownerId: true },
+        });
+        // Attribute the system-stored PDF to the responsible LIA (guaranteed set
+        // by contract-send + re-asserted on SIGNED); fall back to the owner.
+        const uploaderId = caseRow?.liaId ?? caseRow?.ownerId ?? null;
+        if (!uploaderId) {
+          this.logger.warn(
+            `captureSignedArtifacts: case ${caseId} has no LIA/owner to attribute the signed contract — PDF not stored`,
+          );
+        } else {
+          const bytes = await this.docuSignService.getCombinedDocument(envelopeId);
+          const key = `signed-contracts/${caseId}/${envelopeId}.pdf`;
+          await this.r2.putObject(key, bytes, 'application/pdf');
+          try {
+            await this.prisma.document.create({
+              data: {
+                caseId,
+                uploaderId,
+                r2Key:        key,
+                originalName: 'Signed engagement letter.pdf',
+                mimeType:     'application/pdf',
+                sizeBytes:    bytes.length,
+                status:       DocumentUploadStatus.UPLOADED,
+                category:     SIGNED_CONTRACT_CATEGORY,
+              },
+            });
+            await this.prisma.auditLog.create({
+              data: {
+                action:     'CONTRACT_SIGNED_PDF_STORED',
+                eventType:  'CONTRACT_SIGNED_PDF_STORED',
+                entityType: 'CASE',
+                entityId:   caseId,
+                newValue:   { envelopeId, r2Key: key, sizeBytes: bytes.length } as Prisma.InputJsonValue,
+              },
+            });
+            this.logger.log(
+              `captureSignedArtifacts: stored signed contract for case ${caseId} (${bytes.length} bytes)`,
+            );
+          } catch (err: any) {
+            // Unique r2Key backstop — a concurrent webhook already stored it.
+            if (err?.code === 'P2002') {
+              this.logger.log(
+                `captureSignedArtifacts: signed contract row already exists (race) for case ${caseId}`,
+              );
+            } else {
+              throw err;
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `captureSignedArtifacts: failed to store signed PDF for case ${caseId}: ${err?.message ?? err}`,
+      );
+    }
+
+    // ── B. visaType selection ─────────────────────────────────────────
+    try {
+      const caseRow = await this.prisma.case.findUnique({
+        where: { id: caseId },
+        select: { visaType: true },
+      });
+      if (caseRow?.visaType) {
+        this.logger.log(
+          `captureSignedArtifacts: case ${caseId} already has visaType — skipping`,
+        );
+      } else {
+        const visaType = await this.docuSignService.getSelectedVisaType(envelopeId);
+        if (visaType) {
+          await this.prisma.case.update({ where: { id: caseId }, data: { visaType } });
+          await this.prisma.auditLog.create({
+            data: {
+              action:     'CONTRACT_VISA_TYPE_CAPTURED',
+              eventType:  'CONTRACT_VISA_TYPE_CAPTURED',
+              entityType: 'CASE',
+              entityId:   caseId,
+              newValue:   { envelopeId, visaType } as Prisma.InputJsonValue,
+            },
+          });
+          this.logger.log(
+            `captureSignedArtifacts: captured visaType="${visaType}" for case ${caseId}`,
+          );
+        } else {
+          this.logger.warn(
+            `captureSignedArtifacts: no visaType selection found on envelope ${envelopeId} for case ${caseId}`,
+          );
+        }
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `captureSignedArtifacts: failed to capture visaType for case ${caseId}: ${err?.message ?? err}`,
+      );
+    }
   }
 
   // PR-CLIENT-STAGE — promote the case's client user LEAD → STUDENT when the
