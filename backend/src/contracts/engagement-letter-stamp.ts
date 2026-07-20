@@ -34,14 +34,25 @@ import * as fontkit from '@pdf-lib/fontkit';
 const STAMP_PAGE_1_FONT_SIZE  = 11.04;
 const STAMP_PAGE_11_FONT_SIZE =  9.96;
 
-const STAMP_PAGE_1_NAME_X  = 97.66;
+// NOTE (spacing fix): the X values below are NOT the raw output of
+// calibrate-stamp-coordinates.ts. That script measures the label width with
+// Caladea, which UNDER-estimates the document's real (Cambria) label width by
+// ~2.5pt on "Name:" and more on longer labels — so its raw output stamped the
+// value flush against ("Name:Sheila Rose") or overlapping ("IAA Licence
+// Number202300520") the pre-printed label. These X's are re-anchored to the
+// PDF's REAL measured label end (pdfjs anchor.width) plus a gap: ~7pt on page 1
+// (Clause 2.1 reads better with a wider space) and ~3.5pt on page 11 (signature
+// block). Y is unchanged (spacing is horizontal only). If the engagement
+// letter PDF is ever replaced, update calibrate-stamp-coordinates.ts to use the
+// real anchor.width before trusting its output, then re-derive these.
+const STAMP_PAGE_1_NAME_X  = 104.19;
 const STAMP_PAGE_1_NAME_Y  = 100.10;
-const STAMP_PAGE_1_IAA_X   = 166.70;
+const STAMP_PAGE_1_IAA_X   = 176.48;
 const STAMP_PAGE_1_IAA_Y   = 68.30;
 
-const STAMP_PAGE_11_NAME_X = 280.32;
+const STAMP_PAGE_11_NAME_X = 279.95;
 const STAMP_PAGE_11_NAME_Y = 529.27;
-const STAMP_PAGE_11_IAA_X  = 300.04;
+const STAMP_PAGE_11_IAA_X  = 300.96;
 const STAMP_PAGE_11_IAA_Y  = 471.19;
 
 const CALADEA_TTF_REL_PATH = 'assets/fonts/caladea-regular.ttf';
