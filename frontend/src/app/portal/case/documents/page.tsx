@@ -79,6 +79,10 @@ export default async function MyDocumentsPage() {
     /* fail-safe: locked */
   }
   if (!access.paid) {
+    // No engagement invoice yet (payInvoiceId null, not processing) → the fee is
+    // raised only after the client signs, so show the honest "sign first" state
+    // instead of a "Go to payment" button that loops back to My Case.
+    const awaitingSignature = !access.payInvoiceId && !access.processing;
     const payHref = access.payInvoiceId
       ? `/portal/case/pay?invoiceId=${access.payInvoiceId}`
       : '/portal/case';
@@ -91,7 +95,7 @@ export default async function MyDocumentsPage() {
           <ArrowLeft size={16} />
           {t('portal.documents.backLink')}
         </Link>
-        <PaymentGatePanel processing={access.processing} payHref={payHref} />
+        <PaymentGatePanel processing={access.processing} awaitingSignature={awaitingSignature} payHref={payHref} />
       </div>
     );
   }

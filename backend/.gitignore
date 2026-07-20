@@ -28,3 +28,4 @@ scripts/test-client-consultant-slot.ts
 scripts/test-unassign-slots.ts
 scripts/test-tickets-rich.ts
 scripts/test-contract-capture.ts
+scripts/test-client-contract-onramp.ts

@@ -22,10 +22,11 @@ export default async function AdmissionPage() {
     /* fail-safe: locked */
   }
   if (!access.paid) {
+    const awaitingSignature = !access.payInvoiceId && !access.processing;
     const payHref = access.payInvoiceId
       ? `/portal/case/pay?invoiceId=${access.payInvoiceId}`
       : '/portal/case';
-    return <PaymentGatePanel processing={access.processing} payHref={payHref} />;
+    return <PaymentGatePanel processing={access.processing} awaitingSignature={awaitingSignature} payHref={payHref} />;
   }
 
   let initialData: {

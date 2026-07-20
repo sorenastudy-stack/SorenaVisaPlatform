@@ -201,10 +201,18 @@ export default async function MyCasePage() {
                   <p className="text-sm font-medium text-[#1e3a5f]">{s.label}</p>
                   {s.detail && <p className="text-xs text-gray-500 mt-0.5">{s.detail}</p>}
                 </div>
-                {(s.kind === 'DOCUMENT' || s.kind === 'CONTRACT') && (
+                {s.kind === 'DOCUMENT' && (
                   <Link href="/portal/case/documents" className="shrink-0 text-xs font-semibold text-[#1e3a5f] underline underline-offset-4 hover:text-[#b8941f]">
                     Open
                   </Link>
+                )}
+                {/* Signing is email-only (see the banner above). This step points
+                    the client at their email — NOT the payment-gated documents
+                    page, which was a dead-end that funnelled them into the gate. */}
+                {s.kind === 'CONTRACT' && (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[#8a6d10]">
+                    <Mail size={13} /> Check your email
+                  </span>
                 )}
                 {s.kind === 'INVOICE' && s.invoiceId && (
                   <Link
