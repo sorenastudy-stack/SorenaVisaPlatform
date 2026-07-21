@@ -68,7 +68,7 @@ export class CasesService {
       data: {
         leadId: dto.leadId,
         ownerId: lead.ownerId,
-        riskLevel: lead.riskLevel,
+        riskLevel: lead.riskLevel ?? undefined,
       },
     });
 
