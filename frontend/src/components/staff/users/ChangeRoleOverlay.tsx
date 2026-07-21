@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useRoleLabel } from '@/lib/role-label';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -29,6 +30,7 @@ export function ChangeRoleOverlay({
   onDone:      () => void;
 }) {
   const t = useTranslations();
+  const roleLabel = useRoleLabel();
   const [newRole, setNewRole] = useState<StaffRole | ''>('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -93,7 +95,7 @@ export function ChangeRoleOverlay({
           >
             <option value="" disabled>—</option>
             {ASSIGNABLE_ROLES.filter((r) => r !== currentRole).map((r) => (
-              <option key={r} value={r}>{t(`staff.roles.${r}`)}</option>
+              <option key={r} value={r}>{roleLabel(r)}</option>
             ))}
           </select>
         </div>

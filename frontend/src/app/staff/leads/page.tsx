@@ -7,6 +7,7 @@ import {
   Users, Search, Filter, X, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useRoleLabel } from '@/lib/role-label';
 import { displayCountry } from '@/lib/country-codes';
 import { Card, CardContent } from '@/components/ui/Card';
 import { DateInput } from '@/components/ui/DateInput';
@@ -88,6 +89,7 @@ function initials(name: string): string {
 export default function StaffLeadsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const roleLabel = useRoleLabel();
 
   // Hydrate filters from URL on first paint and on back/forward.
   const filters = useMemo(() => ({
@@ -282,7 +284,7 @@ export default function StaffLeadsPage() {
                 <option value="">All assignees</option>
                 <option value="unassigned">Unassigned</option>
                 {assignees.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
+                  <option key={a.id} value={a.id}>{a.name} ({roleLabel(a.role)})</option>
                 ))}
               </select>
             </div>

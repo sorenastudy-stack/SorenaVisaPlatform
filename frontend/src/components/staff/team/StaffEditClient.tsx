@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { StaffAvatar } from '@/components/staff/StaffAvatar';
 import { ArrowLeft, Loader2, Plus, X, BadgeCheck, Clock, CalendarOff, AlertTriangle } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useRoleLabel } from '@/lib/role-label';
 import { formatDate } from '@/lib/date';
 import { DateInput } from '@/components/ui/DateInput';
 import {
@@ -56,6 +57,7 @@ function fmtConflictWhen(iso: string, tz: string | null): string {
 
 export function StaffEditClient({ staffId }: { staffId: string }) {
   const router = useRouter();
+  const roleLabel = useRoleLabel();
   const [data, setData] = useState<Staff | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -231,7 +233,7 @@ export function StaffEditClient({ staffId }: { staffId: string }) {
       <div className="mb-6 flex items-center gap-2">
         <StaffAvatar name={data.name} photoUrl={data.photoUrl} size={40} />
         <h1 className="text-2xl font-bold text-sorena-navy">{data.name}</h1>
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{data.role}</span>
+        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{roleLabel(data.role)}</span>
         {data.role === 'LIA' && data.liaVerified && (
           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-sorena-jade"><BadgeCheck size={13} /> verified</span>
         )}

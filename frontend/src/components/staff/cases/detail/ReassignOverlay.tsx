@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { useRoleLabel } from '@/lib/role-label';
 import type { RoleSlot } from './types';
 
 // Option 1 step 3b/4c — Reassign overlay, Case-side flow for all 4 slots.
@@ -23,18 +24,18 @@ interface CaseEligibleStaff {
   activeCaseCount: number;
 }
 
-// Per-slot display label + PATCH endpoint + body field name. The
-// CONSULTANT slot is the "Admission Specialist" externally (display
-// relabel only — the code role string stays CONSULTANT and the body
-// key stays ownerId because Case.ownerId is the underlying column).
-const SLOT_CONFIG: Record<RoleSlot, { label: string; path: (id: string) => string; bodyKey: string }> = {
-  LIA:               { label: 'Immigration Adviser',  path: (id) => `/cases/${id}/lia`,        bodyKey: 'liaId'         },
-  CONSULTANT:        { label: 'Admission Officer',    path: (id) => `/cases/${id}/owner`,      bodyKey: 'ownerId'       },
-  SUPPORT:           { label: 'Support',              path: (id) => `/cases/${id}/support`,    bodyKey: 'supportId'     },
-  FINANCE:           { label: 'Finance',              path: (id) => `/cases/${id}/finance`,    bodyKey: 'financeId'     },
+// Per-slot PATCH endpoint + body field name. The display label is NOT held
+// here — it resolves through the central role map (useRoleLabel) so there is a
+// single source of truth. The CONSULTANT slot writes Case.ownerId (its display
+// label is "Admission Officer"); the code role string stays CONSULTANT.
+const SLOT_CONFIG: Record<RoleSlot, { path: (id: string) => string; bodyKey: string }> = {
+  LIA:               { path: (id) => `/cases/${id}/lia`,        bodyKey: 'liaId'         },
+  CONSULTANT:        { path: (id) => `/cases/${id}/owner`,      bodyKey: 'ownerId'       },
+  SUPPORT:           { path: (id) => `/cases/${id}/support`,    bodyKey: 'supportId'     },
+  FINANCE:           { path: (id) => `/cases/${id}/finance`,    bodyKey: 'financeId'     },
   // PR-CLIENT-CONSULTANT-SLOT — reuses the existing guarded, audited endpoint
   // PATCH /cases/:id/consultant (writes Case.consultantId; rejects non-CLIENT_CONSULTANT).
-  CLIENT_CONSULTANT: { label: 'Client Officer',       path: (id) => `/cases/${id}/consultant`, bodyKey: 'consultantId' },
+  CLIENT_CONSULTANT: { path: (id) => `/cases/${id}/consultant`, bodyKey: 'consultantId' },
 };
 
 const REASON_MIN = 10;
@@ -58,6 +59,7 @@ export function ReassignOverlay({
   // is nothing to unassign and the action is hidden.
   currentAssigneeName?: string | null;
 }) {
+  const roleLabel = useRoleLabel();
   const [candidates, setCandidates] = useState<CaseEligibleStaff[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [reason, setReason] = useState<string>('');
@@ -84,7 +86,7 @@ export function ReassignOverlay({
 
   if (!open) return null;
 
-  const slotDisplay = SLOT_CONFIG[roleSlot].label;
+  const slotDisplay = roleLabel(roleSlot);
   const reasonTrimmedLen = reason.trim().length;
   const reasonTooShort = reasonTrimmedLen < REASON_MIN;
   const canSubmit = !!selectedId && !reasonTooShort && !submitting;

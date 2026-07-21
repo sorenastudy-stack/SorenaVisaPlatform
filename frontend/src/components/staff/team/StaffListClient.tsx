@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Loader2, Search, ChevronRight, BadgeCheck, AlertTriangle } from 'lucide-react';
 import { StaffAvatar } from '@/components/staff/StaffAvatar';
 import { api, ApiError } from '@/lib/api';
+import { useRoleLabel } from '@/lib/role-label';
 import { langLabel, sessionTypeLabel } from '@/lib/booking/staff-options';
 import { formatDate } from '@/lib/date';
 
@@ -33,6 +34,7 @@ function Chip({ children, tone = 'navy' }: { children: React.ReactNode; tone?: '
 }
 
 export function StaffListClient() {
+  const roleLabel = useRoleLabel();
   const [rows, setRows] = useState<StaffSummary[] | null>(null);
   const [error, setError] = useState(false);
   const [q, setQ] = useState('');
@@ -158,7 +160,7 @@ export function StaffListClient() {
                 <div className="flex items-center gap-2">
                   <StaffAvatar name={a.name} photoUrl={a.photoUrl} size={24} />
                   <span className="font-semibold text-sorena-navy">{a.name}</span>
-                  <Chip tone="muted">{a.role}</Chip>
+                  <Chip tone="muted">{roleLabel(a.role)}</Chip>
                   {a.role === 'LIA' && a.liaVerified && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-medium text-sorena-jade"><BadgeCheck size={13} /> verified</span>
                   )}

@@ -5,6 +5,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useTranslations } from 'next-intl';
+import { useRoleLabel } from '@/lib/role-label';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -54,6 +55,7 @@ export function CreateStaffOverlay({
   onDone:  () => void;
 }) {
   const t = useTranslations();
+  const roleLabel = useRoleLabel();
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const {
     register,
@@ -186,7 +188,7 @@ export function CreateStaffOverlay({
             >
               <option value="" disabled>—</option>
               {ASSIGNABLE_ROLES.map((r) => (
-                <option key={r} value={r}>{t(`staff.roles.${r}`)}</option>
+                <option key={r} value={r}>{roleLabel(r)}</option>
               ))}
             </select>
             {errors.role && <p className="mt-1 text-xs text-rose-600">{errors.role.message}</p>}

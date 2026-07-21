@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useRoleLabel } from '@/lib/role-label';
 
 // PR-CONSULT-4 — Payload preview for HARD_DELETE_STAFF.
 //
@@ -25,6 +26,7 @@ export function HardDeleteStaffPayload({ payload }: { payload: Record<string, un
   const userId = String(payload.userId ?? '');
   const [snapshot, setSnapshot] = useState<StaffSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const roleLabel = useRoleLabel();
 
   useEffect(() => {
     if (!userId) return;
@@ -38,7 +40,7 @@ export function HardDeleteStaffPayload({ payload }: { payload: Record<string, un
       <dl className="text-sm space-y-1">
         <Row label="Name"  value={snapshot.name || '—'} />
         <Row label="Email" value={snapshot.email} />
-        <Row label="Role"  value={snapshot.role} />
+        <Row label="Role"  value={roleLabel(snapshot.role)} />
         <Row label="User ID" value={snapshot.id} mono />
       </dl>
     );

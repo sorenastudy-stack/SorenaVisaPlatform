@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { PermissionGate } from '@/components/staff/shell/PermissionGate';
 import { StaffAvatar } from '@/components/staff/StaffAvatar';
+import { useRoleLabel } from '@/lib/role-label';
 import type { CaseDetail, RoleSlot } from './types';
 import { ReassignOverlay } from './ReassignOverlay';
 
@@ -17,14 +18,6 @@ import { ReassignOverlay } from './ReassignOverlay';
 // Display-only relabel: the CONSULTANT code role is the "Admission
 // Specialist" externally. The role enum stays CONSULTANT.
 
-// LIA/SUPPORT/FINANCE labels come from the bilingual dictionary. CONSULTANT and
-// CLIENT_CONSULTANT are English literals (see slotLabel) — no fa keys added.
-const SLOT_I18N_KEYS: Partial<Record<RoleSlot, string>> = {
-  LIA:     'staff.roles.LIA',
-  SUPPORT: 'staff.roles.SUPPORT',
-  FINANCE: 'staff.roles.FINANCE',
-};
-
 // PR-CLIENT-CONSULTANT-SLOT — Client Consultant (consultantId) sits next to the
 // Admission Specialist (ownerId) so the two consultant-type roles are adjacent.
 const SLOTS: RoleSlot[] = ['LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE'];
@@ -37,13 +30,12 @@ export function CaseAssignmentsPanel({
   onChanged: () => void;
 }) {
   const t = useTranslations();
+  const roleLabel = useRoleLabel();
   const [reassigning, setReassigning] = useState<RoleSlot | null>(null);
 
-  const slotLabel = (slot: RoleSlot): string => {
-    if (slot === 'CONSULTANT') return 'Admission Officer';
-    if (slot === 'CLIENT_CONSULTANT') return 'Client Officer';
-    return t(SLOT_I18N_KEYS[slot] as string);
-  };
+  // Each slot name IS a role enum value, so the central map resolves them all
+  // (LIA → "Immigration Adviser", CONSULTANT → "Admission Officer", …).
+  const slotLabel = (slot: RoleSlot): string => roleLabel(slot);
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5">

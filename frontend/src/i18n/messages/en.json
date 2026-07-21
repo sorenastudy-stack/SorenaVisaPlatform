@@ -1587,7 +1587,12 @@
       "CONSULTANT": "Admission Officer",
       "CLIENT_CONSULTANT": "Client Officer",
       "SUPPORT": "Support",
-      "FINANCE": "Finance"
+      "FINANCE": "Finance",
+      "SALES": "Sales",
+      "OPERATIONS": "Operations",
+      "LEAD": "Lead",
+      "STUDENT": "Client",
+      "AGENT": "Agent"
     },
     "users": {
       "title": "Staff",

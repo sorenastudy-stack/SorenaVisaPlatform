@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
 import { X, Check, Minus, Archive, ArchiveRestore, Pencil, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useRoleLabel } from '@/lib/role-label';
 import { useStaff } from '@/contexts/StaffContext';
 import { StaffRoleBadge } from '@/components/staff/shell/StaffRoleBadge';
 import { PermissionGate } from '@/components/staff/shell/PermissionGate';
@@ -45,6 +46,7 @@ export function StaffDetailOverlay({
   onDone:  () => void;
 }) {
   const t = useTranslations();
+  const roleLabel = useRoleLabel();
   const locale = useLocale() as 'en' | 'fa';
   const { me } = useStaff();
   const [detail, setDetail] = useState<StaffUserDetail | null>(null);
@@ -169,7 +171,7 @@ export function StaffDetailOverlay({
                 {(['LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE'] as const).map((slot) => (
                   <div key={slot} className="rounded-lg bg-gray-50 px-2 py-1.5 text-center">
                     <div className="text-gray-500 text-[10px] uppercase tracking-wide">
-                      {slot === 'CONSULTANT' ? 'Admission Officer' : slot === 'CLIENT_CONSULTANT' ? 'Client Officer' : slot}
+                      {roleLabel(slot)}
                     </div>
                     <div className="text-gray-900 font-semibold">{workload.byRoleSlot[slot] ?? 0}</div>
                   </div>

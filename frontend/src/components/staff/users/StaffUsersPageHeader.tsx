@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { useRoleLabel } from '@/lib/role-label';
 import { Search, Plus } from 'lucide-react';
 import { PermissionGate } from '@/components/staff/shell/PermissionGate';
 import { ASSIGNABLE_ROLES } from './types';
@@ -31,6 +32,7 @@ export function StaffUsersPageHeader({
   onCreate:              () => void;
 }) {
   const t = useTranslations();
+  const roleLabel = useRoleLabel();
 
   return (
     <div className="flex flex-col gap-4">
@@ -55,9 +57,9 @@ export function StaffUsersPageHeader({
         >
           <option value="">{t('staff.users.filter.role')}</option>
           {ASSIGNABLE_ROLES.map((r) => (
-            <option key={r} value={r}>{t(`staff.roles.${r}`)}</option>
+            <option key={r} value={r}>{roleLabel(r)}</option>
           ))}
-          <option value="OWNER">{t('staff.roles.OWNER')}</option>
+          <option value="OWNER">{roleLabel('OWNER')}</option>
         </select>
 
         <label className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-200 text-sm cursor-pointer select-none min-h-[48px]">

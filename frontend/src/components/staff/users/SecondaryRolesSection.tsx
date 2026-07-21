@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useRoleLabel } from '@/lib/role-label';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ASSIGNABLE_ROLES } from './types';
@@ -26,6 +27,7 @@ export function SecondaryRolesSection({
   onDone:      () => void;
 }) {
   const t = useTranslations();
+  const roleLabel = useRoleLabel();
   const options = ASSIGNABLE_ROLES.filter((r) => r !== primaryRole);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initial));
   const [saving, setSaving] = useState(false);
@@ -87,7 +89,7 @@ export function SecondaryRolesSection({
                 onChange={() => toggle(r)}
                 className="h-4 w-4 rounded accent-[#1e3a5f]"
               />
-              <span className="text-sm font-medium text-[#1e3a5f]">{t(`staff.roles.${r}`)}</span>
+              <span className="text-sm font-medium text-[#1e3a5f]">{roleLabel(r)}</span>
             </label>
           );
         })}

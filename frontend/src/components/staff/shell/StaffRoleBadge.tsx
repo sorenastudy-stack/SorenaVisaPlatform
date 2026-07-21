@@ -1,7 +1,7 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
 import type { StaffRole } from '@/contexts/StaffContext';
+import { useRoleLabel } from '@/lib/role-label';
 
 // PR-CONSULT-2 — Staff role pill.
 //
@@ -9,12 +9,16 @@ import type { StaffRole } from '@/contexts/StaffContext';
 //   OWNER         → gold bg, navy text
 //   SUPER_ADMIN   → navy bg, off-white text
 //   ADMIN         → slate-700 bg, white text
-//   LIA/CONSULTANT/SUPPORT/FINANCE → gray-100 bg, gray-800 text
+//   everyone else → gray-100 bg, gray-800 text
 //
-// Label resolves through the staff.roles.* i18n keys so en + fa
-// both work without a hardcoded English fallback.
+// The label resolves through the central useRoleLabel() (the single
+// staff.roles.* map) so every role — including non-staff values like LEAD /
+// STUDENT that can still appear in the users list — renders a clean label and
+// never a raw enum or an unresolved i18n key. `role` is typed wide (string)
+// because the users endpoint returns the full UserRole enum, not just the
+// staff subset.
 
-const STYLES: Record<StaffRole, string> = {
+const STYLES: Record<string, string> = {
   OWNER:       'bg-[#F3CE49] text-[#1e3a5f]',
   SUPER_ADMIN: 'bg-[#1e3a5f] text-[#faf8f3]',
   ADMIN:       'bg-slate-700 text-white',
@@ -29,10 +33,10 @@ export function StaffRoleBadge({
   role,
   size = 'sm',
 }: {
-  role: StaffRole;
+  role: StaffRole | string;
   size?: 'sm' | 'md';
 }) {
-  const t = useTranslations();
+  const roleLabel = useRoleLabel();
   const padding = size === 'md' ? 'px-3 py-1 text-xs' : 'px-2 py-0.5 text-[10px]';
   return (
     <span
@@ -42,7 +46,7 @@ export function StaffRoleBadge({
         STYLES[role] ?? 'bg-gray-100 text-gray-800',
       ].join(' ')}
     >
-      {t(`staff.roles.${role}`)}
+      {roleLabel(role)}
     </span>
   );
 }

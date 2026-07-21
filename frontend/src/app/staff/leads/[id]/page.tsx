@@ -8,6 +8,7 @@ import {
   Megaphone, AlertTriangle, Clock, Briefcase,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useRoleLabel } from '@/lib/role-label';
 import { displayCountry } from '@/lib/country-codes';
 import { Card, CardContent } from '@/components/ui/Card';
 import {
@@ -334,6 +335,7 @@ function AssignmentCard({
   const [next, setNext] = useState<string>(currentAssignee?.id ?? '');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const roleLabel = useRoleLabel();
 
   useEffect(() => { setNext(currentAssignee?.id ?? ''); }, [currentAssignee?.id]);
 
@@ -362,7 +364,7 @@ function AssignmentCard({
         </h2>
         <div className="mb-3 text-sm text-[#1E3A5F]">
           {currentAssignee
-            ? <>{currentAssignee.name} <span className="text-xs text-[#4A4A4A]/70">({currentAssignee.role})</span></>
+            ? <>{currentAssignee.name} <span className="text-xs text-[#4A4A4A]/70">({roleLabel(currentAssignee.role)})</span></>
             : <span className="italic text-[#4A4A4A]/60">Unassigned</span>}
         </div>
         <select
@@ -372,7 +374,7 @@ function AssignmentCard({
         >
           <option value="">Unassigned</option>
           {assignees.map((a) => (
-            <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
+            <option key={a.id} value={a.id}>{a.name} ({roleLabel(a.role)})</option>
           ))}
         </select>
         {err && <p className="mt-1 text-xs text-red-700">{err}</p>}
