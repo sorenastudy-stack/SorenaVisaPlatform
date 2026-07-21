@@ -74,7 +74,12 @@ function firstName(fullName: string): string {
 
 function formatCurrency(amount: string | number, currency = 'NZD'): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return new Intl.NumberFormat('en-NZ', { style: 'currency', currency }).format(num);
+  // currencyDisplay: 'code' → "USD 200.00", matching the /student/payments row.
+  return new Intl.NumberFormat('en-NZ', {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'code',
+  }).format(num);
 }
 
 function timeAgo(iso: string): string {
@@ -102,18 +107,6 @@ function stageSubline(stage: string): string {
     ACTIVE: "Your case is moving forward — here's what's happening.",
   };
   return map[stage] ?? "Your case is in progress — we'll keep you updated every step of the way.";
-}
-
-function outstandingAmount(invoices: Invoice[]): number {
-  return invoices
-    .filter(inv => ['SENT', 'PARTIAL', 'OVERDUE'].includes(inv.status))
-    .reduce((sum, inv) => {
-      const total = typeof inv.amount === 'string' ? parseFloat(inv.amount) : inv.amount;
-      const paid = (inv.payments ?? [])
-        .filter(p => p.status === 'COMPLETED')
-        .reduce((s, p) => s + (typeof p.amount === 'string' ? parseFloat(p.amount) : p.amount), 0);
-      return sum + Math.max(0, total - paid);
-    }, 0);
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -170,11 +163,12 @@ export default async function StudentDashboard() {
   if (invoicesResult.status === 'fulfilled' && Array.isArray(invoicesResult.value)) invoices = invoicesResult.value as Invoice[];
 
   const name = firstName(profile.fullName);
-  const outstanding = outstandingAmount(invoices);
-  // The specific invoice to send the client to checkout for (the engagement fee
-  // in practice). Feeds the same Pay-now flow the My Case page uses.
-  const outstandingInvoiceId =
-    invoices.find((inv) => ['SENT', 'OVERDUE', 'PARTIAL'].includes(inv.status))?.id ?? null;
+  // The specific payable invoice (the engagement fee, in practice) to send the
+  // client to checkout for. Restricted to the statuses the pay-link endpoint
+  // accepts, and used for BOTH the Pay-now button and the amount shown — in the
+  // invoice's own currency (matching the /student/payments row).
+  const outstandingInvoice =
+    invoices.find((inv) => ['SENT', 'OVERDUE'].includes(inv.status)) ?? null;
   const latestTicket = tickets[0] ?? null;
   const latestMessage = latestTicket?.messages?.[0] ?? null;
   const newMessages = tickets.filter(t => t.status === 'AWAITING_CLIENT').length;
@@ -253,7 +247,7 @@ export default async function StudentDashboard() {
             My Case page uses (Stripe redirect) right here, instead of routing to
             the history page (which was a dead end pre-payment). When paid up, the
             tile links to the payment history. */}
-        {outstanding > 0 && outstandingInvoiceId ? (
+        {outstandingInvoice ? (
           <Card className="h-full">
             <CardContent className="pt-5">
               <div className="flex items-start gap-3">
@@ -262,10 +256,12 @@ export default async function StudentDashboard() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Payments</p>
-                  <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">{formatCurrency(outstanding)}</p>
+                  <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">
+                    {formatCurrency(outstandingInvoice.amount, outstandingInvoice.currency)}
+                  </p>
                   <p className="text-xs text-[#4A4A4A]/70 mt-1">Outstanding balance</p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <PayInvoiceButton invoiceId={outstandingInvoiceId} label="Pay now" />
+                    <PayInvoiceButton invoiceId={outstandingInvoice.id} label="Pay now" />
                     <Link
                       href="/student/payments"
                       className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b8941f] transition-colors"
