@@ -115,3 +115,44 @@ Already **set** locally: `DOCUSIGN_ACCOUNT_ID`, `DOCUSIGN_BASE_URL`,
 - Removing just the `SendContractPanel` import + mount in `CaseDetailClient.tsx` removes
   the button from the UI with **no backend impact** (the `POST /contracts` route and the
   audit row simply go unused).
+
+## 11. DocuSign template-owned rules (⚠️ re-apply at go-live)
+
+The engagement envelope is a **composite-template send**. Our backend references a saved
+DocuSign template by id (`DOCUSIGN_TEMPLATE_ID`) and **deliberately does NOT set signer
+tabs** — see `backend/src/contracts/docusign.service.ts` (`buildEnvelopeDefinition`,
+"We deliberately do NOT set signer.tabs — that's the template's job now"). The template
+therefore owns **all** field definitions and their validation:
+
+- signature / date / full-name / passport text fields, and
+- the **11 visa-type checkboxes** grouped as **`visaType`** (the LIA's selection, read
+  back after signing by `getSelectedVisaType` → captured onto `Case.visaType`).
+
+**Because these live in the template, they cannot be changed in this repo** — edit them
+in the DocuSign web UI.
+
+### The `visaType` "at least one required" rule
+Our code only *reads* the selection and tolerates none being chosen (it logs
+`no visaType selection found` and leaves `Case.visaType` null). So "the LIA must pick a
+visa type to finish signing" is **enforced only by the template's checkbox-group
+validation**, not by our code.
+
+- **To require it:** open the template → LIA recipient → the `visaType` checkbox group →
+  set the group rule to **minimum 1 selected** (and, for the intended "pick exactly one",
+  cap **maximum 1** too).
+
+### Where the template lives
+| | |
+|---|---|
+| Env / account | **DocuSign Demo/Sandbox** (`account-d.docusign.com` / `demo.docusign.net`) |
+| Template id | `c1c1b0f6-533e-4427-98db-c45cd5c666e8` |
+| Direct link | `https://apps-d.docusign.com/send/templates/details/c1c1b0f6-533e-4427-98db-c45cd5c666e8` |
+
+The template **name** is not stored in the repo (only the id) — find it in the UI by that id.
+
+### ⚠️ Go-live warning
+The id above is the **demo** template. When switching to production, `DOCUSIGN_TEMPLATE_ID`
+will point at a **different** template object in the **production** DocuSign account. Any
+template-owned validation — including the `visaType` **min-1** rule — **must be re-applied
+to the production template**; it does not carry over from demo. Verify this as part of the
+go-live checklist.
