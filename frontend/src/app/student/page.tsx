@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StudentHeader } from '@/components/student/StudentHeader';
+import { PayInvoiceButton } from '@/components/portal/PayInvoiceButton';
 import {
   FileText, MessageCircle, CreditCard, ArrowRight,
   CheckCircle, Clock, AlertCircle, Folder
@@ -170,6 +171,10 @@ export default async function StudentDashboard() {
 
   const name = firstName(profile.fullName);
   const outstanding = outstandingAmount(invoices);
+  // The specific invoice to send the client to checkout for (the engagement fee
+  // in practice). Feeds the same Pay-now flow the My Case page uses.
+  const outstandingInvoiceId =
+    invoices.find((inv) => ['SENT', 'OVERDUE', 'PARTIAL'].includes(inv.status))?.id ?? null;
   const latestTicket = tickets[0] ?? null;
   const latestMessage = latestTicket?.messages?.[0] ?? null;
   const newMessages = tickets.filter(t => t.status === 'AWAITING_CLIENT').length;
@@ -244,27 +249,52 @@ export default async function StudentDashboard() {
           </Card>
         </Link>
 
-        {/* Payments */}
-        <Link href="/student/payments" className="block">
-          <Card className="hover:border-[#F3CE49]/50 transition-colors cursor-pointer h-full">
+        {/* Payments — when a balance is due, offer the SAME Pay-now checkout the
+            My Case page uses (Stripe redirect) right here, instead of routing to
+            the history page (which was a dead end pre-payment). When paid up, the
+            tile links to the payment history. */}
+        {outstanding > 0 && outstandingInvoiceId ? (
+          <Card className="h-full">
             <CardContent className="pt-5">
               <div className="flex items-start gap-3">
-                <div className={`p-2 rounded-xl ${outstanding > 0 ? 'bg-orange-50' : 'bg-green-50'}`}>
-                  <CreditCard size={20} className={outstanding > 0 ? 'text-orange-600' : 'text-green-600'} />
+                <div className="p-2 rounded-xl bg-orange-50">
+                  <CreditCard size={20} className="text-orange-600" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Payments</p>
-                  <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">
-                    {outstanding > 0 ? formatCurrency(outstanding) : 'All paid up'}
-                  </p>
-                  <p className="text-xs text-[#4A4A4A]/70 mt-1">
-                    {outstanding > 0 ? 'Outstanding balance — pay now →' : 'No pending payments'}
-                  </p>
+                  <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">{formatCurrency(outstanding)}</p>
+                  <p className="text-xs text-[#4A4A4A]/70 mt-1">Outstanding balance</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <PayInvoiceButton invoiceId={outstandingInvoiceId} label="Pay now" />
+                    <Link
+                      href="/student/payments"
+                      className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b8941f] transition-colors"
+                    >
+                      History →
+                    </Link>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </Link>
+        ) : (
+          <Link href="/student/payments" className="block">
+            <Card className="hover:border-[#F3CE49]/50 transition-colors cursor-pointer h-full">
+              <CardContent className="pt-5">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-green-50">
+                    <CreditCard size={20} className="text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Payments</p>
+                    <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">All paid up</p>
+                    <p className="text-xs text-[#4A4A4A]/70 mt-1">No pending payments</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        )}
       </div>
 
       {/* Bottom row */}
