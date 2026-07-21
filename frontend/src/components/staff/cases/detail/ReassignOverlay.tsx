@@ -29,12 +29,12 @@ interface CaseEligibleStaff {
 // key stays ownerId because Case.ownerId is the underlying column).
 const SLOT_CONFIG: Record<RoleSlot, { label: string; path: (id: string) => string; bodyKey: string }> = {
   LIA:               { label: 'Immigration Adviser',  path: (id) => `/cases/${id}/lia`,        bodyKey: 'liaId'         },
-  CONSULTANT:        { label: 'Admission Specialist', path: (id) => `/cases/${id}/owner`,      bodyKey: 'ownerId'       },
+  CONSULTANT:        { label: 'Admission Officer',    path: (id) => `/cases/${id}/owner`,      bodyKey: 'ownerId'       },
   SUPPORT:           { label: 'Support',              path: (id) => `/cases/${id}/support`,    bodyKey: 'supportId'     },
   FINANCE:           { label: 'Finance',              path: (id) => `/cases/${id}/finance`,    bodyKey: 'financeId'     },
   // PR-CLIENT-CONSULTANT-SLOT — reuses the existing guarded, audited endpoint
   // PATCH /cases/:id/consultant (writes Case.consultantId; rejects non-CLIENT_CONSULTANT).
-  CLIENT_CONSULTANT: { label: 'Client Consultant',   path: (id) => `/cases/${id}/consultant`, bodyKey: 'consultantId' },
+  CLIENT_CONSULTANT: { label: 'Client Officer',       path: (id) => `/cases/${id}/consultant`, bodyKey: 'consultantId' },
 };
 
 const REASON_MIN = 10;

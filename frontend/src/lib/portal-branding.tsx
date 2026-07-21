@@ -25,8 +25,9 @@ export function portalBrand(role: string | null | undefined): PortalBrand {
     case 'LIA':
       return { label: 'Legal Portal', Icon: Scale };
     case 'CONSULTANT':
+      return { label: 'Admission Officer Portal', Icon: Handshake };
     case 'CLIENT_CONSULTANT':
-      return { label: 'Consultant Portal', Icon: Handshake };
+      return { label: 'Client Officer Portal', Icon: Handshake };
     case 'SUPPORT':
       return { label: 'Support Portal', Icon: LifeBuoy };
     case 'FINANCE':

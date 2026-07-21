@@ -1457,7 +1457,7 @@
         "status": "Status",
         "stage": "Stage",
         "lia": "LIA",
-        "consultant": "Consultant",
+        "consultant": "Admission Officer",
         "updated": "Updated"
       },
       "notAssigned": "Not yet assigned",
@@ -1584,8 +1584,8 @@
       "SUPER_ADMIN": "Super Admin",
       "ADMIN": "Admin",
       "LIA": "Immigration Adviser",
-      "CONSULTANT": "Consultant",
-      "CLIENT_CONSULTANT": "Client Consultant",
+      "CONSULTANT": "Admission Officer",
+      "CLIENT_CONSULTANT": "Client Officer",
       "SUPPORT": "Support",
       "FINANCE": "Finance"
     },
@@ -1758,7 +1758,7 @@
       "team": {
         "heading": "Your team",
         "lia": "Immigration Adviser",
-        "consultant": "Admission Specialist",
+        "consultant": "Admission Officer",
         "support": "Support",
         "finance": "Finance"
       },

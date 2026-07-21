@@ -29,7 +29,7 @@ import {
 const CHOOSER_ORDER: BookingType[] = ['FREE_15', 'GAP_CLOSING', 'LIA'];
 const TYPE_META: Record<BookingType, { slug: string; title: string; blurb: string; icon: React.ReactNode }> = {
   FREE_15:     { slug: 'free15', title: 'Free 15-minute consultation', blurb: 'Confirm your pathway and next steps with our team.', icon: <Calendar size={20} /> },
-  GAP_CLOSING: { slug: 'gap',    title: 'Gap-Closing Session',         blurb: 'A structured improvement plan with an Admission Specialist.', icon: <Sparkles size={20} /> },
+  GAP_CLOSING: { slug: 'gap',    title: 'Gap-Closing Session',         blurb: 'A structured improvement plan with an Admission Officer.', icon: <Sparkles size={20} /> },
   LIA:         { slug: 'lia',    title: 'LIA Consultation',            blurb: 'Tailored legal guidance from a Licensed Immigration Adviser.', icon: <Scale size={20} /> },
 };
 

@@ -35,9 +35,9 @@ interface PendingHandoffs {
 }
 
 const SLOT_LABEL: Record<Slot, string> = {
-  CONSULTANT: 'Consultant',
+  CONSULTANT: 'Client Officer',
   LIA: 'LIA',
-  ADMISSION: 'Admission Specialist',
+  ADMISSION: 'Admission Officer',
   FINANCE: 'Finance',
   PASTORAL: 'Pastoral Care',
 };
@@ -72,17 +72,17 @@ export default function OpsHandoffsPage() {
         </div>
       )}
 
-      {/* Consultant pool banner — only when no Client Consultants are configured */}
+      {/* Consultant pool banner — only when no Client Officers are configured */}
       {data?.consultantPoolEmpty && data.unstaffedConsultantCount > 0 && (
         <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
           <div>
             <p className="text-sm font-semibold text-amber-900">
-              No Client Consultants configured — {data.unstaffedConsultantCount}{' '}
+              No Client Officers configured — {data.unstaffedConsultantCount}{' '}
               {data.unstaffedConsultantCount === 1 ? 'case is' : 'cases are'} unstaffed
             </p>
             <p className="mt-0.5 text-xs text-amber-800">
-              Every eligible case is missing its consultant. Create a Client Consultant so
+              Every eligible case is missing its consultant. Create a Client Officer so
               auto-assignment can staff them.
             </p>
           </div>

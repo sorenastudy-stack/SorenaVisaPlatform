@@ -168,7 +168,9 @@ export function StaffDetailOverlay({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 {(['LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE'] as const).map((slot) => (
                   <div key={slot} className="rounded-lg bg-gray-50 px-2 py-1.5 text-center">
-                    <div className="text-gray-500 text-[10px] uppercase tracking-wide">{slot}</div>
+                    <div className="text-gray-500 text-[10px] uppercase tracking-wide">
+                      {slot === 'CONSULTANT' ? 'Admission Officer' : slot === 'CLIENT_CONSULTANT' ? 'Client Officer' : slot}
+                    </div>
                     <div className="text-gray-900 font-semibold">{workload.byRoleSlot[slot] ?? 0}</div>
                   </div>
                 ))}

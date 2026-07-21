@@ -40,8 +40,8 @@ export function CaseAssignmentsPanel({
   const [reassigning, setReassigning] = useState<RoleSlot | null>(null);
 
   const slotLabel = (slot: RoleSlot): string => {
-    if (slot === 'CONSULTANT') return 'Admission Specialist';
-    if (slot === 'CLIENT_CONSULTANT') return 'Client Consultant';
+    if (slot === 'CONSULTANT') return 'Admission Officer';
+    if (slot === 'CLIENT_CONSULTANT') return 'Client Officer';
     return t(SLOT_I18N_KEYS[slot] as string);
   };
 
