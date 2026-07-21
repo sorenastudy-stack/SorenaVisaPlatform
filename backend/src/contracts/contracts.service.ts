@@ -31,6 +31,7 @@ import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { docusignToContractStatus } from './contract-status';
 import { stampLiaIdentity } from './engagement-letter-stamp';
+import { linkCaseContactToUser } from '../common/link-case-contact.helper';
 
 // PR-DOCUSIGN-1 step 5 piece 5a/5b — real engagement-letter PDF.
 // Lives at backend/assets/contract-templates/. Read lazily on first
@@ -753,7 +754,14 @@ export class ContractsService {
         where:  { id: caseId },
         select: { lead: { select: { contact: { select: { userId: true } } } } },
       });
-      const userId = c?.lead?.contact?.userId ?? null;
+      let userId = c?.lead?.contact?.userId ?? null;
+      // PR-CONTACT-LINK resilience: a case-bearing contact left unlinked by the
+      // staff "Create case" path would otherwise silently block promotion. Try
+      // the same email-based auto-link before giving up (best-effort, no throw).
+      if (!userId) {
+        const link = await linkCaseContactToUser(this.prisma, caseId);
+        userId = link.linked ? link.userId : null;
+      }
       if (!userId) return; // client has no user account to promote
 
       const user = await this.prisma.user.findUnique({

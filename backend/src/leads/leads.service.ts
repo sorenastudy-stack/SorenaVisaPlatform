@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
+import { linkCaseContactToUser } from '../common/link-case-contact.helper';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadStatusDto, isValidTransition } from './dto/update-lead-status.dto';
 import { UpdateLeadNotesDto } from './dto/update-lead-notes.dto';
@@ -239,6 +240,12 @@ export class LeadsService {
           }`,
         );
       }
+
+      // PR-CONTACT-LINK: this path already provisioned + linked the login user
+      // above, so this is a no-op (returns already_linked) — but calling the
+      // shared linker keeps both lead→case paths uniformly protected, so a
+      // future reordering here can't reintroduce the contact-split bug.
+      await linkCaseContactToUser(this.prisma, newCase.id);
     }
 
     // Send welcome email — failure is non-fatal

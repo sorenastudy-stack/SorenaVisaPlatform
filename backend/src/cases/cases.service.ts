@@ -14,6 +14,7 @@ import { CaseListQueryDto } from './dto/case-list-filter.dto';
 import { OverrideRiskDto, ClearHardStopDto } from './dto/lia-actions.dto';
 import { LiaAssignmentService } from './lia-assignment.service';
 import { canReadCase } from './case-access.helper';
+import { linkCaseContactToUser } from '../common/link-case-contact.helper';
 
 // Phase 5a — the verified-JWT viewer passed from the controller for read
 // scoping. Roles that see every case (no slot filter).
@@ -90,6 +91,13 @@ export class CasesService {
     } catch {
       /* consultant auto-assign is best-effort; case creation still succeeds */
     }
+
+    // PR-CONTACT-LINK: this staff "Create case" path does NOT create/link a
+    // login user (unlike the qualification path in leads.service). If the
+    // client already has a User (email match) but the case-bearing contact is
+    // unlinked, wire them together so the client portal + LEAD→STUDENT
+    // promotion resolve. Best-effort; the helper never throws.
+    await linkCaseContactToUser(this.prisma, caseRecord.id);
 
     return caseRecord;
   }
