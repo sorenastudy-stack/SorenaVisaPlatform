@@ -10,12 +10,18 @@ import { MarkConsultationStatusDto, RefundToCardDto } from './dto/staff-bookings
 
 // PR-WALLET slice 2 — staff consultation-bookings surface.
 //
-// Open to the roles that run consultations (LIA/CONSULTANT) plus admin tier;
-// the marker itself further requires the caller to be the ASSIGNED consultant
-// or an admin (enforced in BookingCancellationService). NO_SHOW on a paid
-// booking posts the 75% wallet credit; COMPLETED posts nothing; CANCELLED uses
-// the same time-based tier as a client cancel — all atomic with the status flip.
-const STAFF = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT'] as const;
+// Open to the roles that run consultations (LIA / CONSULTANT / CLIENT_CONSULTANT)
+// plus admin tier; the marker itself further requires the caller to be the
+// ASSIGNED consultant or an admin (enforced in BookingCancellationService).
+// NO_SHOW on a paid booking posts the 75% wallet credit; COMPLETED posts
+// nothing; CANCELLED uses the same time-based tier as a client cancel — all
+// atomic with the status flip.
+//
+// CLIENT_CONSULTANT (Client Officer) is booking-eligible — clients book sessions
+// with them (Consultation.assignedToId) — so it MUST be here; omitting it 403'd
+// their own /staff/bookings request, which the "My Meetings" UI renders as an
+// empty state ("No meetings yet"). Mirrors the staff-cases controller's set.
+const STAFF = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 // PR-CARD-REFUND — real money out. Admin tier ONLY, never a regular consultant.
 const ADMIN_TIER = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 
