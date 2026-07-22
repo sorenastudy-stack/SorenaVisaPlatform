@@ -1,25 +1,33 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CalendarClock, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarClock, Loader2, Video, CalendarPlus, X, CalendarDays, List as ListIcon } from 'lucide-react';
+import { Calendar, dateFnsLocalizer, Views, type View } from 'react-big-calendar';
+import { format, parse, startOfWeek, getDay } from 'date-fns';
+import { enUS } from 'date-fns/locale';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { api, ApiError } from '@/lib/api';
+import { downloadIcs, type IcsMeeting } from '@/lib/ics';
 
-// Staff "My Meetings" — replaces the old placeholder panel. A read-only view
-// of the signed-in staff member's own consultation sessions,
-// split Upcoming / Past. Reuses GET /staff/bookings, which the server scopes
-// to `assignedToId = req.user.userId` (admin tier sees all) — no userId is
-// ever sent from the client. Actioning a booking (no-show / complete / cancel)
-// lives on /staff/bookings; this surface is the calendar-style read.
+// Staff "My Meetings" — the signed-in staff member's own consultation sessions.
+// A read-only calendar (Day / Work Week / Month, primary) plus a flat
+// Upcoming / Past list (secondary tab). Each upcoming meeting exposes the stored
+// Jitsi "Join" link and an "Add to calendar" (.ics) download. Data from
+// GET /staff/bookings, server-scoped to assignedToId = the JWT user (admin tier
+// sees all) — no userId is sent from the client.
 //
-// Roles not entitled to the bookings endpoint (e.g. SUPPORT) get a 403, which
-// we treat as "no meetings" — a warm empty state, never an error wall.
+// A 403 (role not entitled to the bookings surface) is treated as "no meetings"
+// — a warm empty state, never an error wall.
 
 interface Row {
   id: string;
   type: string;
   status: string;
   scheduledAt: string | null;
+  scheduledEndAt: string | null;
+  durationMinutes: number | null;
   timezone: string | null;
+  meetingLink: string | null;
   staffName: string | null;
   clientName: string;
 }
@@ -35,6 +43,11 @@ const STATUS_STYLE: Record<string, string> = {
   NO_SHOW: 'bg-red-50 text-red-600 border border-red-200',
 };
 
+const localizer = dateFnsLocalizer({
+  format, parse, startOfWeek, getDay, locales: { 'en-US': enUS },
+});
+const CAL_VIEWS: View[] = [Views.MONTH, Views.WORK_WEEK, Views.DAY];
+
 function fmt(iso: string | null, tz: string | null): string {
   if (!iso) return 'Time to be confirmed';
   return new Intl.DateTimeFormat('en-NZ', {
@@ -43,9 +56,31 @@ function fmt(iso: string | null, tz: string | null): string {
   }).format(new Date(iso));
 }
 
+function isUpcoming(r: Row): boolean {
+  return !!r.scheduledAt
+    && new Date(r.scheduledAt).getTime() >= Date.now()
+    && r.status !== 'CANCELLED' && r.status !== 'NO_SHOW';
+}
+
+function toIcs(r: Row): IcsMeeting {
+  return {
+    id: r.id,
+    clientName: r.clientName,
+    typeLabel: TYPE_LABEL[r.type] ?? r.type,
+    scheduledAt: r.scheduledAt as string,
+    scheduledEndAt: r.scheduledEndAt,
+    durationMinutes: r.durationMinutes,
+    meetingLink: r.meetingLink,
+  };
+}
+
 export function StaffMeetingsClient() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [tab, setTab] = useState<'calendar' | 'list'>('calendar');
+  const [view, setView] = useState<View>(Views.WORK_WEEK);
+  const [date, setDate] = useState<Date>(new Date());
+  const [selected, setSelected] = useState<Row | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -53,7 +88,6 @@ export function StaffMeetingsClient() {
       .then((r) => { if (alive) { setRows(r); setState('ready'); } })
       .catch((e) => {
         if (!alive) return;
-        // 403 = this role has no bookings surface → treat as empty, not error.
         if (e instanceof ApiError && e.statusCode === 403) { setRows([]); setState('ready'); }
         else setState('error');
       });
@@ -61,22 +95,40 @@ export function StaffMeetingsClient() {
   }, []);
 
   const now = Date.now();
-  const dated = (rows ?? []).filter((r) => r.scheduledAt);
-  const upcoming = dated
-    .filter((r) => new Date(r.scheduledAt!).getTime() >= now && r.status !== 'CANCELLED' && r.status !== 'NO_SHOW')
-    .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime());
-  const past = dated
-    .filter((r) => !(new Date(r.scheduledAt!).getTime() >= now && r.status !== 'CANCELLED' && r.status !== 'NO_SHOW'))
-    .sort((a, b) => new Date(b.scheduledAt!).getTime() - new Date(a.scheduledAt!).getTime());
+  const dated = useMemo(() => (rows ?? []).filter((r) => r.scheduledAt), [rows]);
+  const upcoming = useMemo(() => dated
+    .filter((r) => isUpcoming(r))
+    .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime()), [dated]);
+  const past = useMemo(() => dated
+    .filter((r) => !isUpcoming(r))
+    .sort((a, b) => new Date(b.scheduledAt!).getTime() - new Date(a.scheduledAt!).getTime()), [dated]);
+
+  const events = useMemo(() => dated.map((r) => {
+    const start = new Date(r.scheduledAt!);
+    const end = r.scheduledEndAt
+      ? new Date(r.scheduledEndAt)
+      : new Date(start.getTime() + (r.durationMinutes ?? 30) * 60_000);
+    return { id: r.id, title: `${TYPE_LABEL[r.type] ?? r.type} · ${r.clientName}`, start, end, resource: r };
+  }), [dated]);
+
+  const hasAny = upcoming.length > 0 || past.length > 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-6">
-        <div className="flex items-center gap-2">
-          <CalendarClock size={20} className="text-[#1e3a5f]" />
-          <h1 className="text-2xl font-bold text-[#1e3a5f]">My Meetings</h1>
+    <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <CalendarClock size={20} className="text-[#1e3a5f]" />
+            <h1 className="text-2xl font-bold text-[#1e3a5f]">My Meetings</h1>
+          </div>
+          <p className="mt-1 text-sm text-[#4A4A4A]/70">Your upcoming and past consultation sessions.</p>
         </div>
-        <p className="mt-1 text-sm text-[#4A4A4A]/70">Your upcoming and past consultation sessions.</p>
+        {state === 'ready' && hasAny && (
+          <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1">
+            <TabButton active={tab === 'calendar'} onClick={() => setTab('calendar')} icon={<CalendarDays size={15} />} label="Calendar" />
+            <TabButton active={tab === 'list'} onClick={() => setTab('list')} icon={<ListIcon size={15} />} label="List" />
+          </div>
+        )}
       </div>
 
       {state === 'loading' && (
@@ -87,23 +139,34 @@ export function StaffMeetingsClient() {
 
       {state === 'error' && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Couldn't load your meetings just now. Please refresh.
+          Couldn&apos;t load your meetings just now. Please refresh.
         </div>
       )}
 
-      {state === 'ready' && upcoming.length === 0 && past.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-[#c9a961]/40 bg-[#faf8f3] py-16 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#c9a961]/15">
-            <CalendarClock size={26} className="text-[#b8941f]" />
-          </div>
-          <p className="text-lg font-bold text-[#1e3a5f]">No meetings yet</p>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-[#4A4A4A]/60">
-            They'll appear here once clients book a session with you.
-          </p>
+      {state === 'ready' && !hasAny && <EmptyState />}
+
+      {state === 'ready' && hasAny && tab === 'calendar' && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-2 md:p-3" style={{ height: 680 }}>
+          <Calendar
+            localizer={localizer}
+            events={events}
+            startAccessor="start"
+            endAccessor="end"
+            view={view}
+            onView={(v) => setView(v)}
+            date={date}
+            onNavigate={(d) => setDate(d)}
+            views={CAL_VIEWS}
+            popup
+            onSelectEvent={(e: any) => setSelected(e.resource as Row)}
+            eventPropGetter={eventPropGetter}
+            tooltipAccessor={(e: any) => `${e.resource.clientName} — ${e.resource.status}`}
+            style={{ height: '100%' }}
+          />
         </div>
       )}
 
-      {state === 'ready' && (upcoming.length > 0 || past.length > 0) && (
+      {state === 'ready' && hasAny && tab === 'list' && (
         <div className="space-y-8">
           {upcoming.length > 0 && (
             <Section title="Upcoming">
@@ -117,7 +180,45 @@ export function StaffMeetingsClient() {
           )}
         </div>
       )}
+
+      {selected && <MeetingDetail row={selected} onClose={() => setSelected(null)} />}
     </div>
+  );
+}
+
+// Color events by status; strike-through cancelled/no-show.
+function eventPropGetter(event: any) {
+  const s: string = event.resource.status;
+  const bg =
+    s === 'CONFIRMED' ? '#d1fae5' :
+    s === 'COMPLETED' ? '#e0e7ff' :
+    (s === 'CANCELLED' || s === 'NO_SHOW') ? '#f3f4f6' :
+    '#f7ecc9';
+  return {
+    style: {
+      backgroundColor: bg,
+      color: '#1e3a5f',
+      border: 'none',
+      borderRadius: '6px',
+      fontSize: '12px',
+      padding: '1px 5px',
+      textDecoration: (s === 'CANCELLED' || s === 'NO_SHOW') ? 'line-through' : 'none',
+    },
+  };
+}
+
+function TabButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors',
+        active ? 'bg-[#1e3a5f] text-white' : 'text-[#1e3a5f] hover:bg-[#1e3a5f]/5',
+      ].join(' ')}
+    >
+      {icon} {label}
+    </button>
   );
 }
 
@@ -130,7 +231,33 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function JoinLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1e3a5f] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#162d4a] transition-colors"
+    >
+      <Video size={14} /> Join
+    </a>
+  );
+}
+
+function AddToCalendar({ row }: { row: Row }) {
+  return (
+    <button
+      type="button"
+      onClick={() => downloadIcs(toIcs(row))}
+      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#1e3a5f]/30 px-3.5 py-2 text-xs font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 transition-colors"
+    >
+      <CalendarPlus size={14} /> Add to calendar
+    </button>
+  );
+}
+
 function MeetingCard({ b, muted }: { b: Row; muted?: boolean }) {
+  const upcoming = isUpcoming(b);
   return (
     <div className={`rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5 ${muted ? 'opacity-80' : ''}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -148,7 +275,53 @@ function MeetingCard({ b, muted }: { b: Row; muted?: boolean }) {
             {fmt(b.scheduledAt, b.timezone)}{b.staffName ? ` · ${b.staffName}` : ''}
           </p>
         </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {upcoming && b.meetingLink && <JoinLink href={b.meetingLink} />}
+          {upcoming && b.scheduledAt && <AddToCalendar row={b} />}
+        </div>
       </div>
+    </div>
+  );
+}
+
+// Detail popover for a calendar event — client, time, Join + Add to calendar.
+function MeetingDetail({ row, onClose }: { row: Row; onClose: () => void }) {
+  const upcoming = isUpcoming(row);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 text-gray-400 hover:text-gray-700">
+          <X size={18} />
+        </button>
+        <p className="text-xs uppercase tracking-wide text-[#4A4A4A]/60">{TYPE_LABEL[row.type] ?? row.type}</p>
+        <h3 className="mt-1 text-lg font-bold text-[#1e3a5f]">{row.clientName}</h3>
+        <p className="mt-1 text-sm text-[#4A4A4A]/70">{fmt(row.scheduledAt, row.timezone)}</p>
+        <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_STYLE[row.status] ?? 'bg-gray-100 text-gray-500'}`}>
+          {row.status}
+        </span>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {upcoming && row.meetingLink && <JoinLink href={row.meetingLink} />}
+          {row.scheduledAt && <AddToCalendar row={row} />}
+        </div>
+        {!upcoming && (
+          <p className="mt-3 text-xs text-[#4A4A4A]/50">This session has passed.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="rounded-2xl border border-dashed border-[#c9a961]/40 bg-[#faf8f3] py-16 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#c9a961]/15">
+        <CalendarClock size={26} className="text-[#b8941f]" />
+      </div>
+      <p className="text-lg font-bold text-[#1e3a5f]">No meetings yet</p>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-[#4A4A4A]/60">
+        They&apos;ll appear here once clients book a session with you.
+      </p>
     </div>
   );
 }

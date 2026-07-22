@@ -33,7 +33,8 @@ export class StaffBookingsService {
       select: {
         id: true, type: true, status: true, paymentStatus: true, amountNZD: true,
         paidWith: true, stripePaymentId: true,
-        scheduledAt: true, bookingTimezone: true, assignedToId: true,
+        scheduledAt: true, scheduledEndAt: true, durationMinutes: true,
+        bookingTimezone: true, assignedToId: true, meetingLink: true,
         assignedTo: { select: { name: true } },
         lead: { select: { contact: { select: { fullName: true, user: { select: { name: true } } } } } },
       },
@@ -61,7 +62,12 @@ export class StaffBookingsService {
       paymentStatus: r.paymentStatus,
       amountNZD: r.amountNZD,
       scheduledAt: r.scheduledAt,
+      scheduledEndAt: r.scheduledEndAt,
+      durationMinutes: r.durationMinutes,
       timezone: r.bookingTimezone,
+      // The Jitsi link for the "Join" button + the .ics on the staff My Meetings
+      // page. Read-only passthrough — the link is generated at booking confirm.
+      meetingLink: r.meetingLink,
       staffName: r.assignedTo?.name ?? null,
       clientName: r.lead?.contact?.fullName || r.lead?.contact?.user?.name || 'Client',
       // The UI enables No-show only once the session start has passed.
