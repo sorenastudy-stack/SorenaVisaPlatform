@@ -33,7 +33,7 @@ export class BookingConfirmationService {
         where: { id: consultationId },
         select: {
           id: true, type: true, scheduledAt: true, bookingTimezone: true, meetingLink: true,
-          assignedTo: { select: { name: true } },
+          assignedTo: { select: { name: true, email: true } },
           lead: { select: { contact: { select: { fullName: true, user: { select: { email: true, name: true } } } } } },
         },
       });
@@ -63,6 +63,18 @@ export class BookingConfirmationService {
         await this.mail.sendBookingConfirmation(clientEmail, clientName, sessionLabel, whenStr, staffName, meetingLink);
       } else {
         this.logger.warn(`onConfirmed: no client email for consultation ${consultationId} — link generated, email skipped`);
+      }
+
+      // 3. Notify the assigned staff member (the booked User) — same session
+      //    details + Jitsi link, addressed to them. Best-effort; independent of
+      //    the client email above. Covered by the same meetingLink idempotency
+      //    guard, so webhook retries don't re-notify.
+      const staffEmail = c.assignedTo?.email ?? null;
+      if (staffEmail) {
+        const staffGreeting = c.assignedTo?.name || 'there';
+        await this.mail.sendStaffBookingNotification(staffEmail, staffGreeting, clientName, sessionLabel, whenStr, meetingLink);
+      } else {
+        this.logger.warn(`onConfirmed: no staff email for consultation ${consultationId} — staff notification skipped`);
       }
     } catch (e: any) {
       // NEVER throw — a confirmed/paid booking must stand regardless.

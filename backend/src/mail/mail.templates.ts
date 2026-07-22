@@ -381,3 +381,33 @@ export function bookingConfirmationBody(
     <p style="color:${MUTED};font-size:13px;">You can also join from your Sorena portal. See you then.</p>
   `;
 }
+
+// PR-BOOKING-STAFF-NOTIFY — the mirror of bookingConfirmationBody, addressed to
+// the assigned staff member: same session details + Jitsi link, but framed as
+// "a client booked with you" rather than "your session is confirmed".
+export function staffBookingNotificationBody(
+  staffName:    string,
+  clientName:   string,
+  sessionLabel: string,
+  whenStr:      string,
+  meetingLink:  string,
+): string {
+  return `
+    <p>Hi ${esc(staffName)},</p>
+    <p><strong>${esc(clientName)}</strong> has booked a <strong>${esc(sessionLabel)}</strong> with you.</p>
+    <p style="margin:16px 0;">
+      <strong>${esc(whenStr)}</strong><br/>
+      with ${esc(clientName)}
+    </p>
+    <p style="margin:20px 0;">
+      <a href="${esc(meetingLink)}"
+         style="display:inline-block;background:#F3CE49;color:${NAVY};font-weight:600;text-decoration:none;padding:12px 22px;border-radius:10px;">
+        Join the session
+      </a>
+    </p>
+    <p style="color:${MUTED};font-size:13px;">Or paste this link into your browser at the time of the session:<br/>
+      <a href="${esc(meetingLink)}" style="color:${MUTED};">${esc(meetingLink)}</a>
+    </p>
+    <p style="color:${MUTED};font-size:13px;">This session also appears in your Sorena staff portal.</p>
+  `;
+}

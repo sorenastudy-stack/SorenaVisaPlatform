@@ -22,6 +22,7 @@ import {
   ticketReplyNotificationBody,
   consultationConfirmationBody,
   bookingConfirmationBody,
+  staffBookingNotificationBody,
 } from './mail.templates';
 
 // PR-EMAIL-1 — Unified Resend-based email service.
@@ -429,6 +430,28 @@ export class MailService implements OnModuleInit {
       html: wrapHtml(
         bookingConfirmationBody(name, sessionLabel, whenStr, staffName, meetingLink),
         { heading: 'Your session is confirmed' },
+      ),
+    });
+  }
+
+  // PR-BOOKING-STAFF-NOTIFY — notify the assigned staff member that a client
+  // booked a consultation with them. Same info the client receives (client
+  // name, when, Jitsi link), addressed to the staff member. Mirrors
+  // sendBookingConfirmation exactly (best-effort; this.send swallows failures).
+  async sendStaffBookingNotification(
+    to:           string,
+    staffName:    string,
+    clientName:   string,
+    sessionLabel: string,
+    whenStr:      string,
+    meetingLink:  string,
+  ): Promise<void> {
+    await this.send({
+      to,
+      subject: `New booking: ${clientName} — ${sessionLabel}`,
+      html: wrapHtml(
+        staffBookingNotificationBody(staffName, clientName, sessionLabel, whenStr, meetingLink),
+        { heading: 'New session booked' },
       ),
     });
   }
