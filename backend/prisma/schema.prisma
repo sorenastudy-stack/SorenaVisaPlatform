@@ -1724,6 +1724,10 @@ model Contract {
   caseId              String         @unique
   templateId          String?
   docusignEnvelopeId  String?
+  // PR-DOCUSEAL — external submission id when the contract is sent via DocuSeal
+  // (the active provider). Distinct from docusignEnvelopeId so the DocuSign path
+  // stays intact for rollback. The DocuSeal webhook looks the contract up by it.
+  docusealSubmissionId String?       @unique
   status              ContractStatus @default(DRAFT)
   signedAt            DateTime?
   declinedAt          DateTime?

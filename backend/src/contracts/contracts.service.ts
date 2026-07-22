@@ -32,6 +32,11 @@ import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { docusignToContractStatus } from './contract-status';
 import { stampLiaIdentity } from './engagement-letter-stamp';
 import { linkCaseContactToUser } from '../common/link-case-contact.helper';
+import {
+  DocusealService,
+  buildEngagementSubmitters,
+  docusealSubmitterStatus,
+} from './docuseal.service';
 
 // PR-DOCUSIGN-1 step 5 piece 5a/5b — real engagement-letter PDF.
 // Lives at backend/assets/contract-templates/. Read lazily on first
@@ -84,6 +89,8 @@ export class ContractsService {
     private liaAssignments: LiaAssignmentService,
     // PR-CONTRACT-CAPTURE — store the signed PDF in R2 on completion.
     private r2: R2Service,
+    // PR-DOCUSEAL — the active contract provider (DocuSign kept for rollback).
+    private docuseal: DocusealService,
   ) {}
 
   // PR-DOCUSIGN-1 step 5 piece 2 — multi-signer envelope creation.
@@ -117,13 +124,22 @@ export class ContractsService {
   // payments.controller.ts) continue to fire; case.liaId is set here
   // BEFORE either trigger runs, so both short-circuit through the
   // assignLiaToCase 'already_assigned' branch and stay idempotent.
-  async createContract(
-    dto: CreateContractDto,
-    actor: { id: string; name: string | null; role: string | null },
-  ) {
+  // PR-DOCUSEAL — shared send-prep for BOTH providers, extracted verbatim from
+  // the original DocuSign createContract so the DocuSeal path reuses the EXACT
+  // same gating (not a copy): validate the case + client identity, assign the
+  // LIA (422 if none) + Admission + Finance, resolve the LIA identity + IAA
+  // licence, and the director identity from env. Returns the three signer
+  // identities the provider dispatch needs.
+  private async prepareEngagementSend(caseId: string): Promise<{
+    clientContact: { email: string; fullName: string; userId: string | null };
+    lia: { id: string; email: string; name: string };
+    iaaLicenceNumber: string | null;
+    directorEmail: string;
+    directorName: string;
+  }> {
     // 1. Validate case + no existing contract + client identity present.
     const caseRecord = await this.prisma.case.findUnique({
-      where: { id: dto.caseId },
+      where: { id: caseId },
       include: { contract: true, lead: { include: { contact: true } } },
     });
 
@@ -143,7 +159,7 @@ export class ContractsService {
     // 2. Auto-pick the LIA. assignLiaToCase is idempotent on
     //    already-assigned cases (returns 'already_assigned' with the
     //    existing liaId), so it's safe to call unconditionally.
-    const assignResult = await this.liaAssignments.assignLiaToCase(dto.caseId);
+    const assignResult = await this.liaAssignments.assignLiaToCase(caseId);
     if (assignResult.status === 'no_candidates') {
       throw new UnprocessableEntityException(
         'Cannot send contract — no LIA available to assign to this case.',
@@ -162,25 +178,25 @@ export class ContractsService {
     // send — the methods never throw, but each call is try/catch-wrapped as
     // defence-in-depth.
     try {
-      const adm = await this.liaAssignments.assignAdmissionToCase(dto.caseId);
+      const adm = await this.liaAssignments.assignAdmissionToCase(caseId);
       this.logger.log(
-        `Admission auto-assign for case ${dto.caseId}: ${adm.status}` +
+        `Admission auto-assign for case ${caseId}: ${adm.status}` +
           (adm.ownerId ? ` → ${adm.ownerId}${adm.replacedStrayOwner ? ' (replaced stray owner)' : ''}` : ''),
       );
     } catch (err: any) {
       this.logger.error(
-        `Admission auto-assign failed for case ${dto.caseId} (non-fatal): ${err?.message ?? err}`,
+        `Admission auto-assign failed for case ${caseId} (non-fatal): ${err?.message ?? err}`,
       );
     }
     try {
-      const fin = await this.liaAssignments.assignFinanceToCase(dto.caseId);
+      const fin = await this.liaAssignments.assignFinanceToCase(caseId);
       this.logger.log(
-        `Finance auto-assign for case ${dto.caseId}: ${fin.status}` +
+        `Finance auto-assign for case ${caseId}: ${fin.status}` +
           (fin.financeId ? ` → ${fin.financeId}` : ''),
       );
     } catch (err: any) {
       this.logger.error(
-        `Finance auto-assign failed for case ${dto.caseId} (non-fatal): ${err?.message ?? err}`,
+        `Finance auto-assign failed for case ${caseId} (non-fatal): ${err?.message ?? err}`,
       );
     }
 
@@ -189,7 +205,7 @@ export class ContractsService {
     // + page-11 IAA tabs the 5b tab map emits. liaProfile is an
     // optional 1:1 relation on User (a brand-new LIA may not have one
     // yet); iaaLicenceNumber inside it is nullable too. Both missing
-    // states are treated the same (blank IAA tab, send proceeds, see
+    // states are treated the same (blank IAA field, send proceeds, see
     // below).
     const lia = await this.prisma.user.findUnique({
       where: { id: assignResult.liaId },
@@ -204,17 +220,16 @@ export class ContractsService {
       throw new InternalServerErrorException('Assigned LIA user not found in DB');
     }
 
-    // Missing-IAA policy: WARN, do NOT block. 5b made the IAA tabs
-    // unlocked text fields, so the LIA can fill the number at signing
-    // time on their device. Blocking the send here would be more
-    // disruptive than helpful — the case is already at the contract-
-    // dispatch stage, the client is waiting, and the LIA has a
-    // separate "complete your profile" path to backfill the DB row.
+    // Missing-IAA policy: WARN, do NOT block. The IAA field is an unlocked
+    // text field, so the LIA can fill the number at signing time on their
+    // device. Blocking the send here would be more disruptive than helpful —
+    // the case is already at the contract-dispatch stage, the client is
+    // waiting, and the LIA has a separate "complete your profile" path.
     const iaaLicenceNumber = lia.liaProfile?.iaaLicenceNumber ?? null;
     if (!iaaLicenceNumber) {
       this.logger.warn(
-        `Contract dispatch for case ${dto.caseId}: assigned LIA ${lia.id} (${lia.email}) ` +
-        `has no IAA licence number on file — the IAA Licence Number tab will be sent blank; ` +
+        `Contract dispatch for case ${caseId}: assigned LIA ${lia.id} (${lia.email}) ` +
+        `has no IAA licence number on file — the IAA Licence Number field will be sent blank; ` +
         `the LIA can fill it at signing time. Send proceeds.`,
       );
     }
@@ -228,6 +243,26 @@ export class ContractsService {
         'Cannot send contract — director identity not configured. Set CONTRACT_DIRECTOR_EMAIL and CONTRACT_DIRECTOR_NAME in backend/.env',
       );
     }
+
+    return {
+      clientContact: {
+        email:    clientContact.email,
+        fullName: clientContact.fullName,
+        userId:   clientContact.userId ?? null,
+      },
+      lia: { id: lia.id, email: lia.email, name: lia.name },
+      iaaLicenceNumber,
+      directorEmail,
+      directorName,
+    };
+  }
+
+  async createContract(
+    dto: CreateContractDto,
+    actor: { id: string; name: string | null; role: string | null },
+  ) {
+    const { clientContact, lia, iaaLicenceNumber, directorEmail, directorName } =
+      await this.prepareEngagementSend(dto.caseId);
 
     // 4. Read the engagement-letter PDF (lazy + cached, static asset)
     //    and stamp the LIA's identity into it BEFORE handing to
@@ -366,6 +401,96 @@ export class ContractsService {
 
     this.logger.log(
       `Contract ${contract.id} created for case ${dto.caseId} with envelope ${envelopeId} (CLIENT → LIA → DIRECTOR)`,
+    );
+    return contract;
+  }
+
+  // PR-DOCUSEAL — the ACTIVE send path. Same prep + persist shape as
+  // createContract, but dispatches via DocuSeal (a submission from the template)
+  // instead of a DocuSign envelope. Signer rows carry docusealSubmissionId (not
+  // docusignRecipientId — the webhook matches signers back by email).
+  async createContractViaDocuseal(
+    dto: CreateContractDto,
+    actor: { id: string; name: string | null; role: string | null },
+  ) {
+    const { clientContact, lia, iaaLicenceNumber, directorEmail, directorName } =
+      await this.prepareEngagementSend(dto.caseId);
+
+    // Build the three ordered submitters with the known fields pre-filled and
+    // create the submission (send_email=true, order preserved → Client → LIA →
+    // Director emailed in turn). Network call OUTSIDE the DB transaction so a
+    // failure leaves no orphan rows.
+    const submitters = buildEngagementSubmitters({
+      client:   { email: clientContact.email, name: clientContact.fullName },
+      lia:      { email: lia.email, name: lia.name },
+      director: { email: directorEmail, name: directorName },
+      iaaLicenceNo: iaaLicenceNumber,
+    });
+    const { submissionId } = await this.docuseal.createSubmission(submitters, {
+      sendEmail: true,
+      order: 'preserved',
+    });
+
+    // Persist Contract + 3 ContractSigner rows atomically. Client=SENT (emailed
+    // first), LIA+DIRECTOR=PENDING. docusealSubmissionId links the webhook back;
+    // docusignRecipientId stays null (the DocuSeal webhook matches by email).
+    const contract = await this.prisma.$transaction(async (tx) => {
+      const c = await tx.contract.create({
+        data: {
+          caseId:               dto.caseId,
+          docusealSubmissionId: submissionId,
+          status:               ContractStatus.SENT,
+        },
+      });
+      await tx.contractSigner.createMany({
+        data: [
+          {
+            contractId:   c.id,
+            role:         ContractSignerRole.CLIENT,
+            routingOrder: 1,
+            signerName:   clientContact.fullName,
+            signerEmail:  clientContact.email,
+            userId:       clientContact.userId ?? null,
+            status:       ContractSignerStatus.SENT,
+          },
+          {
+            contractId:   c.id,
+            role:         ContractSignerRole.LIA,
+            routingOrder: 2,
+            signerName:   lia.name,
+            signerEmail:  lia.email,
+            userId:       lia.id,
+            status:       ContractSignerStatus.PENDING,
+          },
+          {
+            contractId:   c.id,
+            role:         ContractSignerRole.DIRECTOR,
+            routingOrder: 3,
+            signerName:   directorName,
+            signerEmail:  directorEmail,
+            userId:       null,
+            status:       ContractSignerStatus.PENDING,
+          },
+        ],
+      });
+      return c;
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId:            actor.id,
+        action:            'CONTRACT_SENT',
+        eventType:         'CONTRACT_SENT',
+        entityType:        'Contract',
+        entityId:          contract.id,
+        newValue:          { caseId: dto.caseId, status: 'SENT', provider: 'docuseal', submissionId } as Prisma.InputJsonValue,
+        actorNameSnapshot: actor.name,
+        actorRoleSnapshot: actor.role,
+      },
+    });
+
+    this.logger.log(
+      `Contract ${contract.id} created for case ${dto.caseId} via DocuSeal submission ${submissionId} (CLIENT → LIA → DIRECTOR)`,
     );
     return contract;
   }
@@ -616,6 +741,120 @@ export class ContractsService {
     return updated;
   }
 
+  // PR-DOCUSEAL — webhook handler for form.completed / submission.completed.
+  // The guard (shared secret) runs BEFORE this; here we ADDITIONALLY re-fetch the
+  // submission from the DocuSeal API (authoritative) rather than trust the
+  // payload. On full completion we mark the contract SIGNED, capture the visaType
+  // + signed PDF via the SAME storage helpers the DocuSign path uses, then run
+  // the identical downstream (LIA/Admission/Finance safety-net, LEAD→STUDENT
+  // promotion, engagement invoice). Idempotent; graceful no-op on stale/unknown.
+  async handleDocusealWebhook(payload: any) {
+    const eventType: string | undefined = payload?.event_type;
+    // form.completed → data.submission_id; submission.completed → data.id.
+    const submissionId = payload?.data?.submission_id ?? payload?.data?.id ?? null;
+    if (!submissionId) {
+      this.logger.warn(
+        `handleDocusealWebhook: no submission id in payload (event=${eventType}) — ignored`,
+      );
+      return null;
+    }
+
+    const contract = await this.prisma.contract.findFirst({
+      where: { docusealSubmissionId: String(submissionId) },
+      include: { signers: true },
+    });
+    if (!contract) {
+      this.logger.warn(
+        `handleDocusealWebhook: no Contract for submissionId=${submissionId} — ignored (stale/unknown)`,
+      );
+      return null;
+    }
+
+    // Authoritative re-fetch — never trust the webhook body for state.
+    const submission = await this.docuseal.getSubmission(submissionId);
+    const submitters: any[] = submission?.submitters ?? [];
+
+    // Update signer rows from the authoritative submitters (matched by email).
+    const rowByEmail = new Map<string, (typeof contract.signers)[number]>();
+    for (const s of contract.signers) {
+      if (s.signerEmail) rowByEmail.set(s.signerEmail.toLowerCase(), s);
+    }
+    for (const sub of submitters) {
+      const email = String(sub?.email ?? '').toLowerCase();
+      const row = email ? rowByEmail.get(email) : undefined;
+      if (!row) continue;
+      const mapped = docusealSubmitterStatus(sub?.status);
+      if (!mapped) continue;
+      const updates: Prisma.ContractSignerUpdateInput = {};
+      if (mapped !== row.status) updates.status = ContractSignerStatus[mapped];
+      const completedAt = sub?.completed_at ? new Date(sub.completed_at) : null;
+      if (completedAt && (!row.signedAt || row.signedAt.getTime() !== completedAt.getTime())) {
+        updates.signedAt = completedAt;
+      }
+      const openedAt = sub?.opened_at ? new Date(sub.opened_at) : null;
+      if (openedAt && (!row.viewedAt || row.viewedAt.getTime() !== openedAt.getTime())) {
+        updates.viewedAt = openedAt;
+      }
+      if (Object.keys(updates).length > 0) {
+        await this.prisma.contractSigner.update({ where: { id: row.id }, data: updates });
+      }
+    }
+
+    // "Fully signed" — the submission is completed (all parties done). DocuSeal
+    // reports this on submission.completed; we also derive it from the submitters.
+    const allCompleted =
+      submission?.status === 'completed' ||
+      (submitters.length > 0 && submitters.every((s) => s?.status === 'completed'));
+    if (!allCompleted) {
+      this.logger.log(
+        `handleDocusealWebhook: submission ${submissionId} not fully completed (event=${eventType}) — signer rows synced, awaiting completion`,
+      );
+      return contract;
+    }
+
+    // Mark the contract SIGNED (only if changed — idempotent on re-delivery).
+    const completedAt = submission?.completed_at ? new Date(submission.completed_at) : new Date();
+    if (contract.status !== ContractStatus.SIGNED) {
+      await this.prisma.contract.update({
+        where: { id: contract.id },
+        data:  { status: ContractStatus.SIGNED, signedAt: completedAt },
+      });
+    }
+
+    // Capture visaType (from the LIA's completed values) + the signed PDF, via
+    // the SAME provider-agnostic helpers the DocuSign path uses.
+    await this.storeCaseVisaType(contract.caseId, String(submissionId), () =>
+      Promise.resolve(this.docuseal.extractVisaType(submission)),
+    );
+    await this.storeSignedContractPdf(contract.caseId, String(submissionId), () =>
+      this.docuseal.downloadCompletedPdf(submissionId),
+    );
+
+    // Downstream — identical to the DocuSign SIGNED path. All idempotent.
+    try {
+      await this.liaAssignments.assignLiaToCase(contract.caseId);
+    } catch (err: any) {
+      this.logger.error(`DocuSeal: LIA assign failed for case ${contract.caseId}: ${err?.message ?? err}`);
+    }
+    try {
+      await this.liaAssignments.assignAdmissionToCase(contract.caseId);
+    } catch (err: any) {
+      this.logger.error(`DocuSeal: Admission assign failed for case ${contract.caseId}: ${err?.message ?? err}`);
+    }
+    try {
+      await this.liaAssignments.assignFinanceToCase(contract.caseId);
+    } catch (err: any) {
+      this.logger.error(`DocuSeal: Finance assign failed for case ${contract.caseId}: ${err?.message ?? err}`);
+    }
+    await this.maybePromoteClientToStudent(contract.id, contract.caseId);
+    await this.maybeCreateEngagementInvoice(contract.id, contract.caseId);
+
+    this.logger.log(
+      `handleDocusealWebhook: submission ${submissionId} completed → contract ${contract.id} SIGNED + downstream run`,
+    );
+    return contract;
+  }
+
   // PR-CONTRACT-CAPTURE — download + persist the signed artifacts once an
   // envelope is fully signed. Two independent, idempotent, best-effort steps:
   //   A. the flattened signed PDF → R2 → a case Document (category
@@ -624,7 +863,25 @@ export class ContractsService {
   //   B. the LIA's visaType checkbox selection → Case.visaType.
   // Neither throws: a failure logs and leaves the webhook succeeding.
   private async captureSignedArtifacts(caseId: string, envelopeId: string): Promise<void> {
-    // ── A. Signed PDF ─────────────────────────────────────────────────
+    // Delegates to the provider-agnostic helpers (shared with the DocuSeal
+    // path), supplying DocuSign fetchers for the bytes + visaType.
+    await this.storeSignedContractPdf(caseId, envelopeId, () =>
+      this.docuSignService.getCombinedDocument(envelopeId),
+    );
+    await this.storeCaseVisaType(caseId, envelopeId, () =>
+      this.docuSignService.getSelectedVisaType(envelopeId),
+    );
+  }
+
+  // Provider-agnostic: store the fully-signed PDF as a case Document (category
+  // signed_contract). `ref` (envelope/submission id) is used in the R2 key +
+  // audit. `getBytes` is invoked ONLY when we actually need to store (so an
+  // already-stored contract skips the download). Idempotent + never throws.
+  private async storeSignedContractPdf(
+    caseId: string,
+    ref: string,
+    getBytes: () => Promise<Buffer>,
+  ): Promise<void> {
     try {
       const already = await this.prisma.document.findFirst({
         where: { caseId, category: SIGNED_CONTRACT_CATEGORY },
@@ -632,68 +889,76 @@ export class ContractsService {
       });
       if (already) {
         this.logger.log(
-          `captureSignedArtifacts: signed contract already stored for case ${caseId} — skipping PDF`,
+          `storeSignedContractPdf: signed contract already stored for case ${caseId} — skipping PDF`,
         );
-      } else {
-        const caseRow = await this.prisma.case.findUnique({
-          where: { id: caseId },
-          select: { liaId: true, ownerId: true },
+        return;
+      }
+      const caseRow = await this.prisma.case.findUnique({
+        where: { id: caseId },
+        select: { liaId: true, ownerId: true },
+      });
+      // Attribute the system-stored PDF to the responsible LIA (guaranteed set
+      // by contract-send + re-asserted on SIGNED); fall back to the owner.
+      const uploaderId = caseRow?.liaId ?? caseRow?.ownerId ?? null;
+      if (!uploaderId) {
+        this.logger.warn(
+          `storeSignedContractPdf: case ${caseId} has no LIA/owner to attribute the signed contract — PDF not stored`,
+        );
+        return;
+      }
+      const bytes = await getBytes();
+      const key = `signed-contracts/${caseId}/${ref}.pdf`;
+      await this.r2.putObject(key, bytes, 'application/pdf');
+      try {
+        await this.prisma.document.create({
+          data: {
+            caseId,
+            uploaderId,
+            r2Key:        key,
+            originalName: 'Signed engagement letter.pdf',
+            mimeType:     'application/pdf',
+            sizeBytes:    bytes.length,
+            status:       DocumentUploadStatus.UPLOADED,
+            category:     SIGNED_CONTRACT_CATEGORY,
+          },
         });
-        // Attribute the system-stored PDF to the responsible LIA (guaranteed set
-        // by contract-send + re-asserted on SIGNED); fall back to the owner.
-        const uploaderId = caseRow?.liaId ?? caseRow?.ownerId ?? null;
-        if (!uploaderId) {
-          this.logger.warn(
-            `captureSignedArtifacts: case ${caseId} has no LIA/owner to attribute the signed contract — PDF not stored`,
+        await this.prisma.auditLog.create({
+          data: {
+            action:     'CONTRACT_SIGNED_PDF_STORED',
+            eventType:  'CONTRACT_SIGNED_PDF_STORED',
+            entityType: 'CASE',
+            entityId:   caseId,
+            newValue:   { ref, r2Key: key, sizeBytes: bytes.length } as Prisma.InputJsonValue,
+          },
+        });
+        this.logger.log(
+          `storeSignedContractPdf: stored signed contract for case ${caseId} (${bytes.length} bytes)`,
+        );
+      } catch (err: any) {
+        // Unique r2Key backstop — a concurrent webhook already stored it.
+        if (err?.code === 'P2002') {
+          this.logger.log(
+            `storeSignedContractPdf: signed contract row already exists (race) for case ${caseId}`,
           );
         } else {
-          const bytes = await this.docuSignService.getCombinedDocument(envelopeId);
-          const key = `signed-contracts/${caseId}/${envelopeId}.pdf`;
-          await this.r2.putObject(key, bytes, 'application/pdf');
-          try {
-            await this.prisma.document.create({
-              data: {
-                caseId,
-                uploaderId,
-                r2Key:        key,
-                originalName: 'Signed engagement letter.pdf',
-                mimeType:     'application/pdf',
-                sizeBytes:    bytes.length,
-                status:       DocumentUploadStatus.UPLOADED,
-                category:     SIGNED_CONTRACT_CATEGORY,
-              },
-            });
-            await this.prisma.auditLog.create({
-              data: {
-                action:     'CONTRACT_SIGNED_PDF_STORED',
-                eventType:  'CONTRACT_SIGNED_PDF_STORED',
-                entityType: 'CASE',
-                entityId:   caseId,
-                newValue:   { envelopeId, r2Key: key, sizeBytes: bytes.length } as Prisma.InputJsonValue,
-              },
-            });
-            this.logger.log(
-              `captureSignedArtifacts: stored signed contract for case ${caseId} (${bytes.length} bytes)`,
-            );
-          } catch (err: any) {
-            // Unique r2Key backstop — a concurrent webhook already stored it.
-            if (err?.code === 'P2002') {
-              this.logger.log(
-                `captureSignedArtifacts: signed contract row already exists (race) for case ${caseId}`,
-              );
-            } else {
-              throw err;
-            }
-          }
+          throw err;
         }
       }
     } catch (err: any) {
       this.logger.error(
-        `captureSignedArtifacts: failed to store signed PDF for case ${caseId}: ${err?.message ?? err}`,
+        `storeSignedContractPdf: failed to store signed PDF for case ${caseId}: ${err?.message ?? err}`,
       );
     }
+  }
 
-    // ── B. visaType selection ─────────────────────────────────────────
+  // Provider-agnostic: capture the LIA's visaType selection onto the case.
+  // `getVisaType` is invoked ONLY when the case has none yet. Idempotent + never
+  // throws.
+  private async storeCaseVisaType(
+    caseId: string,
+    ref: string,
+    getVisaType: () => Promise<string | null>,
+  ): Promise<void> {
     try {
       const caseRow = await this.prisma.case.findUnique({
         where: { id: caseId },
@@ -701,33 +966,33 @@ export class ContractsService {
       });
       if (caseRow?.visaType) {
         this.logger.log(
-          `captureSignedArtifacts: case ${caseId} already has visaType — skipping`,
+          `storeCaseVisaType: case ${caseId} already has visaType — skipping`,
+        );
+        return;
+      }
+      const visaType = await getVisaType();
+      if (visaType) {
+        await this.prisma.case.update({ where: { id: caseId }, data: { visaType } });
+        await this.prisma.auditLog.create({
+          data: {
+            action:     'CONTRACT_VISA_TYPE_CAPTURED',
+            eventType:  'CONTRACT_VISA_TYPE_CAPTURED',
+            entityType: 'CASE',
+            entityId:   caseId,
+            newValue:   { ref, visaType } as Prisma.InputJsonValue,
+          },
+        });
+        this.logger.log(
+          `storeCaseVisaType: captured visaType="${visaType}" for case ${caseId}`,
         );
       } else {
-        const visaType = await this.docuSignService.getSelectedVisaType(envelopeId);
-        if (visaType) {
-          await this.prisma.case.update({ where: { id: caseId }, data: { visaType } });
-          await this.prisma.auditLog.create({
-            data: {
-              action:     'CONTRACT_VISA_TYPE_CAPTURED',
-              eventType:  'CONTRACT_VISA_TYPE_CAPTURED',
-              entityType: 'CASE',
-              entityId:   caseId,
-              newValue:   { envelopeId, visaType } as Prisma.InputJsonValue,
-            },
-          });
-          this.logger.log(
-            `captureSignedArtifacts: captured visaType="${visaType}" for case ${caseId}`,
-          );
-        } else {
-          this.logger.warn(
-            `captureSignedArtifacts: no visaType selection found on envelope ${envelopeId} for case ${caseId}`,
-          );
-        }
+        this.logger.warn(
+          `storeCaseVisaType: no visaType selection found (ref ${ref}) for case ${caseId}`,
+        );
       }
     } catch (err: any) {
       this.logger.error(
-        `captureSignedArtifacts: failed to capture visaType for case ${caseId}: ${err?.message ?? err}`,
+        `storeCaseVisaType: failed to capture visaType for case ${caseId}: ${err?.message ?? err}`,
       );
     }
   }
