@@ -17,6 +17,33 @@ export const DOCUSEAL_ROLE_CLIENT = 'Client';
 export const DOCUSEAL_ROLE_LIA = 'LIA';
 export const DOCUSEAL_ROLE_DIRECTOR = 'Director';
 
+// Template FIELD names — verified verbatim against GET /api/templates/1 on the
+// live instance. The template uses human-readable field names (NOT machine keys
+// like "clientName"), so prefill `values` must key by these exact strings. Note
+// "Full Name" is reused per party; DocuSeal scopes `values` to each submitter,
+// so the Client "Full Name" and LIA "Full Name" don't collide.
+const FIELD_FULL_NAME = 'Full Name';
+const FIELD_EMAIL = 'Email';
+const FIELD_IAA_LICENCE_NO = 'IAA Licence No';
+
+// The LIA's visa-type selection is a GROUP of checkbox fields (one per visa
+// type) on the template — there is no single "visaType" field. On completion we
+// return the name(s) of the checked box(es). Names are verbatim from the
+// template; any edit there must be mirrored here.
+export const VISA_CHECKBOX_FIELDS: readonly string[] = [
+  'Initial Student Visa',
+  'Student Visa Renewal',
+  'Post-Study Work Visa (PSWV)',
+  'Dependent Partner Work Visa',
+  'Dependent Child Visa (per child)',
+  'Dependent Partner Visa Renewal',
+  'Dependent Child Visa Renewal (per child)',
+  'Visitor Visa',
+  'Work Visa (post-study, employer-sponsored)',
+  'Visa Variation / Condition Change',
+  'Visa Resubmission (one resubmission per declined visa)',
+];
+
 export interface DocusealSubmitterSpec {
   role: string;
   email: string;
@@ -41,8 +68,8 @@ export function buildEngagementSubmitters(input: {
       email: input.client.email,
       name: input.client.name,
       values: {
-        clientName: input.client.name,
-        clientEmail: input.client.email,
+        [FIELD_FULL_NAME]: input.client.name,
+        [FIELD_EMAIL]: input.client.email,
       },
     },
     {
@@ -50,8 +77,8 @@ export function buildEngagementSubmitters(input: {
       email: input.lia.email,
       name: input.lia.name,
       values: {
-        liaName: input.lia.name,
-        iaaLicenceNo: input.iaaLicenceNo ?? '',
+        [FIELD_FULL_NAME]: input.lia.name,
+        [FIELD_IAA_LICENCE_NO]: input.iaaLicenceNo ?? '',
       },
     },
     {
@@ -189,25 +216,36 @@ export class DocusealService {
     }
   }
 
-  // Extract the LIA's visaType selection from a fetched submission. visaType is a
-  // multi-select; DocuSeal returns the value as an array or a comma string. We
-  // normalise to a single free-text string for Case.visaType.
+  // Extract the LIA's visa-type selection from a fetched submission. The template
+  // captures it as a group of checkbox fields (VISA_CHECKBOX_FIELDS), so we
+  // collect the names of every CHECKED box and join them into the free-text
+  // Case.visaType. Returns null when nothing is selected.
   extractVisaType(submission: any): string | null {
     const submitters: any[] = submission?.submitters ?? [];
-    // Prefer the LIA submitter (by role); fall back to scanning every submitter.
-    const ordered = [
-      ...submitters.filter(
-        (s) => (s.role ?? '').toLowerCase() === DOCUSEAL_ROLE_LIA.toLowerCase(),
-      ),
-      ...submitters,
-    ];
-    for (const sub of ordered) {
+    const checkboxSet = new Set(VISA_CHECKBOX_FIELDS);
+    const selected: string[] = [];
+    for (const sub of submitters) {
       const values: any[] = Array.isArray(sub?.values) ? sub.values : [];
-      const hit = values.find((v) => (v.field ?? v.name) === 'visaType');
-      if (hit && hit.value != null && hit.value !== '') {
-        return Array.isArray(hit.value) ? hit.value.join(', ') : String(hit.value);
+      for (const v of values) {
+        const field = v?.field ?? v?.name;
+        if (checkboxSet.has(field) && isCheckboxChecked(v?.value) && !selected.includes(field)) {
+          selected.push(field);
+        }
       }
     }
-    return null;
+    return selected.length ? selected.join(', ') : null;
   }
+}
+
+// DocuSeal renders a checked checkbox value in a few shapes across versions
+// (boolean true, the string "true"/"checked", or the field's own label). Treat
+// any of those as checked; an empty / false / missing value is unchecked.
+function isCheckboxChecked(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    return v !== '' && v !== 'false' && v !== '0' && v !== 'off' && v !== 'unchecked';
+  }
+  return false;
 }

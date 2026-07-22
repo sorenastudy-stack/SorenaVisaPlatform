@@ -36,25 +36,27 @@ describe('buildEngagementSubmitters', () => {
     ]);
   });
 
-  it('pre-fills the client name + email on the Client submitter', () => {
+  // Field names are the LIVE template's human-readable names (verified against
+  // GET /api/templates/1), not machine keys.
+  it('pre-fills the client Full Name + Email on the Client submitter', () => {
     const [client] = buildEngagementSubmitters(input);
     expect(client.values).toEqual({
-      clientName: 'Oscar Bach',
-      clientEmail: 'oscar@example.com',
+      'Full Name': 'Oscar Bach',
+      'Email': 'oscar@example.com',
     });
   });
 
-  it('pre-fills liaName + iaaLicenceNo on the LIA submitter', () => {
+  it('pre-fills Full Name + IAA Licence No on the LIA submitter', () => {
     const lia = buildEngagementSubmitters(input)[1];
     expect(lia.values).toEqual({
-      liaName: 'Sheila Rose',
-      iaaLicenceNo: '201900123',
+      'Full Name': 'Sheila Rose',
+      'IAA Licence No': '201900123',
     });
   });
 
-  it('sends a blank iaaLicenceNo (never undefined) when the LIA has none', () => {
+  it('sends a blank IAA Licence No (never undefined) when the LIA has none', () => {
     const lia = buildEngagementSubmitters({ ...input, iaaLicenceNo: null })[1];
-    expect(lia.values?.iaaLicenceNo).toBe('');
+    expect(lia.values?.['IAA Licence No']).toBe('');
   });
 
   it('leaves the Director submitter without prefilled values', () => {
@@ -79,38 +81,60 @@ describe('docusealSubmitterStatus', () => {
   });
 });
 
-describe('DocusealService.extractVisaType', () => {
+describe('DocusealService.extractVisaType (checkbox group)', () => {
   const svc = new DocusealService();
 
-  it('reads the LIA submitter visaType (single value)', () => {
+  it('returns the name of the single checked visa-type checkbox', () => {
     const submission = {
       submitters: [
-        { role: 'Client', values: [{ field: 'clientName', value: 'Oscar' }] },
-        { role: 'LIA', values: [{ field: 'visaType', value: 'Student Visa' }] },
+        { role: 'Client', values: [{ field: 'Full Name', value: 'Oscar' }] },
+        {
+          role: 'LIA',
+          values: [
+            { field: 'Full Name', value: 'Sheila' },
+            { field: 'Initial Student Visa', value: true },
+            { field: 'Visitor Visa', value: false },
+          ],
+        },
       ],
     };
-    expect(svc.extractVisaType(submission)).toBe('Student Visa');
+    expect(svc.extractVisaType(submission)).toBe('Initial Student Visa');
   });
 
-  it('joins a multi-select visaType array', () => {
+  it('joins multiple checked visa-type checkboxes', () => {
     const submission = {
       submitters: [
-        { role: 'LIA', values: [{ field: 'visaType', value: ['Student Visa', 'Work Visa'] }] },
+        {
+          role: 'LIA',
+          values: [
+            { field: 'Initial Student Visa', value: 'true' },
+            { field: 'Visitor Visa', value: true },
+          ],
+        },
       ],
     };
-    expect(svc.extractVisaType(submission)).toBe('Student Visa, Work Visa');
+    expect(svc.extractVisaType(submission)).toBe('Initial Student Visa, Visitor Visa');
   });
 
-  it('supports the "name" key as well as "field"', () => {
+  it('ignores non-visa fields and unchecked boxes', () => {
     const submission = {
-      submitters: [{ role: 'LIA', values: [{ name: 'visaType', value: 'Visitor Visa' }] }],
+      submitters: [
+        {
+          role: 'LIA',
+          values: [
+            { field: 'IAA Licence No', value: '2019123' },
+            { field: 'Student Visa Renewal', value: false },
+            { field: 'Visitor Visa', value: '' },
+          ],
+        },
+      ],
     };
-    expect(svc.extractVisaType(submission)).toBe('Visitor Visa');
+    expect(svc.extractVisaType(submission)).toBeNull();
   });
 
-  it('returns null when no submitter has a visaType value', () => {
+  it('returns null when the submission has no visa checkboxes at all', () => {
     const submission = {
-      submitters: [{ role: 'LIA', values: [{ field: 'liaName', value: 'Sheila' }] }],
+      submitters: [{ role: 'LIA', values: [{ field: 'Full Name', value: 'Sheila' }] }],
     };
     expect(svc.extractVisaType(submission)).toBeNull();
   });
