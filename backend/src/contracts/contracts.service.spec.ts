@@ -26,6 +26,7 @@ import { ContractsService } from './contracts.service';
 import { DocuSignService } from './docusign.service';
 import { DocusealService } from './docuseal.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
+import { CasesService } from '../cases/cases.service';
 import { MailService } from '../mail/mail.service';
 import { R2Service } from '../common/r2/r2.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -237,6 +238,10 @@ describe('ContractsService.handleWebhook (PR-DOCUSIGN-1 step 5 piece 3)', () => 
         { provide: LiaAssignmentService,  useValue: liaMock },
         { provide: R2Service,             useValue: r2Mock },
         { provide: DocusealService,       useValue: docusealMock },
+        // PR-CONTRACT-LEAD (Phase B) — new ContractsService dependency. This
+        // DocuSign webhook spec drives case-based contracts (caseId set), so the
+        // lead-based auto-create path never fires; a bare stub satisfies DI.
+        { provide: CasesService,          useValue: {} },
       ],
     }).compile();
 

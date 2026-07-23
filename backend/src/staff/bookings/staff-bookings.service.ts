@@ -171,31 +171,85 @@ export class StaffBookingsService {
     }
 
     const trimmed = notes?.trim() || null;
-    const updated = await this.prisma.consultation.update({
-      where: { id: consultationId },
-      data: {
-        decision,
-        decisionNotes: trimmed,
-        decidedAt: now,
-        decidedById: actor.userId,
-        // Only touch status if it isn't already COMPLETED — never re-stamp it.
-        ...(c.status === 'COMPLETED' ? {} : { status: 'COMPLETED', completedAt: now }),
-      },
-      select: { id: true, decision: true, decisionNotes: true, decidedAt: true, status: true },
-    });
+    const approves = decision === LegalDecision.APPROVED;
 
-    await this.prisma.auditLog.create({
-      data: {
-        userId: actor.userId,
-        action: 'LIA_CONSULTATION_DECISION',
-        entityType: 'Consultation',
-        entityId: consultationId,
-        newValue: {
-          leadId: c.leadId,
+    // PR-CONTRACT-LEAD (Phase B) — the gate-reconciliation. An APPROVED LIA
+    // verdict is the authorization to proceed, so it must ALSO clear the lead's
+    // OWN execution gate (executionAllowed / hardStopFlag / liaEscalationRequired),
+    // the lead-level equivalent of CasesService.clearHardStop. Without this, a
+    // red-flagged (HS4) lead — which has executionAllowed=false, hardStopFlag=true
+    // — would pass Phase A's contract-send gate but then be REJECTED by
+    // CasesService.createCase when the case auto-creates on client-sign. The clear
+    // runs in the SAME transaction as the verdict so it can never be missed.
+    const { updated } = await this.prisma.$transaction(async (tx) => {
+      const upd = await tx.consultation.update({
+        where: { id: consultationId },
+        data: {
           decision,
-          hasNotes: !!trimmed,
-        } as Prisma.InputJsonValue,
-      },
+          decisionNotes: trimmed,
+          decidedAt: now,
+          decidedById: actor.userId,
+          // Only touch status if it isn't already COMPLETED — never re-stamp it.
+          ...(c.status === 'COMPLETED' ? {} : { status: 'COMPLETED', completedAt: now }),
+        },
+        select: { id: true, decision: true, decisionNotes: true, decidedAt: true, status: true },
+      });
+
+      if (approves && c.leadId) {
+        const lead = await tx.lead.findUnique({
+          where: { id: c.leadId },
+          select: { executionAllowed: true, hardStopFlag: true, hardStopReason: true, liaEscalationRequired: true },
+        });
+        // Only write (and audit) when something actually changes — keeps a repeat
+        // "approve" idempotent and avoids a redundant audit row.
+        if (lead && (!lead.executionAllowed || lead.hardStopFlag || lead.liaEscalationRequired)) {
+          await tx.lead.update({
+            where: { id: c.leadId },
+            data: {
+              executionAllowed: true,
+              hardStopFlag: false,
+              hardStopReason: null,
+              liaEscalationRequired: false,
+            },
+          });
+          await tx.auditLog.create({
+            data: {
+              userId: actor.userId,
+              action: 'LIA_LEAD_GATE_CLEARED',
+              eventType: 'LIA_LEAD_GATE_CLEARED',
+              entityType: 'Lead',
+              entityId: c.leadId,
+              oldValue: {
+                executionAllowed: lead.executionAllowed,
+                hardStopFlag: lead.hardStopFlag,
+                liaEscalationRequired: lead.liaEscalationRequired,
+              } as Prisma.InputJsonValue,
+              newValue: {
+                executionAllowed: true,
+                hardStopFlag: false,
+                liaEscalationRequired: false,
+                clearedByConsultationId: consultationId,
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId,
+          action: 'LIA_CONSULTATION_DECISION',
+          entityType: 'Consultation',
+          entityId: consultationId,
+          newValue: {
+            leadId: c.leadId,
+            decision,
+            hasNotes: !!trimmed,
+          } as Prisma.InputJsonValue,
+        },
+      });
+
+      return { updated: upd };
     });
 
     return updated;

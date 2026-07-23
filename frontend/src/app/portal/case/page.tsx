@@ -222,6 +222,13 @@ export default async function MyCasePage() {
                     <ShieldCheck size={13} /> In review
                   </span>
                 )}
+                {/* Phase B — the client has signed; the LIA/Director are still
+                    counter-signing internally. Informational + reassuring, no action. */}
+                {s.kind === 'CONTRACT_PENDING_COUNTERSIGN' && (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-sorena-jade">
+                    <CheckCircle2 size={13} /> Signed
+                  </span>
+                )}
                 {s.kind === 'INVOICE' && s.invoiceId && (
                   <Link
                     href={`/portal/case/pay?invoiceId=${s.invoiceId}`}

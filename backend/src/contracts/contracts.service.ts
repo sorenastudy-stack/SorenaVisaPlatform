@@ -32,6 +32,7 @@ import {
 import { CreateContractDto } from './dto/create-contract.dto';
 import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
+import { CasesService } from '../cases/cases.service';
 import { docusignToContractStatus } from './contract-status';
 import { stampLiaIdentity } from './engagement-letter-stamp';
 import { linkCaseContactToUser } from '../common/link-case-contact.helper';
@@ -94,6 +95,10 @@ export class ContractsService {
     private r2: R2Service,
     // PR-DOCUSEAL — the active contract provider (DocuSign kept for rollback).
     private docuseal: DocusealService,
+    // PR-CONTRACT-LEAD (Phase B) — auto-create the case when the client signs a
+    // lead-based contract. CasesModule already exports CasesService and
+    // ContractsModule imports it, so this is a plain (non-circular) injection.
+    private cases: CasesService,
   ) {}
 
   // PR-DOCUSIGN-1 step 5 piece 2 — multi-signer envelope creation.
@@ -188,83 +193,147 @@ export class ContractsService {
   // LIA (422 if none) + Admission + Finance, resolve the LIA identity + IAA
   // licence, and the director identity from env. Returns the three signer
   // identities the provider dispatch needs.
-  private async prepareEngagementSend(caseId: string): Promise<{
+  // PR-CONTRACT-LEAD (Phase B) — `target` is EITHER an existing case (caseId,
+  // legacy) OR a lead with no case yet (leadId). The resolved lead + client
+  // contact, the Phase-A gate, and the LIA pick are identical in both; only the
+  // LIA *assignment* differs (case-based assigns to the case + Admission/Finance;
+  // lead-based just picks — the case created on client-sign is pointed at this
+  // same LIA, and Admission/Finance are assigned then / at full completion). The
+  // returned `resolved` tells the caller whether to persist caseId or leadId.
+  private async prepareEngagementSend(target: { caseId?: string; leadId?: string }): Promise<{
     clientContact: { email: string; fullName: string; userId: string | null };
     lia: { id: string; email: string; name: string };
     iaaLicenceNumber: string | null;
     directorEmail: string;
     directorName: string;
+    resolved: { caseId: string | null; leadId: string | null };
   }> {
-    // 1. Validate case + no existing contract + client identity present.
-    const caseRecord = await this.prisma.case.findUnique({
-      where: { id: caseId },
-      include: { contract: true, lead: { include: { contact: true } } },
-    });
+    const caseId = target.caseId ?? null;
+    const leadId = target.leadId ?? null;
+    if ((caseId && leadId) || (!caseId && !leadId)) {
+      throw new BadRequestException('A contract send must target exactly one of caseId or leadId.');
+    }
 
-    if (!caseRecord) {
-      throw new NotFoundException('Case not found');
+    // 1. Resolve the lead + client contact, and guard against a duplicate
+    //    contract, from EITHER the case (legacy) or the lead (Phase B).
+    let resolvedLeadId: string;
+    let liaEscalationRequired: boolean;
+    let clientContact: { email: string | null; fullName: string | null; userId: string | null } | null | undefined;
+
+    if (caseId) {
+      const caseRecord = await this.prisma.case.findUnique({
+        where: { id: caseId },
+        include: { contract: true, lead: { include: { contact: true } } },
+      });
+      if (!caseRecord) {
+        throw new NotFoundException('Case not found');
+      }
+      if (caseRecord.contract) {
+        throw new BadRequestException('Contract already exists for this case');
+      }
+      if (!caseRecord.lead) {
+        throw new BadRequestException('Case has no lead — cannot identify the client');
+      }
+      resolvedLeadId = caseRecord.lead.id;
+      liaEscalationRequired = caseRecord.lead.liaEscalationRequired;
+      clientContact = caseRecord.lead.contact;
+    } else {
+      const lead = await this.prisma.lead.findUnique({
+        where: { id: leadId! },
+        include: {
+          contact: true,
+          cases: { select: { id: true }, take: 1 },
+          // A LIVE lead-based contract already sent for this lead (caseId still
+          // null). The partial unique index is the hard backstop; this is the
+          // friendly pre-check.
+          contracts: { where: { caseId: null }, select: { id: true }, take: 1 },
+        },
+      });
+      if (!lead) {
+        throw new NotFoundException('Lead not found');
+      }
+      if (lead.cases.length > 0) {
+        throw new BadRequestException('This lead already has a case — send the contract from the case.');
+      }
+      if (lead.contracts.length > 0) {
+        throw new BadRequestException('A contract has already been sent for this lead.');
+      }
+      resolvedLeadId = lead.id;
+      liaEscalationRequired = lead.liaEscalationRequired;
+      clientContact = lead.contact;
     }
-    if (caseRecord.contract) {
-      throw new BadRequestException('Contract already exists for this case');
-    }
-    const clientContact = caseRecord.lead?.contact;
+
     if (!clientContact || !clientContact.email || !clientContact.fullName) {
       throw new BadRequestException(
-        'Case has no client contact with email + full name — cannot identify the CLIENT signer',
+        'No client contact with email + full name — cannot identify the CLIENT signer',
       );
     }
 
     // 1b. PR-CONTRACT-GATE (Phase A) — consultation-completion + LIA-approval
     //     precondition. Runs BEFORE any assignment/dispatch, for EVERY provider
-    //     and EVERY caller (there is only this one send path). Throws a
-    //     client-safe UnprocessableEntity message the SendContractPanel surfaces.
+    //     and EVERY caller (there is only this one send path). Unchanged: it keys
+    //     on the LEAD, so it works identically for case-based and lead-based sends.
     await this.assertContractSendAllowed({
-      id: caseRecord.lead!.id,
-      liaEscalationRequired: caseRecord.lead!.liaEscalationRequired,
+      id: resolvedLeadId,
+      liaEscalationRequired,
     });
 
-    // 2. Auto-pick the LIA. assignLiaToCase is idempotent on
-    //    already-assigned cases (returns 'already_assigned' with the
-    //    existing liaId), so it's safe to call unconditionally.
-    const assignResult = await this.liaAssignments.assignLiaToCase(caseId);
-    if (assignResult.status === 'no_candidates') {
-      throw new UnprocessableEntityException(
-        'Cannot send contract — no LIA available to assign to this case.',
-      );
-    }
-    if (!assignResult.liaId) {
-      throw new InternalServerErrorException(
-        `LIA assignment returned status=${assignResult.status} but no liaId — inconsistent state`,
-      );
-    }
+    // 2. Resolve the LIA who becomes the contract's LIA signer.
+    let liaId: string;
+    if (caseId) {
+      // Case-based (legacy): assign to the case (idempotent) + Admission/Finance.
+      const assignResult = await this.liaAssignments.assignLiaToCase(caseId);
+      if (assignResult.status === 'no_candidates') {
+        throw new UnprocessableEntityException(
+          'Cannot send contract — no LIA available to assign to this case.',
+        );
+      }
+      if (!assignResult.liaId) {
+        throw new InternalServerErrorException(
+          `LIA assignment returned status=${assignResult.status} but no liaId — inconsistent state`,
+        );
+      }
+      liaId = assignResult.liaId;
 
-    // Phase 3 — auto-assign the Admission Specialist + Finance officer at the
-    // same trigger as the LIA. Placed AFTER the LIA assign so the existing
-    // no-LIA UnprocessableException still governs whether the send proceeds.
-    // Unlike the LIA, a missing Admission/Finance staffer must NOT block the
-    // send — the methods never throw, but each call is try/catch-wrapped as
-    // defence-in-depth.
-    try {
-      const adm = await this.liaAssignments.assignAdmissionToCase(caseId);
-      this.logger.log(
-        `Admission auto-assign for case ${caseId}: ${adm.status}` +
-          (adm.ownerId ? ` → ${adm.ownerId}${adm.replacedStrayOwner ? ' (replaced stray owner)' : ''}` : ''),
-      );
-    } catch (err: any) {
-      this.logger.error(
-        `Admission auto-assign failed for case ${caseId} (non-fatal): ${err?.message ?? err}`,
-      );
-    }
-    try {
-      const fin = await this.liaAssignments.assignFinanceToCase(caseId);
-      this.logger.log(
-        `Finance auto-assign for case ${caseId}: ${fin.status}` +
-          (fin.financeId ? ` → ${fin.financeId}` : ''),
-      );
-    } catch (err: any) {
-      this.logger.error(
-        `Finance auto-assign failed for case ${caseId} (non-fatal): ${err?.message ?? err}`,
-      );
+      // Phase 3 — auto-assign the Admission Specialist + Finance officer at the
+      // same trigger as the LIA. Placed AFTER the LIA assign so the existing
+      // no-LIA UnprocessableException still governs whether the send proceeds.
+      // Unlike the LIA, a missing Admission/Finance staffer must NOT block the
+      // send — the methods never throw, but each call is try/catch-wrapped as
+      // defence-in-depth.
+      try {
+        const adm = await this.liaAssignments.assignAdmissionToCase(caseId);
+        this.logger.log(
+          `Admission auto-assign for case ${caseId}: ${adm.status}` +
+            (adm.ownerId ? ` → ${adm.ownerId}${adm.replacedStrayOwner ? ' (replaced stray owner)' : ''}` : ''),
+        );
+      } catch (err: any) {
+        this.logger.error(
+          `Admission auto-assign failed for case ${caseId} (non-fatal): ${err?.message ?? err}`,
+        );
+      }
+      try {
+        const fin = await this.liaAssignments.assignFinanceToCase(caseId);
+        this.logger.log(
+          `Finance auto-assign for case ${caseId}: ${fin.status}` +
+            (fin.financeId ? ` → ${fin.financeId}` : ''),
+        );
+      } catch (err: any) {
+        this.logger.error(
+          `Finance auto-assign failed for case ${caseId} (non-fatal): ${err?.message ?? err}`,
+        );
+      }
+    } else {
+      // Lead-based (Phase B): pick the least-loaded LIA WITHOUT a case write. The
+      // case (auto-created when the client signs) is pointed at this same LIA, and
+      // Admission/Finance are assigned at that point / re-asserted at completion.
+      const picked = await this.liaAssignments.pickLeastLoadedLia();
+      if (picked.status === 'no_candidates' || !picked.liaId) {
+        throw new UnprocessableEntityException(
+          'Cannot send contract — no LIA available to sign the engagement letter.',
+        );
+      }
+      liaId = picked.liaId;
     }
 
     // PR-DOCUSIGN-1 step 5 piece 5c — load liaProfile alongside the
@@ -275,7 +344,7 @@ export class ContractsService {
     // states are treated the same (blank IAA field, send proceeds, see
     // below).
     const lia = await this.prisma.user.findUnique({
-      where: { id: assignResult.liaId },
+      where: { id: liaId },
       select: {
         id:    true,
         email: true,
@@ -295,7 +364,7 @@ export class ContractsService {
     const iaaLicenceNumber = lia.liaProfile?.iaaLicenceNumber ?? null;
     if (!iaaLicenceNumber) {
       this.logger.warn(
-        `Contract dispatch for case ${caseId}: assigned LIA ${lia.id} (${lia.email}) ` +
+        `Contract dispatch for ${caseId ? `case ${caseId}` : `lead ${resolvedLeadId}`}: assigned LIA ${lia.id} (${lia.email}) ` +
         `has no IAA licence number on file — the IAA Licence Number field will be sent blank; ` +
         `the LIA can fill it at signing time. Send proceeds.`,
       );
@@ -321,6 +390,7 @@ export class ContractsService {
       iaaLicenceNumber,
       directorEmail,
       directorName,
+      resolved: { caseId, leadId },
     };
   }
 
@@ -328,8 +398,8 @@ export class ContractsService {
     dto: CreateContractDto,
     actor: { id: string; name: string | null; role: string | null },
   ) {
-    const { clientContact, lia, iaaLicenceNumber, directorEmail, directorName } =
-      await this.prepareEngagementSend(dto.caseId);
+    const { clientContact, lia, iaaLicenceNumber, directorEmail, directorName, resolved } =
+      await this.prepareEngagementSend({ caseId: dto.caseId, leadId: dto.leadId });
 
     // 4. Read the engagement-letter PDF (lazy + cached, static asset)
     //    and stamp the LIA's identity into it BEFORE handing to
@@ -394,7 +464,9 @@ export class ContractsService {
       {
         emailSubject: 'Sorena Visa engagement letter — signature required',
         emailBlurb:   'Please review and sign the attached engagement letter. The other signers will be notified in order once you complete your signature.',
-        caseId:       dto.caseId,
+        // Reference id for DocuSign metadata — the case if we have one, else the
+        // lead (Phase B lead-based send, before the case exists).
+        caseId:       resolved.caseId ?? resolved.leadId ?? undefined,
       },
     );
 
@@ -405,7 +477,11 @@ export class ContractsService {
     const contract = await this.prisma.$transaction(async (tx) => {
       const c = await tx.contract.create({
         data: {
-          caseId:              dto.caseId,
+          // PR-CONTRACT-LEAD (Phase B) — exactly one of these is set: caseId for a
+          // legacy case-based send, leadId for a lead-based send (caseId backfilled
+          // on client-sign).
+          caseId:              resolved.caseId,
+          leadId:              resolved.leadId,
           docusignEnvelopeId:  envelopeId,
           status:              ContractStatus.SENT,
         },
@@ -460,14 +536,15 @@ export class ContractsService {
         eventType:         'CONTRACT_SENT',
         entityType:        'Contract',
         entityId:          contract.id,
-        newValue:          { caseId: dto.caseId, status: 'SENT' } as Prisma.InputJsonValue,
+        newValue:          { caseId: resolved.caseId, leadId: resolved.leadId, status: 'SENT' } as Prisma.InputJsonValue,
         actorNameSnapshot: actor.name,
         actorRoleSnapshot: actor.role,
       },
     });
 
     this.logger.log(
-      `Contract ${contract.id} created for case ${dto.caseId} with envelope ${envelopeId} (CLIENT → LIA → DIRECTOR)`,
+      `Contract ${contract.id} created for ${resolved.caseId ? `case ${resolved.caseId}` : `lead ${resolved.leadId}`} ` +
+      `with envelope ${envelopeId} (CLIENT → LIA → DIRECTOR)`,
     );
     return contract;
   }
@@ -480,8 +557,8 @@ export class ContractsService {
     dto: CreateContractDto,
     actor: { id: string; name: string | null; role: string | null },
   ) {
-    const { clientContact, lia, iaaLicenceNumber, directorEmail, directorName } =
-      await this.prepareEngagementSend(dto.caseId);
+    const { clientContact, lia, iaaLicenceNumber, directorEmail, directorName, resolved } =
+      await this.prepareEngagementSend({ caseId: dto.caseId, leadId: dto.leadId });
 
     // Build the three ordered submitters with the known fields pre-filled and
     // create the submission (send_email=true, order preserved → Client → LIA →
@@ -504,7 +581,10 @@ export class ContractsService {
     const contract = await this.prisma.$transaction(async (tx) => {
       const c = await tx.contract.create({
         data: {
-          caseId:               dto.caseId,
+          // PR-CONTRACT-LEAD (Phase B) — case-based (legacy) sets caseId;
+          // lead-based sets leadId (caseId backfilled on client-sign).
+          caseId:               resolved.caseId,
+          leadId:               resolved.leadId,
           docusealSubmissionId: submissionId,
           status:               ContractStatus.SENT,
         },
@@ -550,14 +630,15 @@ export class ContractsService {
         eventType:         'CONTRACT_SENT',
         entityType:        'Contract',
         entityId:          contract.id,
-        newValue:          { caseId: dto.caseId, status: 'SENT', provider: 'docuseal', submissionId } as Prisma.InputJsonValue,
+        newValue:          { caseId: resolved.caseId, leadId: resolved.leadId, status: 'SENT', provider: 'docuseal', submissionId } as Prisma.InputJsonValue,
         actorNameSnapshot: actor.name,
         actorRoleSnapshot: actor.role,
       },
     });
 
     this.logger.log(
-      `Contract ${contract.id} created for case ${dto.caseId} via DocuSeal submission ${submissionId} (CLIENT → LIA → DIRECTOR)`,
+      `Contract ${contract.id} created for ${resolved.caseId ? `case ${resolved.caseId}` : `lead ${resolved.leadId}`} ` +
+      `via DocuSeal submission ${submissionId} (CLIENT → LIA → DIRECTOR)`,
     );
     return contract;
   }
@@ -873,8 +954,45 @@ export class ContractsService {
       submission?.status === 'completed' ||
       (submitters.length > 0 && submitters.every((s) => s?.status === 'completed'));
     if (!allCompleted) {
+      // PR-CONTRACT-LEAD (Phase B) — the moment the CLIENT (first signer) completes
+      // their signature, auto-create the Case for a lead-based contract and backfill
+      // Contract.caseId. Detected from the just-synced signer rows: a CLIENT/GUARDIAN
+      // row now has signedAt set. Idempotent — on a retry, contract.caseId is already
+      // set so we skip. IMPORTANT: we deliberately run NO downstream here (no invoice,
+      // no promotion, no signed-PDF capture) — the client is only the FIRST of three
+      // signers. Those all stay in the allCompleted branch below.
+      if (!contract.caseId && contract.leadId) {
+        const clientSigned = await this.prisma.contractSigner.findFirst({
+          where: {
+            contractId: contract.id,
+            role: { in: [ContractSignerRole.CLIENT, ContractSignerRole.GUARDIAN] },
+            signedAt: { not: null },
+          },
+          select: { id: true },
+        });
+        if (clientSigned) {
+          await this.ensureCaseForLeadBasedContract(contract.id, contract.leadId);
+        }
+      }
       this.logger.log(
         `handleDocusealWebhook: submission ${submissionId} not fully completed (event=${eventType}) — signer rows synced, awaiting completion`,
+      );
+      return contract;
+    }
+
+    // PR-CONTRACT-LEAD (Phase B) — a lead-based contract can reach full completion
+    // with caseId STILL null (e.g. the first webhook we ever see is
+    // submission.completed, with no prior per-signer event). Ensure the case exists
+    // and caseId is backfilled BEFORE any downstream runs; skip (loudly) if it can't
+    // be created rather than crashing the webhook into a retry storm.
+    let caseId = contract.caseId;
+    if (!caseId && contract.leadId) {
+      caseId = await this.ensureCaseForLeadBasedContract(contract.id, contract.leadId);
+    }
+    if (!caseId) {
+      this.logger.error(
+        `handleDocusealWebhook: submission ${submissionId} fully completed but has no caseId ` +
+        `(lead ${contract.leadId ?? 'none'}) — downstream skipped, needs manual attention.`,
       );
       return contract;
     }
@@ -889,37 +1007,126 @@ export class ContractsService {
     }
 
     // Capture visaType (from the LIA's completed values) + the signed PDF, via
-    // the SAME provider-agnostic helpers the DocuSign path uses.
-    await this.storeCaseVisaType(contract.caseId, String(submissionId), () =>
+    // the SAME provider-agnostic helpers the DocuSign path uses. `caseId` is the
+    // resolved (backfilled) case id — guaranteed non-null by the guard above.
+    await this.storeCaseVisaType(caseId, String(submissionId), () =>
       Promise.resolve(this.docuseal.extractVisaType(submission)),
     );
-    await this.storeSignedContractPdf(contract.caseId, String(submissionId), () =>
+    await this.storeSignedContractPdf(caseId, String(submissionId), () =>
       this.docuseal.downloadCompletedPdf(submissionId),
     );
 
     // Downstream — identical to the DocuSign SIGNED path. All idempotent.
     try {
-      await this.liaAssignments.assignLiaToCase(contract.caseId);
+      await this.liaAssignments.assignLiaToCase(caseId);
     } catch (err: any) {
-      this.logger.error(`DocuSeal: LIA assign failed for case ${contract.caseId}: ${err?.message ?? err}`);
+      this.logger.error(`DocuSeal: LIA assign failed for case ${caseId}: ${err?.message ?? err}`);
     }
     try {
-      await this.liaAssignments.assignAdmissionToCase(contract.caseId);
+      await this.liaAssignments.assignAdmissionToCase(caseId);
     } catch (err: any) {
-      this.logger.error(`DocuSeal: Admission assign failed for case ${contract.caseId}: ${err?.message ?? err}`);
+      this.logger.error(`DocuSeal: Admission assign failed for case ${caseId}: ${err?.message ?? err}`);
     }
     try {
-      await this.liaAssignments.assignFinanceToCase(contract.caseId);
+      await this.liaAssignments.assignFinanceToCase(caseId);
     } catch (err: any) {
-      this.logger.error(`DocuSeal: Finance assign failed for case ${contract.caseId}: ${err?.message ?? err}`);
+      this.logger.error(`DocuSeal: Finance assign failed for case ${caseId}: ${err?.message ?? err}`);
     }
-    await this.maybePromoteClientToStudent(contract.id, contract.caseId);
-    await this.maybeCreateEngagementInvoice(contract.id, contract.caseId);
+
+    // ┌──────────────────────────────────────────────────────────────────────┐
+    // │ PR-CONTRACT-LEAD (Phase B) — DO NOT MOVE THESE TWO CALLS.             │
+    // │ maybePromoteClientToStudent and maybeCreateEngagementInvoice MUST only│
+    // │ run here, inside the allCompleted branch (ALL THREE parties signed).  │
+    // │ Their INTERNAL guards trigger on "client signed" (the FIRST signer),  │
+    // │ so moving either into the earlier client-signed branch would fire the │
+    // │ $200 engagement invoice / promote the student the instant the client  │
+    // │ signs — before the LIA and Director have countersigned. The call SITE │
+    // │ is the only thing keeping them at full completion. Leave them here.   │
+    // └──────────────────────────────────────────────────────────────────────┘
+    await this.maybePromoteClientToStudent(contract.id, caseId);
+    await this.maybeCreateEngagementInvoice(contract.id, caseId);
 
     this.logger.log(
       `handleDocusealWebhook: submission ${submissionId} completed → contract ${contract.id} SIGNED + downstream run`,
     );
     return contract;
+  }
+
+  // PR-CONTRACT-LEAD (Phase B) — ensure a Case exists for a lead-based contract and
+  // backfill Contract.caseId. Called the moment the CLIENT signs (and again as a
+  // safety net at full completion). Fully idempotent + retry-safe:
+  //   • reuses an existing case for the lead if there is one;
+  //   • createCase throws "Case already exists" on a concurrent/duplicate webhook —
+  //     we catch it and look the case up;
+  //   • a genuine createCase failure (e.g. the lead still isn't execution-eligible)
+  //     is logged LOUDLY and returns null rather than crashing the webhook into a
+  //     DocuSeal retry storm — the contract stays lead-based for manual attention.
+  // On success it also points the case at the contract's LIA signer, so the LIA who
+  // signed the engagement letter is the LIA assigned to the case (signer == owner).
+  private async ensureCaseForLeadBasedContract(
+    contractId: string,
+    leadId: string,
+  ): Promise<string | null> {
+    // Idempotency: reuse an existing case for this lead if one is already there.
+    const existing = await this.prisma.case.findFirst({
+      where: { leadId },
+      select: { id: true, liaId: true },
+    });
+
+    let caseId: string;
+    let caseHasLia: boolean;
+    if (existing) {
+      caseId = existing.id;
+      caseHasLia = existing.liaId !== null;
+    } else {
+      try {
+        const created = await this.cases.createCase({ leadId }, null);
+        caseId = created.id;
+        caseHasLia = false;
+      } catch (err: any) {
+        // "Case already exists for this lead" — a concurrent create / webhook retry.
+        const race = await this.prisma.case.findFirst({
+          where: { leadId },
+          select: { id: true, liaId: true },
+        });
+        if (race) {
+          caseId = race.id;
+          caseHasLia = race.liaId !== null;
+        } else {
+          this.logger.error(
+            `PhaseB: could NOT create a case for lead-based contract ${contractId} (lead ${leadId}): ` +
+            `${err?.message ?? err}. Contract stays lead-based — needs manual attention.`,
+          );
+          return null;
+        }
+      }
+    }
+
+    // Backfill the contract's caseId (idempotent — same value on every retry).
+    await this.prisma.contract.update({
+      where: { id: contractId },
+      data:  { caseId },
+    });
+
+    // Point the case at the contract's LIA signer so signer == case LIA (only if
+    // the case doesn't already have an LIA — never overwrite an existing one).
+    if (!caseHasLia) {
+      const liaSigner = await this.prisma.contractSigner.findFirst({
+        where:  { contractId, role: ContractSignerRole.LIA },
+        select: { userId: true },
+      });
+      if (liaSigner?.userId) {
+        await this.prisma.case.update({
+          where: { id: caseId },
+          data:  { liaId: liaSigner.userId, liaAssignedAt: new Date() },
+        });
+      }
+    }
+
+    this.logger.log(
+      `PhaseB: case ${caseId} ensured for lead-based contract ${contractId} (lead ${leadId}); caseId backfilled.`,
+    );
+    return caseId;
   }
 
   // PR-CONTRACT-CAPTURE — download + persist the signed artifacts once an

@@ -219,6 +219,23 @@ export class LiaAssignmentService {
     return { status: 'assigned', liaId: pick.id, liaName: pick.name };
   }
 
+  // PR-CONTRACT-LEAD (Phase B) — pick the least-loaded active LIA WITHOUT writing
+  // to a case. Used by the lead-based contract send, where no case exists yet to
+  // assign to; the returned LIA becomes the contract's LIA signer, and the case
+  // (created on client-sign) is later pointed at this same LIA so signer == owner.
+  // Same candidate pool + lowest-open-case-count tiebreak as assignLiaToCase.
+  async pickLeastLoadedLia(): Promise<AssignResult> {
+    const candidates = await this.findActiveLias();
+    if (candidates.length === 0) {
+      return { status: 'no_candidates', liaId: null, liaName: null };
+    }
+    let pick = candidates[0]!;
+    for (const c of candidates) {
+      if (c.liaCases.length < pick.liaCases.length) pick = c;
+    }
+    return { status: 'assigned', liaId: pick.id, liaName: pick.name };
+  }
+
   // ─── Auto-assign the client Consultant (Phase 2a) ─────────────────────
   //
   // Mirrors assignLiaToCase, but for the Case.consultantId slot (role

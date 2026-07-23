@@ -40,7 +40,7 @@ function makeService(opts: {
 
   const prisma = { consultation: { findFirst } } as any;
   // Only prisma is touched by the gate; the rest are never called here.
-  const service = new ContractsService(prisma, {} as any, {} as any, {} as any, {} as any, {} as any);
+  const service = new ContractsService(prisma, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
   return { service, findFirst };
 }
 

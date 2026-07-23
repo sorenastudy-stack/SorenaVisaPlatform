@@ -396,7 +396,16 @@ export class PortalService {
       }),
       this.prisma.contract.findUnique({
         where:  { caseId },
-        select: { status: true },
+        // PR-CONTRACT-LEAD (Phase B) — also pull the CLIENT/GUARDIAN signer's own
+        // signedAt so the next-step can tell "you still need to sign" apart from
+        // "you've signed, we're finishing the internal counter-signatures".
+        select: {
+          status: true,
+          signers: {
+            where:  { role: { in: ['CLIENT', 'GUARDIAN'] } },
+            select: { signedAt: true },
+          },
+        },
       }),
       this.prisma.invoice.findMany({
         where:  { caseId, status: { in: ['SENT', 'OVERDUE'] } },
@@ -444,7 +453,20 @@ export class PortalService {
     // to "check your email" would be premature and the "Open" row would dead-end.
     // (SIGNED / DECLINED / EXPIRED need no client action here.)
     if (contract && ['SENT', 'VIEWED'].includes(contract.status)) {
-      steps.push({ kind: 'CONTRACT', label: 'Sign your engagement letter', detail: null });
+      // PR-CONTRACT-LEAD (Phase B) — the contract stays SENT until ALL parties
+      // sign, but the CLIENT signs FIRST. Once they've signed, don't keep telling
+      // them to sign the letter they just signed — show a calm "case started,
+      // wrapping up internally" message for the LIA/Director counter-signing window.
+      const clientHasSigned = contract.signers.some((s) => s.signedAt !== null);
+      if (!clientHasSigned) {
+        steps.push({ kind: 'CONTRACT', label: 'Sign your engagement letter', detail: null });
+      } else {
+        steps.push({
+          kind:   'CONTRACT_PENDING_COUNTERSIGN',
+          label:  "You're signed and your case has started!",
+          detail: "We're wrapping up the last few signatures internally.",
+        });
+      }
     }
 
     for (const inv of invoices) {

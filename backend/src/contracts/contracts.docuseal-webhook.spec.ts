@@ -118,6 +118,11 @@ function makeMocks() {
   });
   jest.spyOn(docuseal, 'downloadCompletedPdf').mockResolvedValue(Buffer.from('%PDF-1.4 test'));
 
+  // PR-CONTRACT-LEAD (Phase B) — CasesService is now injected for lead-based
+  // case auto-creation. This harness's contract has a caseId already, so the
+  // lead-based branch never fires and createCase is never called.
+  const cases: any = { createCase: jest.fn() };
+
   const service = new ContractsService(
     prisma,
     {} as any, // DocuSignService — unused on the DocuSeal path
@@ -125,9 +130,10 @@ function makeMocks() {
     liaAssignments,
     r2,
     docuseal,
+    cases,
   );
 
-  return { service, prisma, captured, docuseal };
+  return { service, prisma, captured, docuseal, cases };
 }
 
 describe('handleDocusealWebhook (submission.completed)', () => {

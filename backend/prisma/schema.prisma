@@ -986,6 +986,8 @@ model Lead {
   subscriptions           Subscription[]
   consultations           Consultation[]
   cases                   Case[]
+  // PR-CONTRACT-LEAD (Phase B) — contracts raised lead-based (before a case).
+  contracts               Contract[]
   events                  CrmEvent[]
   managerNotesLogs        ManagerNotesLog[]
   statusHistory           LeadStatusHistory[]
@@ -1748,7 +1750,17 @@ model ApplicationDocument {
 
 model Contract {
   id                  String         @id @default(cuid())
-  caseId              String         @unique
+  // PR-CONTRACT-LEAD (Phase B) — a contract can now be sent Lead-based, BEFORE a
+  // Case exists. caseId is nullable and backfilled the moment the CLIENT (first
+  // signer) completes their signature (the webhook auto-creates the Case then).
+  // Still @unique so a Case can only ever have one contract; Postgres lets many
+  // rows share a NULL caseId (the lead-based window), and a partial unique index
+  // (contracts_leadId_active_key, WHERE "caseId" IS NULL — see the migration)
+  // prevents more than one LIVE lead-based contract per lead.
+  caseId              String?        @unique
+  // The lead this contract was raised for. Always set on a lead-based send;
+  // legacy case-based rows leave it NULL (they resolve the lead via the case).
+  leadId              String?
   templateId          String?
   docusignEnvelopeId  String?
   // PR-DOCUSEAL — external submission id when the contract is sent via DocuSeal
@@ -1764,13 +1776,16 @@ model Contract {
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
-  case Case @relation(fields: [caseId], references: [id])
+  case Case? @relation(fields: [caseId], references: [id])
+  // PR-CONTRACT-LEAD (Phase B) — the lead-based link, present until the case exists.
+  lead Lead? @relation(fields: [leadId], references: [id])
 
   // PR-DOCUSIGN-1 step 2: per-party signer rows. Sequential routing —
   // one row per signer slot; "fully signed" is derived from all rows
   // having signedAt non-null (no PARTIALLY_SIGNED enum value).
   signers ContractSigner[]
 
+  @@index([leadId])
   @@map("contracts")
 }
 
