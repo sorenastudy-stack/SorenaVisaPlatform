@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { generateClientId } from '../leads/client-id';
 import {
   Prisma,
   ScorecardBand,
@@ -263,8 +264,11 @@ export class ScorecardService {
         contactId = c.id;
       }
 
+      // PR-CLIENT-ID — assign the permanent human-readable id at creation.
+      const clientId = await generateClientId(tx, { countryOfResidence: country, contactId });
       const lead = await tx.lead.create({
         data: {
+          clientId,
           contactId,
           sourceChannel: resolvedAttribution.sourceChannel,
           leadStatus: 'SCORING_DONE',

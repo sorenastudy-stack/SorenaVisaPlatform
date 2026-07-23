@@ -35,6 +35,7 @@ import {
 
 interface LeadDetail {
   id: string;
+  clientId: string | null;
   name: string;
   email: string;
   phone: string | null;
@@ -150,6 +151,11 @@ export default function StaffLeadDetailPage({
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-[#1E3A5F] truncate">{lead.name}</h1>
+              {lead.clientId && (
+                <div className="mt-0.5 font-mono text-sm font-semibold text-[#b8941f]" title="Client ID">
+                  {lead.clientId}
+                </div>
+              )}
               <div className="mt-1 flex items-center gap-3 flex-wrap text-sm text-[#4A4A4A]/70">
                 {lead.email && (
                   <span className="inline-flex items-center gap-1">

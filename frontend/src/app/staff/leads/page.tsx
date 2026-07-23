@@ -35,6 +35,7 @@ import {
 
 interface LeadListRow {
   id: string;
+  clientId: string | null;
   name: string;
   email: string;
   phone: string | null;
@@ -391,6 +392,11 @@ export default function StaffLeadsPage() {
                               >
                                 {r.name}
                               </Link>
+                              {r.clientId && (
+                                <div className="text-[11px] font-mono text-[#4A4A4A]/50 truncate" title="Client ID">
+                                  {r.clientId}
+                                </div>
+                              )}
                               {r.email && (
                                 <div className="text-xs text-[#4A4A4A]/60 truncate">{r.email}</div>
                               )}

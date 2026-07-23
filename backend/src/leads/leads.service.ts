@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
+import { generateClientId } from './client-id';
 import { LeadStatus, LeadStatusHistory } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -39,8 +40,11 @@ export class LeadsService {
       throw new BadRequestException('Contact not found');
     }
 
+    // PR-CLIENT-ID — permanent human-readable id (country from the contact).
+    const clientId = await generateClientId(this.prisma, { contactId: dto.contactId });
     const lead = await this.prisma.lead.create({
       data: {
+        clientId,
         contactId: dto.contactId,
         ownerId: dto.ownerId || null,
         leadStatus: 'NEW',

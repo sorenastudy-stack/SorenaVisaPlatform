@@ -30,6 +30,7 @@ interface Actor {
 
 export interface LeadListRow {
   id: string;
+  clientId: string | null;
   name: string;
   email: string;
   phone: string | null;
@@ -245,6 +246,7 @@ export class StaffLeadsService {
 
     return {
       id: lead.id,
+      clientId: lead.clientId,
       name: lead.contact.fullName,
       email: lead.contact.email ?? '',
       phone: lead.contact.phone ?? null,
@@ -466,6 +468,7 @@ export class StaffLeadsService {
 
   private toListRow(r: {
     id: string;
+    clientId: string | null;
     leadStatus: LeadStatus;
     sourceChannel: string | null;
     createdAt: Date;
@@ -498,6 +501,7 @@ export class StaffLeadsService {
 
     return {
       id: r.id,
+      clientId: r.clientId,
       name: r.contact.fullName,
       email: r.contact.email ?? '',
       phone: r.contact.phone,

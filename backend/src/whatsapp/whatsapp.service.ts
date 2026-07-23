@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { generateClientId } from '../leads/client-id';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import axios from 'axios';
@@ -63,9 +64,12 @@ export class WhatsappService {
         },
       });
 
-      // Create new lead
+      // Create new lead — PR-CLIENT-ID assigns the permanent human-readable id
+      // (WhatsApp has no country, so it resolves to the XX fallback).
+      const clientId = await generateClientId(this.prisma, { contactId: contact.id });
       const lead = await this.prisma.lead.create({
         data: {
+          clientId,
           contactId: contact.id,
           sourceChannel: 'WHATSAPP',
           leadStatus: LeadStatus.NEW,

@@ -907,6 +907,11 @@ enum TargetCountry {
 
 model Lead {
   id                      String            @id @default(cuid())
+  // PR-CLIENT-ID — permanent, human-readable identifier assigned at lead
+  // creation. Format {COUNTRY}-{YEAR}-{NNNNNN}, e.g. NZ-2026-000001. The NUMBER
+  // is a SINGLE global counter per year (shared across countries), resets to 1
+  // on 1 Jan. Additive + separate from `id` — the cuid stays the relational key.
+  clientId                String?           @unique
   contactId               String
   sourceChannel           String?
   campaignId              String?
@@ -1012,6 +1017,18 @@ model Lead {
   @@index([attributedAgentId])
   @@index([trackingLinkId])
   @@map("leads")
+}
+
+// PR-CLIENT-ID — the atomic, per-year global counter behind Lead.clientId.
+// One row per YEAR (not per country); the NUMBER portion is shared across all
+// countries and resets when a new year gets its first row. Incremented via an
+// atomic `INSERT ... ON CONFLICT (year) DO UPDATE ... RETURNING`, which is
+// race-safe under concurrent lead creation (no COUNT(*)).
+model ClientIdCounter {
+  year       Int @id
+  lastNumber Int @default(0)
+
+  @@map("client_id_counters")
 }
 
 model ManagerNotesLog {

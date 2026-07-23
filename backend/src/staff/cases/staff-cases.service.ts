@@ -227,6 +227,8 @@ export class StaffCasesService {
       updatedAt: row.updatedAt,
       student: {
         id:        row.lead.contact.userId ?? row.lead.contactId,
+        // PR-CLIENT-ID — the client's permanent human-readable id (from the lead).
+        clientId:  row.lead.clientId ?? null,
         firstName,
         lastName,
         email:     row.lead.contact.email ?? '',

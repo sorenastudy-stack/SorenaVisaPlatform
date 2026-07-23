@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
+import { generateClientId } from '../leads/client-id';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -264,7 +265,9 @@ export class BookingService {
           select: { id: true },
         });
       }
-      const lead = await tx.lead.create({ data: { contactId: contact.id }, select: { id: true } });
+      // PR-CLIENT-ID — permanent human-readable id (country from the contact).
+      const clientId = await generateClientId(tx, { contactId: contact.id });
+      const lead = await tx.lead.create({ data: { clientId, contactId: contact.id }, select: { id: true } });
       return lead.id;
     });
   }

@@ -26,6 +26,7 @@ export interface CaseDetail {
   updatedAt: string;
   student: {
     id:        string;
+    clientId:  string | null;
     firstName: string;
     lastName:  string;
     email:     string;

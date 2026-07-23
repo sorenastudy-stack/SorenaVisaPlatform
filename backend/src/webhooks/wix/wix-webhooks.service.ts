@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { generateClientId } from '../../leads/client-id';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -137,8 +138,16 @@ export class WixWebhooksService {
         },
       });
 
+      // PR-CLIENT-ID — permanent human-readable id (country from the Wix-
+      // provided residence/raw name, falling back to the contact).
+      const clientId = await generateClientId(tx, {
+        countryOfResidence,
+        countryRaw,
+        contactId: contact.id,
+      });
       const lead = await tx.lead.create({
         data: {
+          clientId,
           contactId:             contact.id,
           sourceChannel:         'WIX_LEAD_CAPTURE',
           leadStatus:            'NEW' as never,

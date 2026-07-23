@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { generateClientId } from '../leads/client-id';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { ScoringService } from '../scoring/scoring.service';
@@ -78,9 +79,14 @@ export class PublicService {
             },
           });
 
-      // Create lead
+      // Create lead — PR-CLIENT-ID assigns the permanent human-readable id.
+      const clientId = await generateClientId(tx, {
+        countryOfResidence: data.destination,
+        contactId: contact.id,
+      });
       const lead = await tx.lead.create({
         data: {
+          clientId,
           contactId: contact.id,
           sourceChannel: 'PUBLIC_INTAKE',
           leadStatus: LeadStatus.INTAKE_STARTED,
