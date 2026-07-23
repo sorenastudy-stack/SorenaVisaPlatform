@@ -2,6 +2,9 @@
   "name": "sorena-visa-frontend",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "predev": "node ../backend/scripts/kill-port.js 3000",
     "dev": "next dev",
