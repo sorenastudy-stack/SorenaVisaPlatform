@@ -6,7 +6,12 @@ import { BookingCancellationService } from '../../booking/booking-cancellation.s
 import { RefundService } from '../../payments/refund.service';
 import { OwnerApprovalService } from '../owner-approval/owner-approval.service';
 import { StaffBookingsService } from './staff-bookings.service';
-import { MarkConsultationStatusDto, RefundToCardDto } from './dto/staff-bookings.dto';
+import {
+  MarkConsultationStatusDto,
+  RecordLiaDecisionDto,
+  RefundToCardDto,
+} from './dto/staff-bookings.dto';
+import { LegalDecision } from '@prisma/client';
 
 // PR-WALLET slice 2 — staff consultation-bookings surface.
 //
@@ -24,6 +29,10 @@ import { MarkConsultationStatusDto, RefundToCardDto } from './dto/staff-bookings
 const STAFF = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 // PR-CARD-REFUND — real money out. Admin tier ONLY, never a regular consultant.
 const ADMIN_TIER = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
+// PR-CONTRACT-GATE — who may record an LIA legal verdict: the LIAs who hold the
+// session, plus admin tier. Same set the contract-send panel is gated to.
+// Deliberately excludes CONSULTANT / CLIENT_CONSULTANT.
+const LIA_DECISION_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA'] as const;
 
 @Controller('staff')
 @UseGuards(JwtAuthGuard, StaffRolesGuard)
@@ -48,6 +57,22 @@ export class StaffBookingsController {
   markStatus(@Param('id') id: string, @Body() dto: MarkConsultationStatusDto, @Req() req: any) {
     return this.cancellation.staffMarkStatus(
       id, { userId: req.user.userId, role: req.user.role }, dto.status,
+    );
+  }
+
+  // POST /staff/consultations/:id/decision { decision, notes? }
+  // PR-CONTRACT-GATE (Phase A) — the LIA records their verdict on an LIA
+  // consultation. For a red-flagged (HS4) lead this is what unlocks (APPROVED)
+  // or keeps locked (REJECTED / NEEDS_MORE_INFO / WITHDRAWN) contract sending.
+  // The service enforces LIA-type + assigned-LIA-or-admin authorization.
+  @Post('consultations/:id/decision')
+  @StaffRoles(...LIA_DECISION_ROLES)
+  recordDecision(@Param('id') id: string, @Body() dto: RecordLiaDecisionDto, @Req() req: any) {
+    return this.bookings.recordLiaDecision(
+      { userId: req.user.userId, role: req.user.role },
+      id,
+      dto.decision as LegalDecision,
+      dto.notes,
     );
   }
 

@@ -10,7 +10,10 @@ import {
   ContractSignerRole,
   ContractSignerStatus,
   ContractStatus,
+  ConsultationStatus,
+  ConsultationType,
   DocumentUploadStatus,
+  LegalDecision,
   Prisma,
 } from '@prisma/client';
 import * as fs from 'fs';
@@ -124,6 +127,61 @@ export class ContractsService {
   // payments.controller.ts) continue to fire; case.liaId is set here
   // BEFORE either trigger runs, so both short-circuit through the
   // assignLiaToCase 'already_assigned' branch and stay idempotent.
+  // PR-CONTRACT-GATE (Phase A) — precondition before ANY engagement contract is
+  // created/sent. Two rules:
+  //   1. The client must have COMPLETED their free 15-minute consultation.
+  //   2. If the lead is red-flagged for immigration/legal review
+  //      (liaEscalationRequired === HS4), an LIA-type consultation must be
+  //      COMPLETED with a recorded verdict of APPROVED. A missing verdict, or a
+  //      REJECTED / NEEDS_MORE_INFO / WITHDRAWN verdict, keeps the send locked.
+  // A non-flagged lead is NOT affected by any LIA session (only rule 1 applies).
+  // Throws UnprocessableEntity with a client-safe message the UI surfaces.
+  private async assertContractSendAllowed(lead: {
+    id: string;
+    liaEscalationRequired: boolean;
+  }): Promise<void> {
+    const free15 = await this.prisma.consultation.findFirst({
+      where: {
+        leadId: lead.id,
+        type: ConsultationType.FREE_15,
+        status: ConsultationStatus.COMPLETED,
+      },
+      select: { id: true },
+    });
+    if (!free15) {
+      throw new UnprocessableEntityException(
+        "This client hasn't completed their free 15-minute consultation yet.",
+      );
+    }
+
+    if (lead.liaEscalationRequired) {
+      const liaSession = await this.prisma.consultation.findFirst({
+        where: {
+          leadId: lead.id,
+          type: ConsultationType.LIA,
+          status: ConsultationStatus.COMPLETED,
+          decision: { not: null },
+        },
+        orderBy: { decidedAt: 'desc' },
+        select: { decision: true },
+      });
+      if (!liaSession) {
+        throw new UnprocessableEntityException(
+          'This case has a flagged immigration/legal concern. Contract sending is locked until an LIA holds a consultation and approves.',
+        );
+      }
+      if (liaSession.decision !== LegalDecision.APPROVED) {
+        const msg =
+          liaSession.decision === LegalDecision.NEEDS_MORE_INFO
+            ? 'The LIA reviewed this case and needs more information before it can proceed. Contract sending stays locked until an LIA approves.'
+            : liaSession.decision === LegalDecision.WITHDRAWN
+              ? 'The LIA review for this case was withdrawn. Contract sending stays locked until an LIA approves.'
+              : 'The LIA reviewed this case and did not approve it. Contract sending stays locked until an LIA approves.';
+        throw new UnprocessableEntityException(msg);
+      }
+    }
+  }
+
   // PR-DOCUSEAL — shared send-prep for BOTH providers, extracted verbatim from
   // the original DocuSign createContract so the DocuSeal path reuses the EXACT
   // same gating (not a copy): validate the case + client identity, assign the
@@ -155,6 +213,15 @@ export class ContractsService {
         'Case has no client contact with email + full name — cannot identify the CLIENT signer',
       );
     }
+
+    // 1b. PR-CONTRACT-GATE (Phase A) — consultation-completion + LIA-approval
+    //     precondition. Runs BEFORE any assignment/dispatch, for EVERY provider
+    //     and EVERY caller (there is only this one send path). Throws a
+    //     client-safe UnprocessableEntity message the SendContractPanel surfaces.
+    await this.assertContractSendAllowed({
+      id: caseRecord.lead!.id,
+      liaEscalationRequired: caseRecord.lead!.liaEscalationRequired,
+    });
 
     // 2. Auto-pick the LIA. assignLiaToCase is idempotent on
     //    already-assigned cases (returns 'already_assigned' with the

@@ -1137,6 +1137,16 @@ model Consultation {
   paidWith        PaymentMethod?
   status          ConsultationStatus @default(PENDING)
   outcomeNotes    String?
+  // PR-CONTRACT-GATE (Phase A) — LIA verdict on an LIA-type consultation, used
+  // to unlock contract-send for a red-flagged (HS4 / liaEscalationRequired)
+  // lead. Reuses the LegalDecision vocabulary (APPROVED / REJECTED /
+  // NEEDS_MORE_INFO / WITHDRAWN). All nullable + additive; only set when an LIA
+  // records a decision after their session. decidedById is a plain snapshot of
+  // the deciding LIA's user id (no FK, mirrors the actor-snapshot pattern).
+  decision        LegalDecision?
+  decisionNotes   String?
+  decidedAt       DateTime?
+  decidedById     String?
   scheduledAt     DateTime?
   completedAt     DateTime?
   // PR-BOOKING-1: native in-portal scheduling fields. All nullable so

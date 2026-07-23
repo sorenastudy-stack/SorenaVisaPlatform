@@ -389,7 +389,7 @@ export class PortalService {
   // an unsigned engagement letter, and any due invoice. Internal fields
   // (ApplicationDocument.notes, Invoice.notes, etc.) are never surfaced.
   private async buildNextSteps(caseId: string) {
-    const [docs, contract, invoices] = await Promise.all([
+    const [docs, contract, invoices, caseInfo] = await Promise.all([
       this.prisma.applicationDocument.findMany({
         where:  { application: { caseId }, status: { in: ['MISSING', 'REJECTED'] } },
         select: { type: true, status: true },
@@ -402,9 +402,34 @@ export class PortalService {
         where:  { caseId, status: { in: ['SENT', 'OVERDUE'] } },
         select: { id: true, invoiceNumber: true, amount: true, currency: true, dueDate: true, receiptUploadedAt: true },
       }),
+      // PR-CONTRACT-GATE (Phase A) — the red-flag signal for the LIA-review notice.
+      this.prisma.case.findUnique({
+        where:  { id: caseId },
+        select: { lead: { select: { id: true, liaEscalationRequired: true } } },
+      }),
     ]);
 
     const steps: Array<{ kind: string; label: string; detail?: string | null; invoiceId?: string }> = [];
+
+    // PR-CONTRACT-GATE (Phase A) — when the lead is flagged for immigration/legal
+    // review (HS4) AND an LIA hasn't yet APPROVED it, show a calm heads-up. It
+    // clears the moment an LIA records an APPROVED verdict (the same condition
+    // that unlocks contract sending). Deliberately vague and reassuring — never
+    // surfaces the internal hard-stop reasoning to the client.
+    if (caseInfo?.lead?.liaEscalationRequired) {
+      const liaApproved = await this.prisma.consultation.findFirst({
+        where:  { leadId: caseInfo.lead.id, type: 'LIA', status: 'COMPLETED', decision: 'APPROVED' },
+        select: { id: true },
+      });
+      if (!liaApproved) {
+        steps.push({
+          kind: 'LIA_REVIEW',
+          label: 'Legal/immigration review needed',
+          detail:
+            "We've identified something that needs a licensed immigration adviser to review before we can proceed — we'll be in touch to schedule this.",
+        });
+      }
+    }
 
     for (const d of docs) {
       steps.push({

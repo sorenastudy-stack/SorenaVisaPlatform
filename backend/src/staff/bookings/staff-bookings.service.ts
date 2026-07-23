@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConsultationType, LegalDecision, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RefundService } from '../../payments/refund.service';
 
@@ -35,6 +41,8 @@ export class StaffBookingsService {
         paidWith: true, stripePaymentId: true,
         scheduledAt: true, scheduledEndAt: true, durationMinutes: true,
         bookingTimezone: true, assignedToId: true, meetingLink: true,
+        // PR-CONTRACT-GATE — the LIA verdict, so My Meetings can show/record it.
+        decision: true,
         assignedTo: { select: { name: true } },
         lead: { select: { contact: { select: { fullName: true, user: { select: { name: true } } } } } },
       },
@@ -59,6 +67,7 @@ export class StaffBookingsService {
       id: r.id,
       type: r.type,
       status: r.status,
+      decision: r.decision,
       paymentStatus: r.paymentStatus,
       amountNZD: r.amountNZD,
       scheduledAt: r.scheduledAt,
@@ -126,5 +135,69 @@ export class StaffBookingsService {
       capturedAmountNZD: capturedCents != null ? capturedCents / 100 : null,
       blocked,
     };
+  }
+
+  // PR-CONTRACT-GATE (Phase A) — the LIA records their verdict on an LIA
+  // consultation. This is the signal the contract-send gate reads for a
+  // red-flagged (HS4) lead. Reuses the LegalDecision vocabulary.
+  //
+  // Authorization: the ASSIGNED LIA, or an admin. A consultant/client-officer
+  // cannot record a legal verdict (the controller already keeps them off this
+  // route; this is the defence-in-depth check). Recording a verdict implies the
+  // session was held, so a non-terminal booking is flipped to COMPLETED here —
+  // that keeps the gate's "COMPLETED + decision" precondition self-consistent.
+  async recordLiaDecision(
+    actor: { userId: string; role: string },
+    consultationId: string,
+    decision: LegalDecision,
+    notes: string | undefined,
+    now = new Date(),
+  ) {
+    const c = await this.prisma.consultation.findUnique({
+      where: { id: consultationId },
+      select: { id: true, type: true, status: true, assignedToId: true, leadId: true },
+    });
+    if (!c) throw new NotFoundException('Consultation not found');
+    if (c.type !== ConsultationType.LIA) {
+      throw new BadRequestException('A legal verdict can only be recorded on an LIA consultation.');
+    }
+    if (c.status === 'CANCELLED' || c.status === 'NO_SHOW') {
+      throw new BadRequestException('Cannot record a verdict on a cancelled or no-show session.');
+    }
+
+    const isAdmin = ADMIN_TIER.has(actor.role);
+    if (!isAdmin && c.assignedToId !== actor.userId) {
+      throw new ForbiddenException('Only the assigned LIA (or an admin) can record this verdict.');
+    }
+
+    const trimmed = notes?.trim() || null;
+    const updated = await this.prisma.consultation.update({
+      where: { id: consultationId },
+      data: {
+        decision,
+        decisionNotes: trimmed,
+        decidedAt: now,
+        decidedById: actor.userId,
+        // Only touch status if it isn't already COMPLETED — never re-stamp it.
+        ...(c.status === 'COMPLETED' ? {} : { status: 'COMPLETED', completedAt: now }),
+      },
+      select: { id: true, decision: true, decisionNotes: true, decidedAt: true, status: true },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: actor.userId,
+        action: 'LIA_CONSULTATION_DECISION',
+        entityType: 'Consultation',
+        entityId: consultationId,
+        newValue: {
+          leadId: c.leadId,
+          decision,
+          hasNotes: !!trimmed,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return updated;
   }
 }

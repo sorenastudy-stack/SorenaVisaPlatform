@@ -23,6 +23,8 @@ interface Row {
   id: string;
   type: string;
   status: string;
+  // PR-CONTRACT-GATE (Phase A) — the LIA verdict on an LIA session, if recorded.
+  decision: string | null;
   scheduledAt: string | null;
   scheduledEndAt: string | null;
   durationMinutes: number | null;
@@ -181,7 +183,20 @@ export function StaffMeetingsClient() {
         </div>
       )}
 
-      {selected && <MeetingDetail row={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <MeetingDetail
+          row={selected}
+          onClose={() => setSelected(null)}
+          // PR-CONTRACT-GATE — after an LIA records a verdict the session is also
+          // marked COMPLETED; reflect both in the calendar/list without a refetch.
+          onRecorded={(u) => {
+            setRows((prev) =>
+              (prev ?? []).map((r) => (r.id === u.id ? { ...r, status: u.status, decision: u.decision } : r)),
+            );
+            setSelected((prev) => (prev && prev.id === u.id ? { ...prev, status: u.status, decision: u.decision } : prev));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -285,8 +300,19 @@ function MeetingCard({ b, muted }: { b: Row; muted?: boolean }) {
 }
 
 // Detail popover for a calendar event — client, time, Join + Add to calendar.
-function MeetingDetail({ row, onClose }: { row: Row; onClose: () => void }) {
+function MeetingDetail({
+  row,
+  onClose,
+  onRecorded,
+}: {
+  row: Row;
+  onClose: () => void;
+  onRecorded: (u: { id: string; status: string; decision: string | null }) => void;
+}) {
   const upcoming = isUpcoming(row);
+  // PR-CONTRACT-GATE — the verdict action shows only on LIA sessions that are
+  // still actionable (a cancelled / no-show session can't carry a legal verdict).
+  const canRecordVerdict = row.type === 'LIA' && row.status !== 'CANCELLED' && row.status !== 'NO_SHOW';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -304,10 +330,88 @@ function MeetingDetail({ row, onClose }: { row: Row; onClose: () => void }) {
           {upcoming && row.meetingLink && <JoinLink href={row.meetingLink} />}
           {row.scheduledAt && <AddToCalendar row={row} />}
         </div>
-        {!upcoming && (
+        {!upcoming && !canRecordVerdict && (
           <p className="mt-3 text-xs text-[#4A4A4A]/50">This session has passed.</p>
         )}
+        {canRecordVerdict && <LiaDecisionPanel row={row} onRecorded={onRecorded} />}
       </div>
+    </div>
+  );
+}
+
+// PR-CONTRACT-GATE (Phase A) — the LIA records their verdict on an LIA session.
+// APPROVED unlocks contract sending for the (red-flagged) case; the other three
+// keep it locked. Recording also marks the session COMPLETED server-side.
+const DECISION_LABEL: Record<string, string> = {
+  APPROVED: 'Approved', REJECTED: 'Declined', NEEDS_MORE_INFO: 'Needs more info', WITHDRAWN: 'Withdrawn',
+};
+const DECISION_ACTIONS: { value: string; label: string; className: string }[] = [
+  { value: 'APPROVED', label: 'Approve', className: 'bg-emerald-600 text-white hover:bg-emerald-700' },
+  { value: 'NEEDS_MORE_INFO', label: 'Needs info', className: 'bg-[#c9a961]/20 text-[#8a6d10] hover:bg-[#c9a961]/30 border border-[#c9a961]/40' },
+  { value: 'REJECTED', label: 'Decline', className: 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200' },
+  { value: 'WITHDRAWN', label: 'Withdraw', className: 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200' },
+];
+
+function LiaDecisionPanel({
+  row,
+  onRecorded,
+}: {
+  row: Row;
+  onRecorded: (u: { id: string; status: string; decision: string | null }) => void;
+}) {
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function record(decision: string) {
+    setSaving(decision);
+    setError(null);
+    try {
+      const res = await api.post<{ id: string; status: string; decision: string | null }>(
+        `/staff/consultations/${row.id}/decision`,
+        { decision, notes: notes.trim() || undefined },
+      );
+      onRecorded({ id: res.id, status: res.status, decision: res.decision });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not save the verdict — please try again.');
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-[#1e3a5f]/15 bg-[#f7f9fc] p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#1e3a5f]/70">Legal review verdict</p>
+      {row.decision ? (
+        <p className="mt-1 text-xs text-[#4A4A4A]/70">
+          Recorded: <span className="font-semibold">{DECISION_LABEL[row.decision] ?? row.decision}</span>. Selecting again updates it.
+        </p>
+      ) : (
+        <p className="mt-1 text-xs text-[#4A4A4A]/60">
+          Record your verdict for this case. Approving unlocks contract sending.
+        </p>
+      )}
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Notes (optional)"
+        rows={2}
+        className="mt-2 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs focus:border-[#1e3a5f]/40 focus:outline-none"
+      />
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {DECISION_ACTIONS.map((d) => (
+          <button
+            key={d.value}
+            type="button"
+            disabled={!!saving}
+            onClick={() => record(d.value)}
+            className={`inline-flex min-h-[36px] items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${d.className}`}
+          >
+            {saving === d.value ? <Loader2 size={13} className="animate-spin" /> : d.label}
+          </button>
+        ))}
+      </div>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

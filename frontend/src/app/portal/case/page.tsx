@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { ArrowRight, FileText, Sparkles, Users, Wallet, ListChecks, Clock, MessageSquare, CheckCircle2, Award, Mail, GraduationCap, ClipboardList, FolderOpen } from 'lucide-react';
+import { ArrowRight, FileText, Sparkles, Users, Wallet, ListChecks, Clock, MessageSquare, CheckCircle2, Award, Mail, GraduationCap, ClipboardList, FolderOpen, ShieldCheck } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { getSession } from '@/lib/auth';
 import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
@@ -212,6 +212,14 @@ export default async function MyCasePage() {
                 {s.kind === 'CONTRACT' && (
                   <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[#8a6d10]">
                     <Mail size={13} /> Check your email
+                  </span>
+                )}
+                {/* Phase A — flagged for licensed-adviser review. Informational,
+                    not an action: we reach out to the client, so there's nothing
+                    for them to click. A calm "In review" indicator, not a to-do. */}
+                {s.kind === 'LIA_REVIEW' && (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[#8a6d10]">
+                    <ShieldCheck size={13} /> In review
                   </span>
                 )}
                 {s.kind === 'INVOICE' && s.invoiceId && (
