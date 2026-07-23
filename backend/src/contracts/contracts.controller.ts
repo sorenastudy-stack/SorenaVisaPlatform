@@ -20,7 +20,10 @@ export class ContractsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA')
+  // PR-CONTRACT-LEAD (Phase B) — CLIENT_CONSULTANT (Client Officer) added: they
+  // originate lead-based sends from the lead detail page (and read the case-side
+  // status). Applies to both send + read; the Phase A gate is unchanged.
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CLIENT_CONSULTANT')
   create(@Body() dto: CreateContractDto, @Req() req: any) {
     // JwtStrategy.validate returns { userId, email, role } — there is no
     // `req.user.id` and no guaranteed `name`. Build the actor object the
@@ -45,7 +48,10 @@ export class ContractsController {
   // a contract (matches @Post above).
   @Get(':caseId')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA')
+  // PR-CONTRACT-LEAD (Phase B) — CLIENT_CONSULTANT (Client Officer) added: they
+  // originate lead-based sends from the lead detail page (and read the case-side
+  // status). Applies to both send + read; the Phase A gate is unchanged.
+  @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CLIENT_CONSULTANT')
   getContract(@Param('caseId') caseId: string) {
     return this.contractsService.getContract(caseId);
   }

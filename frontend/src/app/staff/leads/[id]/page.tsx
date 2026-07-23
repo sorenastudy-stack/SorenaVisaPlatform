@@ -22,6 +22,8 @@ import {
   ScorecardBandChip,
   type ScorecardBand,
 } from '@/components/scorecard/ScorecardBandChip';
+// PR-CONTRACT-LEAD (Phase B) — reuse the case-detail send panel in lead mode.
+import { SendContractPanel } from '@/components/staff/cases/detail/SendContractPanel';
 
 // PR-CRM-LEADS — Staff lead detail page.
 //
@@ -209,6 +211,14 @@ export default function StaffLeadDetailPage({
             executionAllowed={lead.executionAllowed}
             hardStopFlag={lead.hardStopFlag}
             hardStopReason={lead.hardStopReason}
+          />
+          {/* PR-CONTRACT-LEAD (Phase B) — send the engagement contract lead-based
+              (no case needed). The case auto-creates when the client signs; after
+              that this panel links to the case. Role-gated inside the panel. */}
+          <SendContractPanel
+            leadId={lead.id}
+            leadCaseId={lead.caseId}
+            onSent={() => load()}
           />
           <StatusHistoryCard history={lead.statusHistory} />
         </div>
