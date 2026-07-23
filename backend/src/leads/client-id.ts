@@ -21,7 +21,11 @@ countries.registerLocale(enLocale as any);
 // the model delegates).
 type Db = Prisma.TransactionClient;
 
-const UNKNOWN_COUNTRY = 'XX';
+// Fallback prefix when a lead has no resolvable country. "TEST" (not a real
+// country code) makes it obvious at a glance that these are test/debug leads.
+// The code is NOT assumed to be 2 chars anywhere — clientId is always parsed by
+// the '-' delimiter, never by fixed width.
+const UNKNOWN_COUNTRY = 'TEST';
 
 // A free-text country name → ISO alpha-2 (uppercase), or null if unmappable.
 // "United Kingdom" → GB is remapped to the commonly-used "UK" per spec.
@@ -47,7 +51,7 @@ export interface CountrySource {
 
 // Resolve the 2-letter country code from the available signals, in priority
 // order. Returns null when nothing resolves (caller may then try a contact
-// lookup before falling back to 'XX').
+// lookup before falling back to the TEST prefix).
 export function resolveCountryCode(src: CountrySource): string | null {
   return (
     nameToAlpha2(src.countryOfResidence) ??
