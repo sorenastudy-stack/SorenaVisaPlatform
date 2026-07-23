@@ -24,8 +24,10 @@ import {
 } from '@prisma/client';
 import { ContractsService } from './contracts.service';
 import { DocuSignService } from './docusign.service';
+import { DocusealService } from './docuseal.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import { MailService } from '../mail/mail.service';
+import { R2Service } from '../common/r2/r2.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const TAG = '__pr_docusign_1_piece3__';
@@ -170,25 +172,38 @@ describe('ContractsService.handleWebhook (PR-DOCUSIGN-1 step 5 piece 3)', () => 
   // Mocks for the three external collaborators. Reset between tests
   // so each test sees a clean call history.
   let docuSignMock: {
-    syncStatus:     jest.Mock;
-    listRecipients: jest.Mock;
-    createEnvelope: jest.Mock;
-    getSigningUrl:  jest.Mock;
-    getAccessToken: jest.Mock;
+    syncStatus:         jest.Mock;
+    listRecipients:     jest.Mock;
+    createEnvelope:     jest.Mock;
+    getSigningUrl:      jest.Mock;
+    getAccessToken:     jest.Mock;
+    // PR-CONTRACT-CAPTURE — the SIGNED completion path pulls the flattened PDF +
+    // visaType via these. The capture helpers are never-throw, but mock them so
+    // the completion test runs cleanly instead of swallowing an error.
+    getCombinedDocument: jest.Mock;
+    getSelectedVisaType: jest.Mock;
   };
   let liaMock: { assignLiaToCase: jest.Mock; assignAdmissionToCase: jest.Mock; assignFinanceToCase: jest.Mock };
-  let notificationsMock: { sendContractReady: jest.Mock };
+  // PR-DOCUSEAL — the ContractsService constructor swapped NotificationsService
+  // for MailService / R2Service / DocusealService. These stubs satisfy DI; the
+  // DocuSign handleWebhook path under test doesn't call DocusealService, and
+  // MailService is unused in this service, so empty stubs are sufficient.
+  let r2Mock: { putObject: jest.Mock };
+  let mailMock: Record<string, never>;
+  let docusealMock: Record<string, never>;
 
   beforeAll(async () => {
     prisma = new PrismaClient();
     await prisma.$connect();
 
     docuSignMock = {
-      syncStatus:     jest.fn(),
-      listRecipients: jest.fn(),
-      createEnvelope: jest.fn(),
-      getSigningUrl:  jest.fn(),
-      getAccessToken: jest.fn(),
+      syncStatus:          jest.fn(),
+      listRecipients:      jest.fn(),
+      createEnvelope:      jest.fn(),
+      getSigningUrl:       jest.fn(),
+      getAccessToken:      jest.fn(),
+      getCombinedDocument: jest.fn().mockResolvedValue(Buffer.from('test-pdf')),
+      getSelectedVisaType: jest.fn().mockResolvedValue(null),
     };
     liaMock = {
       // case.liaId is pre-set by the fixture, so a real call would
@@ -209,17 +224,19 @@ describe('ContractsService.handleWebhook (PR-DOCUSIGN-1 step 5 piece 3)', () => 
         status: 'already_assigned', financeId: 'fake-finance', financeName: null,
       }),
     };
-    notificationsMock = {
-      sendContractReady: jest.fn().mockResolvedValue(undefined),
-    };
+    r2Mock = { putObject: jest.fn().mockResolvedValue(undefined) };
+    mailMock = {};
+    docusealMock = {};
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         ContractsService,
         { provide: PrismaService,         useValue: prisma },
         { provide: DocuSignService,       useValue: docuSignMock },
+        { provide: MailService,           useValue: mailMock },
         { provide: LiaAssignmentService,  useValue: liaMock },
-        { provide: NotificationsService,  useValue: notificationsMock },
+        { provide: R2Service,             useValue: r2Mock },
+        { provide: DocusealService,       useValue: docusealMock },
       ],
     }).compile();
 
