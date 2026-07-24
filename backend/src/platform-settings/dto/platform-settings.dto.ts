@@ -11,3 +11,13 @@ export class UpdateSettingDto {
   @MaxLength(2000)
   value!: string;
 }
+
+// PR-ACCESS-GATE (Phase C) — the five company bank-transfer fields, edited as a
+// single block from the admin form.
+export class UpdateBankDetailsDto {
+  @IsString() @MinLength(1) @MaxLength(2000) bankName!: string;
+  @IsString() @MinLength(1) @MaxLength(2000) bankAddress!: string;
+  @IsString() @MinLength(1) @MaxLength(2000) accountName!: string;
+  @IsString() @MinLength(1) @MaxLength(2000) accountNumber!: string;
+  @IsString() @MinLength(1) @MaxLength(2000) swift!: string;
+}

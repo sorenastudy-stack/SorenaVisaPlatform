@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { createSignedDownloadToken } from '../common/signed-url.util';
 import { getEngagementGateState } from '../common/engagement-payment.helper';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 // Client portal step 2 — service for the signed-in client's OWN case.
 //
@@ -28,6 +29,8 @@ export class PortalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
+    // PR-ACCESS-GATE (Phase C) — company bank details for the pay screen.
+    private readonly settings: PlatformSettingsService,
   ) {}
 
   // POST /portal/me/invoices/:invoiceId/pay-link — generate a Stripe pay
@@ -145,6 +148,9 @@ export class PortalService {
 
     const baseCents = Math.round(invoice.amount.toNumber() * 100);
     const surchargeCents = this.cardSurchargeCents();
+    // PR-ACCESS-GATE (Phase C) — admin-configurable company bank details (falls
+    // back to the previously-hardcoded values until an admin edits them).
+    const bank = await this.settings.getBankDetails();
     return {
       invoiceId:     invoice.id,
       invoiceNumber: invoice.invoiceNumber,
@@ -159,6 +165,7 @@ export class PortalService {
       // it". Never true once PAID (the paid card takes precedence).
       processing:      !isPaid && invoice.receiptUploadedAt !== null,
       receiptMethod:   invoice.receiptMethod ?? null,
+      bank,
     };
   }
 

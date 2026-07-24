@@ -41,6 +41,28 @@ export interface PlatformSettingOut {
   updatedByName: string | null;
 }
 
+// PR-ACCESS-GATE (Phase C) — the five company bank-transfer fields, each a
+// PlatformSetting key with the previously-hardcoded pay-screen value as default.
+export interface BankDetails {
+  bankName: string;
+  bankAddress: string;
+  accountName: string;
+  accountNumber: string;
+  swift: string;
+}
+const BANK_KEYS: ReadonlyArray<{
+  field: keyof BankDetails;
+  key: string;
+  default: string;
+  description: string;
+}> = [
+  { field: 'bankName',      key: 'BANK_NAME',           default: 'Kiwibank',            description: 'Company bank name' },
+  { field: 'bankAddress',   key: 'BANK_ADDRESS',        default: 'Kiwibank Limited, Level 9, 20 Customhouse Quay, Wellington, 6011, New Zealand', description: 'Company bank address' },
+  { field: 'accountName',   key: 'BANK_ACCOUNT_NAME',   default: 'SORENASTUDY LIMITED', description: 'Company bank account name' },
+  { field: 'accountNumber', key: 'BANK_ACCOUNT_NUMBER', default: '38-9022-0355698-01',  description: 'Company bank account number' },
+  { field: 'swift',         key: 'BANK_SWIFT',          default: 'KIWINZ22',            description: 'Company bank SWIFT/BIC code' },
+];
+
 // Keys whose value must NEVER be returned plaintext through the
 // list / get API. Currently empty (the Wix webhook secret was removed
 // with the Wix-payments integration); add keys here as needed.
@@ -126,6 +148,61 @@ export class PlatformSettingsService {
       LIA_CONSULTATION: map.get('BOOKING_URL_LIA_CONSULTATION')
         ?? 'https://www.sorenavisa.com/lia-consultation-payment',
     };
+  }
+
+  // PR-ACCESS-GATE (Phase C) — company bank-transfer details shown on the client
+  // pay screen. Individual keys (one per field) so each keeps its own copy button.
+  // Fallback defaults are the values previously HARDCODED in pay/page.tsx, so the
+  // client display is byte-identical until an admin edits them (no seed needed).
+  async getBankDetails(): Promise<BankDetails> {
+    const rows = await this.prisma.platformSetting.findMany({
+      where:  { key: { in: BANK_KEYS.map((k) => k.key) } },
+      select: { key: true, value: true },
+    });
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    const out = {} as BankDetails;
+    for (const k of BANK_KEYS) {
+      const v = map.get(k.key);
+      out[k.field] = v && v.trim().length > 0 ? v : k.default;
+    }
+    return out;
+  }
+
+  // Upsert all five bank keys at once (admin form saves the whole block). Creates
+  // rows on first save (the base `update` requires a pre-existing key; these keys
+  // are default-backed and may not exist yet). Audited once.
+  async updateBankDetails(details: BankDetails, actor: Actor): Promise<BankDetails> {
+    for (const k of BANK_KEYS) {
+      const raw = details[k.field];
+      const value = (raw ?? '').trim();
+      if (value.length === 0 || value.length > 2000) {
+        throw new BadRequestException(`${k.field} must be 1-2000 characters`);
+      }
+    }
+    await this.prisma.$transaction(async (tx) => {
+      for (const k of BANK_KEYS) {
+        const value = details[k.field].trim();
+        await tx.platformSetting.upsert({
+          where:  { key: k.key },
+          update: { value, updatedById: actor.id },
+          create: { key: k.key, value, category: 'bank', description: k.description, updatedById: actor.id },
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          userId:            actor.id,
+          action:            'UPDATE',
+          eventType:         'BANK_DETAILS_UPDATED',
+          entityType:        'PLATFORM_SETTING',
+          entityId:          'bank',
+          newValue:          { keys: BANK_KEYS.map((k) => k.key) } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+    });
+    this.logger.log(`Bank details updated by ${actor.id} (${actor.role ?? 'unknown role'})`);
+    return this.getBankDetails();
   }
 
   // ─── Mutations ─────────────────────────────────────────────────────

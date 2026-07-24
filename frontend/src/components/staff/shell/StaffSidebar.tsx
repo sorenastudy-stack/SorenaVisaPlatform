@@ -35,8 +35,11 @@ interface NavItem {
 }
 
 const MARKETING_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'] as const;
-// PR-SCORECARD-4: platform settings is OWNER/SUPER_ADMIN only.
-const SETTINGS_ROLES   = ['OWNER', 'SUPER_ADMIN'] as const;
+// PR-SCORECARD-4: platform settings — OWNER/SUPER_ADMIN (booking URLs).
+// PR-ACCESS-GATE (Phase C): ADMIN added so they can edit the company bank
+// details on the same page; the booking-URL card stays owner-tier only (guarded
+// in-page), and the backend enforces each section's real role boundary.
+const SETTINGS_ROLES   = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 // Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
 // OWNER only. Additive; no existing role's access changes.
 const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;

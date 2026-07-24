@@ -6,6 +6,23 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
+import { useStaff } from '@/contexts/StaffContext';
+
+// PR-ACCESS-GATE (Phase C) — company bank details, admin-editable.
+interface BankDetails {
+  bankName:      string;
+  bankAddress:   string;
+  accountName:   string;
+  accountNumber: string;
+  swift:         string;
+}
+const BANK_FIELDS: Array<{ key: keyof BankDetails; label: string }> = [
+  { key: 'bankName',      label: 'Bank' },
+  { key: 'bankAddress',   label: 'Bank Address' },
+  { key: 'accountName',   label: 'Account Name' },
+  { key: 'accountNumber', label: 'Account Number' },
+  { key: 'swift',         label: 'SWIFT Code' },
+];
 
 // PR-SCORECARD-4 — OWNER-editable platform settings.
 //
@@ -56,6 +73,11 @@ const KEY_TO_TYPE: Record<string, string> = {
 };
 
 export default function PlatformSettingsPage() {
+  const { me } = useStaff();
+  // Booking URLs are OWNER/SUPER_ADMIN only (backend-enforced); a plain ADMIN
+  // reaches this page for the bank details but must not load/see that card.
+  const isOwnerTier = !!me && ['OWNER', 'SUPER_ADMIN'].includes(me.role);
+
   const [settings, setSettings] = useState<PlatformSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,8 +116,10 @@ export default function PlatformSettingsPage() {
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    if (isOwnerTier) load();
+    else setLoading(false); // ADMIN-only viewer — no booking-URL fetch (would 403)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwnerTier]);
 
   const bookingSettings = settings.filter((s) => BOOKING_KEYS.includes(s.key as any));
 
@@ -117,7 +141,11 @@ export default function PlatformSettingsPage() {
         </div>
       )}
 
-      {/* ─── Booking URLs ──────────────────────────────────────── */}
+      {/* ─── Company bank details (Phase C) — Owner/Admin ────────── */}
+      <BankDetailsCard />
+
+      {/* ─── Booking URLs — Owner-tier only ──────────────────────── */}
+      {isOwnerTier && (
       <Card className="mb-6">
         <CardContent>
           <h2 className="text-lg font-bold text-[#1E3A5F] mb-1">Booking URLs</h2>
@@ -187,6 +215,7 @@ export default function PlatformSettingsPage() {
           </ul>
         </CardContent>
       </Card>
+      )}
 
       {editing && (
         <EditUrlModal
@@ -198,6 +227,147 @@ export default function PlatformSettingsPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ─── BankDetailsCard (Phase C) ─────────────────────────────────────
+//
+// Company bank-transfer details shown on the client pay screen. Reads/writes
+// GET+PATCH /staff/platform-settings/bank-details (Owner/Admin, backend-enforced).
+// Values fall back to the previously-hardcoded defaults until first saved.
+
+function BankDetailsCard() {
+  const [details, setDetails] = useState<BankDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      setDetails(await api.get<BankDetails>('/staff/platform-settings/bank-details'));
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to load bank details');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <Card className="mb-6">
+      <CardContent>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-[#1E3A5F] mb-1">Company bank details</h2>
+            <p className="text-sm text-[#4A4A4A]/70 mb-4">
+              Shown to clients on the bank-transfer payment screen. Edits take effect immediately.
+            </p>
+          </div>
+          {details && !editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#1E3A5F] text-[#1E3A5F] text-sm font-medium hover:bg-[#1E3A5F]/5 flex-shrink-0"
+            >
+              <Pencil size={13} /> Edit
+            </button>
+          )}
+        </div>
+
+        {error && <p className="text-sm text-red-700 mb-3">{error}</p>}
+        {loading && <div className="text-sm text-[#4A4A4A]/60 py-4">Loading…</div>}
+
+        {details && !editing && (
+          <ul className="space-y-2">
+            {BANK_FIELDS.map((f) => (
+              <li key={f.key} className="flex flex-wrap items-baseline gap-x-3 text-sm">
+                <span className="w-32 shrink-0 text-[#4A4A4A]/60">{f.label}</span>
+                <span className="font-mono text-[#1E3A5F] break-all">{details[f.key]}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {details && editing && (
+          <BankDetailsEditor
+            initial={details}
+            onCancel={() => setEditing(false)}
+            onSaved={(next) => { setDetails(next); setEditing(false); }}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BankDetailsEditor({
+  initial, onCancel, onSaved,
+}: {
+  initial: BankDetails;
+  onCancel: () => void;
+  onSaved: (next: BankDetails) => void;
+}) {
+  const [form, setForm] = useState<BankDetails>(initial);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const allFilled = BANK_FIELDS.every((f) => form[f.key].trim().length > 0);
+
+  async function save() {
+    setErr(null);
+    if (!allFilled) { setErr('All fields are required.'); return; }
+    setSaving(true);
+    try {
+      const next = await api.patch<BankDetails>('/staff/platform-settings/bank-details', {
+        bankName:      form.bankName.trim(),
+        bankAddress:   form.bankAddress.trim(),
+        accountName:   form.accountName.trim(),
+        accountNumber: form.accountNumber.trim(),
+        swift:         form.swift.trim(),
+      });
+      onSaved(next);
+    } catch (e: any) {
+      setErr(e?.message ?? 'Failed to save');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      {BANK_FIELDS.map((f) => (
+        <div key={f.key}>
+          <label className="block text-xs font-semibold text-[#1E3A5F] mb-1">{f.label}</label>
+          <input
+            type="text"
+            value={form[f.key]}
+            onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#F3CE49] focus:ring-1 focus:ring-[#F3CE49]"
+          />
+        </div>
+      ))}
+      {err && <p className="text-xs text-red-700">{err}</p>}
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="px-4 py-2 rounded-lg text-[#1E3A5F] text-sm font-medium hover:bg-gray-100"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || !allFilled}
+          className="px-4 py-2 rounded-lg bg-[#1E3A5F] text-white text-sm font-bold hover:bg-[#162d49] disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
     </div>
   );
 }

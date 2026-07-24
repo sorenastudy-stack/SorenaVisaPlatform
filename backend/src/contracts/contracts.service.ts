@@ -954,28 +954,47 @@ export class ContractsService {
       submission?.status === 'completed' ||
       (submitters.length > 0 && submitters.every((s) => s?.status === 'completed'));
     if (!allCompleted) {
-      // PR-CONTRACT-LEAD (Phase B) — the moment the CLIENT (first signer) completes
-      // their signature, auto-create the Case for a lead-based contract and backfill
-      // Contract.caseId. Detected from the just-synced signer rows: a CLIENT/GUARDIAN
-      // row now has signedAt set. Idempotent — on a retry, contract.caseId is already
-      // set so we skip. IMPORTANT: we deliberately run NO downstream here (no invoice,
-      // no promotion, no signed-PDF capture) — the client is only the FIRST of three
-      // signers. Those all stay in the allCompleted branch below.
-      if (!contract.caseId && contract.leadId) {
-        const clientSigned = await this.prisma.contractSigner.findFirst({
-          where: {
-            contractId: contract.id,
-            role: { in: [ContractSignerRole.CLIENT, ContractSignerRole.GUARDIAN] },
-            signedAt: { not: null },
-          },
-          select: { id: true },
-        });
-        if (clientSigned) {
-          await this.ensureCaseForLeadBasedContract(contract.id, contract.leadId);
-        }
+      // Per-submitter timing. The signer rows were just synced above, so read
+      // which parties have now signed. DocuSeal preserves the Client → LIA →
+      // Director order, so liaSigned necessarily implies clientSigned.
+      const signedRows = await this.prisma.contractSigner.findMany({
+        where:  { contractId: contract.id, signedAt: { not: null } },
+        select: { role: true },
+      });
+      const clientSigned = signedRows.some(
+        (s) => s.role === ContractSignerRole.CLIENT || s.role === ContractSignerRole.GUARDIAN,
+      );
+      const liaSigned = signedRows.some((s) => s.role === ContractSignerRole.LIA);
+
+      // PR-CONTRACT-LEAD (Phase B) — the moment the CLIENT (first signer) completes,
+      // auto-create the Case for a lead-based contract and backfill Contract.caseId.
+      // Idempotent: on a retry contract.caseId is already set so ensure* is a no-op
+      // create-or-find. Case-based contracts already carry caseId from send time.
+      let caseId = contract.caseId;
+      if (clientSigned && !caseId && contract.leadId) {
+        caseId = await this.ensureCaseForLeadBasedContract(contract.id, contract.leadId);
       }
+
+      // PR-ACCESS-GATE (Phase C) — fire the $200 engagement invoice + the
+      // LEAD→STUDENT promotion the moment the LIA has countersigned (the client
+      // has necessarily already signed). We deliberately do NOT wait for the
+      // Director: their signature is purely the company's own countersignature
+      // for the record and unlocks nothing new. Both helpers are internally
+      // guarded (invoice: client signed + no existing ENG invoice; promotion:
+      // client + LIA signed + role still LEAD) and fully idempotent, so a webhook
+      // retry of the LIA-signed event never double-invoices or double-promotes.
+      // We still do NOT capture the signed PDF here — that waits for full
+      // completion in the allCompleted branch below.
+      if (liaSigned && caseId) {
+        await this.maybePromoteClientToStudent(contract.id, caseId);
+        await this.maybeCreateEngagementInvoice(contract.id, caseId);
+      }
+
       this.logger.log(
-        `handleDocusealWebhook: submission ${submissionId} not fully completed (event=${eventType}) — signer rows synced, awaiting completion`,
+        `handleDocusealWebhook: submission ${submissionId} not fully completed (event=${eventType}) — ` +
+        `signer rows synced` +
+        `${clientSigned ? ' [client signed]' : ''}` +
+        `${liaSigned ? ' [LIA signed → invoice/promotion fired]' : ''}; awaiting completion`,
       );
       return contract;
     }
@@ -1034,14 +1053,18 @@ export class ContractsService {
     }
 
     // ┌──────────────────────────────────────────────────────────────────────┐
-    // │ PR-CONTRACT-LEAD (Phase B) — DO NOT MOVE THESE TWO CALLS.             │
-    // │ maybePromoteClientToStudent and maybeCreateEngagementInvoice MUST only│
-    // │ run here, inside the allCompleted branch (ALL THREE parties signed).  │
-    // │ Their INTERNAL guards trigger on "client signed" (the FIRST signer),  │
-    // │ so moving either into the earlier client-signed branch would fire the │
-    // │ $200 engagement invoice / promote the student the instant the client  │
-    // │ signs — before the LIA and Director have countersigned. The call SITE │
-    // │ is the only thing keeping them at full completion. Leave them here.   │
+    // │ PR-ACCESS-GATE (Phase C) — engagement invoice + student promotion.    │
+    // │ Intended timing (see the partial branch above):                       │
+    // │   • Case creation      → fires at CLIENT-signed  (Phase B)            │
+    // │   • Invoice + promotion → fire at LIA-signed      (Phase C)           │
+    // │   • The DIRECTOR's final signature triggers NEITHER — it is purely    │
+    // │     the company's own countersignature for the record.                │
+    // │ These two calls REMAIN here only as an idempotent SAFETY NET for the  │
+    // │ edge case where the very first webhook we ever see is                 │
+    // │ submission.completed (all three signatures coalesced), so the partial │
+    // │ LIA-signed branch never ran. Both helpers are guarded + idempotent,   │
+    // │ so on the normal Director-signed event they are no-ops (invoice       │
+    // │ already exists, client already STUDENT). Do not remove this net.      │
     // └──────────────────────────────────────────────────────────────────────┘
     await this.maybePromoteClientToStudent(contract.id, caseId);
     await this.maybeCreateEngagementInvoice(contract.id, caseId);

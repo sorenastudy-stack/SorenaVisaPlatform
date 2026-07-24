@@ -78,6 +78,15 @@ const CONSULTATION_TYPE_OPTIONS = [
 
 const VERIFICATION_ROLES = new Set(['FINANCE', 'OWNER', 'ADMIN']);
 
+// PR-ACCESS-GATE (Phase C) — roles allowed to GENERATE a payment link / custom
+// link / record a manual payment. Mirrors the backend @Roles on POST
+// /payments/case/:caseId/{consultation-link,custom-link,manual} EXACTLY, so a
+// role that would be 403'd never sees the button. Deliberately excludes
+// CLIENT_CONSULTANT (Client Officer): they must never generate a payment link.
+const CREATE_PAYMENT_ROLES = new Set([
+  'OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE',
+]);
+
 function formatAmount(cents: number, currency: string): string {
   const dollars = (cents / 100).toFixed(2);
   return `${currency.toUpperCase()} ${dollars}`;
@@ -94,6 +103,8 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
   const t = useTranslations();
   const { me } = useStaff();
   const canVerify = !!me && VERIFICATION_ROLES.has(me.role);
+  // Client Officers (and any non-listed role) never see the link/manual buttons.
+  const canCreatePayment = !!me && CREATE_PAYMENT_ROLES.has(me.role);
 
   // List
   const [payments,   setPayments]   = useState<PaymentRow[] | null>(null);
@@ -483,32 +494,36 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
             {t('staff.cases.detail.payments.subheading')}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={linkOpen ? closeLinkForm : openLinkForm}
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-[#1e3a5f] text-white text-sm font-semibold hover:bg-[#162d4a] transition-colors min-h-[48px]"
-          >
-            <Link2 size={16} />
-            {t('staff.cases.detail.payments.createLink')}
-          </button>
-          <button
-            type="button"
-            onClick={customOpen ? closeCustomForm : openCustomForm}
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-[#1e3a5f] text-white text-sm font-semibold hover:bg-[#162d4a] transition-colors min-h-[48px]"
-          >
-            <Wallet size={16} />
-            {t('staff.cases.detail.payments.createCustomLink')}
-          </button>
-          <button
-            type="button"
-            onClick={manualOpen ? closeManualForm : openManualForm}
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-[#1e3a5f]/30 text-[#1e3a5f] text-sm font-semibold hover:bg-[#1e3a5f]/5 transition-colors min-h-[48px]"
-          >
-            <Banknote size={16} />
-            {t('staff.cases.detail.payments.recordManual')}
-          </button>
-        </div>
+        {/* PR-ACCESS-GATE (Phase C) — link/manual generation is hidden for roles
+            the backend would 403 (notably CLIENT_CONSULTANT / Client Officer). */}
+        {canCreatePayment && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={linkOpen ? closeLinkForm : openLinkForm}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-[#1e3a5f] text-white text-sm font-semibold hover:bg-[#162d4a] transition-colors min-h-[48px]"
+            >
+              <Link2 size={16} />
+              {t('staff.cases.detail.payments.createLink')}
+            </button>
+            <button
+              type="button"
+              onClick={customOpen ? closeCustomForm : openCustomForm}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-[#1e3a5f] text-white text-sm font-semibold hover:bg-[#162d4a] transition-colors min-h-[48px]"
+            >
+              <Wallet size={16} />
+              {t('staff.cases.detail.payments.createCustomLink')}
+            </button>
+            <button
+              type="button"
+              onClick={manualOpen ? closeManualForm : openManualForm}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-[#1e3a5f]/30 text-[#1e3a5f] text-sm font-semibold hover:bg-[#1e3a5f]/5 transition-colors min-h-[48px]"
+            >
+              <Banknote size={16} />
+              {t('staff.cases.detail.payments.recordManual')}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Inline consultation-link form */}

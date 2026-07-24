@@ -25,6 +25,14 @@ interface PayOptions {
   paid:           boolean;
   processing:     boolean;
   receiptMethod:  string | null;
+  // PR-ACCESS-GATE (Phase C) — admin-configurable company bank-transfer details.
+  bank: {
+    bankName:      string;
+    bankAddress:   string;
+    accountName:   string;
+    accountNumber: string;
+    swift:         string;
+  };
 }
 
 const REBIT_URL = 'https://my.rebitmoney.com/auth/register?code=SORENA';
@@ -141,12 +149,14 @@ export default async function PayPage({
   const feeLabel = `$${(opts.surchargeCents / 100).toFixed(0)}`;
 
   // Only real values get a copy button — never the guidance placeholders.
+  // PR-ACCESS-GATE (Phase C) — company bank details now come from PlatformSetting
+  // (admin-editable), surfaced via pay-options. Layout + copy buttons unchanged.
   const bankRows: Array<{ label: string; value: string; copy: boolean }> = [
-    { label: 'Bank',           value: 'Kiwibank', copy: true },
-    { label: 'Bank Address',   value: 'Kiwibank Limited, Level 9, 20 Customhouse Quay, Wellington, 6011, New Zealand', copy: true },
-    { label: 'Account Name',   value: 'SORENASTUDY LIMITED', copy: true },
-    { label: 'Account Number', value: '38-9022-0355698-01', copy: true },
-    { label: 'SWIFT Code',     value: 'KIWINZ22', copy: true },
+    { label: 'Bank',           value: opts.bank.bankName, copy: true },
+    { label: 'Bank Address',   value: opts.bank.bankAddress, copy: true },
+    { label: 'Account Name',   value: opts.bank.accountName, copy: true },
+    { label: 'Account Number', value: opts.bank.accountNumber, copy: true },
+    { label: 'SWIFT Code',     value: opts.bank.swift, copy: true },
     { label: 'Particular',     value: nameForBank, copy: hasClientName },
     { label: 'Code',           value: 'Your Client ID (leave blank if new)', copy: false },
     { label: 'Reference',      value: nameForBank, copy: hasClientName },

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
 import { PortalController } from './portal.controller';
 import { PortalService } from './portal.service';
 
@@ -9,7 +10,7 @@ import { PortalService } from './portal.service';
 // invoice pay-link route. No cycle: nothing in the payments graph imports
 // PortalModule.
 @Module({
-  imports:     [PrismaModule, PaymentsModule],
+  imports:     [PrismaModule, PaymentsModule, PlatformSettingsModule],
   controllers: [PortalController],
   providers:   [PortalService],
 })

@@ -35,7 +35,7 @@ function makeService(opts: {
     consultation: { findFirst: consultationFindFirst },
   } as any;
 
-  const service = new PortalService(prisma, {} as any);
+  const service = new PortalService(prisma, {} as any, {} as any);
   return { service, consultationFindFirst };
 }
 
