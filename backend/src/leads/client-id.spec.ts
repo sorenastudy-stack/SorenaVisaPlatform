@@ -37,6 +37,24 @@ describe('resolveCountryCode', () => {
     expect(resolveCountryCode({ countryOfResidence: 'chili' })).toBeNull(); // typo → unmappable
     expect(resolveCountryCode({ countryOfResidence: 'Narnia' })).toBeNull();
   });
+
+  // PR-COUNTRY-DROPDOWN — countryOfResidence is now stored as an alpha-2 CODE by
+  // the searchable dropdown. The resolver must accept a code directly (unchanged
+  // Client ID output) while legacy free-text still resolves via name→code.
+  it('accepts an alpha-2 code directly (new dropdown storage)', () => {
+    expect(resolveCountryCode({ countryOfResidence: 'NZ' })).toBe('NZ');
+    expect(resolveCountryCode({ countryOfResidence: 'CL' })).toBe('CL'); // Chile
+    expect(resolveCountryCode({ countryOfResidence: 'ir' })).toBe('IR'); // case-insensitive
+    expect(resolveCountryCode({ countryOfResidence: 'GB' })).toBe('UK'); // GB→UK convention
+  });
+
+  it('still resolves legacy free-text names (backward-compatible safety net)', () => {
+    expect(resolveCountryCode({ countryOfResidence: 'New Zealand' })).toBe('NZ');
+    expect(resolveCountryCode({ countryOfResidence: 'United Kingdom' })).toBe('UK');
+    // A 2-letter string that is NOT a real country code falls back to name lookup
+    // (and fails → null), never a false positive.
+    expect(resolveCountryCode({ countryOfResidence: 'zz' })).toBeNull();
+  });
 });
 
 describe('formatClientId', () => {

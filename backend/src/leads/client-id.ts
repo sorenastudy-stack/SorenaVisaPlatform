@@ -36,6 +36,23 @@ function nameToAlpha2(name?: string | null): string | null {
   return code === 'GB' ? 'UK' : code.toUpperCase();
 }
 
+// PR-COUNTRY-DROPDOWN — resolve a country value that may be EITHER an alpha-2
+// code (the new searchable-dropdown storage format, e.g. "NZ"/"GB") OR legacy
+// free-text ("Chile", "chili"). A valid 2-letter code is used directly (GB→UK
+// for the Client ID convention); anything else falls back to name→code, so the
+// old free-text data keeps resolving exactly as before (safety net).
+function toAlpha2(value?: string | null): string | null {
+  if (!value || !value.trim()) return null;
+  const v = value.trim();
+  if (/^[A-Za-z]{2}$/.test(v)) {
+    const upper = v.toUpperCase();
+    if (upper === 'GB') return 'UK';
+    // "UK" is our own alias for GB; otherwise validate against the ISO catalogue.
+    if (upper === 'UK' || countries.getName(upper, 'en')) return upper;
+  }
+  return nameToAlpha2(v);
+}
+
 // The platform's study-destination enum → alpha-2.
 function targetToAlpha2(target?: string | null): string | null {
   if (target === 'NEW_ZEALAND') return 'NZ';
@@ -44,19 +61,20 @@ function targetToAlpha2(target?: string | null): string | null {
 }
 
 export interface CountrySource {
-  countryOfResidence?: string | null; // Contact.countryOfResidence (free-text name)
+  countryOfResidence?: string | null; // Contact.countryOfResidence (alpha-2 code, or legacy free-text)
   targetCountry?: string | null;      // Lead.targetCountry enum
   countryRaw?: string | null;         // Lead.countryRaw (Wix un-resolved name)
 }
 
 // Resolve the 2-letter country code from the available signals, in priority
 // order. Returns null when nothing resolves (caller may then try a contact
-// lookup before falling back to the TEST prefix).
+// lookup before falling back to the TEST prefix). Handles both the new alpha-2
+// code storage and legacy free-text (see toAlpha2).
 export function resolveCountryCode(src: CountrySource): string | null {
   return (
-    nameToAlpha2(src.countryOfResidence) ??
+    toAlpha2(src.countryOfResidence) ??
     targetToAlpha2(src.targetCountry) ??
-    nameToAlpha2(src.countryRaw)
+    toAlpha2(src.countryRaw)
   );
 }
 

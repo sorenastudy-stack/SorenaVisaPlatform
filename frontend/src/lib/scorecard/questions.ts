@@ -33,7 +33,10 @@
 // "Other…" searchable list); its stored answer value is a lowercase ISO 639-1
 // code. It is NOT a scoring question — the engine ignores it, like the other
 // contact fields.
-export type QuestionType = 'text' | 'email' | 'phone' | 'select' | 'longtext' | 'language';
+// PR-COUNTRY-DROPDOWN — 'country' renders the shared searchable country picker;
+// its stored answer value is an ISO 3166-1 alpha-2 code (e.g. 'NZ'), NOT free
+// text. Like 'language', it is a contact field the scoring engine ignores.
+export type QuestionType = 'text' | 'email' | 'phone' | 'select' | 'longtext' | 'language' | 'country';
 
 export interface QuestionDef {
   id: string;
@@ -60,7 +63,7 @@ export const CONTACT_QUESTIONS: QuestionDef[] = [
   { id: 'full_name',        type: 'text',  label: 'Full name',                                  required: true },
   { id: 'email',            type: 'email', label: 'Email address',                              required: true },
   { id: 'phone',            type: 'phone', label: 'Phone (with country code, e.g. +98 …)',     required: true },
-  { id: 'current_country',  type: 'text',  label: 'Current country of residence',               required: true },
+  { id: 'current_country',  type: 'country', label: 'Current country of residence',              required: true },
   // Phase 2b: optional first language — captured so we can match you with a
   // consultant who speaks it. Stored as an ISO 639-1 code; NOT a scoring
   // question and NEVER required (submission works without it).

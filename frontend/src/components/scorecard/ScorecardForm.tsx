@@ -13,6 +13,7 @@ import {
 } from '@/lib/scorecard/questions';
 import { fillHiddenAnswers } from '@/lib/scorecard/submit-helpers';
 import { LanguageSelect } from '@/components/scorecard/LanguageSelect';
+import { ScorecardCountrySelect } from '@/components/scorecard/ScorecardCountrySelect';
 import { localeToLanguageCode } from '@/lib/languages';
 import { useLocaleStore } from '@/lib/stores/localeStore';
 
@@ -594,6 +595,8 @@ function FieldRow({
 
       {q.type === 'language' ? (
         <LanguageSelect value={value} onChange={onChange} className={inputClasses} />
+      ) : q.type === 'country' ? (
+        <ScorecardCountrySelect value={value} onChange={onChange} className={inputClasses} />
       ) : q.type === 'select' ? (
         <select
           value={value}

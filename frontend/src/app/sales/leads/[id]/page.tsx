@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { displayCountry } from '@/lib/country-codes';
+import { languageLabel } from '@/lib/languages';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { ArrowLeft, Mail, Phone, Globe, AlertTriangle, Sparkles } from 'lucide-react';
 import { LeadStatusActions } from './LeadStatusActions';
@@ -225,7 +226,7 @@ export default async function LeadDetailPage({
               </div>
             )}
             <div className="pt-2 border-t border-[#1E3A5F]/10 text-xs text-[#4A4A4A]/60">
-              <div>Language: {lead.contact.preferredLanguage.toUpperCase()}</div>
+              <div>Language: {languageLabel(lead.contact.preferredLanguage)}</div>
               {lead.sourceChannel && <div>Source: {lead.sourceChannel}</div>}
               {lead.utmCampaign && <div>Campaign: {lead.utmCampaign}</div>}
             </div>

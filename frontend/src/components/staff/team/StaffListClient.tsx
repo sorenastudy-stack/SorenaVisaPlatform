@@ -6,7 +6,10 @@ import { Loader2, Search, ChevronRight, BadgeCheck, AlertTriangle } from 'lucide
 import { StaffAvatar } from '@/components/staff/StaffAvatar';
 import { api, ApiError } from '@/lib/api';
 import { useRoleLabel } from '@/lib/role-label';
-import { langLabel, sessionTypeLabel } from '@/lib/booking/staff-options';
+import { sessionTypeLabel } from '@/lib/booking/staff-options';
+// PR-COUNTRY-DROPDOWN — full ISO 639-1 label lookup (staff can now speak any of
+// the full list, not just the old 6, so use the complete label map).
+import { languageLabel } from '@/lib/languages';
 import { formatDate } from '@/lib/date';
 
 interface StaffSummary {
@@ -169,7 +172,7 @@ export function StaffListClient() {
 
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
                   {a.languages.length > 0
-                    ? a.languages.map((c) => <Chip key={c}>{langLabel(c)}</Chip>)
+                    ? a.languages.map((c) => <Chip key={c}>{languageLabel(c)}</Chip>)
                     : <Chip tone="muted">no languages</Chip>}
                 </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">

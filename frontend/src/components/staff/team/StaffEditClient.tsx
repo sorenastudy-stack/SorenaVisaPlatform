@@ -10,9 +10,18 @@ import { useRoleLabel } from '@/lib/role-label';
 import { formatDate } from '@/lib/date';
 import { DateInput } from '@/components/ui/DateInput';
 import {
-  LANGUAGES, SESSION_TYPES, TIMEZONES, WEEKDAYS,
+  SESSION_TYPES, TIMEZONES, WEEKDAYS,
   minutesToHHMM, hhmmToMinutes,
 } from '@/lib/booking/staff-options';
+// PR-COUNTRY-DROPDOWN — full searchable language list for staff spoken-languages.
+import { SearchableSelect, type SearchableOption } from '@/components/common/SearchableSelect';
+import { ALL_LANGUAGE_OPTIONS, languageLabel } from '@/lib/languages';
+
+const STAFF_LANGUAGE_OPTIONS: SearchableOption[] = ALL_LANGUAGE_OPTIONS.map((l) => ({
+  value: l.code,
+  label: l.label,
+  searchExtra: l.code,
+}));
 
 interface Window { id?: string; dayOfWeek: number; startMinute: number; endMinute: number; }
 interface Staff {
@@ -249,18 +258,38 @@ export function StaffEditClient({ staffId }: { staffId: string }) {
 
         <div className="mt-4">
           <label className="block text-sm font-semibold text-sorena-navy mb-2">Languages</label>
-          <div className="flex flex-wrap gap-2">
-            {LANGUAGES.map((l) => (
-              <button
-                key={l.code}
-                type="button"
-                onClick={() => setLanguages((v) => toggle(v, l.code))}
-                className={`rounded-full px-3 py-1.5 text-sm border transition-colors ${languages.includes(l.code) ? 'bg-sorena-navy text-white border-sorena-navy' : 'bg-white text-sorena-navy border-gray-200 hover:border-sorena-navy/40'}`}
-              >
-                {l.label}
-              </button>
-            ))}
-          </div>
+          {/* PR-COUNTRY-DROPDOWN — searchable full-list picker (matches the client
+              scorecard) instead of the old 6-language chip toggles. Add a language
+              from the dropdown; remove via the chip's ✕. Stored value is unchanged
+              (lowercase ISO 639-1 codes). */}
+          <SearchableSelect
+            value=""
+            onChange={(code) => { if (code) setLanguages((v) => (v.includes(code) ? v : [...v, code])); }}
+            options={STAFF_LANGUAGE_OPTIONS.filter((o) => !languages.includes(o.value))}
+            placeholder="Add a language…"
+            searchPlaceholder="Search languages…"
+            allowClear={false}
+          />
+          {languages.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {languages.map((code) => (
+                <span
+                  key={code}
+                  className="inline-flex items-center gap-1 rounded-full bg-sorena-navy px-3 py-1.5 text-sm text-white"
+                >
+                  {languageLabel(code)}
+                  <button
+                    type="button"
+                    onClick={() => setLanguages((v) => v.filter((c) => c !== code))}
+                    className="text-white/70 hover:text-white"
+                    aria-label={`Remove ${languageLabel(code)}`}
+                  >
+                    <X size={13} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
