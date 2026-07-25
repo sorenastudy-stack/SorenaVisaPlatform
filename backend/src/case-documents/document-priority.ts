@@ -61,3 +61,32 @@ export function documentPriority(
   // APPLICATION (free-string `type`, unclassifiable) and any other source → P2.
   return 'P2';
 }
+
+// PR-OWNER-DOCS — the SINGLE canonical "can this role SEE this document?" rule,
+// used by BOTH the per-case list, the cross-case list, and the download gate, so
+// visibility can never diverge between them. Encodes the Operations Manual
+// permission matrix:
+//   • LIA + admin tier (OWNER/SUPER_ADMIN/ADMIN) — everything, incl. visa/INZ.
+//   • CONSULTANT (Admission Officer) — Priority-1 documents ONLY, and NEVER the
+//     visa source (the Manual: Admission Specialist has no access to the visa/INZ
+//     file), regardless of an individual doc's type classification.
+//   • CLIENT_CONSULTANT (Client Officer) — the full client file (P1 + P2) EXCEPT
+//     the visa source (visa/INZ stays LIA-only).
+//   • OPERATIONS — all non-visa (legacy OPS reviewer role).
+//   • Any other role — unchanged prior behaviour (sees the document).
+export function canRoleViewDocument(
+  role: string | null | undefined,
+  source: CaseDocumentReviewSource,
+  docType: string,
+): boolean {
+  // Roles explicitly barred from the visa/INZ source by the Operations Manual.
+  const barredFromVisa =
+    role === 'CONSULTANT' || role === 'CLIENT_CONSULTANT' || role === 'OPERATIONS';
+  if (source === 'VISA_SUPPORTING' && barredFromVisa) return false;
+  // Admission Officer: Priority-1 (educational) documents only, across the
+  // non-visa sources it CAN see.
+  if (role === 'CONSULTANT') return documentPriority(source, docType) === 'P1';
+  // LIA / admin tier (everything incl. visa), Client Officer / Operations (all
+  // non-visa), and any other role — the document is visible.
+  return true;
+}

@@ -62,7 +62,7 @@ const STAFF_PANEL_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 const BOOKINGS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT'] as const;
 // PR-STAFF-DOCS: "My case documents" — assignment-based. Slot-holding roles +
 // admin tier (admin sees all; others see only their currently-assigned cases).
-const DOCS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE'] as const;
+const DOCS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE'] as const;
 // PR-LIA-LICENCE: LIA self-service "My Licence" — the adviser's own IAA
 // credential upload + verification status. LIA role ONLY (OWNER/ADMIN verify
 // from /staff/lia-verification, not here). Launch-blocking: an LIA must be

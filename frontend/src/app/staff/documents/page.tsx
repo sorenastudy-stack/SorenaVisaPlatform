@@ -5,7 +5,7 @@ import { MyDocumentsClient } from '@/components/staff/documents/MyDocumentsClien
 // PR-STAFF-DOCS — "My case documents". Assignment-based: slot-holding roles +
 // admin tier. Admin sees all; others see only their currently-assigned cases
 // (enforced server-side). Non-eligible staff bounce to /staff.
-const ALLOWED = new Set(['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE']);
+const ALLOWED = new Set(['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE']);
 
 export default async function StaffDocumentsPage() {
   const session = await getSession();

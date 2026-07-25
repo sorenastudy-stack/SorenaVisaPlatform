@@ -45,8 +45,11 @@ export class CaseDocumentsController {
     return this.service.listAllDocumentsForCase(caseId, this.actor(req).role);
   }
 
+  // PR-OWNER-DOCS — CLIENT_CONSULTANT (Client Officer) added so they can download
+  // the P1+P2 non-visa documents the cross-case list surfaces to them. The service
+  // (assertCanAccessSource + canRoleViewDocument) still denies them the visa source.
   @Get(':caseId/documents/:source/:sourceRowId/download-url')
-  @Roles('OPERATIONS', 'LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'CONSULTANT')
+  @Roles('OPERATIONS', 'LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'CONSULTANT', 'CLIENT_CONSULTANT')
   download(
     @Param('caseId') caseId: string,
     @Param('source') source: string,

@@ -13,7 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { createSignedDownloadToken } from '../common/signed-url.util';
 import { ReviewDocumentDto } from './dto/case-documents.dto';
-import { documentPriority } from './document-priority';
+import { documentPriority, canRoleViewDocument, type DocumentPriority } from './document-priority';
 
 // PR-LIA-5 — Cross-source document listing + signed-URL downloads +
 // internal-only review verdicts.
@@ -54,6 +54,22 @@ export interface CaseDocumentRow {
   liaReviewedById: string | null;
   liaReviewedByName: string | null;
   liaReviewReason: string | null;
+}
+
+// PR-OWNER-DOCS — a row in the Owner-dashboard cross-case document list.
+export interface CrossCaseDocumentRow {
+  id: string;                 // "<caseId>:<source>:<rowId>" (structured) or "<caseId>:OTHER:<docId>"
+  caseId: string;
+  clientName: string | null;
+  bucket: 'STRUCTURED' | 'OTHER';
+  source: string;             // CaseDocumentReviewSource, or 'OTHER' for System-A docs
+  sourceRowId: string;
+  docType: string;            // priority-classified type, or the System-A category
+  priority: DocumentPriority | null;   // null for the OTHER bucket (not part of P1/P2)
+  fileName: string;
+  uploadedAt: Date;
+  downloadable: boolean;
+  reviewStatus: 'UNREVIEWED' | CaseDocumentReviewStatus | null;
 }
 
 // OPS cross-case review queue row (one unreviewed document).
@@ -260,19 +276,108 @@ export class CaseDocumentsService {
 
     rows.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
 
-    // Role-scoped visibility. LIA + admin tier see everything.
-    //   • OPERATIONS never sees VISA_SUPPORTING (legal) docs.
-    //   • Phase 5d — CONSULTANT (Admission Specialist) sees Priority-1
-    //     (educational) docs ONLY, classified by document TYPE (never by source),
-    //     so a P2 type in the ADMISSION source (e.g. VISA_POLICE_CERTIFICATE) is
-    //     hidden while a P1 type in the visa source (e.g. OFFER_OF_PLACE) shows.
-    let visible = rows;
-    if (viewerRole === 'OPERATIONS') {
-      visible = rows.filter((r) => r.source !== 'VISA_SUPPORTING');
-    } else if (viewerRole === 'CONSULTANT') {
-      visible = rows.filter((r) => documentPriority(r.source, r.docType) === 'P1');
+    // Role-scoped visibility — the SINGLE canonical rule (canRoleViewDocument),
+    // shared with the cross-case list + the download gate so they never diverge.
+    // (PR-OWNER-DOCS updated the CONSULTANT rule to ALSO exclude the visa source,
+    // per the Operations Manual; CLIENT_CONSULTANT excludes visa too.)
+    return rows.filter((r) => canRoleViewDocument(viewerRole, r.source, r.docType));
+  }
+
+  // ─── Owner-dashboard cross-case document list (PR-OWNER-DOCS) ─────────────
+  //
+  // Every document the actor may see, across every case they may see. Structured
+  // docs go through the per-case builder (which already applies the SINGLE
+  // canRoleViewDocument filter — no duplicated visibility logic). Owner/admin tier
+  // additionally get the System-A generic Document store as an unprioritized
+  // "Other documents" bucket (signed contracts, receipts, ad-hoc uploads).
+  async listAllDocumentsAcrossCases(actor: Actor): Promise<CrossCaseDocumentRow[]> {
+    const caseIds = await this.resolveScopedCaseIds(actor);
+    const out: CrossCaseDocumentRow[] = [];
+
+    // Structured (ADMISSION / APPLICATION / VISA_SUPPORTING) — role-filtered.
+    for (const caseId of caseIds) {
+      const rows = await this.listAllDocumentsForCase(caseId, actor.role);
+      for (const r of rows) {
+        out.push({
+          id: `${caseId}:${r.id}`,
+          caseId,
+          clientName: r.uploadedByName,
+          bucket: 'STRUCTURED',
+          source: r.source,
+          sourceRowId: r.sourceRowId,
+          docType: r.docType,
+          priority: documentPriority(r.source, r.docType),
+          fileName: r.fileName,
+          uploadedAt: r.uploadedAt,
+          downloadable: r.downloadable,
+          reviewStatus: r.liaReviewStatus,
+        });
+      }
     }
-    return visible;
+
+    // System-A "Other documents" — Owner/admin tier ONLY (not part of the P1/P2
+    // model, so never shown to CONSULTANT / CLIENT_CONSULTANT).
+    if (this.isAdminTier(actor.role) && caseIds.length) {
+      const others = await this.prisma.document.findMany({
+        where: { caseId: { in: caseIds }, status: 'UPLOADED' },
+        select: {
+          id: true,
+          caseId: true,
+          category: true,
+          originalName: true,
+          createdAt: true,
+          case: { select: { lead: { select: { contact: { select: { fullName: true } } } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      for (const d of others) {
+        out.push({
+          id: `${d.caseId}:OTHER:${d.id}`,
+          caseId: d.caseId,
+          clientName: d.case?.lead?.contact?.fullName ?? null,
+          bucket: 'OTHER',
+          source: 'OTHER',
+          sourceRowId: d.id,
+          docType: d.category ?? 'document',
+          priority: null,
+          fileName: d.originalName,
+          uploadedAt: d.createdAt,
+          downloadable: true,
+          reviewStatus: null,
+        });
+      }
+    }
+
+    out.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+    return out;
+  }
+
+  private isAdminTier(role?: string | null): boolean {
+    return role === 'OWNER' || role === 'SUPER_ADMIN' || role === 'ADMIN';
+  }
+
+  // Cases the actor may see: read-all roles (OWNER/SUPER_ADMIN/ADMIN/LIA) → every
+  // case; anyone else → cases where they currently hold a slot (assigned cases),
+  // so a reassign-away drops the case on the next request.
+  private async resolveScopedCaseIds(actor: Actor): Promise<string[]> {
+    const readAll =
+      actor.role === 'OWNER' || actor.role === 'SUPER_ADMIN' ||
+      actor.role === 'ADMIN' || actor.role === 'LIA';
+    const cases = await this.prisma.case.findMany({
+      where: readAll
+        ? {}
+        : {
+            OR: [
+              { ownerId: actor.id },
+              { liaId: actor.id },
+              { supportId: actor.id },
+              { financeId: actor.id },
+              { consultantId: actor.id },
+            ],
+          },
+      select: { id: true },
+    });
+    return cases.map((c) => c.id);
   }
 
   // ─── OPS cross-case review queue ─────────────────────────────────────────
@@ -392,18 +497,16 @@ export class CaseDocumentsService {
     sourceRowId: string,
     actor: Actor,
   ): Promise<{ url: string; expiresInSeconds: number }> {
-    // Source gate first (fail fast, no existence leak): OPS cannot download visa docs.
+    // Source gate first (fail fast, no existence leak): barred roles cannot even
+    // probe the visa source.
     this.assertCanAccessSource(actor.role, source);
     const row = await this.resolveSourceRow(caseId, source, sourceRowId);
-    // Phase 5d — Priority gate for the Admission Specialist (CONSULTANT): they may
-    // download Priority-1 (educational) documents only. Enforced by document TYPE
-    // (not source), so a hand-crafted download-url for a P2 doc — including a
-    // VISA_POLICE_CERTIFICATE that sits in the ADMISSION source — is denied here,
-    // BEFORE any token is minted. LIA/admin/OPERATIONS are unaffected.
-    if (actor.role === 'CONSULTANT' && documentPriority(source, row.documentType) === 'P2') {
-      throw new ForbiddenException(
-        'Admission Specialists may only access Priority-1 (educational) documents.',
-      );
+    // Full per-document rule — the SAME canonical predicate the list uses, so a
+    // hand-crafted download-url can never bypass what the list would hide. Denies
+    // e.g. a CONSULTANT's request for any P2 doc (incl. a VISA_POLICE_CERTIFICATE
+    // sitting in the ADMISSION source), BEFORE any token is minted.
+    if (!canRoleViewDocument(actor.role, source, row.documentType)) {
+      throw new ForbiddenException('You do not have access to this document.');
     }
     if (!row.fileUrl) {
       throw new BadRequestException(
@@ -693,10 +796,13 @@ export class CaseDocumentsService {
     role: string | null | undefined,
     source: CaseDocumentReviewSource,
   ) {
-    if (role === 'OPERATIONS' && source === 'VISA_SUPPORTING') {
-      throw new ForbiddenException(
-        'Operations may only access admission documents (ADMISSION / APPLICATION).',
-      );
+    // Fast-fail source gate (no docType yet): the roles the Operations Manual bars
+    // from the visa/INZ file. The full per-document rule (incl. CONSULTANT's
+    // Priority-1-only) is enforced by canRoleViewDocument in createDownloadUrl.
+    const barredFromVisa =
+      role === 'OPERATIONS' || role === 'CONSULTANT' || role === 'CLIENT_CONSULTANT';
+    if (barredFromVisa && source === 'VISA_SUPPORTING') {
+      throw new ForbiddenException('This role may not access visa / INZ documents.');
     }
   }
 
