@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, Megaphone,
+  LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
   Clock, BookOpen, KeyRound, Award,
 } from 'lucide-react';
@@ -40,6 +40,9 @@ const MARKETING_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'] as const;
 // details on the same page; the booking-URL card stays owner-tier only (guarded
 // in-page), and the backend enforces each section's real role boundary.
 const SETTINGS_ROLES   = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
+// PR-COMPLIANCE — Owner-dashboard Compliance section (flagged cases, contract
+// exceptions, override/audit log). Compliance-Admin tier only.
+const COMPLIANCE_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
 // OWNER only. Additive; no existing role's access changes.
 const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;
@@ -84,6 +87,7 @@ const NAV: NavItem[] = [
   { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} />,       roleGate: TICKETS_ROLES },
   { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },
   { label: 'staff.nav.approvals',         href: '/staff/approvals',          icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
+  { label: 'Compliance',                   href: '/staff/compliance',         icon: <ShieldAlert size={18} />, roleGate: COMPLIANCE_ROLES },
   // PR-DOCUSIGN-1 step 3 (Screen B): LIA credential verification queue.
   // Inline label string — no next-intl yet, matching the rest of this
   // surface's English-only labels (the .nav.* keys above are the

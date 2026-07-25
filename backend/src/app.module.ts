@@ -47,6 +47,7 @@ import { PlatformSettingsModule } from './platform-settings/platform-settings.mo
 import { BookingModule } from './booking/booking.module';
 import { WalletModule } from './wallet/wallet.module';
 import { AuditModule } from './audit/audit.module';
+import { ComplianceModule } from './compliance/compliance.module';
 
 @Module({
   imports: [
@@ -144,6 +145,7 @@ import { AuditModule } from './audit/audit.module';
     // OWNER audit-log browser — read-only view over the existing AuditLog
     // (GET /admin/audit + /:id). OWNER/SUPER_ADMIN only. No new audit machinery.
     AuditModule,
+    ComplianceModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`
