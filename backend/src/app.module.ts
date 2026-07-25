@@ -48,6 +48,7 @@ import { BookingModule } from './booking/booking.module';
 import { WalletModule } from './wallet/wallet.module';
 import { AuditModule } from './audit/audit.module';
 import { ComplianceModule } from './compliance/compliance.module';
+import { HandoffsModule } from './handoffs/handoffs.module';
 
 @Module({
   imports: [
@@ -146,6 +147,9 @@ import { ComplianceModule } from './compliance/compliance.module';
     // (GET /admin/audit + /:id). OWNER/SUPER_ADMIN only. No new audit machinery.
     AuditModule,
     ComplianceModule,
+    // PR-HANDOFFS: Owner-dashboard Handoffs — staffing exceptions (reused from
+    // OpsHandoffsModule) + state-derived stuck-case rules. OWNER/SUPER_ADMIN.
+    HandoffsModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`

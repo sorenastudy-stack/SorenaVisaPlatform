@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
-  Clock, BookOpen, KeyRound, Award,
+  Clock, BookOpen, KeyRound, Award, ArrowLeftRight,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 import { portalBrand } from '@/lib/portal-branding';
@@ -43,6 +43,9 @@ const SETTINGS_ROLES   = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 // PR-COMPLIANCE — Owner-dashboard Compliance section (flagged cases, contract
 // exceptions, override/audit log). Compliance-Admin tier only.
 const COMPLIANCE_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
+// PR-HANDOFFS — Owner-dashboard Handoffs section (unstaffed roles + stuck cases).
+// Same oversight tier as Compliance.
+const HANDOFFS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
 // OWNER only. Additive; no existing role's access changes.
 const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;
@@ -88,6 +91,9 @@ const NAV: NavItem[] = [
   { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },
   { label: 'staff.nav.approvals',         href: '/staff/approvals',          icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
   { label: 'Compliance',                   href: '/staff/compliance',         icon: <ShieldAlert size={18} />, roleGate: COMPLIANCE_ROLES },
+  // PR-HANDOFFS: unstaffed roles + stalled cases. Sits next to Compliance —
+  // both are cross-case oversight surfaces for the Owner tier.
+  { label: 'Handoffs',                     href: '/staff/handoffs',           icon: <ArrowLeftRight size={18} />, roleGate: HANDOFFS_ROLES },
   // PR-DOCUSIGN-1 step 3 (Screen B): LIA credential verification queue.
   // Inline label string — no next-intl yet, matching the rest of this
   // surface's English-only labels (the .nav.* keys above are the
