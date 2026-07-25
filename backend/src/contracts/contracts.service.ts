@@ -988,6 +988,21 @@ export class ContractsService {
       if (liaSigned && caseId) {
         await this.maybePromoteClientToStudent(contract.id, caseId);
         await this.maybeCreateEngagementInvoice(contract.id, caseId);
+        // PR-ALLOC — assign the Admission Officer (Case.ownerId) at the SAME
+        // LIA-signed moment, so it typically lands here rather than waiting for
+        // full completion / the ACCOUNT_OPENING payment. Additive: the existing
+        // later call sites remain as safety nets and are idempotent
+        // (assignAdmissionToCase skips a case that already has a real CONSULTANT
+        // owner). Never-throw, mirroring the allCompleted downstream.
+        try {
+          const adm = await this.liaAssignments.assignAdmissionToCase(caseId);
+          this.logger.log(
+            `DocuSeal LIA-signed: Admission auto-assign for case ${caseId}: ${adm.status}` +
+              (adm.ownerId ? ` → ${adm.ownerId}` : ''),
+          );
+        } catch (err: any) {
+          this.logger.error(`DocuSeal LIA-signed: Admission assign failed for case ${caseId}: ${err?.message ?? err}`);
+        }
       }
 
       this.logger.log(

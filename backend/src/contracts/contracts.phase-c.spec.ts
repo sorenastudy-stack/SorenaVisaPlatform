@@ -178,4 +178,46 @@ describe('Phase C — invoice + promotion fire at LIA-signed (not full completio
     expect(await roleOf(clientUserId)).toBe('STUDENT');
     expect(await statusOf(contract.id)).toBe('SIGNED');
   });
+
+  // PR-ALLOC — Admission Officer (Case.ownerId) is now assigned at LIA-signed for
+  // a fresh LEAD-BASED flow (no case at send), and stays put at completion.
+  it('Admission Officer is assigned at LIA-signed (lead-based) and idempotent at full completion', async () => {
+    const s = stamp();
+    await prisma.user.create({ data: { name: `LIA ${s}`, email: `lia.adm.${s}@t.local`, passwordHash: 'x', role: 'LIA', isActive: true } });
+    const admissionOfficer = await prisma.user.create({
+      data: { name: `Admission ${s}`, email: `adm.${s}@t.local`, passwordHash: 'x', role: 'CONSULTANT', isActive: true },
+    });
+    const clientUser = await prisma.user.create({
+      data: { name: `Client ${s}`, email: `client.adm.${s}@t.local`, passwordHash: 'x', role: 'LEAD', isActive: true },
+    });
+    const contact = await prisma.contact.create({ data: { fullName: `Client ${s}`, email: clientUser.email, userId: clientUser.id } });
+    const lead = await prisma.lead.create({ data: { contactId: contact.id, executionAllowed: true, leadStatus: 'NEW' } });
+    await prisma.consultation.create({ data: { leadId: lead.id, type: 'FREE_15', status: 'COMPLETED', amountNZD: 0 } as any });
+
+    const subId = `sub-adm-${lead.id}`;
+    docusealMock.createSubmission.mockResolvedValueOnce({ submissionId: subId, submitters: [] });
+    const contract = await service.createContractViaDocuseal({ leadId: lead.id }, actor);
+    const liaSigner = await prisma.contractSigner.findFirst({ where: { contractId: contract.id, role: 'LIA' } });
+    const emails = { client: clientUser.email, lia: liaSigner!.signerEmail, director: DIRECTOR_EMAIL };
+    const fire = (completed: Array<'client' | 'lia' | 'director'>, at: string) => {
+      docusealMock.getSubmission.mockResolvedValueOnce(submissionOf(emails, completed, at));
+      return service.handleDocusealWebhook({ event_type: 'form.completed', data: { submission_id: subId } });
+    };
+
+    // Client signs → case auto-creates, but NO Admission Officer yet (createCase
+    // assigns only the Client Officer / consultant slot).
+    await fire(['client'], '2026-07-25T10:00:00.000Z');
+    const caseRow = await prisma.case.findFirst({ where: { leadId: lead.id } });
+    expect(caseRow).not.toBeNull();
+    expect(caseRow!.ownerId).toBeNull();
+
+    // LIA signs → Admission Officer assigned NOW (the new trigger).
+    await fire(['client', 'lia'], '2026-07-25T11:00:00.000Z');
+    expect((await prisma.case.findUnique({ where: { id: caseRow!.id } }))!.ownerId).toBe(admissionOfficer.id);
+
+    // Director signs (full completion) → same owner, not reassigned (idempotent).
+    docusealMock.getSubmission.mockResolvedValueOnce(submissionOf(emails, ['client', 'lia', 'director'], '2026-07-25T12:00:00.000Z'));
+    await service.handleDocusealWebhook({ event_type: 'submission.completed', data: { id: subId } });
+    expect((await prisma.case.findUnique({ where: { id: caseRow!.id } }))!.ownerId).toBe(admissionOfficer.id);
+  });
 });

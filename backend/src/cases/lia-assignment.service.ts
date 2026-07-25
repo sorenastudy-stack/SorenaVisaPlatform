@@ -306,15 +306,36 @@ export class LiaAssignmentService {
       return { status: 'no_candidates', consultantId: null, consultantName: null, langMatched: false };
     }
 
-    // Language preference (guarded no-op while clientLang is 'en'). Compare
-    // lowercase ISO 639-1 codes on both sides. Staff `languages` are stored
-    // normalised lowercase (team.service); lowercase the client value too.
+    // Language selection. Compare lowercase ISO 639-1 codes on both sides (staff
+    // `languages` are stored normalised lowercase; lowercase the client value too).
+    //
+    // Pool priority (confirmed logic):
+    //   1. language-match — an officer who speaks the client's own language;
+    //   2. english-fallback — no match (or client speaks English): narrow to
+    //      ENGLISH-speaking officers specifically (the common working language);
+    //   3. all-fallback — no English speaker either (edge case): the full pool as
+    //      a last resort so a client is never left unassigned.
+    // In every case the pick within the chosen pool is the LEAST-LOADED officer.
+    const speaks = (c: (typeof candidates)[number], code: string) =>
+      (c.languages ?? []).map((l) => l.toLowerCase()).includes(code);
+
     const clientLang = (existing.lead?.contact?.preferredLanguage ?? 'en').trim().toLowerCase();
-    const langAware = candidates.filter((c) =>
-      (c.languages ?? []).map((l) => l.toLowerCase()).includes(clientLang),
-    );
-    const useLangPool = clientLang !== 'en' && langAware.length > 0;
-    const pool = useLangPool ? langAware : candidates;
+    const langAware = candidates.filter((c) => speaks(c, clientLang));
+    const englishSpeakers = candidates.filter((c) => speaks(c, 'en'));
+
+    let pool: typeof candidates;
+    let poolKind: 'language-match' | 'english-fallback' | 'all-fallback';
+    if (clientLang !== 'en' && langAware.length > 0) {
+      pool = langAware;
+      poolKind = 'language-match';
+    } else if (englishSpeakers.length > 0) {
+      pool = englishSpeakers;
+      poolKind = 'english-fallback';
+    } else {
+      pool = candidates;
+      poolKind = 'all-fallback';
+    }
+    const useLangPool = poolKind === 'language-match';
 
     // Lowest open-case count wins; ties broken by createdAt ASC (DB order).
     let pick = pool[0]!;
@@ -345,6 +366,7 @@ export class LiaAssignmentService {
             consultantName: pick.name,
             clientLang,
             langMatched: useLangPool,
+            poolKind, // language-match | english-fallback | all-fallback
             candidates: candidatesAudit,
           } as Prisma.InputJsonValue,
           actorNameSnapshot: triggerActor?.name ?? 'System (eligible)',
