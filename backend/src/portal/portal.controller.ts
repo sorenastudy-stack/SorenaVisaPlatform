@@ -2,6 +2,7 @@ import {
   Controller, Get, Param, Post, Req, UseGuards, UseFilters,
   UseInterceptors, UnsupportedMediaTypeException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
@@ -143,5 +144,22 @@ export class PortalController {
   payInvoice(@Param('invoiceId') invoiceId: string, @Req() req: any) {
     const userId = req.user?.userId ?? req.user?.id;
     return this.service.createInvoicePayLink(userId, invoiceId);
+  }
+
+  // POST /portal/me/contract/request → { ok: true }
+  // PR-CLIENT-CONTRACT — the client self-requests their OWN engagement contract.
+  // Reuses the staff send engine (Phase A/B gate + DocuSeal) against the caller's
+  // own case/lead (resolved server-side from the JWT — no client-supplied id).
+  // Rate-limited to 5/min/IP, matching the convention on other sensitive
+  // client-facing writes (auth, acquisition). The engine's own "already sent" /
+  // "already has a case" rejections + the contracts_leadId_active_key unique index
+  // prevent duplicate sends under rapid double-clicks — not re-implemented here.
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Post('me/contract/request')
+  requestContract(@Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    // Attribute the send to the CLIENT in the audit trail (name may be null; the
+    // role distinguishes a self-service send from a Client-Officer / LIA send).
+    return this.service.requestOwnContract(userId, req.user?.name ?? null, req.user?.role ?? null);
   }
 }

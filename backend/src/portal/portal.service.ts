@@ -3,11 +3,13 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import * as fs from 'fs';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
+import { ContractsService } from '../contracts/contracts.service';
 import { createSignedDownloadToken } from '../common/signed-url.util';
 import { getEngagementGateState } from '../common/engagement-payment.helper';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
@@ -31,7 +33,83 @@ export class PortalService {
     private readonly payments: PaymentsService,
     // PR-ACCESS-GATE (Phase C) — company bank details for the pay screen.
     private readonly settings: PlatformSettingsService,
+    // PR-CLIENT-CONTRACT — client self-service "Request contract" reuses the
+    // EXACT staff send engine (Phase A/B gate + DocuSeal dispatch), never a copy.
+    private readonly contracts: ContractsService,
   ) {}
+
+  // POST /portal/me/contract/request — the client triggers their OWN engagement
+  // contract send. Reuses the staff send path verbatim: resolve the caller's own
+  // case (or lead, if no case yet) — never a client-supplied id — then call the
+  // same createContractViaDocuseal(dto, actor) the Client Officer / LIA use.
+  //
+  // Security + idempotency are inherited, not rebuilt:
+  //   • Ownership — the lead is found via lead.contact.userId; a client can only
+  //     ever target their own lead. No lead / not-theirs → 404 (no existence leak).
+  //   • Phase A gate — assertContractSendAllowed(lead) runs inside the engine and
+  //     is caller-agnostic (keys on the lead, not the actor). We translate its
+  //     UnprocessableEntity into a calm client-safe message (the button normally
+  //     hides in that state; this covers the race/direct-hit edge).
+  //   • Duplicate sends — prepareEngagementSend's "already has a case" / "already
+  //     sent" rejections + the DB partial-unique index (contracts_leadId_active_key)
+  //     already block double-clicks. We do NOT add our own "already sent" check.
+  async requestOwnContract(
+    userId: string,
+    actorName: string | null,
+    actorRole: string | null,
+  ): Promise<{ ok: true }> {
+    // Resolve the caller's OWN target, CASE-FIRST then LEAD-fallback:
+    //   • A case exists once the lead is QUALIFIED (provisionStudentAccount) — the
+    //     common state by the time the button renders, since buildNextSteps only
+    //     runs when a case exists. Then we must send CASE-based: the engine rejects
+    //     a lead-based send for a lead that already has a case, by design.
+    //   • No case yet (pure lead-based / direct-hit edge) → send LEAD-based (Phase B).
+    // Either way the target is derived from lead.contact.userId — the client can
+    // never influence which record is targeted. Nothing theirs → 404, no leak.
+    const ownCase = await this.prisma.case.findFirst({
+      where:   { lead: { contact: { userId } } },
+      orderBy: { createdAt: 'desc' },
+      select:  { id: true },
+    });
+
+    let dto: { caseId?: string; leadId?: string };
+    if (ownCase) {
+      dto = { caseId: ownCase.id };
+    } else {
+      const lead = await this.prisma.lead.findFirst({
+        where:   { contact: { userId } },
+        orderBy: { createdAt: 'desc' },
+        select:  { id: true },
+      });
+      if (!lead) {
+        throw new NotFoundException('No lead found for your account.');
+      }
+      dto = { leadId: lead.id };
+    }
+
+    try {
+      // Same engine the staff paths call. actor is stamped into the audit as the
+      // CLIENT, so a self-service send is distinguishable from a staff send.
+      await this.contracts.createContractViaDocuseal(
+        dto,
+        { id: userId, name: actorName, role: actorRole },
+      );
+      return { ok: true };
+    } catch (err) {
+      // Phase A gate rejection (consultation not done / red-flag not approved).
+      // Replace the staff-facing copy with a calm client-safe line. The button
+      // shouldn't render in this state, so this is the race / direct-hit edge.
+      if (err instanceof UnprocessableEntityException) {
+        throw new UnprocessableEntityException(
+          "We're not quite ready to send your contract yet — we'll be in touch shortly to let you know what's needed.",
+        );
+      }
+      // "Already sent" / "already has a case" (idempotency) and any other
+      // BadRequest/Conflict pass through unchanged — they're already safe,
+      // generic messages, and the DB unique index is the ultimate backstop.
+      throw err;
+    }
+  }
 
   // POST /portal/me/invoices/:invoiceId/pay-link — generate a Stripe pay
   // link for the caller's OWN unpaid invoice.
@@ -396,7 +474,7 @@ export class PortalService {
   // an unsigned engagement letter, and any due invoice. Internal fields
   // (ApplicationDocument.notes, Invoice.notes, etc.) are never surfaced.
   private async buildNextSteps(caseId: string) {
-    const [docs, contract, invoices, caseInfo] = await Promise.all([
+    const [docs, contract, invoices, caseInfo, free15Complete] = await Promise.all([
       this.prisma.applicationDocument.findMany({
         where:  { application: { caseId }, status: { in: ['MISSING', 'REJECTED'] } },
         select: { type: true, status: true },
@@ -423,6 +501,14 @@ export class PortalService {
         where:  { id: caseId },
         select: { lead: { select: { id: true, liaEscalationRequired: true } } },
       }),
+      // PR-CLIENT-CONTRACT — has THIS case's client completed their free 15-min
+      // consultation? The first half of the Phase-A gate; drives whether the
+      // self-service "Request contract" step may appear (joined via the case so
+      // we don't need the leadId resolved first).
+      this.prisma.consultation.findFirst({
+        where:  { lead: { cases: { some: { id: caseId } } }, type: 'FREE_15', status: 'COMPLETED' },
+        select: { id: true },
+      }),
     ]);
 
     const steps: Array<{ kind: string; label: string; detail?: string | null; invoiceId?: string }> = [];
@@ -432,11 +518,15 @@ export class PortalService {
     // clears the moment an LIA records an APPROVED verdict (the same condition
     // that unlocks contract sending). Deliberately vague and reassuring — never
     // surfaces the internal hard-stop reasoning to the client.
-    if (caseInfo?.lead?.liaEscalationRequired) {
-      const liaApproved = await this.prisma.consultation.findFirst({
+    // PR-CLIENT-CONTRACT — liaApproved is computed once here and reused below to
+    // decide whether the self-service "Request contract" step is allowed to show.
+    const redFlagged = !!caseInfo?.lead?.liaEscalationRequired;
+    let liaApproved = false;
+    if (redFlagged && caseInfo?.lead?.id) {
+      liaApproved = !!(await this.prisma.consultation.findFirst({
         where:  { leadId: caseInfo.lead.id, type: 'LIA', status: 'COMPLETED', decision: 'APPROVED' },
         select: { id: true },
-      });
+      }));
       if (!liaApproved) {
         steps.push({
           kind: 'LIA_REVIEW',
@@ -445,6 +535,25 @@ export class PortalService {
             "We've identified something that needs a licensed immigration adviser to review before we can proceed — we'll be in touch to schedule this.",
         });
       }
+    }
+
+    // PR-CLIENT-CONTRACT — self-service "Request my engagement contract". Shown
+    // ONLY when the send would actually be allowed, mirroring the Phase-A gate so
+    // the button never renders in a locked state:
+    //   • the free 15-min consultation is COMPLETED, AND
+    //   • no contract exists yet for this case, AND
+    //   • if red-flagged, an LIA has already recorded APPROVED (otherwise the
+    //     LIA_REVIEW notice above shows instead — never both).
+    // The endpoint re-checks the real gate on submit, so this is presentation
+    // only; a race that slips through gets the calm client-safe locked message.
+    const contractExists = contract !== null;
+    if (free15Complete && !contractExists && (!redFlagged || liaApproved)) {
+      steps.push({
+        kind: 'REQUEST_CONTRACT',
+        label: 'Request my engagement contract',
+        detail:
+          "You've completed your consultation — request your engagement letter and we'll email it to you to review and sign.",
+      });
     }
 
     for (const d of docs) {

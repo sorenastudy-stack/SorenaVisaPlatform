@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth';
 import { UpcomingBookings } from '@/components/portal/UpcomingBookings';
 import { ReloginBanner } from '@/components/portal/ReloginBanner';
 import { AssessmentPdfButton } from '@/components/portal/AssessmentPdfButton';
+import { RequestContractButton } from '@/components/portal/RequestContractButton';
 import { formatDate as fmtDate } from '@/lib/date';
 
 // Client portal step 3 — the client's case overview.
@@ -229,6 +230,10 @@ export default async function MyCasePage() {
                     <CheckCircle2 size={13} /> Signed
                   </span>
                 )}
+                {/* PR-CLIENT-CONTRACT — self-service contract request. Only rendered
+                    when the server deemed the send allowed (consultation done, no
+                    contract yet, red-flag approved), so this is always actionable. */}
+                {s.kind === 'REQUEST_CONTRACT' && <RequestContractButton />}
                 {s.kind === 'INVOICE' && s.invoiceId && (
                   <Link
                     href={`/portal/case/pay?invoiceId=${s.invoiceId}`}
