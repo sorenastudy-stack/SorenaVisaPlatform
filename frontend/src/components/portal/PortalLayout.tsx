@@ -33,12 +33,11 @@ interface NavItem {
 
 const NAV_CONFIG: Record<Portal, NavItem[]> = {
   admin: [
-    { label: 'Dashboard',  href: '/admin',            icon: <LayoutDashboard size={18} /> },
-    // Users / Cases / Settings were placeholder stubs duplicating the staff
-    // and OPS portals — their routes now redirect there, so the nav items are
-    // removed. Providers had no UI and was removed. Real admin surfaces only.
-    // OWNER audit-log browser — sensitive access history, gated above ADMIN.
-    // Backend endpoint enforces OWNER/SUPER_ADMIN too; this hides the tab from ADMIN.
+    // PR-ADMIN-CLEANUP: the /admin hub + the Users/Cases/Settings redirect stubs
+    // were removed (they only duplicated / forwarded to the real /staff + /ops
+    // surfaces). The audit-log browser is the sole real admin surface that lives
+    // here. OWNER/SUPER_ADMIN only — the backend enforces the same, this hides the
+    // tab from plain ADMIN.
     { label: 'Audit Log',  href: '/admin/audit',      icon: <FileText size={18} />,
       requiresRoleIn: ['OWNER', 'SUPER_ADMIN'] },
   ],

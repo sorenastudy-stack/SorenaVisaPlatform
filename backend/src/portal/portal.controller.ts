@@ -100,6 +100,15 @@ export class PortalController {
     return this.service.getMyPayments(userId);
   }
 
+  // GET /portal/me/invoices → the caller's OWN invoices (read-only). LEAD-safe
+  // counterpart of the STUDENT-gated /students/me/invoices, so the portal
+  // Payments page works for LEAD clients too. Own-data-scoped in the service.
+  @Get('me/invoices')
+  getMyInvoices(@Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    return this.service.getMyInvoices(userId);
+  }
+
   // GET /portal/me/invoices/:invoiceId/pay-options → read-only pay-screen data
   // (base amount, card total incl. server-derived surcharge, currency, client
   // name). Ownership from the JWT; a foreign invoice returns the same 404.

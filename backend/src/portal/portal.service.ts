@@ -449,6 +449,34 @@ export class PortalService {
     });
   }
 
+  // GET /portal/me/invoices — the caller's OWN invoices (read-only), for the
+  // portal Payments page. Own-data-scoped by resolving the caller's contact from
+  // their JWT userId (never a client-supplied id), so a client can only ever see
+  // their own invoices — the same query the student endpoint uses, but reachable
+  // by LEAD clients too (the /students/* controller is STUDENT-gated). Client-safe
+  // fields only (no receipt file paths / finance internals).
+  async getMyInvoices(userId: string) {
+    const contact = await this.prisma.contact.findFirst({
+      where:  { userId },
+      select: { id: true },
+    });
+    if (!contact) return [];
+    const invoices = await this.prisma.invoice.findMany({
+      where:   { contactId: contact.id },
+      orderBy: { createdAt: 'desc' },
+      select:  { id: true, invoiceNumber: true, description: true, amount: true, currency: true, status: true, dueDate: true },
+    });
+    return invoices.map((i) => ({
+      id: i.id,
+      invoiceNumber: i.invoiceNumber,
+      description: i.description,
+      amount: i.amount.toString(),
+      currency: i.currency,
+      status: i.status,
+      dueDate: i.dueDate ? i.dueDate.toISOString() : null,
+    }));
+  }
+
   // Safely pull a string invoiceId out of the JSON metadata blob.
   private readInvoiceId(metadata: unknown): string | null {
     if (typeof metadata !== 'object' || metadata === null) return null;

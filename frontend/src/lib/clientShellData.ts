@@ -50,6 +50,9 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
       // Persian is frozen; /portal/report already exists (404 → /portal/case).
       { labelKey: 'My Assessment',        href: '/portal/report',         iconName: 'sparkles' },
       { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText', lockedUntilPaid: true },
+      // PR-PORTAL-PAYMENTS: LEAD-reachable Payments page (STUDENT nav already has
+      // its own further down). Own-data-scoped server-side.
+      { labelKey: 'portal.nav.payments',  href: '/portal/payments',       iconName: 'creditCard' },
       // Inline English label (no dot) — renders literally, skips next-intl.
       // Bare /portal/booking = the standing chooser (all three types, always).
       { labelKey: 'Booking',              href: '/portal/booking',        iconName: 'calendar' },
