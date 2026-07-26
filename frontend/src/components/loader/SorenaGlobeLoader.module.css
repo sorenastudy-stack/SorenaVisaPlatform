@@ -1,0 +1,163 @@
+/* PR-GLOBE-LOADER — a lightweight distillation of the "Global Operations · Live"
+   globe HUD. Pure CSS/SVG: no D3, no TopoJSON, no CDN fetch, no web fonts. All
+   motion is GPU-friendly (transform / opacity) and disabled under
+   prefers-reduced-motion. Colours mirror the source design (dark navy + amber
+   gold + cyan) on our navy theme. */
+
+.root {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 38%, #1a2640 0%, #0a1222 74%);
+  color: #dde6f1;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+
+  --accent:        #ffc25c;
+  --accent-bright: #ffe39a;
+  --cyan:          #8ff0ff;
+  --ok:            #7af2a0;
+}
+
+/* film grain + vignette, exactly as the source stage */
+.root::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 3px 3px;
+  mix-blend-mode: overlay;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 55%, transparent 56%, rgba(0, 0, 0, 0.82) 100%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* ── HUD bars ─────────────────────────────────────────────────────────── */
+.hud {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2.5vw, 14px);
+  padding: 0 clamp(12px, 4vw, 22px);
+  font-size: clamp(8px, 2.3vw, 11px);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #b9c3d0;
+  z-index: 4;
+  white-space: nowrap;
+}
+.top    { top: 0;    border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.bottom { bottom: 0; border-top:    1px solid rgba(255, 255, 255, 0.05); }
+.spacer { flex: 1; }
+.accent { color: var(--accent-bright); }
+.mono   { font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace; }
+.pill {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  padding: 4px 9px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+  animation: liveDot 1.4s ease-in-out infinite;
+}
+
+/* ── Centre column: globe + wordmark ──────────────────────────────────── */
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(16px, 4.5vh, 32px);
+  z-index: 2;
+}
+.globeWrap {
+  position: relative;
+  width: clamp(210px, 54vmin, 360px);
+  aspect-ratio: 1;
+}
+.globe { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* Rotating radar sweep, clipped to the sphere */
+.sweep {
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(143, 240, 255, 0) 210deg,
+    rgba(143, 240, 255, 0.26) 322deg,
+    rgba(255, 255, 255, 0.55) 350deg,
+    rgba(255, 227, 154, 0.30) 356deg,
+    transparent 360deg
+  );
+  mix-blend-mode: screen;
+  opacity: 0.75;
+  animation: spin 4.4s linear infinite;
+}
+
+/* Precessing orbit ring (the "network") */
+.orbit { transform-box: fill-box; transform-origin: center; animation: spin 12s linear infinite; }
+
+/* Expanding pings on the hub */
+.ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ping 2.4s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+}
+.netLight { animation: netBlink 2.6s ease-in-out infinite; }
+
+.wordmark {
+  font-weight: 800;
+  letter-spacing: 0.42em;
+  font-size: clamp(17px, 5vw, 27px);
+  color: var(--accent-bright);
+  text-shadow: 0 0 18px rgba(255, 194, 92, 0.35);
+  padding-left: 0.42em; /* optical centring for the tracked caps */
+}
+.tagline {
+  margin-top: 8px;
+  font-size: clamp(8px, 2.6vw, 11px);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: #8ea3bd;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.tagline .live {
+  color: var(--accent-bright);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Keyframes ────────────────────────────────────────────────────────── */
+@keyframes spin    { to { transform: rotate(360deg); } }
+@keyframes ping    { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(5); opacity: 0; } }
+@keyframes liveDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
+@keyframes netBlink{ 0%, 100% { opacity: 0.18; } 50% { opacity: 0.95; } }
+
+/* Drop the HUD pill clutter on small screens so it never wraps/overflows */
+@media (max-width: 560px) {
+  .hideSm { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sweep, .orbit, .ping, .dot, .netLight { animation: none !important; }
+}

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { SplashGate } from '@/components/loader/SplashGate';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -18,6 +19,9 @@ const itemVariants = {
 
 export default function Home() {
   return (
+    <>
+      {/* PR-GLOBE-LOADER — first-open splash that fades into the landing page. */}
+      <SplashGate />
     <main className="min-h-screen bg-sorena-cream font-sans text-sorena-text">
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-16">
         <motion.div
@@ -74,5 +78,6 @@ export default function Home() {
         </motion.div>
       </div>
     </main>
+    </>
   );
 }
