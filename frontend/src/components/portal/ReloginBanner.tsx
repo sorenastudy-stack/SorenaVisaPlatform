@@ -31,10 +31,10 @@ export function ReloginBanner() {
   };
 
   return (
-    <section className="rounded-2xl border border-[#F3CE49]/50 bg-[#1e3a5f] text-white px-5 py-5 md:px-6 md:py-6">
+    <section className="rounded-2xl border border-[#c9a961]/50 bg-[#1e3a5f] text-white px-5 py-5 md:px-6 md:py-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0">
-          <Sparkles size={20} className="text-[#F3CE49] mt-0.5 shrink-0" />
+          <Sparkles size={20} className="text-[#c9a961] mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="font-bold">{t('portal.relogin.title')}</p>
             <p className="mt-0.5 text-sm text-white/80">{t('portal.relogin.body')}</p>
@@ -44,7 +44,7 @@ export function ReloginBanner() {
           type="button"
           onClick={handleReSignIn}
           disabled={busy}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#F3CE49] px-4 py-2.5 text-sm font-semibold text-[#1e3a5f] transition-colors hover:bg-[#F3CE49]/90 disabled:opacity-60 min-h-[44px]"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#c9a961] px-4 py-2.5 text-sm font-semibold text-[#1e3a5f] transition-colors hover:bg-[#c9a961]/90 disabled:opacity-60 min-h-[44px]"
         >
           {busy ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
           {t('portal.relogin.button')}

@@ -52,7 +52,7 @@ export function ProgressCard({
         </div>
         <Link
           href={visaStepHref(targetStep)}
-          className="mt-2 inline-flex h-12 items-center justify-center rounded-xl bg-sorena-gold px-6 text-base font-semibold text-white transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sorena-gold focus-visible:ring-offset-2"
+          className="mt-2 inline-flex h-12 items-center justify-center rounded-xl bg-[#c9a961] px-6 text-base font-semibold text-white transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a961] focus-visible:ring-offset-2"
         >
           {isComplete
             ? t('dashboard.progress.review')

@@ -21,8 +21,8 @@ export function ReadOnlyView({ applicationId }: { applicationId: string }) {
   if (!visible) return null;
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-sorena-gold/40 bg-sorena-gold/10 p-4">
-      <CheckCircle className="mt-0.5 shrink-0 text-sorena-gold" size={20} />
+    <div className="flex items-start gap-3 rounded-xl border border-[#c9a961]/40 bg-[#c9a961]/10 p-4">
+      <CheckCircle className="mt-0.5 shrink-0 text-[#c9a961]" size={20} />
       <div className="flex-1">
         <p className="text-sm font-semibold text-sorena-navy">
           {t('admissionSubmittedTitle')}

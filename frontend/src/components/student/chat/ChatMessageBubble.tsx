@@ -38,7 +38,7 @@ export function ChatMessageBubble({
           className={[
             'rounded-2xl px-4 py-3 text-sm leading-relaxed',
             isUser
-              ? 'bg-sorena-gold/15 text-sorena-navy'
+              ? 'bg-[#c9a961]/15 text-sorena-navy'
               : 'bg-[#faf8f3] text-sorena-navy border border-sorena-navy/10',
           ].join(' ')}
         >

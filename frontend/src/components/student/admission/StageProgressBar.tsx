@@ -22,7 +22,7 @@ export function StageProgressBar({ currentStep }: { currentStep: number }) {
           <div key={stage.key} className="flex-1">
             <div className={[
               'mb-1 h-1.5 rounded-full',
-              isDone ? 'bg-sorena-gold' : isActive ? 'bg-sorena-navy' : 'bg-sorena-navy/10',
+              isDone ? 'bg-[#c9a961]' : isActive ? 'bg-sorena-navy' : 'bg-sorena-navy/10',
             ].join(' ')} />
             <span className={[
               'text-sm',

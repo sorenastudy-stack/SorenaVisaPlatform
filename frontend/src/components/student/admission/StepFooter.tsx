@@ -74,7 +74,7 @@ export function StepFooter({ isAgent }: { isAgent: boolean }) {
         {isLast ? (
           <button
             onClick={handleSubmit}
-            className="rounded-lg bg-sorena-gold px-6 py-2 text-base font-semibold text-white transition-colors hover:bg-sorena-gold/90"
+            className="rounded-lg bg-[#c9a961] px-6 py-2 text-base font-semibold text-white transition-colors hover:bg-[#c9a961]/90"
           >
             {t('admissionSubmit')}
           </button>

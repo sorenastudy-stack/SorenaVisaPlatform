@@ -127,7 +127,7 @@ export function ClientShell({ children, session, portalStage, navItems, backHref
           <span className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</span>
           {/* Unified sub-label — "CLIENT PORTAL" everywhere, styled like the
               Finance Portal's "FINANCE PORTAL" (gold, uppercase, same placement). */}
-          <span className="text-sorena-gold text-[10px] font-bold uppercase tracking-wider">
+          <span className="text-[#c9a961] text-[10px] font-bold uppercase tracking-wider">
             Client Portal
           </span>
         </div>

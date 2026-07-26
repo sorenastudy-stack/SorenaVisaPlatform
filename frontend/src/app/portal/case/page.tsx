@@ -72,8 +72,8 @@ export default async function MyCasePage() {
       <div className="space-y-6">
         <UpcomingBookings />
         <section className="rounded-2xl bg-white border border-gray-200 p-8 md:p-12 text-center">
-          <div className="mx-auto mb-5 w-14 h-14 rounded-full bg-[#F3CE49]/15 flex items-center justify-center">
-            <Sparkles size={24} className="text-[#b8941f]" />
+          <div className="mx-auto mb-5 w-14 h-14 rounded-full bg-[#c9a961]/15 flex items-center justify-center">
+            <Sparkles size={24} className="text-[#b28f4e]" />
           </div>
           <h1 className="text-xl md:text-2xl font-bold text-[#1e3a5f] mb-2">
             {t('portal.case.noCase.title')}
@@ -151,15 +151,20 @@ export default async function MyCasePage() {
   // the DocuSign email.
   const contractReadyToSign = caseData.nextSteps.some((s) => s.kind === 'CONTRACT');
 
+  // Only the FIRST payable invoice gets the primary "Pay now" button; any further
+  // invoices render as a low-emphasis "Pay" link, so the screen keeps ONE clear
+  // primary action (per the UI principles) instead of stacking identical CTAs.
+  const firstInvoiceIdx = caseData.nextSteps.findIndex((s) => s.kind === 'INVOICE' && s.invoiceId);
+
   return (
     <div className="space-y-6">
       {promotedButStale && <ReloginBanner />}
 
       {/* ── Status hero ──────────────────────────────────────────────── */}
       <section className="relative overflow-hidden rounded-3xl bg-[#1e3a5f] text-white px-6 py-8 md:px-10 md:py-12">
-        <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-[#F3CE49]/15 blur-3xl" aria-hidden />
+        <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-[#c9a961]/15 blur-3xl" aria-hidden />
         <div className="relative">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[#b8941f] font-semibold mb-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#b28f4e] font-semibold mb-3">
             {t('portal.case.heading')}
           </p>
           <h1 className="text-2xl md:text-3xl font-bold leading-tight max-w-2xl">
@@ -170,9 +175,9 @@ export default async function MyCasePage() {
 
       {/* ── Contract ready to sign (check email) ─────────────────────── */}
       {contractReadyToSign && (
-        <section className="rounded-2xl border border-[#F3CE49]/50 bg-[#faf8f3] p-5 md:p-6">
+        <section className="rounded-2xl border border-[#c9a961]/50 bg-[#faf8f3] p-5 md:p-6">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#F3CE49]/20">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#c9a961]/20">
               <Mail size={20} className="text-[#8a6d10]" />
             </div>
             <div className="min-w-0">
@@ -186,7 +191,7 @@ export default async function MyCasePage() {
       {/* ── What to do next ──────────────────────────────────────────── */}
       <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
         <div className="flex items-center gap-2 mb-4">
-          <ListChecks size={16} className="text-[#b8941f]" />
+          <ListChecks size={16} className="text-[#b28f4e]" />
           <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">What to do next</h2>
         </div>
         {caseData.nextSteps.length === 0 ? (
@@ -197,13 +202,13 @@ export default async function MyCasePage() {
         ) : (
           <ul className="space-y-2">
             {caseData.nextSteps.map((s, i) => (
-              <li key={i} className="flex items-start justify-between gap-3 rounded-xl border border-[#F3CE49]/40 bg-[#faf8f3] px-4 py-3">
+              <li key={i} className="flex items-start justify-between gap-3 rounded-xl border border-[#c9a961]/40 bg-[#faf8f3] px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-[#1e3a5f]">{s.label}</p>
                   {s.detail && <p className="text-xs text-gray-500 mt-0.5">{s.detail}</p>}
                 </div>
                 {s.kind === 'DOCUMENT' && (
-                  <Link href="/portal/case/documents" className="shrink-0 text-xs font-semibold text-[#1e3a5f] underline underline-offset-4 hover:text-[#b8941f]">
+                  <Link href="/portal/case/documents" className="shrink-0 text-xs font-semibold text-[#1e3a5f] underline underline-offset-4 hover:text-[#b28f4e]">
                     Open
                   </Link>
                 )}
@@ -235,12 +240,21 @@ export default async function MyCasePage() {
                     contract yet, red-flag approved), so this is always actionable. */}
                 {s.kind === 'REQUEST_CONTRACT' && <RequestContractButton />}
                 {s.kind === 'INVOICE' && s.invoiceId && (
-                  <Link
-                    href={`/portal/case/pay?invoiceId=${s.invoiceId}`}
-                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-[#faf8f3] text-sm font-semibold min-h-[44px] hover:bg-[#162d4a] transition-colors"
-                  >
-                    Pay now
-                  </Link>
+                  i === firstInvoiceIdx ? (
+                    <Link
+                      href={`/portal/case/pay?invoiceId=${s.invoiceId}`}
+                      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-[#faf8f3] text-sm font-semibold min-h-[44px] hover:bg-[#162d4a] transition-colors"
+                    >
+                      Pay now
+                    </Link>
+                  ) : (
+                    <Link
+                      href={`/portal/case/pay?invoiceId=${s.invoiceId}`}
+                      className="shrink-0 self-center text-xs font-semibold text-[#1e3a5f] underline underline-offset-4 hover:text-[#b28f4e]"
+                    >
+                      Pay
+                    </Link>
+                  )
                 )}
               </li>
             ))}
@@ -252,7 +266,7 @@ export default async function MyCasePage() {
       {portalStage === 'STAGE_2' && (
         <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
           <div className="flex items-center gap-2 mb-4">
-            <GraduationCap size={16} className="text-[#b8941f]" />
+            <GraduationCap size={16} className="text-[#b28f4e]" />
             <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">{t('portal.stage2.heading')}</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -270,7 +284,7 @@ export default async function MyCasePage() {
       {/* ── Wallet ───────────────────────────────────────────────────── */}
       <Link href="/portal/wallet" className="flex items-center justify-between rounded-2xl bg-white border border-gray-200 p-5 md:p-6 transition-all hover:border-sorena-navy/30 hover:shadow">
         <div className="flex items-center gap-2">
-          <Wallet size={16} className="text-[#b8941f]" />
+          <Wallet size={16} className="text-[#b28f4e]" />
           <span className="text-sm font-bold uppercase tracking-wide text-gray-500">My wallet</span>
         </div>
         <ArrowRight size={16} className="text-gray-300" />
@@ -280,7 +294,7 @@ export default async function MyCasePage() {
       {assessment && (
         <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
           <div className="flex items-center gap-2 mb-3">
-            <Award size={16} className="text-[#b8941f]" />
+            <Award size={16} className="text-[#b28f4e]" />
             <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">{t('portal.assessment.title')}</h2>
           </div>
           <p className="text-lg font-bold text-[#1e3a5f]">{assessment.bandName}</p>
@@ -302,7 +316,7 @@ export default async function MyCasePage() {
       {team.length > 0 && (
         <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Users size={16} className="text-[#b8941f]" />
+            <Users size={16} className="text-[#b28f4e]" />
             <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">
               {t('portal.case.team.heading')}
             </h2>
@@ -331,7 +345,7 @@ export default async function MyCasePage() {
 
       {/* ── INZ reference (only if present) ──────────────────────────── */}
       {caseData.inzApplicationNumber && (
-        <section className="rounded-2xl bg-[#faf8f3] border border-[#F3CE49]/30 p-5 md:p-6">
+        <section className="rounded-2xl bg-[#faf8f3] border border-[#c9a961]/30 p-5 md:p-6">
           <p className="text-xs uppercase tracking-wide text-[#1e3a5f]/60 font-semibold mb-1">
             {t('portal.case.inz.heading')}
           </p>
@@ -350,13 +364,13 @@ export default async function MyCasePage() {
       {caseData.timeline.length > 0 && (
         <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Clock size={16} className="text-[#b8941f]" />
+            <Clock size={16} className="text-[#b28f4e]" />
             <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">Your case timeline</h2>
           </div>
           <ol className="relative border-l border-gray-200 pl-5 space-y-4">
             {caseData.timeline.map((e, i) => (
               <li key={i} className="relative">
-                <span className="absolute -left-[23px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#F3CE49] ring-2 ring-white" aria-hidden />
+                <span className="absolute -left-[23px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#c9a961] ring-2 ring-white" aria-hidden />
                 <p className="text-sm font-medium text-[#1e3a5f]">{e.label}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{formatDate(e.date)}</p>
               </li>

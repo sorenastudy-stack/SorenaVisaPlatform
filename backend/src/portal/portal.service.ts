@@ -522,7 +522,7 @@ export class PortalService {
       }),
       this.prisma.invoice.findMany({
         where:  { caseId, status: { in: ['SENT', 'OVERDUE'] } },
-        select: { id: true, invoiceNumber: true, amount: true, currency: true, dueDate: true, receiptUploadedAt: true },
+        select: { id: true, invoiceNumber: true, description: true, amount: true, currency: true, dueDate: true, receiptUploadedAt: true },
       }),
       // PR-CONTRACT-GATE (Phase A) — the red-flag signal for the LIA-review notice.
       this.prisma.case.findUnique({
@@ -627,12 +627,13 @@ export class PortalService {
       } else {
         steps.push({
           kind: 'INVOICE',
-          // Display-only: hide the raw ENG-<caseId> id from clients. Engagement
-          // invoices read as a friendly "Pay engagement fee"; other invoice
-          // types keep their number. Amount/due/invoiceId are unchanged.
+          // Display-only: NEVER surface the raw invoice id/number to a client.
+          // Engagement invoices read as a friendly "Pay engagement fee"; every
+          // other invoice uses its human description ("Pay visa application
+          // service fee"). Amount/due/invoiceId are unchanged.
           label: inv.invoiceNumber.startsWith('ENG-')
             ? 'Pay engagement fee'
-            : `Pay invoice ${inv.invoiceNumber}`,
+            : `Pay ${inv.description.trim().toLowerCase()}`,
           detail: `${inv.currency} ${inv.amount.toString()}${inv.dueDate ? ` · due ${inv.dueDate.toISOString().slice(0, 10)}` : ''}`,
           invoiceId: inv.id,
         });

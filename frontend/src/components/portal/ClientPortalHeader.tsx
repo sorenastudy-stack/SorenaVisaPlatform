@@ -47,7 +47,7 @@ export function ClientPortalHeader() {
           <span className="text-lg font-bold tracking-wide">
             Sorena
           </span>
-          <span className="text-xs text-[#b8941f] uppercase tracking-widest hidden sm:inline">
+          <span className="text-xs text-[#b28f4e] uppercase tracking-widest hidden sm:inline">
             {t('portal.headerTitle')}
           </span>
         </Link>
@@ -74,7 +74,7 @@ export function ClientPortalHeader() {
                   className={[
                     'inline-flex items-center px-3 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors min-h-[40px]',
                     active
-                      ? 'border-[#F3CE49] text-white'
+                      ? 'border-[#c9a961] text-white'
                       : 'border-transparent text-white/60 hover:text-white',
                   ].join(' ')}
                 >

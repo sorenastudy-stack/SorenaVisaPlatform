@@ -29,7 +29,7 @@ export function CopyButton({ value, label = 'value' }: { value: string; label?: 
       title={copied ? 'Copied' : 'Copy'}
       className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-[#1e3a5f]/55 hover:text-[#1e3a5f] hover:bg-[#1e3a5f]/5 transition-colors"
     >
-      {copied ? <Check size={16} className="text-[#b8941f]" /> : <Copy size={16} />}
+      {copied ? <Check size={16} className="text-[#b28f4e]" /> : <Copy size={16} />}
     </button>
   );
 }

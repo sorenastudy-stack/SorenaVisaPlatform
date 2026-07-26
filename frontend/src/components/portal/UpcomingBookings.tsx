@@ -49,7 +49,7 @@ export async function UpcomingBookings() {
   return (
     <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
       <div className="flex items-center gap-2 mb-4">
-        <CalendarClock size={16} className="text-[#b8941f]" />
+        <CalendarClock size={16} className="text-[#b28f4e]" />
         <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">
           Your upcoming sessions
         </h2>
@@ -79,7 +79,7 @@ export async function UpcomingBookings() {
                       href={b.meetingLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#F3CE49] px-3 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#F3CE49]/90"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#c9a961] px-3 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#c9a961]/90"
                     >
                       Join your session
                     </a>

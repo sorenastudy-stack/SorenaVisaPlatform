@@ -126,7 +126,7 @@ export default async function PayPage({
         <section className="rounded-2xl border border-[#c9a961]/40 bg-[#faf8f3] p-6 shadow-sm ring-1 ring-[#c9a961]/10 md:p-7">
           <div className="flex items-center gap-2.5">
             <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-[#c9a961]/20">
-              <Clock size={22} className="text-[#b8941f]" />
+              <Clock size={22} className="text-[#b28f4e]" />
             </div>
             <h1 className="text-xl font-bold leading-tight text-[#1e3a5f]">
               Payment received — we&apos;re confirming it
@@ -169,7 +169,7 @@ export default async function PayPage({
       {/* ── Reassuring header ─────────────────────────────────────────── */}
       <header className="flex items-start gap-3.5">
         <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-[#c9a961]/15">
-          <ShieldCheck size={22} className="text-[#b8941f]" />
+          <ShieldCheck size={22} className="text-[#b28f4e]" />
         </div>
         <div className="min-w-0">
           <h1 className="text-2xl font-bold leading-tight text-[#1e3a5f]">Complete your payment</h1>
@@ -209,7 +209,7 @@ export default async function PayPage({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#c9a961]/20">
-              <Landmark size={18} className="text-[#b8941f]" />
+              <Landmark size={18} className="text-[#b28f4e]" />
             </div>
             <h2 className="text-base font-bold text-[#1e3a5f]">Pay by bank transfer</h2>
           </div>

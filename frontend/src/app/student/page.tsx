@@ -132,14 +132,14 @@ export default async function StudentDashboard() {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center max-w-md">
-          <AlertCircle size={40} className="text-[#b8941f] mx-auto mb-4" />
+          <AlertCircle size={40} className="text-[#b28f4e] mx-auto mb-4" />
           <h2 className="text-xl font-bold text-[#1E3A5F] mb-2">Wrong portal</h2>
           <p className="text-[#4A4A4A] mb-6">
             This portal is for student users. If you&apos;re staff, please use the Sales or Admin portal.
           </p>
           <Link
             href="/login"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#F3CE49] text-[#1E3A5F] font-semibold hover:bg-[#d4a51e] transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#c9a961] text-[#1E3A5F] font-semibold hover:bg-[#b28f4e] transition-colors"
           >
             Back to Login
           </Link>
@@ -185,7 +185,7 @@ export default async function StudentDashboard() {
       {/* CTA card */}
       <div className="rounded-2xl bg-[#1E3A5F] text-white p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[#b8941f] text-xs font-semibold uppercase tracking-wider mb-1">Your Case</p>
+          <p className="text-[#b28f4e] text-xs font-semibold uppercase tracking-wider mb-1">Your Case</p>
           <h2 className="text-xl font-bold">
             {caseData ? `Stage: ${stageLabel(caseData.stage)}` : 'Case not yet assigned'}
           </h2>
@@ -195,7 +195,7 @@ export default async function StudentDashboard() {
         </div>
         <Link
           href="/student/case"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#F3CE49] text-[#1E3A5F] font-semibold hover:bg-[#d4a51e] transition-colors whitespace-nowrap flex-shrink-0"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#c9a961] text-[#1E3A5F] font-semibold hover:bg-[#b28f4e] transition-colors whitespace-nowrap flex-shrink-0"
         >
           View My Case <ArrowRight size={16} />
         </Link>
@@ -205,11 +205,11 @@ export default async function StudentDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Documents */}
         <Link href="/student/documents" className="block">
-          <Card className="hover:border-[#F3CE49]/50 transition-colors cursor-pointer h-full">
+          <Card className="hover:border-[#c9a961]/50 transition-colors cursor-pointer h-full">
             <CardContent className="pt-5">
               <div className="flex items-start gap-3">
-                <div className="p-2 rounded-xl bg-[#F3CE49]/10">
-                  <FileText size={20} className="text-[#b8941f]" />
+                <div className="p-2 rounded-xl bg-[#c9a961]/10">
+                  <FileText size={20} className="text-[#b28f4e]" />
                 </div>
                 <div>
                   <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Visa Section</p>
@@ -223,11 +223,11 @@ export default async function StudentDashboard() {
 
         {/* Messages */}
         <Link href="/student/case/messages" className="block">
-          <Card className="hover:border-[#F3CE49]/50 transition-colors cursor-pointer h-full">
+          <Card className="hover:border-[#c9a961]/50 transition-colors cursor-pointer h-full">
             <CardContent className="pt-5">
               <div className="flex items-start gap-3">
-                <div className="p-2 rounded-xl bg-blue-50">
-                  <MessageCircle size={20} className="text-blue-600" />
+                <div className="p-2 rounded-xl bg-[#1E3A5F]/10">
+                  <MessageCircle size={20} className="text-[#1E3A5F]" />
                 </div>
                 <div>
                   <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Messages</p>
@@ -251,8 +251,8 @@ export default async function StudentDashboard() {
           <Card className="h-full">
             <CardContent className="pt-5">
               <div className="flex items-start gap-3">
-                <div className="p-2 rounded-xl bg-orange-50">
-                  <CreditCard size={20} className="text-orange-600" />
+                <div className="p-2 rounded-xl bg-[#c9a961]/15">
+                  <CreditCard size={20} className="text-[#c9a961]" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Payments</p>
@@ -264,7 +264,7 @@ export default async function StudentDashboard() {
                     <PayInvoiceButton invoiceId={outstandingInvoice.id} label="Pay now" />
                     <Link
                       href="/student/payments"
-                      className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b8941f] transition-colors"
+                      className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b28f4e] transition-colors"
                     >
                       History →
                     </Link>
@@ -275,11 +275,11 @@ export default async function StudentDashboard() {
           </Card>
         ) : (
           <Link href="/student/payments" className="block">
-            <Card className="hover:border-[#F3CE49]/50 transition-colors cursor-pointer h-full">
+            <Card className="hover:border-[#c9a961]/50 transition-colors cursor-pointer h-full">
               <CardContent className="pt-5">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-xl bg-green-50">
-                    <CreditCard size={20} className="text-green-600" />
+                  <div className="p-2 rounded-xl bg-[#15a86b]/10">
+                    <CreditCard size={20} className="text-[#15a86b]" />
                   </div>
                   <div>
                     <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Payments</p>
@@ -299,7 +299,7 @@ export default async function StudentDashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="text-[#1E3A5F] flex items-center gap-2">
-              <MessageCircle size={16} className="text-[#b8941f]" />
+              <MessageCircle size={16} className="text-[#b28f4e]" />
               Latest Message
             </CardTitle>
           </CardHeader>
@@ -314,7 +314,7 @@ export default async function StudentDashboard() {
                   </span>
                   <Link
                     href="/student/case/messages"
-                    className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b8941f] transition-colors"
+                    className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b28f4e] transition-colors"
                   >
                     View all →
                   </Link>
@@ -326,7 +326,7 @@ export default async function StudentDashboard() {
                 <p className="text-sm text-[#4A4A4A]/60">No messages yet.</p>
                 <Link
                   href="/student/case/messages"
-                  className="mt-2 inline-block text-sm font-semibold text-[#b8941f] hover:underline"
+                  className="mt-2 inline-block text-sm font-semibold text-[#b28f4e] hover:underline"
                 >
                   Send us a message →
                 </Link>
@@ -339,7 +339,7 @@ export default async function StudentDashboard() {
         <Card>
           <CardHeader>
             <CardTitle className="text-[#1E3A5F] flex items-center gap-2">
-              <Clock size={16} className="text-[#b8941f]" />
+              <Clock size={16} className="text-[#b28f4e]" />
               Recent Activity
             </CardTitle>
           </CardHeader>
@@ -348,7 +348,7 @@ export default async function StudentDashboard() {
               <ol className="space-y-3">
                 {tickets.slice(0, 3).map(t => (
                   <li key={t.id} className="flex items-start gap-3">
-                    <span className="mt-1.5 w-2 h-2 rounded-full bg-[#F3CE49] flex-shrink-0" />
+                    <span className="mt-1.5 w-2 h-2 rounded-full bg-[#c9a961] flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm text-[#1E3A5F] font-medium truncate">{t.subject}</p>
                       <p className="text-xs text-[#4A4A4A]/60">{timeAgo(t.updatedAt)}</p>
@@ -358,7 +358,7 @@ export default async function StudentDashboard() {
               </ol>
             ) : caseData ? (
               <div className="text-center py-4">
-                <CheckCircle size={28} className="text-green-400 mx-auto mb-2" />
+                <CheckCircle size={28} className="text-[#15a86b] mx-auto mb-2" />
                 <p className="text-sm text-[#4A4A4A]/60">Your case is active and progressing.</p>
               </div>
             ) : (

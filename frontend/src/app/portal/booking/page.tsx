@@ -69,7 +69,7 @@ function BookingChooser() {
           {/* No submission → nudge to the assessment. The three types below are
               still shown (dimmed) with the server "take your assessment" reason. */}
           {!elig.hasSubmission && (
-            <div className="mb-5 rounded-2xl border border-sorena-gold/40 bg-sorena-gold/10 p-4 text-center">
+            <div className="mb-5 rounded-2xl border border-[#c9a961]/40 bg-[#c9a961]/10 p-4 text-center">
               <p className="text-sm font-semibold text-sorena-navy">Take your free assessment first</p>
               <p className="mt-1 text-xs text-sorena-text/70">A short assessment unlocks the right consultation for you.</p>
               <Link
@@ -102,7 +102,7 @@ function BookingTypeCard({
   return (
     <section className="rounded-xl border border-sorena-navy/10 bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className={['flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl', item.eligible ? 'bg-sorena-gold/15 text-sorena-navy' : 'bg-sorena-navy/[0.04] text-sorena-navy/40'].join(' ')}>
+        <div className={['flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl', item.eligible ? 'bg-[#c9a961]/15 text-sorena-navy' : 'bg-sorena-navy/[0.04] text-sorena-navy/40'].join(' ')}>
           {meta.icon}
         </div>
         <div className="min-w-0 flex-1">
@@ -127,7 +127,7 @@ function BookingTypeCard({
         {item.eligible ? (
           <Link
             href={`/portal/booking?type=${meta.slug}`}
-            className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3 text-sm font-bold text-sorena-navy shadow-sm transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-navy"
+            className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#c9a961] px-6 py-3 text-sm font-bold text-sorena-navy shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#c9a961]/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-navy"
           >
             {item.paid ? `Book · ${priceLabel}` : 'Book now'} <ArrowRight size={16} />
           </Link>
@@ -280,7 +280,7 @@ function FreeBookingFlow() {
           <div className="mt-8 flex flex-col items-center gap-3">
             <Link
               href="/portal/booking?type=gap"
-              className="inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-sorena-gold px-8 py-3 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90"
+              className="inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-[#c9a961] px-8 py-3 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-[#c9a961]/90"
             >
               Explore paid sessions
             </Link>
@@ -345,7 +345,7 @@ function FreeBookingFlow() {
           <button
             onClick={confirm}
             disabled={submitting}
-            className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 hover:shadow-xl disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-navy"
+            className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-[#c9a961] px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-[#c9a961]/90 hover:shadow-xl disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-navy"
           >
             {submitting ? <><Loader2 size={18} className="animate-spin" /> Confirming…</> : 'Confirm booking'}
           </button>
@@ -408,7 +408,7 @@ function FreeBookingFlow() {
           <button
             key={s.startUtc}
             onClick={() => { setSelectedSlot(s); setStep('review'); }}
-            className="flex flex-col items-center rounded-xl border border-sorena-navy/15 bg-white px-2 py-2.5 text-sm font-semibold text-sorena-navy transition-all hover:-translate-y-0.5 hover:border-sorena-gold hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-gold"
+            className="flex flex-col items-center rounded-xl border border-sorena-navy/15 bg-white px-2 py-2.5 text-sm font-semibold text-sorena-navy transition-all hover:-translate-y-0.5 hover:border-[#c9a961] hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a961]"
           >
             {fmt(s.startUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true })}
             {/* Gentle urgency only when nearly full (last seat). */}
@@ -631,7 +631,7 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
           <h1 className="text-xl font-bold text-sorena-navy">Your hold expired</h1>
           <p className="mt-3 text-sm text-sorena-text/75">No charge was made. Please pick a time again.</p>
           <div className="mt-8 flex flex-col items-center gap-3">
-            <button onClick={resetToPick} className="inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-sorena-gold px-8 py-3 font-semibold text-sorena-navy shadow-md hover:bg-sorena-gold/90">Pick a time</button>
+            <button onClick={resetToPick} className="inline-flex min-h-[3rem] items-center justify-center rounded-xl bg-[#c9a961] px-8 py-3 font-semibold text-sorena-navy shadow-md hover:bg-[#c9a961]/90">Pick a time</button>
             <BackToCase />
           </div>
         </div>
@@ -708,7 +708,7 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
               </div>
             </>
           )}
-          <button onClick={pay} disabled={paying || payingWallet || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-gold px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-gold/90 disabled:opacity-60 disabled:hover:translate-y-0">
+          <button onClick={pay} disabled={paying || payingWallet || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-[#c9a961] px-6 py-3.5 font-semibold text-sorena-navy shadow-md transition-all hover:-translate-y-0.5 hover:bg-[#c9a961]/90 disabled:opacity-60 disabled:hover:translate-y-0">
             {paying ? <><Loader2 size={18} className="animate-spin" /> Redirecting…</> : `Pay ${money(hold.cardTotalCents, hold.currency)} by card`}
           </button>
           {hold.cardFeeCents > 0 && (
@@ -753,7 +753,7 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
           <p className="mt-5 text-xs text-sorena-text/50 text-center">Times shown in New Zealand time</p>
           <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
             {activeDay?.slots.map((s) => (
-              <button key={s.startUtc} disabled={holding} onClick={() => startHold(s)} className="rounded-xl border border-sorena-navy/15 bg-white px-2 py-3 text-sm font-semibold text-sorena-navy transition-all hover:-translate-y-0.5 hover:border-sorena-gold hover:shadow-sm disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-gold">
+              <button key={s.startUtc} disabled={holding} onClick={() => startHold(s)} className="rounded-xl border border-sorena-navy/15 bg-white px-2 py-3 text-sm font-semibold text-sorena-navy transition-all hover:-translate-y-0.5 hover:border-[#c9a961] hover:shadow-sm disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9a961]">
                 {fmt(s.startUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true })}
               </button>
             ))}

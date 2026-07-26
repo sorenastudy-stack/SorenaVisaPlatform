@@ -27,7 +27,7 @@ export function PaymentGatePanel({
     return (
       <section className="mx-auto max-w-2xl rounded-2xl border border-[#c9a961]/40 bg-[#faf8f3] p-6 text-center shadow-sm ring-1 ring-[#c9a961]/10 md:p-10">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#c9a961]/20">
-          <Mail size={26} className="text-[#b8941f]" />
+          <Mail size={26} className="text-[#b28f4e]" />
         </div>
         <h1 className="text-xl font-bold leading-tight text-[#1e3a5f] md:text-2xl">
           Sign your engagement letter first
@@ -52,7 +52,7 @@ export function PaymentGatePanel({
       <section className="mx-auto max-w-2xl rounded-2xl border border-[#c9a961]/40 bg-[#faf8f3] p-6 shadow-sm ring-1 ring-[#c9a961]/10 md:p-8">
         <div className="flex items-center gap-2.5">
           <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-[#c9a961]/20">
-            <Clock size={22} className="text-[#b8941f]" />
+            <Clock size={22} className="text-[#b28f4e]" />
           </div>
           <h1 className="text-xl font-bold leading-tight text-[#1e3a5f]">
             Payment received — we&apos;re confirming it

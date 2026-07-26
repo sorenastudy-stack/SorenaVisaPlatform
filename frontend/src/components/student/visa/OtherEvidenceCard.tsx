@@ -356,7 +356,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
                 onClick={() => onDownload(f)}
                 title={`Download ${f.originalFilename}`}
                 aria-label={`Download ${f.originalFilename}`}
-                className="flex h-12 min-w-12 items-center justify-center rounded-lg border border-sorena-navy/30 bg-white text-sorena-navy transition-colors hover:border-sorena-gold hover:text-sorena-gold"
+                className="flex h-12 min-w-12 items-center justify-center rounded-lg border border-sorena-navy/30 bg-white text-sorena-navy transition-colors hover:border-[#c9a961] hover:text-[#c9a961]"
               >
                 <Download size={16} />
               </button>
@@ -425,7 +425,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
         className={[
           'flex min-h-[5rem] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-3 text-center transition-colors',
           dragOver
-            ? 'border-sorena-gold bg-sorena-gold/5'
+            ? 'border-[#c9a961] bg-[#c9a961]/5'
             : 'border-sorena-navy/25 bg-white hover:border-sorena-navy/45 hover:bg-sorena-navy/[0.03]',
         ].join(' ')}
       >

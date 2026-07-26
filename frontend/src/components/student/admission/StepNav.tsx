@@ -51,7 +51,7 @@ export function StepNav({ isAgent }: { isAgent: boolean }) {
               isActive
                 ? 'border-white bg-white text-sorena-navy'
                 : isDone
-                  ? 'border-sorena-gold bg-sorena-gold text-white'
+                  ? 'border-[#c9a961] bg-[#c9a961] text-white'
                   : 'border-sorena-navy/20 text-sorena-navy/35',
             ].join(' ')}>
               {isDone && !isActive ? <Check size={12} /> : displayNum}
