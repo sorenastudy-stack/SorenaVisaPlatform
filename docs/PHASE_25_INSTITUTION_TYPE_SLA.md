@@ -6,8 +6,17 @@ through the system** (not hardcoded) and **vary by institution type** (Universit
 Polytechnic / College).
 
 **Date:** 2026-07-27
-**Commit (this phase):**
+**Commits (this phase):**
 - `e01a1ba` — feat(sla): Owner-manageable, institution-type stage SLAs + overdue kanban counter + report
+- follow-up — refine(sla): exclude NZ national public holidays from ADMISSION working-day
+  math + extract shared `setCaseStage()` stamping helper
+
+> **Refinement (2026-07-27, follow-up commit).** Two changes after the initial build:
+> (1) ADMISSION working-day counting now skips **NZ national public holidays** (a static,
+> pre-resolved list 2026–2030 in `SlaService`), not just weekends — see §1/§6/§7.
+> (2) The 6 stage-transition writes now stamp `stageEnteredAt` through a single shared
+> helper, `setCaseStage()` (`backend/src/cases/case-stage.util.ts`), instead of inline
+> duplication — so a future 7th stage-write can't forget the stamp.
 
 ---
 
@@ -18,7 +27,7 @@ by an **Owner-editable** config that **varies by institution type**:
 
 - **`SlaConfig`** — one editable row per `{institutionType, stage}` → `slaDays` +
   `isWorkingDays`. Seeded with the launch defaults:
-  - **ADMISSION — 25 working days** (weekends skipped)
+  - **ADMISSION — 25 working days** (weekends **and NZ national public holidays** skipped)
   - **VISA — 30 calendar days**
   - **INZ_SUBMITTED — 2 calendar days**
   - identical across University / Polytechnic / College (the point is independent
@@ -50,10 +59,14 @@ Pulled from `git show --stat e01a1ba`.
 *Changed*
 - `backend/prisma/schema.prisma` — `SlaConfig` model; `Case.stageEnteredAt`,
   `Case.stageDeadlineOverride`.
+- `backend/src/cases/case-stage.util.ts` *(created, follow-up)* — the shared
+  `setCaseStage(stage)` helper returning a `{ stage, stageEnteredAt: now }` Prisma data
+  fragment (single source of truth for the stamp).
 - `backend/src/cases/inz-submission/inz-submission.service.ts`,
   `backend/src/cases/visa/visa.service.ts`,
-  `backend/src/legal-notes/legal-notes.service.ts` — stamp `stageEnteredAt = now` at
-  the 5 stage-transition writes.
+  `backend/src/legal-notes/legal-notes.service.ts` — the **6** stage-transition writes
+  now stamp `stageEnteredAt` via `setCaseStage()` (2 of them bundle it with other column
+  writes, so the helper returns a spreadable fragment rather than doing its own update).
 - `backend/src/kanban/kanban.service.ts` + `kanban.module.ts` — case cards carry
   deadline / daysOverdue / overdue (via `SlaService`).
 - `backend/src/app.module.ts` — register `SlaModule`.
@@ -79,11 +92,13 @@ Pulled from `git show --stat e01a1ba`.
 
 ## 6. How to test it works
 
-**Automated** — `sla.spec.ts` (DB-backed, 6/6 green): ADMISSION deadline uses working
-days; an aged VISA case is overdue with the correct day-count; **editing a stage's SLA
-changes the calc** and **University vs Polytechnic are independent**; a manual
-override wins; the report groups overdue cases by officer; out-of-range days rejected.
-The Phase 24 co-kanban spec (5) still passes. Backend `tsc` + `next build` clean.
+**Automated** — `sla.spec.ts` (DB-backed, 7/7 green): ADMISSION deadline uses working
+days; **ADMISSION working-day math skips NZ national public holidays** (a case spanning
+Matariki lands one weekday later); an aged VISA case is overdue with the correct
+day-count; **editing a stage's SLA changes the calc** and **University vs Polytechnic are
+independent**; a manual override wins; the report groups overdue cases by officer;
+out-of-range days rejected. The Phase 24 co-kanban spec (5) still passes. Backend `tsc`
+clean on all SLA-touched files.
 
 **Manual:**
 1. As OWNER, open **Stage SLAs** (`/staff/settings/sla`) — a table of institution type
@@ -113,6 +128,13 @@ The Phase 24 co-kanban spec (5) still passes. Backend `tsc` + `next build` clean
 - **Only `slaDays` is editable** in the screen; `isWorkingDays` is a per-stage property
   set at seed time (ADMISSION working, VISA/INZ calendar). Make it editable if a stage
   ever needs to switch.
+- **Public holidays are a static list, national only.** ADMISSION working-day math skips
+  `NZ_PUBLIC_HOLIDAYS` in `SlaService` — a hardcoded list of observed/Mondayised dates
+  for **2026–2030**. Two upkeep notes: (a) **extend the list past 2030** (or a case
+  spanning an unlisted year's holiday silently loses a day); (b) **provincial anniversary
+  days are deliberately excluded** (a case isn't tied to one region), so a deadline over,
+  e.g., Auckland Anniversary is one day "short" versus a strict Auckland-business-days
+  reading. Move to a computed calendar or a DB table if either becomes a real problem.
 - **No deadline-extension *approval* workflow.** The `stageDeadlineOverride` field
   exists and wins, but setting it isn't yet gated behind an approval (Phase 22 also
   mentioned "deadline-extension approval") — that's a further follow-up.

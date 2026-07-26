@@ -54,6 +54,16 @@ describe('SlaService (institution-type SLAs)', () => {
     expect(d.overdue).toBe(false);
   });
 
+  it('ADMISSION working-day math skips NZ national public holidays', async () => {
+    // Entered ADMISSION Mon 2026-07-06. Matariki (Fri 2026-07-10) is a national
+    // public holiday inside the 25-working-day window, so it's skipped: the deadline
+    // lands one weekday LATER than a weekends-only count would give.
+    //   weekends-only → 2026-08-10; skipping Matariki too → 2026-08-11.
+    const caseId = await seedCase('UNIVERSITY', 'ADMISSION', new Date('2026-07-06T00:00:00Z'));
+    const d = await one(caseId, new Date('2026-07-20T00:00:00Z'));
+    expect(d.deadline!.toISOString().slice(0, 10)).toBe('2026-08-11');
+  });
+
   it('an aged case is overdue with a correct day-count (VISA, calendar days)', async () => {
     // VISA SLA = 30 calendar days. Entered 40 days before "now" → 10 days overdue.
     const now = new Date('2026-06-30T00:00:00Z');

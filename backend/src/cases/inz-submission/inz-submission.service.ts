@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { setCaseStage } from '../case-stage.util';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { MailService } from '../../mail/mail.service';
 import {
@@ -140,7 +141,7 @@ export class InzSubmissionService {
       const u = await tx.case.update({
         where: { id: caseId },
         data: {
-          stage: 'INZ_SUBMITTED', stageEnteredAt: new Date(),
+          ...setCaseStage('INZ_SUBMITTED'),
           inzApplicationNumber: dto.inzApplicationNumber.trim(),
           inzSubmittedAt: submittedAt,
           inzSubmissionNotes: dto.notes?.trim() || null,
@@ -332,7 +333,7 @@ export class InzSubmissionService {
       const u = await tx.case.update({
         where: { id: caseId },
         data: {
-          stage: 'VISA', stageEnteredAt: new Date(),
+          ...setCaseStage('VISA'),
           inzApplicationNumber: null,
           inzSubmittedAt: null,
           inzSubmissionNotes: null,

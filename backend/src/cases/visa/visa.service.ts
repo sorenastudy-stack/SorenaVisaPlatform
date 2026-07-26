@@ -9,6 +9,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { setCaseStage } from '../case-stage.util';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { MailService } from '../../mail/mail.service';
 // Phase 4 — Pastoral Care (SUPPORT slot) auto-assigns when the visa is approved.
@@ -163,7 +164,7 @@ export class VisaService {
 
       await tx.case.update({
         where: { id: caseId },
-        data: { stage: 'COMPLETED', stageEnteredAt: new Date() },
+        data: setCaseStage('COMPLETED'),
       });
 
       await tx.auditLog.create({
@@ -301,7 +302,7 @@ export class VisaService {
 
       await tx.case.update({
         where: { id: caseId },
-        data: { stage: 'COMPLETED', stageEnteredAt: new Date() },
+        data: setCaseStage('COMPLETED'),
       });
 
       await tx.auditLog.create({
@@ -516,7 +517,7 @@ export class VisaService {
 
       await tx.case.update({
         where: { id: caseId },
-        data: { stage: 'INZ_SUBMITTED', stageEnteredAt: new Date() },
+        data: setCaseStage('INZ_SUBMITTED'),
       });
 
       await tx.auditLog.create({

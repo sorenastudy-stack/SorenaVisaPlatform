@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { LegalDecision, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { setCaseStage } from '../cases/case-stage.util';
 import { CryptoService } from '../common/crypto/crypto.service';
 import {
   CreateLegalNoteDto,
@@ -139,7 +140,7 @@ export class LegalNotesService {
       if (dto.decision === LegalDecisionDto.WITHDRAWN) {
         await tx.case.update({
           where: { id: caseId },
-          data: { stage: 'WITHDRAWN', stageEnteredAt: new Date() },
+          data: setCaseStage('WITHDRAWN'),
         });
       }
 
