@@ -59,6 +59,32 @@ Pick one:
 - 02250c8 — docs: add Phase 6 Payments handover document
 - ef8a26e — fix(backend): generate Prisma client before nest build to fix Docker build
 
+## SLA / Fork C — RESOLVED (2026-07-27, Phase 25, commit e01a1ba)
+
+Phase 22's deferred **"Fork C" (SLA / deadline system) is now BUILT** — no longer
+backlog. And per the updated requirement, the durations are **manageable by the Owner
+through the system** (not hardcoded) and **vary by institution type** (University /
+Polytechnic / College):
+
+- New `SlaConfig` table — one editable row per `{institutionType, stage}` → `slaDays`
+  + `isWorkingDays`, seeded with defaults (ADMISSION 25 working days; VISA 30 /
+  INZ_SUBMITTED 2 calendar days), editable at **`/staff/settings/sla`**
+  (OWNER/SUPER_ADMIN) with **no deploy**.
+- `Case.stageEnteredAt` (stamped at every stage transition) + `Case.stageDeadlineOverride`
+  (manual per-case extension).
+- Deadline = institution-type × stage SLA from `stageEnteredAt` (working/calendar
+  days); override wins; terminal stages excluded. A case's institution type comes from
+  its accepted/most-recent application's `provider.providerType` (fallback UNIVERSITY).
+- Surfaced as a **red overdue day-counter** on the CO kanban case cards and an
+  **overdue-by-Client-Officer report** at **`/staff/sla-report`** (OWNER/ADMIN).
+
+Full detail: `docs/PHASE_25_INSTITUTION_TYPE_SLA.md`. Remaining SLA-adjacent follow-up
+(NOT blocking): a *deadline-extension approval* workflow, and the `CaseStageTransition`
+history table for time-in-each-stage analytics.
+
+> Note: the Prisma-crash content above is from an old (2026-04-27) debug session and
+> is long resolved — the backend runs on Prisma 6, migrations + deploys work.
+
 ## Other pending items (from before this debug session)
 
 - `app.sorenavisa.com` DNS not resolving. Domain registered at Dreamscape Networks; nameservers point to Wix DNS (ns12.wixdns.net / ns
