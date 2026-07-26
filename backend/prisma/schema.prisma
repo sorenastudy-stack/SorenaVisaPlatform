@@ -941,6 +941,12 @@ model Lead {
   nurtureUnsubscribedAt   DateTime?
   nurtureUnsubToken       String?      @unique
   nurtureLastNewsletterAt DateTime?
+  // PR-CO-KANBAN — CO manual POSTPONE: pause the nurture cron for this lead until
+  // this instant (the daily sweep skips held leads). Set with a short mandatory
+  // reason via POST /staff/nurture/:leadId/override; both advance + postpone are
+  // audited. NULL = not held.
+  nurtureHeldUntil        DateTime?
+  nurtureHoldReason       String?
 
   readinessScore        Int?
   academicScore         Int?
@@ -2347,16 +2353,20 @@ model KnowledgeChunk {
 // ─── TICKETS / IN-PORTAL MESSAGES ─────────────────────────────────────────────
 
 model Ticket {
-  id           String         @id @default(cuid())
+  id           String                @id @default(cuid())
   caseId       String?
   contactId    String
   subject      String
-  status       TicketStatus   @default(OPEN)
-  priority     TicketPriority @default(NORMAL)
+  status       TicketStatus          @default(OPEN)
+  priority     TicketPriority        @default(NORMAL)
+  // PR-CO-KANBAN — department routing for a staff/CO-raised ticket. Reuses the
+  // VisaTicketDepartment enum so routing matches the visa-support queue. Nullable:
+  // existing (student admission) tickets predate it and don't set it.
+  department   VisaTicketDepartment?
   assignedToId String?
   createdById  String
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
   closedAt     DateTime?
 
   case       Case?           @relation(fields: [caseId], references: [id])

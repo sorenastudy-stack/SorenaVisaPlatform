@@ -51,6 +51,7 @@ import { ComplianceModule } from './compliance/compliance.module';
 import { HandoffsModule } from './handoffs/handoffs.module';
 import { NurtureModule } from './nurture/nurture.module';
 import { DiaryModule } from './diary/diary.module';
+import { KanbanModule } from './kanban/kanban.module';
 
 @Module({
   imports: [
@@ -158,6 +159,9 @@ import { DiaryModule } from './diary/diary.module';
     // PR-DIARY: Client Officer daily agenda (today + missed) over nurture call
     // tasks + consultation meetings. Read-only.
     DiaryModule,
+    // PR-CO-KANBAN: Client Officer daily task kanban (journey board) + staff/CO
+    // raise-ticket. Manual nurture override lives in NurtureModule.
+    KanbanModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`

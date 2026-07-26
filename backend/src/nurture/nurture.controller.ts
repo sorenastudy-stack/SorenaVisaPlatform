@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { NurtureService } from './nurture.service';
-import { CompleteCallTaskDto, EnrollNurtureDto, StopNurtureDto } from './dto/nurture.dto';
+import { CompleteCallTaskDto, EnrollNurtureDto, NurtureOverrideDto, StopNurtureDto } from './dto/nurture.dto';
 
 // PR-NURTURE — staff surface. The Client Officer who ran a FREE_15 enrols a
 // "not ready" lead, sees their own open call tasks, logs outcomes, and can stop a
@@ -15,7 +15,14 @@ export class NurtureController {
   constructor(private readonly nurture: NurtureService) {}
 
   private actor(req: any) {
-    return { userId: req.user?.userId ?? req.user?.id, role: req.user?.role ?? '' };
+    return { userId: req.user?.userId ?? req.user?.id, role: req.user?.role ?? '', name: req.user?.name ?? null };
+  }
+
+  // POST /staff/nurture/:leadId/override — CO manual ADVANCE / POSTPONE of the
+  // automated nurture cadence (pre-contract only). Mandatory reason; audited.
+  @Post(':leadId/override')
+  override(@Param('leadId') leadId: string, @Body() dto: NurtureOverrideDto, @Req() req: any) {
+    return this.nurture.manualOverride(leadId, dto.direction, dto.reason, dto.holdDays ?? null, this.actor(req));
   }
 
   // POST /staff/nurture/enroll — "mark not ready" → start the 21-day sequence.

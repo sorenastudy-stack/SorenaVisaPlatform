@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class EnrollNurtureDto {
   @IsString()
@@ -28,4 +28,20 @@ export class CompleteCallTaskDto {
 export class UnsubscribeDto {
   @IsString()
   token!: string;
+}
+
+export class NurtureOverrideDto {
+  @IsIn(['ADVANCE', 'POSTPONE'])
+  direction!: 'ADVANCE' | 'POSTPONE';
+
+  @IsString()
+  @MaxLength(500)
+  reason!: string;
+
+  // Required for POSTPONE — how many days to hold nurturing (bounded, not indefinite).
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  holdDays?: number;
 }

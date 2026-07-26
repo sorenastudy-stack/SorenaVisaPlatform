@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
-  Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall, CalendarDays, DollarSign,
+  Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall, CalendarDays, DollarSign, LayoutGrid,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 import { portalBrand } from '@/lib/portal-branding';
@@ -51,6 +51,8 @@ const HANDOFFS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 const FOLLOWUPS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 // PR-DIARY — "My day": daily agenda (call tasks + meetings). Assignee roles + admin.
 const DIARY_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
+// PR-CO-KANBAN — the CO journey board. CO + admin tier (see all).
+const KANBAN_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 // PR-COMMISSIONS-UI — institutional/provider commission ledger. Money-managing
 // tier: OWNER + FINANCE (+ SUPER_ADMIN).
 const COMMISSIONS_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'] as const;
@@ -97,6 +99,8 @@ const NAV: NavItem[] = [
   { label: 'Bookings',                     href: '/staff/bookings',           icon: <CalendarClock size={18} />, roleGate: BOOKINGS_ROLES },
   // PR-DIARY: the staff member's daily agenda (today + missed).
   { label: 'My day',                       href: '/staff/diary',              icon: <CalendarDays size={18} />, roleGate: DIARY_ROLES },
+  // PR-CO-KANBAN: the CO journey board (leads → cases).
+  { label: 'My clients',                   href: '/staff/kanban',             icon: <LayoutGrid size={18} />,      roleGate: KANBAN_ROLES },
   // PR-NURTURE: nurture call tasks for the assigned Client Officer.
   { label: 'Follow-ups',                   href: '/staff/follow-ups',         icon: <PhoneCall size={18} />,   roleGate: FOLLOWUPS_ROLES },
   { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} />,       roleGate: TICKETS_ROLES },

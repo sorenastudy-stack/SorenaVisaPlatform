@@ -100,6 +100,79 @@ export class NurtureService {
     return { ok: true };
   }
 
+  // PR-CO-KANBAN — CO manual override of the automated nurture cadence. PRE-CONTRACT
+  // ONLY (rejected once a contract exists). A short reason is mandatory and BOTH
+  // directions are written to the audit log so OWNER/ADMIN can review who is
+  // accelerating/delaying leads and why.
+  //   • ADVANCE  — end automated nurturing early + ready the lead for referral
+  //                (stage → ENDED, any hold cleared).
+  //   • POSTPONE — hold nurturing for a chosen number of days (nurtureHeldUntil =
+  //                now + days); the daily sweep skips the lead until then.
+  async manualOverride(
+    leadId: string,
+    direction: 'ADVANCE' | 'POSTPONE',
+    reason: string,
+    holdDays: number | null,
+    actor: StaffActor & { name?: string | null },
+    now: Date = new Date(),
+  ): Promise<{ ok: true; nurtureHeldUntil?: Date }> {
+    if (!reason || !reason.trim()) throw new BadRequestException('A short reason is required.');
+
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { id: true, nurtureStage: true, nurtureHeldUntil: true },
+    });
+    if (!lead) throw new NotFoundException('Lead not found');
+
+    // Pre-contract only — reject if a contract already exists (lead- or case-based).
+    const contract = await this.prisma.contract.findFirst({
+      where: { OR: [{ leadId }, { case: { leadId } }] },
+      select: { id: true },
+    });
+    if (contract) {
+      throw new ConflictException('This lead already has a contract — overrides apply pre-contract only.');
+    }
+
+    if (direction === 'ADVANCE') {
+      const from = lead.nurtureStage;
+      await this.prisma.lead.update({
+        where: { id: leadId },
+        data: { nurtureStage: 'ENDED', nurtureHeldUntil: null, nurtureHoldReason: null },
+      });
+      await this.writeOverrideAudit('NURTURE_MANUALLY_ADVANCED', leadId, { from, to: 'ENDED', reason }, actor);
+      return { ok: true };
+    }
+
+    // POSTPONE — a bounded hold, not an indefinite suspension.
+    if (!holdDays || holdDays < 1) throw new BadRequestException('Postpone needs a number of days (≥ 1).');
+    const until = this.addDays(now, holdDays);
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: { nurtureHeldUntil: until, nurtureHoldReason: reason },
+    });
+    await this.writeOverrideAudit('NURTURE_MANUALLY_POSTPONED', leadId, {
+      from: lead.nurtureHeldUntil, to: until, reason, holdDays,
+    }, actor);
+    return { ok: true, nurtureHeldUntil: until };
+  }
+
+  private async writeOverrideAudit(
+    eventType: string, leadId: string, newValue: Record<string, unknown>, actor: StaffActor & { name?: string | null },
+  ): Promise<void> {
+    await this.prisma.auditLog.create({
+      data: {
+        userId: actor.userId ?? null,
+        action: 'UPDATE',
+        eventType,
+        entityType: 'LEAD',
+        entityId: leadId,
+        newValue: newValue as any,
+        actorNameSnapshot: actor.name ?? null,
+        actorRoleSnapshot: actor.role ?? null,
+      },
+    });
+  }
+
   // ─── Client action (public, token-gated) ────────────────────────────────
 
   // Permanent EMAIL unsubscribe. Sets the master kill-switch that the sweep
@@ -187,7 +260,12 @@ export class NurtureService {
       // the sweep must keep creating their scheduled call tasks. The email/
       // newsletter sends are muted per-send in processLead (checked before every
       // send). nurtureStartedAt is always set for an active stage.
-      where: { nurtureStage: { in: ['SEQUENCE', 'NEWSLETTER'] } },
+      // PR-CO-KANBAN — a CO "postpone" holds the lead: skip it entirely while
+      // nurtureHeldUntil is in the future (resumes automatically once it passes).
+      where: {
+        nurtureStage: { in: ['SEQUENCE', 'NEWSLETTER'] },
+        OR: [{ nurtureHeldUntil: null }, { nurtureHeldUntil: { lte: now } }],
+      },
       select: {
         id: true, nurtureStage: true, nurtureStartedAt: true, nurtureLastNewsletterAt: true,
         nurtureUnsubToken: true, nurtureUnsubscribedAt: true, leadStatus: true,
