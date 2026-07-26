@@ -49,6 +49,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { AuditModule } from './audit/audit.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { HandoffsModule } from './handoffs/handoffs.module';
+import { NurtureModule } from './nurture/nurture.module';
 
 @Module({
   imports: [
@@ -150,6 +151,9 @@ import { HandoffsModule } from './handoffs/handoffs.module';
     // PR-HANDOFFS: Owner-dashboard Handoffs — staffing exceptions (reused from
     // OpsHandoffsModule) + state-derived stuck-case rules. OWNER/SUPER_ADMIN.
     HandoffsModule,
+    // PR-NURTURE: post-FREE_15 nurture sequence (4 emails + 3 call tasks / 21
+    // days) → indefinite monthly newsletter, with unsubscribe. Daily cron.
+    NurtureModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`

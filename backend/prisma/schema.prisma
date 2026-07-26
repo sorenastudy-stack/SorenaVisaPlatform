@@ -401,47 +401,47 @@ enum MessageDirection {
 // ─── USERS ───────────────────────────────────────────────────────────────────
 
 model User {
-  id               String    @id @default(cuid())
-  name             String
-  email            String    @unique
-  emailHash        String?   @unique
+  id                String     @id @default(cuid())
+  name              String
+  email             String     @unique
+  emailHash         String?    @unique
   // Option C step 1 — passwordHash is now optional. Users created
   // before Option C still have a bcrypt hash here. Users provisioned
   // via Google OAuth or first-time magic-link sign-in won't have one.
   // The login service must guard against null before calling
   // bcrypt.compare.
-  passwordHash     String?
+  passwordHash      String?
   // Option C step 1 — Google "sub" claim from OAuth ID-token. Null
   // until the user links Google. @unique prevents two app users from
   // binding the same Google account.
-  googleId         String?   @unique
-  role             UserRole  @default(SALES)
+  googleId          String?    @unique
+  role              UserRole   @default(SALES)
   // Secondary roles WIDEN access only — they never change `role` (which still
   // drives login, routing, and the UI badge), never narrow access, and default
   // to empty so every existing row is unaffected. Permission gates (RolesGuard,
   // frontend middleware) accept `role` OR any of these.
-  secondaryRoles   UserRole[] @default([])
+  secondaryRoles    UserRole[] @default([])
   // PR-STAFF-RENAME: descriptive staff-portal role. Coexists with `role`
   // (which still drives auth guards + booking's LIA gate). Null for
   // non-staff users (LEAD/STUDENT/AGENT). Backfilled from `role` by
   // migration: LIA→ADVISER, ADMIN/OWNER/SUPER_ADMIN→ADMIN,
   // SUPPORT→SUPPORT_CONSULTANT, CONSULTANT→ADMISSION_CONSULTANT.
-  staffRole        StaffRole?
-  canEditGlobalData Boolean  @default(false)
-  isActive         Boolean   @default(true)
-  lastLoginAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  staffRole         StaffRole?
+  canEditGlobalData Boolean    @default(false)
+  isActive          Boolean    @default(true)
+  lastLoginAt       DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   // PR-CONSULT-4: staff profile fields. All three encrypted columns
   // store base64-encoded AES-256-GCM ciphertext via CryptoService.
   // countryOfResidence is plain text (ISO 3166-1 alpha-2 code) so
   // we can filter / aggregate without decrypting. All four nullable
   // because existing rows pre-date the migration.
-  mobileNumber        String?
-  countryOfResidence  String?
-  address             String?
-  emergencyContact    String?
+  mobileNumber       String?
+  countryOfResidence String?
+  address            String?
+  emergencyContact   String?
 
   // PR-LIA-2: ISO 3166-1 alpha-2 codes a User is "specialised" in
   // (LIA forward-compat; the future country-router will read this).
@@ -468,37 +468,37 @@ model User {
   bookableSessionTypes ConsultationType[] @default([])
   bookingActive        Boolean            @default(true)
 
-  assignedLeads    Lead[]           @relation("LeadOwner")
-  consultations    Consultation[]   @relation("ConsultationStaff")
-  cases            Case[]           @relation("CaseOwner")
+  assignedLeads     Lead[]                 @relation("LeadOwner")
+  consultations     Consultation[]         @relation("ConsultationStaff")
+  cases             Case[]                 @relation("CaseOwner")
   // PR-LIA-2: cases where this user is the assigned LIA.
-  liaCases         Case[]           @relation("CaseLia")
+  liaCases          Case[]                 @relation("CaseLia")
   // Option 1 step 4: cases where this user is the assigned
   // Support or Finance staff (parallel to liaCases).
-  supportCases     Case[]           @relation("CaseSupport")
-  financeCases     Case[]           @relation("CaseFinance")
+  supportCases      Case[]                 @relation("CaseSupport")
+  financeCases      Case[]                 @relation("CaseFinance")
   // Phase 1 (auto-assignment): cases where this user is the assigned Consultant.
-  consultantCases  Case[]           @relation("CaseConsultant")
+  consultantCases   Case[]                 @relation("CaseConsultant")
   // Documents step 2: case attachments this user has uploaded.
-  uploadedDocuments Document[]      @relation("DocumentUploader")
-  auditLogs        AuditLog[]
-  notesAuditLogs   ManagerNotesLog[]
+  uploadedDocuments Document[]             @relation("DocumentUploader")
+  auditLogs         AuditLog[]
+  notesAuditLogs    ManagerNotesLog[]
   leadStatusChanges LeadStatusHistory[]
-  contact          Contact?         @relation("StudentContact")
-  assignedTickets   Ticket[]                @relation("TicketAssignee")
-  createdTickets    Ticket[]                @relation("TicketCreator")
-  ticketMessages    TicketMessage[]         @relation("TicketMessageSender")
+  contact           Contact?               @relation("StudentContact")
+  assignedTickets   Ticket[]               @relation("TicketAssignee")
+  createdTickets    Ticket[]               @relation("TicketCreator")
+  ticketMessages    TicketMessage[]        @relation("TicketMessageSender")
   agentProfile      AgentProfile?
-  agentApplications AdmissionApplication[]  @relation("ApplicationAgent")
+  agentApplications AdmissionApplication[] @relation("ApplicationAgent")
 
   // PR-DASH-1: client dashboard relations. `clientVisaCases` are the
   // dashboard-side visa cases this user OWNS as a student (1:1 with
   // their VisaApplication). `consultantVisaCases` are visa cases this
   // user is ASSIGNED TO as a consultant. `assessmentReport` is the
   // Friday AI scoring bot's writeback target (1:1 per student).
-  clientVisaCases       VisaCase[]        @relation("VisaCaseClient")
-  consultantVisaCases   VisaCase[]        @relation("VisaCaseConsultant")
-  assessmentReport      AssessmentReport?
+  clientVisaCases     VisaCase[]        @relation("VisaCaseClient")
+  consultantVisaCases VisaCase[]        @relation("VisaCaseConsultant")
+  assessmentReport    AssessmentReport?
 
   // PR-DASH-2: support-ticket relations.
   // `visaSupportTicketsAsClient`: tickets this user opened.
@@ -507,18 +507,18 @@ model User {
   // (CLIENT or STAFF).
   // `visaCaseFileNotesCreated`: file notes created by this user
   // (nullable on the row — system-generated notes have no author).
-  visaSupportTicketsAsClient  VisaSupportTicket[]        @relation("VisaSupportTicketClient")
-  visaSupportTicketsAsStaff   VisaSupportTicket[]        @relation("VisaSupportTicketStaff")
-  visaSupportTicketMessages   VisaSupportTicketMessage[]
-  visaCaseFileNotesCreated    VisaCaseFileNote[]         @relation("VisaCaseFileNoteCreator")
+  visaSupportTicketsAsClient VisaSupportTicket[]        @relation("VisaSupportTicketClient")
+  visaSupportTicketsAsStaff  VisaSupportTicket[]        @relation("VisaSupportTicketStaff")
+  visaSupportTicketMessages  VisaSupportTicketMessage[]
+  visaCaseFileNotesCreated   VisaCaseFileNote[]         @relation("VisaCaseFileNoteCreator")
 
   // PR-DASH-3: meetings + transcripts.
   // `studentMeetings`: meetings this user is the student (client) on.
   // `consultantMeetings`: meetings this user is consulting on.
   // `transcriptUploads`: transcript metadata rows this user uploaded.
-  studentMeetings       VisaMeeting[]              @relation("StudentMeetings")
-  consultantMeetings    VisaMeeting[]              @relation("ConsultantMeetings")
-  transcriptUploads     VisaMeetingTranscript[]
+  studentMeetings    VisaMeeting[]           @relation("StudentMeetings")
+  consultantMeetings VisaMeeting[]           @relation("ConsultantMeetings")
+  transcriptUploads  VisaMeetingTranscript[]
 
   // PR-DASH-4: in-platform AI chatbot (student-side, Pattern 1
   // escalation). Each student owns their conversations; nothing
@@ -532,31 +532,35 @@ model User {
   // `ownerApprovalRequests`: requests this user (SUPER_ADMIN) raised.
   // `ownerApprovalDecisions`: requests this user (OWNER) decided.
   // `staffActiveStatus`: 1:1 soft-deactivation flag.
-  staffAssignments        VisaCaseAssignment[]    @relation("StaffAssignments")
-  assignmentsMade         VisaCaseAssignment[]    @relation("AssignmentsMade")
-  ownerApprovalRequests   OwnerApprovalRequest[]  @relation("OwnerApprovalRequester")
-  ownerApprovalDecisions  OwnerApprovalRequest[]  @relation("OwnerApprovalDecider")
-  staffActiveStatus       StaffActiveStatus?      @relation("StaffActive")
+  staffAssignments       VisaCaseAssignment[]   @relation("StaffAssignments")
+  assignmentsMade        VisaCaseAssignment[]   @relation("AssignmentsMade")
+  ownerApprovalRequests  OwnerApprovalRequest[] @relation("OwnerApprovalRequester")
+  ownerApprovalDecisions OwnerApprovalRequest[] @relation("OwnerApprovalDecider")
+  staffActiveStatus      StaffActiveStatus?     @relation("StaffActive")
 
   // PR-LIA-1: LegalNote rows this user authored (notes + decisions
   // on CRM-side Cases). LIA / ADMIN / SUPER_ADMIN-gated at the
   // endpoint layer.
-  legalNotes              LegalNote[]             @relation("LegalNoteAuthor")
+  legalNotes        LegalNote[]            @relation("LegalNoteAuthor")
   // PR-LIA-CONVO-NOTES: conversation notes this user (an LIA) authored.
-  conversationNotes       CaseConversationNote[]  @relation("ConvNoteAuthor")
+  conversationNotes CaseConversationNote[] @relation("ConvNoteAuthor")
+
+  // PR-NURTURE: nurture call tasks assigned to / completed by this staff member.
+  nurtureCallTasksAssigned  NurtureCallTask[] @relation("NurtureCallAssignee")
+  nurtureCallTasksCompleted NurtureCallTask[] @relation("NurtureCallCompleter")
 
   // PR-LIA-4: CaseMessage rows this user authored (either as the LIA
   // working the case, or as the case's client replying to the thread).
-  caseMessages            CaseMessage[]           @relation("CaseMessageAuthor")
+  caseMessages CaseMessage[] @relation("CaseMessageAuthor")
 
   // PR-LIA-5: CaseDocumentReview rows this user authored (LIA / OWNER
   // /  ADMIN / SUPER_ADMIN — the gate is enforced at the controller).
-  documentReviews         CaseDocumentReview[]    @relation("CaseDocumentReviewer")
+  documentReviews CaseDocumentReview[] @relation("CaseDocumentReviewer")
 
   // PR-LIA-8: Visa rows this user issued (recorded the approval or
   // decline outcome for). Same role gate as the rest of the LIA
   // surface — LIA / ADMIN / SUPER_ADMIN / OWNER.
-  issuedVisas             Visa[]                  @relation("VisaIssuer")
+  issuedVisas Visa[] @relation("VisaIssuer")
 
   // PR-LIA-10: Immigration Officer module relations.
   // `createdOfficers`     — officer profiles this user originally created.
@@ -564,73 +568,73 @@ model User {
   //                         post-creation; only the author can delete
   //                         their own per Decision 2C).
   // `caseOfficerLinkages` — case ↔ officer links this user recorded.
-  createdOfficers         ImmigrationOfficer[]               @relation("OfficerCreator")
-  officerObservations     ImmigrationOfficerObservation[]    @relation("OfficerObservationAuthor")
-  caseOfficerLinkages     CaseOfficerLinkage[]               @relation("CaseOfficerLinker")
+  createdOfficers     ImmigrationOfficer[]            @relation("OfficerCreator")
+  officerObservations ImmigrationOfficerObservation[] @relation("OfficerObservationAuthor")
+  caseOfficerLinkages CaseOfficerLinkage[]            @relation("CaseOfficerLinker")
 
   // PR-SCORECARD-1: every scorecard submission this user has made.
   // Multiple rows per user are expected (re-assessment after English
   // improvement, etc.). History is preserved.
-  scorecardSubmissions    ScorecardSubmission[]              @relation("ScorecardUser")
+  scorecardSubmissions ScorecardSubmission[] @relation("ScorecardUser")
 
   // PR-SCORECARD-2: marketing/affiliate link tracking.
   // `createdAffiliateAgents`  — agent profiles this OWNER/ADMIN created.
   // `createdTrackingLinks`    — tracking links this OWNER/ADMIN issued.
-  createdAffiliateAgents  AffiliateAgent[]                  @relation("AffiliateAgentCreator")
-  createdTrackingLinks    TrackingLink[]                    @relation("TrackingLinkCreator")
+  createdAffiliateAgents AffiliateAgent[] @relation("AffiliateAgentCreator")
+  createdTrackingLinks   TrackingLink[]   @relation("TrackingLinkCreator")
 
   // PR-SCORECARD-4: OWNER-editable platform settings (booking URLs +
   // Wix webhook secret) and the Wix payments matched to this user by
   // email at webhook-receive time.
-  platformSettingUpdates  PlatformSetting[]                 @relation("PlatformSettingUpdater")
-  wixPayments             WixPayment[]                      @relation("WixPaymentUser")
+  platformSettingUpdates PlatformSetting[] @relation("PlatformSettingUpdater")
+  wixPayments            WixPayment[]      @relation("WixPaymentUser")
 
   // PR-DOCUSIGN-1: LIA credential profile (1:0..1 — only LIAs get one).
   // `liaProfile` is this user's own credential row; cascade on user delete.
   // `liaProfilesVerified` are the credential rows this user (as OWNER/ADMIN)
   // has manually verified against the IAA register; SetNull on verifier
   // delete, so the array is empty for every non-OWNER/ADMIN user.
-  liaProfile              LiaProfile?                       @relation("LiaProfileOwner")
-  liaProfilesVerified     LiaProfile[]                      @relation("LiaProfileVerifier")
+  liaProfile          LiaProfile?  @relation("LiaProfileOwner")
+  liaProfilesVerified LiaProfile[] @relation("LiaProfileVerifier")
 
   // PR-DOCUSIGN-1 step 2: ContractSigner rows where this user IS the
   // signer (LIA, DIRECTOR, or any client-side signer who has a User
   // account at envelope-creation time). SetNull on user hard-delete:
   // the signer row survives with its snapshotted name/email as audit
   // evidence.
-  contractsSigned         ContractSigner[]
+  contractsSigned ContractSigner[]
 
   // Option C step 1 — magic-link tokens issued to this user for
   // passwordless sign-in. Cascade on user delete (orphaned tokens
   // are useless).
-  magicLinkTokens         MagicLinkToken[]
+  magicLinkTokens MagicLinkToken[]
 
   // Client-onboarding step — first-time "create your password" tokens
   // issued ONLY to brand-new passwordless LEADs from the public scorecard.
   // Never a reset (the set endpoint refuses if passwordHash is already
   // set). Cascade on user delete.
-  passwordSetupTokens     PasswordSetupToken[]
-  passwordResetTokens     PasswordResetToken[]
+  passwordSetupTokens PasswordSetupToken[]
+  passwordResetTokens PasswordResetToken[]
 
   // PR-BOOKING-1: OWNER-set weekly working hours for this user as a
   // bookable staff member. Empty for users who aren't bookable.
-  staffAvailability       StaffAvailability[]               @relation("StaffAvailabilityStaff")
+  staffAvailability StaffAvailability[] @relation("StaffAvailabilityStaff")
 
   // PR-BOOKING-ADMIN-B: leave / time-off rows for this user as staff.
-  staffLeave              StaffLeave[]                      @relation("StaffLeaveStaff")
+  staffLeave StaffLeave[] @relation("StaffLeaveStaff")
 
   // PR-STAFF-HR (Phase 3): HR self-service. Admin-set job description (plain
   // text) + who/when set it; and one current employment-contract PDF per
   // staff member (replace-on-reupload). Staff read only their own.
-  jobDescription          String?
-  jobDescriptionSetById   String?
-  jobDescriptionSetAt     DateTime?
-  staffContract           StaffContract?                    @relation("StaffContractStaff")
+  jobDescription        String?
+  jobDescriptionSetById String?
+  jobDescriptionSetAt   DateTime?
+  staffContract         StaffContract? @relation("StaffContractStaff")
 
   // PR-WALLET (slice 1): the client's single store-credit wallet + the
   // proof-of-acceptance rows captured before a paid booking.
-  wallet                  Wallet?                           @relation("WalletUser")
-  policyAcceptances       PolicyAcceptance[]                @relation("PolicyAcceptanceUser")
+  wallet            Wallet?            @relation("WalletUser")
+  policyAcceptances PolicyAcceptance[] @relation("PolicyAcceptanceUser")
 
   @@map("users")
 }
@@ -650,20 +654,20 @@ model User {
 // the rate limiter uses.
 
 model MagicLinkToken {
-  id          String    @id @default(cuid())
-  userId      String
+  id         String    @id @default(cuid())
+  userId     String
   // Lowercased target email captured at token-create time. Verify
   // checks that the email arriving on the verify URL matches this
   // field. Stored alongside userId so a future email change on the
   // User row doesn't break in-flight tokens; the authoritative user
   // lookup at verify time still uses userId (FK).
-  email       String
-  tokenHash   String
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  email      String
+  tokenHash  String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Primary lookup at verify time: SHA-256(rawToken) → row. UNIQUE
   // because token collisions would be a security bug, not a data
@@ -687,19 +691,19 @@ model MagicLinkToken {
 // (expiresAt), scanner-safe (validate is read-only; consume happens on the
 // password POST). Raw token is never stored — only sha256(raw).
 model PasswordSetupToken {
-  id          String    @id @default(cuid())
-  userId      String
+  id         String    @id @default(cuid())
+  userId     String
   // Lowercased target email captured at issue time; the set endpoint
   // verifies the email on the URL matches this before consuming. Stored
   // alongside userId so a later email change doesn't break in-flight tokens
   // (authoritative user lookup still uses userId FK).
-  email       String
-  tokenHash   String
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  email      String
+  tokenHash  String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tokenHash])
   @@index([tokenHash])
@@ -714,17 +718,17 @@ model PasswordSetupToken {
 // passwordless-only invariant. Keeping them separate means a setup token can
 // never reach the reset code path and vice-versa.
 model PasswordResetToken {
-  id          String    @id @default(cuid())
-  userId      String
+  id         String    @id @default(cuid())
+  userId     String
   // Lowercased target email captured at issue time; the reset endpoint verifies
   // the email on the URL matches before consuming. userId FK is authoritative.
-  email       String
-  tokenHash   String
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  email      String
+  tokenHash  String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tokenHash])
   @@index([tokenHash])
@@ -747,8 +751,8 @@ model Visitor {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  events           AcquisitionEvent[]
-  legacyLeads      LeadCapture[]
+  events      AcquisitionEvent[]
+  legacyLeads LeadCapture[]
 
   @@map("visitors")
 }
@@ -861,33 +865,33 @@ model EmailVerification {
 // ─── CONTACTS ────────────────────────────────────────────────────────────────
 
 model Contact {
-  id                String    @id @default(cuid())
-  fullName          String
-  email             String?   @unique
-  emailHash         String?   @unique
-  phone             String?
-  whatsapp          String?
-  nationality       String?
+  id                 String    @id @default(cuid())
+  fullName           String
+  email              String?   @unique
+  emailHash          String?   @unique
+  phone              String?
+  whatsapp           String?
+  nationality        String?
   countryOfResidence String?
-  preferredLanguage String    @default("en")
-  lifecycleStage    String?
-  photoUrl          String?
-  dateOfBirth       DateTime?
-  gender            String?
-  ownerId           String?
-  partnerId         String?
-  archivedAt        DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  preferredLanguage  String    @default("en")
+  lifecycleStage     String?
+  photoUrl           String?
+  dateOfBirth        DateTime?
+  gender             String?
+  ownerId            String?
+  partnerId          String?
+  archivedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  userId            String?   @unique
-  user              User?     @relation("StudentContact", fields: [userId], references: [id])
+  userId String? @unique
+  user   User?   @relation("StudentContact", fields: [userId], references: [id])
 
-  leads             Lead[]
-  legacyLeadCaptures LeadCapture[]
+  leads                 Lead[]
+  legacyLeadCaptures    LeadCapture[]
   whatsappConversations WhatsAppConversation[]
-  tickets           Ticket[]
-  invoices          Invoice[]
+  tickets               Ticket[]
+  invoices              Invoice[]
   admissionApplications AdmissionApplication[]
 
   @@index([email])
@@ -906,49 +910,62 @@ enum TargetCountry {
 }
 
 model Lead {
-  id                      String            @id @default(cuid())
+  id               String  @id @default(cuid())
   // PR-CLIENT-ID — permanent, human-readable identifier assigned at lead
   // creation. Format {COUNTRY}-{YEAR}-{NNNNNN}, e.g. NZ-2026-000001. The NUMBER
   // is a SINGLE global counter per year (shared across countries), resets to 1
   // on 1 Jan. Additive + separate from `id` — the cuid stays the relational key.
-  clientId                String?           @unique
-  contactId               String
-  sourceChannel           String?
-  campaignId              String?
-  utmSource               String?
-  utmMedium               String?
-  utmCampaign             String?
-  firstTouchSource        String?
-  lastTouchSource         String?
+  clientId         String? @unique
+  contactId        String
+  sourceChannel    String?
+  campaignId       String?
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  firstTouchSource String?
+  lastTouchSource  String?
 
-  leadStatus              LeadStatus        @default(NEW)
-  disqualificationReason  String?
-  isNurtureCandidate      Boolean           @default(false)
+  leadStatus             LeadStatus @default(NEW)
+  disqualificationReason String?
+  isNurtureCandidate     Boolean    @default(false)
 
-  readinessScore          Int?
-  academicScore           Int?
-  financialScore          Int?
-  englishScore            Int?
-  intentScore             Int?
-  engagementScore         Int?
-  scoreBand               ScoreBand?
-  riskLevel               RiskLevel?
-  riskFlags               String[]
-  hardStopFlag            Boolean           @default(false)
-  hardStopReason          String?
-  liaEscalationRequired   Boolean           @default(false)
-  executionAllowed         Boolean           @default(false)
-  recommendedRoute        RecommendedRoute?
-  monetisationModel       String?
-  countryConfigId         String?
+  // PR-NURTURE — post-FREE_15 nurture sequence (7 touches / 21 days) then an
+  // ongoing monthly newsletter. Set by the staff "mark not ready" action; driven
+  // by the daily cron sweep (NurtureService). `nurtureStage` is the lifecycle
+  // anchor; `nurtureUnsubscribedAt` is the master kill-switch checked before
+  // every send; `nurtureUnsubToken` is the durable per-lead token in each email's
+  // unsubscribe link. `nurtureLastNewsletterAt` paces the monthly cadence.
+  nurtureStage            NurtureStage @default(NONE)
+  nurtureStartedAt        DateTime?
+  nurtureReason           String?
+  nurtureUnsubscribedAt   DateTime?
+  nurtureUnsubToken       String?      @unique
+  nurtureLastNewsletterAt DateTime?
 
-  aiSummary               String?
-  managerNotes            String?
+  readinessScore        Int?
+  academicScore         Int?
+  financialScore        Int?
+  englishScore          Int?
+  intentScore           Int?
+  engagementScore       Int?
+  scoreBand             ScoreBand?
+  riskLevel             RiskLevel?
+  riskFlags             String[]
+  hardStopFlag          Boolean           @default(false)
+  hardStopReason        String?
+  liaEscalationRequired Boolean           @default(false)
+  executionAllowed      Boolean           @default(false)
+  recommendedRoute      RecommendedRoute?
+  monetisationModel     String?
+  countryConfigId       String?
 
-  ownerId                 String?
-  assignedAt              DateTime?
-  createdAt               DateTime          @default(now())
-  updatedAt               DateTime          @updatedAt
+  aiSummary    String?
+  managerNotes String?
+
+  ownerId    String?
+  assignedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   // PR-WIX-1: lead-stage signal captured by the Wix lead-capture
   // webhook. `currentEducationLevel` is free-text per the Wix form.
@@ -959,10 +976,10 @@ model Lead {
   // alpha-2 normaliser can't map a free-form name like "Aotearoa".
   // `webhookMetadata` keeps the original page URL / form id so we
   // can debug submissions without log archaeology.
-  currentEducationLevel   String?
-  externalSubmissionId    String?           @unique
-  countryRaw              String?
-  webhookMetadata         Json?
+  currentEducationLevel String?
+  externalSubmissionId  String? @unique
+  countryRaw            String?
+  webhookMetadata       Json?
 
   // PR-SCORECARD-2: marketing attribution. Captured at scorecard
   // submission time from the sv_attribution cookie or query-string
@@ -970,47 +987,50 @@ model Lead {
   // we never overwrite, so the channel that originally brought the
   // lead in keeps the credit. Both columns nullable so legacy /
   // direct-traffic leads remain valid.
-  trackingLinkId          String?
-  attributedAgentId       String?
+  trackingLinkId    String?
+  attributedAgentId String?
 
   // Country the visitor picked on /start (NEW_ZEALAND | MALAYSIA). One
   // assessment covers both countries; the picker records the choice to
   // sessionStorage (sv_target_country) and it's forwarded with the submit.
   // Nullable — legacy leads, Wix leads, and deep-links straight to the
   // assessment have no picked country.
-  targetCountry           TargetCountry?
+  targetCountry TargetCountry?
 
-  contact                 Contact           @relation(fields: [contactId], references: [id])
-  owner                   User?             @relation("LeadOwner", fields: [ownerId], references: [id])
-  intakeForm              IntakeForm?
-  subscriptions           Subscription[]
-  consultations           Consultation[]
-  cases                   Case[]
+  contact             Contact              @relation(fields: [contactId], references: [id])
+  owner               User?                @relation("LeadOwner", fields: [ownerId], references: [id])
+  intakeForm          IntakeForm?
+  subscriptions       Subscription[]
+  consultations       Consultation[]
+  cases               Case[]
   // PR-CONTRACT-LEAD (Phase B) — contracts raised lead-based (before a case).
-  contracts               Contract[]
-  events                  CrmEvent[]
-  managerNotesLogs        ManagerNotesLog[]
-  statusHistory           LeadStatusHistory[]
+  contracts           Contract[]
+  // PR-NURTURE — the lead's nurture call tasks + email/newsletter send ledger.
+  nurtureCallTasks    NurtureCallTask[]
+  nurtureSent         LeadNurtureSent[]
+  events              CrmEvent[]
+  managerNotesLogs    ManagerNotesLog[]
+  statusHistory       LeadStatusHistory[]
   // PR-SCORECARD-1: the scorecard submission this Lead was auto-
   // created from. Optional (1:0..1) because legacy Leads pre-date
   // the scorecard. The inverse on ScorecardSubmission.leadId is
   // @unique so a Lead can only be the result of one submission.
-  scorecardSubmission     ScorecardSubmission? @relation("ScorecardLead")
+  scorecardSubmission ScorecardSubmission? @relation("ScorecardLead")
 
   // PR-SCORECARD-2: attribution relations.
-  trackingLink            TrackingLink?     @relation("LeadAttributedLink", fields: [trackingLinkId], references: [id])
-  attributedAgent         AffiliateAgent?   @relation("LeadAttributedAgent", fields: [attributedAgentId], references: [id])
+  trackingLink    TrackingLink?   @relation("LeadAttributedLink", fields: [trackingLinkId], references: [id])
+  attributedAgent AffiliateAgent? @relation("LeadAttributedAgent", fields: [attributedAgentId], references: [id])
 
   // PR-SCORECARD-4: Wix payments matched to this lead by email at
   // webhook-receive time. Match is best-effort and informational only —
   // we never auto-update lead status from a payment.
-  wixPayments             WixPayment[]      @relation("WixPaymentLead")
+  wixPayments WixPayment[] @relation("WixPaymentLead")
 
   // PR-LIA-AUTO-ASSIGN: Stripe-webhook-event payments tied to this lead
   // (consultation, ACCOUNT_OPENING, subscription). One row per Stripe
   // paymentIntent.id; written by the /payments/webhook handler with
   // @unique idempotency on stripePaymentIntentId.
-  payments                Payment[]
+  payments Payment[]
 
   @@index([contactId])
   @@index([leadStatus])
@@ -1049,18 +1069,18 @@ model ManagerNotesLog {
 }
 
 model LeadStatusHistory {
-  id           String      @id @default(cuid())
-  leadId       String
-  fromStatus   LeadStatus?
-  toStatus     LeadStatus
-  changedById  String
-  reason       String?
-  isOverride   Boolean     @default(false)
-  isUndo       Boolean     @default(false)
-  createdAt    DateTime    @default(now())
+  id          String      @id @default(cuid())
+  leadId      String
+  fromStatus  LeadStatus?
+  toStatus    LeadStatus
+  changedById String
+  reason      String?
+  isOverride  Boolean     @default(false)
+  isUndo      Boolean     @default(false)
+  createdAt   DateTime    @default(now())
 
-  lead         Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  changedBy    User        @relation(fields: [changedById], references: [id])
+  lead      Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  changedBy User @relation(fields: [changedById], references: [id])
 
   @@index([leadId, createdAt])
   @@map("lead_status_history")
@@ -1069,28 +1089,28 @@ model LeadStatusHistory {
 // ─── INTAKE FORM ─────────────────────────────────────────────────────────────
 
 model IntakeForm {
-  id                    String   @id @default(cuid())
-  leadId                String   @unique
-  highestQualification  String?
-  fieldOfStudy          String?
-  gpa                   Float?
-  englishTestType       String?
-  englishOverallScore   Float?
+  id                     String   @id @default(cuid())
+  leadId                 String   @unique
+  highestQualification   String?
+  fieldOfStudy           String?
+  gpa                    Float?
+  englishTestType        String?
+  englishOverallScore    Float?
   englishComponentScores Json?
-  financialLevel        String?
-  estimatedBudgetNZD    Float?
-  visaHistory           String?
-  visaRejectionCount    Int      @default(0)
-  visaRejectionReason   String?
-  workExperienceYears   Int?
-  studyIntent           String?
-  preferredStartDate    String?
-  preferredCountry      String   @default("NZ")
-  preferredLevel        String?
-  preferredField        String?
-  completionPercent     Int      @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  financialLevel         String?
+  estimatedBudgetNZD     Float?
+  visaHistory            String?
+  visaRejectionCount     Int      @default(0)
+  visaRejectionReason    String?
+  workExperienceYears    Int?
+  studyIntent            String?
+  preferredStartDate     String?
+  preferredCountry       String   @default("NZ")
+  preferredLevel         String?
+  preferredField         String?
+  completionPercent      Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -1201,9 +1221,9 @@ model Consultation {
 model StaffAvailability {
   id          String   @id @default(cuid())
   staffId     String
-  dayOfWeek   Int      // 0 = Sunday … 6 = Saturday
-  startMinute Int      // minutes from midnight, in `timezone`
-  endMinute   Int      // minutes from midnight, in `timezone`; must be > startMinute
+  dayOfWeek   Int // 0 = Sunday … 6 = Saturday
+  startMinute Int // minutes from midnight, in `timezone`
+  endMinute   Int // minutes from midnight, in `timezone`; must be > startMinute
   timezone    String   @default("Pacific/Auckland")
   active      Boolean  @default(true)
   // Who set this window (OWNER/ADMIN). Plain nullable String with no
@@ -1212,7 +1232,7 @@ model StaffAvailability {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  staff       User     @relation("StaffAvailabilityStaff", fields: [staffId], references: [id], onDelete: Cascade)
+  staff User @relation("StaffAvailabilityStaff", fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([staffId, dayOfWeek])
   @@index([staffId, active])
@@ -1249,8 +1269,8 @@ enum StaffLeaveKind {
 model StaffLeave {
   id            String           @id @default(cuid())
   staffId       String
-  startDate     String           // "YYYY-MM-DD" in the staff member's tz (inclusive)
-  endDate       String           // "YYYY-MM-DD" (inclusive); == startDate for one day
+  startDate     String // "YYYY-MM-DD" in the staff member's tz (inclusive)
+  endDate       String // "YYYY-MM-DD" (inclusive); == startDate for one day
   kind          StaffLeaveKind   @default(DAY_OFF)
   status        StaffLeaveStatus @default(REQUESTED)
   reason        String?
@@ -1262,7 +1282,7 @@ model StaffLeave {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  staff         User             @relation("StaffLeaveStaff", fields: [staffId], references: [id], onDelete: Cascade)
+  staff User @relation("StaffLeaveStaff", fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([staffId, status])
   @@index([status])
@@ -1280,14 +1300,14 @@ model StaffLeave {
 model StaffContract {
   id           String   @id @default(cuid())
   userId       String   @unique
-  fileUrl      String   // absolute disk path (matches AdmissionDocument.fileUrl convention)
+  fileUrl      String // absolute disk path (matches AdmissionDocument.fileUrl convention)
   originalName String
   mimeType     String
   sizeBytes    Int
-  uploadedById String   // the ADMIN/OWNER who uploaded it
+  uploadedById String // the ADMIN/OWNER who uploaded it
   uploadedAt   DateTime @default(now())
 
-  staff        User     @relation("StaffContractStaff", fields: [userId], references: [id], onDelete: Cascade)
+  staff User @relation("StaffContractStaff", fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("staff_contract")
 }
@@ -1300,15 +1320,15 @@ model StaffContract {
 // client User. `balanceCents` is a DENORMALISED cache — the append-only
 // WalletTransaction ledger is the source of truth. ALL money is Int cents.
 model Wallet {
-  id           String              @id @default(cuid())
-  userId       String              @unique
-  balanceCents Int                 @default(0)
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  balanceCents Int      @default(0)
   // Phase E: sessions are priced in USD; wallets follow. Existing empty NZD
   // wallets are migrated to USD (0 funded at migration time — verified). The
   // payWithWallet currency guard refuses any wallet.currency ≠ session currency.
-  currency     String              @default("USD")
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  currency     String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   user         User                @relation("WalletUser", fields: [userId], references: [id], onDelete: Cascade)
   transactions WalletTransaction[] @relation("WalletTransactionWallet")
@@ -1324,25 +1344,25 @@ model Wallet {
 enum WalletTransactionType {
   REFUND_CANCEL_FULL // cancel >24h before → 100% credited
   REFUND_CANCEL_LATE // cancel <24h before → 80% credited (20% retained)
-  REFUND_NO_SHOW     // human-marked no-show → 75% credited (25% retained)
-  SPEND_BOOKING      // credit spent on a future booking (negative amount)
-  CASH_REDEMPTION    // exceptional cash-out (later PR; negative amount)
-  ADJUSTMENT         // manual admin correction
+  REFUND_NO_SHOW // human-marked no-show → 75% credited (25% retained)
+  SPEND_BOOKING // credit spent on a future booking (negative amount)
+  CASH_REDEMPTION // exceptional cash-out (later PR; negative amount)
+  ADJUSTMENT // manual admin correction
 }
 
 model WalletTransaction {
   id                    String                @id @default(cuid())
   walletId              String
-  amountCents           Int                   // signed: + credit / − spend
+  amountCents           Int // signed: + credit / − spend
   type                  WalletTransactionType
-  balanceAfterCents     Int                   // running balance snapshot (audit)
+  balanceAfterCents     Int // running balance snapshot (audit)
   reason                String?
   relatedConsultationId String?
   relatedPaymentId      String?
-  createdById           String                // system, admin, or the client
+  createdById           String // system, admin, or the client
   createdAt             DateTime              @default(now())
 
-  wallet                Wallet                @relation("WalletTransactionWallet", fields: [walletId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation("WalletTransactionWallet", fields: [walletId], references: [id], onDelete: Cascade)
 
   @@index([walletId, createdAt])
   @@index([relatedConsultationId])
@@ -1362,7 +1382,7 @@ model PolicyAcceptance {
   userAgent      String?
   createdAt      DateTime @default(now())
 
-  user           User     @relation("PolicyAcceptanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("PolicyAcceptanceUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([consultationId])
@@ -1372,42 +1392,42 @@ model PolicyAcceptance {
 // ─── CASES ───────────────────────────────────────────────────────────────────
 
 model Case {
-  id          String    @id @default(cuid())
-  leadId      String
-  stage       CaseStage @default(ADMISSION)
-  status      String    @default("active")
+  id                   String    @id @default(cuid())
+  leadId               String
+  stage                CaseStage @default(ADMISSION)
+  status               String    @default("active")
   // PR-CONTRACT-CAPTURE — the visa type the LIA selected in the engagement
   // contract's `visaType` checkbox group, captured from DocuSign on envelope
   // completion (the webhook reads the LIA's selected tab). NULL until a contract
   // is fully signed. Free-text (the selected checkbox's label), not an enum, so
   // it survives template wording changes without a migration.
-  visaType    String?
-  ownerId     String?
+  visaType             String?
+  ownerId              String?
   // PR-LIA-2: the LIA (Legal & Immigration Adviser) currently
   // responsible for this case. Set automatically when the client
   // signs the contract (load-balanced auto-pick), reassignable by
   // OWNER / ADMIN / SUPER_ADMIN via PATCH /cases/:id/lia. NULL
   // until contract sign (or if no active LIA was available at sign
   // time — the case sits unassigned and an audit row records why).
-  liaId       String?
+  liaId                String?
   // PR-LIA-3: timestamp the LIA was attached to this case (or
   // reassigned to a different LIA). Set by both auto-assignment and
   // manual reassignment paths inside the same transaction that
   // touches `liaId`. NULL when no LIA is assigned. Used by the
   // productivity report for time-to-action / time-to-resolution
   // calculations and by the case-detail "Assigned N days ago" line.
-  liaAssignedAt DateTime?
+  liaAssignedAt        DateTime?
   // Option 1 step 4: Support and Finance slot assignees on this case.
   // Reassignable via PATCH /cases/:id/support and /cases/:id/finance.
   // Both nullable + SetNull on user delete, mirroring liaId.
-  supportId   String?
-  financeId   String?
+  supportId            String?
+  financeId            String?
   // Phase 1 (auto-assignment): the real client Consultant — owns the client
   // from eligibility through to the visa result. DISTINCT from ownerId (whose
   // auth role is CONSULTANT but semantically = "Admission Specialist"). Holds a
   // user with the CLIENT_CONSULTANT role. Nullable + SetNull, mirroring lia/
   // support/finance so the case survives a consultant hard-delete.
-  consultantId String?
+  consultantId         String?
   // PR-LIA-7: INZ submission lifecycle. All five fields are co-managed
   // by the InzSubmissionService — they populate together when the LIA
   // submits, clear together on revert. The receipt file metadata is
@@ -1417,31 +1437,31 @@ model Case {
   // at `inzReceiptFileUrl` (a filesystem path under ./uploads/inz-receipts/);
   // we use the existing /files/signed/:token route to serve it.
   // The handover (§3 / §file-storage) explains the rationale.
-  inzApplicationNumber String?    @db.VarChar(128)
+  inzApplicationNumber String?   @db.VarChar(128)
   inzSubmittedAt       DateTime?
-  inzSubmissionNotes   String?    @db.Text
+  inzSubmissionNotes   String?   @db.Text
   inzReceiptFileUrl    String?
   inzReceiptFileName   String?
   inzReceiptMimeType   String?
   inzReceiptSizeBytes  Int?
-  riskLevel   RiskLevel @default(LOW)
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  riskLevel            RiskLevel @default(LOW)
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  lead         Lead           @relation(fields: [leadId], references: [id])
-  owner        User?          @relation("CaseOwner", fields: [ownerId], references: [id])
+  lead                  Lead                   @relation(fields: [leadId], references: [id])
+  owner                 User?                  @relation("CaseOwner", fields: [ownerId], references: [id])
   // PR-LIA-2: assigned LIA. SetNull on user delete so the case
   // survives an LIA being hard-deleted (PR-CONSULT-4 audit-snapshot
   // pattern handles attribution).
-  lia          User?          @relation("CaseLia", fields: [liaId], references: [id], onDelete: SetNull)
+  lia                   User?                  @relation("CaseLia", fields: [liaId], references: [id], onDelete: SetNull)
   // Option 1 step 4: Support and Finance slot assignees. SetNull on
   // user delete so the case survives a hard-delete of either staff
   // role, matching the lia relation's behaviour.
-  support      User?          @relation("CaseSupport", fields: [supportId], references: [id], onDelete: SetNull)
-  finance      User?          @relation("CaseFinance", fields: [financeId], references: [id], onDelete: SetNull)
+  support               User?                  @relation("CaseSupport", fields: [supportId], references: [id], onDelete: SetNull)
+  finance               User?                  @relation("CaseFinance", fields: [financeId], references: [id], onDelete: SetNull)
   // Phase 1 (auto-assignment): the real client Consultant slot.
-  consultant   User?          @relation("CaseConsultant", fields: [consultantId], references: [id], onDelete: SetNull)
+  consultant            User?                  @relation("CaseConsultant", fields: [consultantId], references: [id], onDelete: SetNull)
   applications          Application[]
   contract              Contract?
   tickets               Ticket[]
@@ -1458,7 +1478,7 @@ model Case {
   documentReviews       CaseDocumentReview[]
   // Documents step 2: R2-backed case attachments. Sibling to the
   // existing review-verdict surface above; uploads land here.
-  documents             Document[]            @relation("CaseDocuments")
+  documents             Document[]             @relation("CaseDocuments")
   // PR-LIA-8: visa outcome (1:0..1). One row per case ever — issued
   // by the LIA after INZ decides on the submitted application. NULL
   // until the LIA records the outcome via POST /cases/:id/visa/issue
@@ -1517,32 +1537,32 @@ enum VisaIssueOutcome {
 }
 
 model Visa {
-  id                String           @id @default(uuid())
-  caseId            String           @unique
-  outcome           VisaIssueOutcome
+  id                     String           @id @default(uuid())
+  caseId                 String           @unique
+  outcome                VisaIssueOutcome
   // Approval fields (populated when outcome=APPROVED)
-  visaStartDate     DateTime?
-  visaEndDate       DateTime?
-  visaDocumentUrl   String?          @db.Text
-  visaDocumentName  String?          @db.Text
-  visaDocumentMime  String?          @db.Text
-  visaDocumentSize  Int?
+  visaStartDate          DateTime?
+  visaEndDate            DateTime?
+  visaDocumentUrl        String?          @db.Text
+  visaDocumentName       String?          @db.Text
+  visaDocumentMime       String?          @db.Text
+  visaDocumentSize       Int?
   // Decline fields (populated when outcome=DECLINED)
   declineReasonEncrypted Bytes?
   // Common metadata
-  issuedById        String
-  issuedAt          DateTime         @default(now())
-  notes             String?          @db.Text
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  issuedById             String
+  issuedAt               DateTime         @default(now())
+  notes                  String?          @db.Text
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
-  case              Case             @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  issuedBy          User             @relation("VisaIssuer", fields: [issuedById], references: [id])
+  case     Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  issuedBy User @relation("VisaIssuer", fields: [issuedById], references: [id])
 
   // PR-LIA-9: dispatched expiry-reminder ledger. One row per
   // (visa, threshold, recipient) — the unique constraint keeps the
   // sweep idempotent.
-  expiryReminders   VisaExpiryReminderSent[]
+  expiryReminders VisaExpiryReminderSent[]
 
   @@index([issuedById, issuedAt])
   @@index([visaEndDate])
@@ -1599,23 +1619,23 @@ enum VisaExpiryReminderRecipient {
 //     approvedCases / declinedCases — read-time aggregation only.
 //     The (officerId, linkedAt) index keeps these queries cheap.
 model ImmigrationOfficer {
-  id                          String                          @id @default(uuid())
+  id               String  @id @default(uuid())
   // Identity (plaintext — needed for ILIKE search + ORDER BY).
-  fullName                    String                          @db.VarChar(200)
-  officerCode                 String?                         @db.VarChar(64)
-  branch                      String?                         @db.VarChar(200)
-  countryOfPosting            String?                         @db.VarChar(120)
+  fullName         String  @db.VarChar(200)
+  officerCode      String? @db.VarChar(64)
+  branch           String? @db.VarChar(200)
+  countryOfPosting String? @db.VarChar(120)
 
   // Encrypted profile description.
   profileDescriptionEncrypted Bytes?
 
-  createdById                 String
-  createdAt                   DateTime                        @default(now())
-  updatedAt                   DateTime                        @updatedAt
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  createdBy                   User                            @relation("OfficerCreator", fields: [createdById], references: [id])
-  observations                ImmigrationOfficerObservation[]
-  caseLinkages                CaseOfficerLinkage[]
+  createdBy    User                            @relation("OfficerCreator", fields: [createdById], references: [id])
+  observations ImmigrationOfficerObservation[]
+  caseLinkages CaseOfficerLinkage[]
 
   @@index([fullName])
   @@index([branch])
@@ -1624,20 +1644,20 @@ model ImmigrationOfficer {
 }
 
 model ImmigrationOfficerObservation {
-  id            String              @id @default(uuid())
+  id            String   @id @default(uuid())
   officerId     String
   authorId      String
   bodyEncrypted Bytes
   // Free-form analyst tags (e.g. ["financial-scrutiny", "fast-decision"]).
   // Plaintext on purpose — these are categorical labels for future
   // analytics, not sensitive prose.
-  tags          String[]            @default([])
-  createdAt     DateTime            @default(now())
+  tags          String[] @default([])
+  createdAt     DateTime @default(now())
   // No updatedAt — Decision 2C: observations are append-only. The
   // author can delete their own row, but cannot edit (delete + repost).
 
-  officer       ImmigrationOfficer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
-  author        User                @relation("OfficerObservationAuthor", fields: [authorId], references: [id])
+  officer ImmigrationOfficer @relation(fields: [officerId], references: [id], onDelete: Cascade)
+  author  User               @relation("OfficerObservationAuthor", fields: [authorId], references: [id])
 
   @@index([officerId, createdAt])
   @@index([authorId, createdAt])
@@ -1645,8 +1665,8 @@ model ImmigrationOfficerObservation {
 }
 
 model CaseOfficerLinkage {
-  id            String              @id @default(uuid())
-  caseId        String              @unique
+  id            String            @id @default(uuid())
+  caseId        String            @unique
   officerId     String
   // Snapshot of visa.outcome at the moment of linkage (null if the
   // case hasn't reached a decision yet). NOT auto-updated if the
@@ -1655,14 +1675,14 @@ model CaseOfficerLinkage {
   // Optional encrypted note about this specific officer-case interaction.
   noteEncrypted Bytes?
   linkedById    String
-  linkedAt      DateTime            @default(now())
+  linkedAt      DateTime          @default(now())
 
-  case          Case                @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case     Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
   // Restrict on officer delete — can't drop an officer that still
   // has cases attached. LIA must unlink first (a deliberate friction
   // step so institutional knowledge isn't lost by accident).
-  officer       ImmigrationOfficer  @relation(fields: [officerId], references: [id], onDelete: Restrict)
-  linkedBy      User                @relation("CaseOfficerLinker", fields: [linkedById], references: [id])
+  officer  ImmigrationOfficer @relation(fields: [officerId], references: [id], onDelete: Restrict)
+  linkedBy User               @relation("CaseOfficerLinker", fields: [linkedById], references: [id])
 
   // caseId is already UNIQUE above (one officer per case max), but
   // the spec asks for the composite too — kept for documentation
@@ -1674,7 +1694,7 @@ model CaseOfficerLinkage {
 }
 
 model VisaExpiryReminderSent {
-  id                  String                       @id @default(uuid())
+  id                  String                      @id @default(uuid())
   visaId              String
   thresholdDays       Int
   recipient           VisaExpiryReminderRecipient
@@ -1683,16 +1703,89 @@ model VisaExpiryReminderSent {
   // we record a single ledger row to keep the unique constraint
   // useful — re-running the sweep skips the whole OWNER fan-out).
   recipientUserId     String?
-  sentAt              DateTime                     @default(now())
-  emailDeliveryStatus String                       @default("PENDING")
-  emailErrorMessage   String?                      @db.Text
+  sentAt              DateTime                    @default(now())
+  emailDeliveryStatus String                      @default("PENDING")
+  emailErrorMessage   String?                     @db.Text
 
-  visa                Visa                         @relation(fields: [visaId], references: [id], onDelete: Cascade)
+  visa Visa @relation(fields: [visaId], references: [id], onDelete: Cascade)
 
   @@unique([visaId, thresholdDays, recipient], name: "uniq_visa_threshold_recipient")
   @@index([visaId, sentAt])
   @@index([sentAt])
   @@map("visa_expiry_reminders_sent")
+}
+
+// ─── NURTURE ──────────────────────────────────────────────────────────────────
+
+// PR-NURTURE — the lifecycle stage of a lead's nurture engagement.
+//   NONE       — never enrolled.
+//   SEQUENCE   — inside the 7-touch / 21-day post-FREE_15 sequence.
+//   NEWSLETTER — sequence completed with no exit; now on the indefinite monthly
+//                newsletter cadence.
+//   ENDED      — an exit condition fired or staff manually stopped it. Terminal.
+// (Unsubscribe is a SEPARATE master kill-switch: Lead.nurtureUnsubscribedAt.)
+enum NurtureStage {
+  NONE
+  SEQUENCE
+  NEWSLETTER
+  ENDED
+}
+
+// PR-NURTURE — a phone-call touch in the sequence (steps 2/4/9/21 → the CALL
+// steps). Lead-attached (a nurture-stage lead has no Case yet) and assigned to
+// the Client Officer who ran the FREE_15 (Consultation.assignedToId). Carries its
+// own outcome capture since there's no Case to attach a conversation note to.
+model NurtureCallTask {
+  id            String            @id @default(cuid())
+  leadId        String
+  // The Client Officer who ran the FREE_15. Nullable + SetNull so the task
+  // survives a staff hard-delete (mirrors the case-slot relations).
+  assignedToId  String?
+  step          Int // 2, 4, or 7 (the CALL steps)
+  dueDate       DateTime
+  status        NurtureCallStatus @default(PENDING)
+  outcomeNotes  String?
+  completedAt   DateTime?
+  completedById String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  lead        Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo  User? @relation("NurtureCallAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  completedBy User? @relation("NurtureCallCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+
+  // One task per (lead, step) — makes the cron's create idempotent under re-runs.
+  @@unique([leadId, step], name: "uniq_lead_call_step")
+  // "my open tasks, oldest-due first" — the staff Follow-ups list query.
+  @@index([assignedToId, dueDate])
+  @@index([leadId])
+  @@map("nurture_call_tasks")
+}
+
+enum NurtureCallStatus {
+  PENDING
+  DONE
+  SKIPPED
+  AUTO_CLOSED
+}
+
+// PR-NURTURE — email/newsletter send ledger. Mirrors VisaExpiryReminderSent: one
+// row per (lead, step) makes the daily sweep idempotent across re-runs. `step`
+// is a string so it holds both the sequence email steps ("1","3","5","6") and the
+// monthly newsletter keys ("NL-YYYY-MM").
+model LeadNurtureSent {
+  id                  String   @id @default(uuid())
+  leadId              String
+  step                String
+  sentAt              DateTime @default(now())
+  emailDeliveryStatus String   @default("PENDING")
+  emailErrorMessage   String?  @db.Text
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, step], name: "uniq_lead_nurture_step")
+  @@index([leadId, sentAt])
+  @@map("lead_nurture_sent")
 }
 
 // ─── APPLICATIONS ────────────────────────────────────────────────────────────
@@ -1715,11 +1808,11 @@ model Application {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  case        Case                  @relation(fields: [caseId], references: [id])
-  provider    EducationProvider     @relation(fields: [providerId], references: [id])
-  programme   EducationProgramme    @relation(fields: [programmeId], references: [id])
-  documents   ApplicationDocument[]
-  commission  Commission?
+  case       Case                  @relation(fields: [caseId], references: [id])
+  provider   EducationProvider     @relation(fields: [providerId], references: [id])
+  programme  EducationProgramme    @relation(fields: [programmeId], references: [id])
+  documents  ApplicationDocument[]
+  commission Commission?
 
   @@index([caseId])
   @@index([status])
@@ -1749,7 +1842,7 @@ model ApplicationDocument {
 // ─── CONTRACTS ───────────────────────────────────────────────────────────────
 
 model Contract {
-  id                  String         @id @default(cuid())
+  id                   String         @id @default(cuid())
   // PR-CONTRACT-LEAD (Phase B) — a contract can now be sent Lead-based, BEFORE a
   // Case exists. caseId is nullable and backfilled the moment the CLIENT (first
   // signer) completes their signature (the webhook auto-creates the Case then).
@@ -1757,24 +1850,24 @@ model Contract {
   // rows share a NULL caseId (the lead-based window), and a partial unique index
   // (contracts_leadId_active_key, WHERE "caseId" IS NULL — see the migration)
   // prevents more than one LIVE lead-based contract per lead.
-  caseId              String?        @unique
+  caseId               String?        @unique
   // The lead this contract was raised for. Always set on a lead-based send;
   // legacy case-based rows leave it NULL (they resolve the lead via the case).
-  leadId              String?
-  templateId          String?
-  docusignEnvelopeId  String?
+  leadId               String?
+  templateId           String?
+  docusignEnvelopeId   String?
   // PR-DOCUSEAL — external submission id when the contract is sent via DocuSeal
   // (the active provider). Distinct from docusignEnvelopeId so the DocuSign path
   // stays intact for rollback. The DocuSeal webhook looks the contract up by it.
-  docusealSubmissionId String?       @unique
-  status              ContractStatus @default(DRAFT)
-  signedAt            DateTime?
-  declinedAt          DateTime?
-  expiredAt           DateTime?
-  signedFileUrl       String?
-  auditTrailUrl       String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  docusealSubmissionId String?        @unique
+  status               ContractStatus @default(DRAFT)
+  signedAt             DateTime?
+  declinedAt           DateTime?
+  expiredAt            DateTime?
+  signedFileUrl        String?
+  auditTrailUrl        String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   case Case? @relation(fields: [caseId], references: [id])
   // PR-CONTRACT-LEAD (Phase B) — the lead-based link, present until the case exists.
@@ -1814,17 +1907,17 @@ model Contract {
 // family member) on the same contract. routingOrder is the slot-
 // uniqueness guarantee; role is descriptive, not constraint-bearing.
 model ContractSigner {
-  id                    String                @id @default(cuid())
-  contractId            String
+  id         String @id @default(cuid())
+  contractId String
 
-  role                  ContractSignerRole
-  routingOrder          Int                                          // 1, 2, 3, … — matches DocuSign routingOrder
+  role         ContractSignerRole
+  routingOrder Int // 1, 2, 3, … — matches DocuSign routingOrder
 
   // Identity snapshot — durable truth, what the envelope was actually
   // addressed to at send time. NOT updated when the underlying User /
   // Contact later changes their name or email.
-  signerName            String
-  signerEmail           String
+  signerName  String
+  signerEmail String
 
   // GUARDIAN only — the name of the minor student this guardian is
   // authorized to sign on behalf of. Null for every other role.
@@ -1832,37 +1925,37 @@ model ContractSigner {
   // that backed this signature. Stored as a plain name snapshot (the
   // minor is not a signer; no FK or status of their own). App-layer
   // invariant: role === 'GUARDIAN' ⇒ signingOnBehalfOf IS NOT NULL.
-  signingOnBehalfOf     String?
+  signingOnBehalfOf String?
 
   // Optional FK to User. Populated for LIA + DIRECTOR rows (always
   // staff). Populated for CLIENT / GUARDIAN / PARTNER / FAMILY_MEMBER
   // rows when that person has a User account at envelope-creation
   // time. SetNull on user hard-delete — the snapshotted identity
   // above survives.
-  userId                String?
+  userId String?
 
   // Per-signer state — independent of the parent Contract.status,
   // which mirrors the envelope-level state DocuSign reports back.
   // "Fully signed" is derived from child rows (all signedAt non-null),
   // not stored as a dedicated ContractStatus value.
-  status                ContractSignerStatus  @default(PENDING)
-  viewedAt              DateTime?
-  signedAt              DateTime?
-  declinedAt            DateTime?
-  declineReason         String?                                      // DocuSign returns a free-text reason
+  status        ContractSignerStatus @default(PENDING)
+  viewedAt      DateTime?
+  signedAt      DateTime?
+  declinedAt    DateTime?
+  declineReason String? // DocuSign returns a free-text reason
 
   // DocuSign-side recipient id (string "1"/"2"/"3"/… within an envelope).
   // Webhook payloads reference recipients by this id; we look up the
   // ContractSigner row by (contractId, docusignRecipientId).
-  docusignRecipientId   String?
+  docusignRecipientId String?
 
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  contract              Contract              @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  user                  User?                 @relation(fields: [userId],     references: [id], onDelete: SetNull)
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@unique([contractId, routingOrder])    // slot uniqueness — no two signers share a position
+  @@unique([contractId, routingOrder]) // slot uniqueness — no two signers share a position
   @@index([contractId])
   @@index([userId])
   @@map("contract_signers")
@@ -1882,13 +1975,13 @@ model ContractSigner {
 // Both encrypted columns hold AES-256-GCM ciphertext via CryptoService
 // (same envelope as every other PII column in the project).
 model LegalNote {
-  id                       String         @id @default(uuid())
-  caseId                   String
-  authorId                 String
-  bodyEncrypted            Bytes
-  decision                 LegalDecision?
-  decisionReasonEncrypted  Bytes?
-  createdAt                DateTime       @default(now())
+  id                      String         @id @default(uuid())
+  caseId                  String
+  authorId                String
+  bodyEncrypted           Bytes
+  decision                LegalDecision?
+  decisionReasonEncrypted Bytes?
+  createdAt               DateTime       @default(now())
 
   case   Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
   author User @relation("LegalNoteAuthor", fields: [authorId], references: [id])
@@ -1912,7 +2005,7 @@ model CaseConversationNote {
   id        String   @id @default(cuid())
   caseId    String
   authorId  String
-  bodyHtml  String   // sanitized HTML — server-side allowlist, see html-sanitizer.ts
+  bodyHtml  String // sanitized HTML — server-side allowlist, see html-sanitizer.ts
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1940,18 +2033,18 @@ model CaseConversationNote {
 // handover for why VisaSupportingDocument (and not e.g. ApplicationDocument)
 // is the chosen FK target.
 model CaseMessage {
-  id                String                  @id @default(uuid())
+  id                String                @id @default(uuid())
   caseId            String
   authorId          String
   authorRole        CaseMessageAuthorRole
-  kind              CaseMessageKind         @default(MESSAGE)
+  kind              CaseMessageKind       @default(MESSAGE)
   bodyEncrypted     Bytes
   requestedDocType  String?
   fulfilledByFileId String?
   fulfilledAt       DateTime?
-  readByClient      Boolean                 @default(false)
-  readByLia         Boolean                 @default(false)
-  createdAt         DateTime                @default(now())
+  readByClient      Boolean               @default(false)
+  readByLia         Boolean               @default(false)
+  createdAt         DateTime              @default(now())
 
   case            Case                    @relation(fields: [caseId], references: [id], onDelete: Cascade)
   author          User                    @relation("CaseMessageAuthor", fields: [authorId], references: [id])
@@ -1981,17 +2074,17 @@ model CaseMessage {
 // re-upload is needed, the LIA messages the client via PR-LIA-4.
 // Forward-compat would be a "publishToClient: Boolean" flag.
 model CaseDocumentReview {
-  id              String                     @id @default(uuid())
+  id              String                   @id @default(uuid())
   caseId          String
   source          CaseDocumentReviewSource
   sourceRowId     String
   status          CaseDocumentReviewStatus
   reasonEncrypted Bytes
   reviewedById    String
-  reviewedAt      DateTime                   @default(now())
+  reviewedAt      DateTime                 @default(now())
 
-  case            Case                       @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  reviewedBy      User                       @relation("CaseDocumentReviewer", fields: [reviewedById], references: [id])
+  case       Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  reviewedBy User @relation("CaseDocumentReviewer", fields: [reviewedById], references: [id])
 
   @@unique([source, sourceRowId])
   @@index([caseId, reviewedAt])
@@ -2001,27 +2094,27 @@ model CaseDocumentReview {
 // ─── COMMISSIONS ─────────────────────────────────────────────────────────────
 
 model Commission {
-  id                    String           @id @default(cuid())
-  applicationId         String           @unique
-  providerId            String
-  programmeId           String
-  commissionYear        Int              @default(1)
-  commissionType        CommissionType   @default(PERCENTAGE)
-  commissionValue       Float
-  estimatedAmountNZD    Float?
-  actualAmountNZD       Float?
-  currency              String           @default("NZD")
-  status                CommissionStatus @default(ESTIMATED)
-  confirmedAt           DateTime?
-  invoiceSentAt         DateTime?
-  paidAt                DateTime?
-  renewalReminderDate   DateTime?
-  reminderSent          Boolean          @default(false)
-  notes                 String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id                  String           @id @default(cuid())
+  applicationId       String           @unique
+  providerId          String
+  programmeId         String
+  commissionYear      Int              @default(1)
+  commissionType      CommissionType   @default(PERCENTAGE)
+  commissionValue     Float
+  estimatedAmountNZD  Float?
+  actualAmountNZD     Float?
+  currency            String           @default("NZD")
+  status              CommissionStatus @default(ESTIMATED)
+  confirmedAt         DateTime?
+  invoiceSentAt       DateTime?
+  paidAt              DateTime?
+  renewalReminderDate DateTime?
+  reminderSent        Boolean          @default(false)
+  notes               String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
-  application Application       @relation(fields: [applicationId], references: [id])
+  application Application        @relation(fields: [applicationId], references: [id])
   provider    EducationProvider  @relation(fields: [providerId], references: [id])
   programme   EducationProgramme @relation(fields: [programmeId], references: [id])
 
@@ -2033,27 +2126,27 @@ model Commission {
 // ─── EDUCATION PROVIDERS ─────────────────────────────────────────────────────
 
 model EducationProvider {
-  id                   String         @id @default(cuid())
+  id                   String          @id @default(cuid())
   name                 String
   providerType         ProviderType
-  country              String         @default("NZ")
+  country              String          @default("NZ")
   city                 String?
   websiteUrl           String?
-  status               ProviderStatus @default(PENDING)
+  status               ProviderStatus  @default(PENDING)
   agreementUrl         String?
   agreementStartDate   DateTime?
   agreementEndDate     DateTime?
   agreementRenewalDate DateTime?
-  commissionY1Type     CommissionType @default(PERCENTAGE)
-  commissionY1Value    Float          @default(0)
-  commissionY2Type     CommissionType @default(PERCENTAGE)
-  commissionY2Value    Float          @default(0)
+  commissionY1Type     CommissionType  @default(PERCENTAGE)
+  commissionY1Value    Float           @default(0)
+  commissionY2Type     CommissionType  @default(PERCENTAGE)
+  commissionY2Value    Float           @default(0)
   volumeTarget         Float?
   bonusType            CommissionType?
   bonusValue           Float?
   notes                String?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   faculties    EducationFaculty[]
   programmes   EducationProgramme[]
@@ -2077,26 +2170,26 @@ model EducationFaculty {
 }
 
 model EducationProgramme {
-  id              String             @id @default(cuid())
-  providerId      String
-  facultyId       String?
-  name            String
-  level           QualificationLevel
-  nzqfLevel       NZQFLevel
-  durationMonths  Int?
-  tuitionFeeNZD   Float?
-  currency        String             @default("NZD")
-  intakeMonths    Int[]
-  aiPopulated     Boolean            @default(false)
-  aiLastRunAt     DateTime?
-  reviewStatus    ReviewStatus       @default(PENDING)
-  isActive        Boolean            @default(false)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  id             String             @id @default(cuid())
+  providerId     String
+  facultyId      String?
+  name           String
+  level          QualificationLevel
+  nzqfLevel      NZQFLevel
+  durationMonths Int?
+  tuitionFeeNZD  Float?
+  currency       String             @default("NZD")
+  intakeMonths   Int[]
+  aiPopulated    Boolean            @default(false)
+  aiLastRunAt    DateTime?
+  reviewStatus   ReviewStatus       @default(PENDING)
+  isActive       Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
-  provider     EducationProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  faculty      EducationFaculty?       @relation(fields: [facultyId], references: [id])
-  requirements ProgrammeRequirement?
+  provider         EducationProvider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  faculty          EducationFaculty?          @relation(fields: [facultyId], references: [id])
+  requirements     ProgrammeRequirement?
   applications     Application[]
   commissions      Commission[]
   admissionChoices AdmissionProgrammeChoice[]
@@ -2108,22 +2201,22 @@ model EducationProgramme {
 }
 
 model ProgrammeRequirement {
-  id                       String       @id @default(cuid())
-  programmeId              String       @unique
-  minQualificationLevel    String?
-  minGpa                   Float?
-  englishTestType          String?
-  englishOverallMin        Float?
-  englishComponentMins     Json?
-  workExperienceRequired   Boolean      @default(false)
-  portfolioRequired        Boolean      @default(false)
-  interviewRequired        Boolean      @default(false)
-  documentsRequired        String[]
-  additionalNotes          String?
-  aiPopulated              Boolean      @default(false)
-  reviewStatus             ReviewStatus @default(PENDING)
-  createdAt                DateTime     @default(now())
-  updatedAt                DateTime     @updatedAt
+  id                     String       @id @default(cuid())
+  programmeId            String       @unique
+  minQualificationLevel  String?
+  minGpa                 Float?
+  englishTestType        String?
+  englishOverallMin      Float?
+  englishComponentMins   Json?
+  workExperienceRequired Boolean      @default(false)
+  portfolioRequired      Boolean      @default(false)
+  interviewRequired      Boolean      @default(false)
+  documentsRequired      String[]
+  additionalNotes        String?
+  aiPopulated            Boolean      @default(false)
+  reviewStatus           ReviewStatus @default(PENDING)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
 
   programme EducationProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
 
@@ -2238,14 +2331,14 @@ model AuditLog {
 // ─── KNOWLEDGE BASE (for RAG / pgvector) ─────────────────────────────────────
 
 model KnowledgeChunk {
-  id          String   @id @default(cuid())
-  sourceType  String
-  sourceId    String?
-  sourceUrl   String?
-  content     String
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  sourceType String
+  sourceId   String?
+  sourceUrl  String?
+  content    String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([sourceType])
   @@map("knowledge_chunks")
@@ -2254,23 +2347,23 @@ model KnowledgeChunk {
 // ─── TICKETS / IN-PORTAL MESSAGES ─────────────────────────────────────────────
 
 model Ticket {
-  id            String          @id @default(cuid())
-  caseId        String?
-  contactId     String
-  subject       String
-  status        TicketStatus    @default(OPEN)
-  priority      TicketPriority  @default(NORMAL)
-  assignedToId  String?
-  createdById   String
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  closedAt      DateTime?
+  id           String         @id @default(cuid())
+  caseId       String?
+  contactId    String
+  subject      String
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(NORMAL)
+  assignedToId String?
+  createdById  String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  closedAt     DateTime?
 
-  case          Case?           @relation(fields: [caseId], references: [id])
-  contact       Contact         @relation(fields: [contactId], references: [id])
-  assignedTo    User?           @relation("TicketAssignee", fields: [assignedToId], references: [id])
-  createdBy     User            @relation("TicketCreator", fields: [createdById], references: [id])
-  messages      TicketMessage[]
+  case       Case?           @relation(fields: [caseId], references: [id])
+  contact    Contact         @relation(fields: [contactId], references: [id])
+  assignedTo User?           @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  createdBy  User            @relation("TicketCreator", fields: [createdById], references: [id])
+  messages   TicketMessage[]
 
   @@index([contactId])
   @@index([caseId])
@@ -2279,16 +2372,16 @@ model Ticket {
 }
 
 model TicketMessage {
-  id           String   @id @default(cuid())
-  ticketId     String
-  senderId     String
-  body         String
-  attachments  String[]
-  isInternal   Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  ticketId    String
+  senderId    String
+  body        String
+  attachments String[]
+  isInternal  Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
-  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender       User     @relation("TicketMessageSender", fields: [senderId], references: [id])
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User   @relation("TicketMessageSender", fields: [senderId], references: [id])
 
   @@index([ticketId, createdAt])
   @@map("ticket_messages")
@@ -2297,21 +2390,21 @@ model TicketMessage {
 // ─── INVOICES & PAYMENTS ──────────────────────────────────────────────────────
 
 model Invoice {
-  id              String         @id @default(cuid())
+  id              String        @id @default(cuid())
   caseId          String?
   contactId       String
-  invoiceNumber   String         @unique
+  invoiceNumber   String        @unique
   description     String
-  amount          Decimal        @db.Decimal(10, 2)
-  currency        String         @default("NZD")
-  status          InvoiceStatus  @default(DRAFT)
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("NZD")
+  status          InvoiceStatus @default(DRAFT)
   dueDate         DateTime?
   issuedAt        DateTime?
   paidAt          DateTime?
-  stripeInvoiceId String?        @unique
+  stripeInvoiceId String?       @unique
   notes           String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   // Piece #2 — client payment-receipt upload (bank transfer / partner exchange).
   // Denormalised onto Invoice (mirrors Case.inzReceipt* — there's only ever one
@@ -2327,8 +2420,8 @@ model Invoice {
   receiptMethod       String?
   receiptUploadedAt   DateTime?
 
-  case            Case?          @relation(fields: [caseId], references: [id])
-  contact         Contact        @relation(fields: [contactId], references: [id])
+  case    Case?   @relation(fields: [caseId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id])
 
   @@index([contactId])
   @@index([status])
@@ -2448,12 +2541,12 @@ model AdmissionApplication {
   englishPreCourse Boolean?
 
   // Step 3B — Health
-  hasDisability                Boolean?
-  disabilityDetailsEncrypted   Bytes?
-  needsEvacAssistance          Boolean?
-  evacDetailsEncrypted         Bytes?
-  medicalNotesEncrypted        Bytes?
-  otherStudyNotesEncrypted     Bytes?
+  hasDisability              Boolean?
+  disabilityDetailsEncrypted Bytes?
+  needsEvacAssistance        Boolean?
+  evacDetailsEncrypted       Bytes?
+  medicalNotesEncrypted      Bytes?
+  otherStudyNotesEncrypted   Bytes?
 
   // Step 3C — Education background
   schoolCountry          String?
@@ -2469,19 +2562,19 @@ model AdmissionApplication {
   sponsorshipProgramme String?
 
   // Step 5 — Parent / guardian (emergency contact)
-  guardianRelationship          String?
-  guardianFirstNameEncrypted    Bytes?
-  guardianLastNameEncrypted     Bytes?
-  guardianEmail                 String?
-  guardianMobileEncrypted       Bytes?
-  guardianHomePhoneEncrypted    Bytes?
-  guardianAddressSameAs         Boolean?
-  guardianStreetEncrypted       Bytes?
-  guardianSuburbEncrypted       Bytes?
-  guardianCity                  String?
-  guardianState                 String?
-  guardianCountry               String?
-  guardianPostcodeEncrypted     Bytes?
+  guardianRelationship       String?
+  guardianFirstNameEncrypted Bytes?
+  guardianLastNameEncrypted  Bytes?
+  guardianEmail              String?
+  guardianMobileEncrypted    Bytes?
+  guardianHomePhoneEncrypted Bytes?
+  guardianAddressSameAs      Boolean?
+  guardianStreetEncrypted    Bytes?
+  guardianSuburbEncrypted    Bytes?
+  guardianCity               String?
+  guardianState              String?
+  guardianCountry            String?
+  guardianPostcodeEncrypted  Bytes?
 
   // Step 6 — Accommodation
   accommodationType String?
@@ -2532,7 +2625,7 @@ model AdmissionEducationEntry {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
+  admissionApplication AdmissionApplication     @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
   documents            AdmissionDocument[]
   visaSupplement       VisaEducationSupplement?
 
@@ -2567,8 +2660,8 @@ model AdmissionDocument {
   fileSizeBytes          Int
   uploadedAt             DateTime              @default(now())
 
-  admissionApplication AdmissionApplication      @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
-  educationEntry       AdmissionEducationEntry?  @relation(fields: [educationEntryId], references: [id], onDelete: Cascade)
+  admissionApplication AdmissionApplication     @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
+  educationEntry       AdmissionEducationEntry? @relation(fields: [educationEntryId], references: [id], onDelete: Cascade)
 
   @@index([admissionApplicationId])
   @@index([educationEntryId])
@@ -2610,34 +2703,34 @@ model AgentProfile {
 // Forward-compat: iaaLicenceExpiryDate, iaaLicenceClass, and similar columns
 // land via additive migrations later. All would be nullable, no backfill needed.
 model LiaProfile {
-  id                       String    @id @default(cuid())
-  userId                   String    @unique
+  id     String @id @default(cuid())
+  userId String @unique
 
   // Credential — populated when the LIA submits their profile.
   // @unique because IAA licence numbers are globally unique per natural
   // person in NZ. Postgres allows multiple NULLs in a unique index, so
   // "not uploaded yet" rows don't conflict.
-  iaaLicenceNumber         String?   @unique
+  iaaLicenceNumber String? @unique
 
   // Licence cert PDF metadata. Same shape as case-documents, visa-supporting,
   // inz-receipts — filesystem path + denormalised size/mime/name so list views
   // don't need fs.stat. Stored under ./uploads/lia-licences/<userId>/<file>.pdf.
-  iaaLicenceFileUrl        String?
-  iaaLicenceFileName       String?
-  iaaLicenceFileMime       String?
-  iaaLicenceSizeBytes      Int?
+  iaaLicenceFileUrl   String?
+  iaaLicenceFileName  String?
+  iaaLicenceFileMime  String?
+  iaaLicenceSizeBytes Int?
 
   // Verification trail — written together by an OWNER/ADMIN after manual
   // cross-check against the IAA register. SetNull on verifier hard-delete:
   // timestamp survives as audit evidence, attribution is lost.
-  iaaLicenceVerifiedAt     DateTime?
-  iaaLicenceVerifiedById   String?
+  iaaLicenceVerifiedAt   DateTime?
+  iaaLicenceVerifiedById String?
 
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user        User  @relation("LiaProfileOwner",    fields: [userId],                 references: [id], onDelete: Cascade)
-  verifiedBy  User? @relation("LiaProfileVerifier", fields: [iaaLicenceVerifiedById],  references: [id], onDelete: SetNull)
+  user       User  @relation("LiaProfileOwner", fields: [userId], references: [id], onDelete: Cascade)
+  verifiedBy User? @relation("LiaProfileVerifier", fields: [iaaLicenceVerifiedById], references: [id], onDelete: SetNull)
 
   @@map("lia_profiles")
 }
@@ -2649,161 +2742,161 @@ model LiaProfile {
 // at save-time. otherNames + nationalId are PII — encrypted via CryptoService
 // using the same AES-256-GCM envelope as admission's PR-SEC3 columns.
 model VisaApplication {
-  id                      String   @id @default(cuid())
-  applicationId           String   @unique
+  id            String @id @default(cuid())
+  applicationId String @unique
 
   // Section 1 — Identity Details
-  hasMononym              Boolean?
-  middleNames             String?
-  hasUsedOtherNames       Boolean?
-  otherNamesEncrypted     Bytes?
-  countryWhenSubmitting   String?
-  prevAppliedNzVisa       Boolean?
-  prevRequestedNzeta      Boolean?
-  everTravelledNz         Boolean?
-  totalNzTime24Plus       Boolean?
-  passportIssueDate       DateTime?
-  passportExpiryDate      DateTime?
-  passportCountryOfIssue  String?
-  passportGender          String?
-  stateOfBirth            String?
-  cityOfBirth             String?
-  hasNationalId           Boolean?
-  nationalIdEncrypted     Bytes?
-  nationalIdCountry       String?
+  hasMononym             Boolean?
+  middleNames            String?
+  hasUsedOtherNames      Boolean?
+  otherNamesEncrypted    Bytes?
+  countryWhenSubmitting  String?
+  prevAppliedNzVisa      Boolean?
+  prevRequestedNzeta     Boolean?
+  everTravelledNz        Boolean?
+  totalNzTime24Plus      Boolean?
+  passportIssueDate      DateTime?
+  passportExpiryDate     DateTime?
+  passportCountryOfIssue String?
+  passportGender         String?
+  stateOfBirth           String?
+  cityOfBirth            String?
+  hasNationalId          Boolean?
+  nationalIdEncrypted    Bytes?
+  nationalIdCountry      String?
 
   // Section 2 — Address and contact information (PR-VISA2)
-  physicalStreetEncrypted     Bytes?
-  physicalSuburb              String?
-  physicalCity                String?
-  physicalState               String?
-  physicalPostcode            String?
-  physicalCountry             String?
-  postalSameAsPhysical        Boolean?
-  postalStreetEncrypted       Bytes?
-  postalSuburb                String?
-  postalCity                  String?
-  postalState                 String?
-  postalPostcode              String?
-  postalCountry               String?
-  preferredContactCountryCode    String?
-  preferredContactNumber         String?
-  alternativeContactCountryCode  String?
-  alternativeContactNumber       String?
+  physicalStreetEncrypted       Bytes?
+  physicalSuburb                String?
+  physicalCity                  String?
+  physicalState                 String?
+  physicalPostcode              String?
+  physicalCountry               String?
+  postalSameAsPhysical          Boolean?
+  postalStreetEncrypted         Bytes?
+  postalSuburb                  String?
+  postalCity                    String?
+  postalState                   String?
+  postalPostcode                String?
+  postalCountry                 String?
+  preferredContactCountryCode   String?
+  preferredContactNumber        String?
+  alternativeContactCountryCode String?
+  alternativeContactNumber      String?
 
   // Section 3 — Eligibility (PR-VISA3)
   // Study history
-  holdsNzStudentVisa             Boolean?
+  holdsNzStudentVisa           Boolean?
   // Offer of Place assistance
-  usedEducationAgent             Boolean?
-  agentOrganisationName          String?
-  agentCountry                   String?
-  agentGivenName                 String?
-  agentSurname                   String?
-  agentEmail                     String?
+  usedEducationAgent           Boolean?
+  agentOrganisationName        String?
+  agentCountry                 String?
+  agentGivenName               String?
+  agentSurname                 String?
+  agentEmail                   String?
   // Study details
-  studyingSchoolLevel            Boolean?
-  studyingMastersOrPhd           String?
-  educationProviderName          String?
-  studyLocation                  String?
-  courseRequiresOtherLocation    Boolean?
-  courseProgrammeName            String?
-  courseStartDate                DateTime?
-  courseEndDate                  DateTime?
-  intendedArrivalDate            DateTime?
+  studyingSchoolLevel          Boolean?
+  studyingMastersOrPhd         String?
+  educationProviderName        String?
+  studyLocation                String?
+  courseRequiresOtherLocation  Boolean?
+  courseProgrammeName          String?
+  courseStartDate              DateTime?
+  courseEndDate                DateTime?
+  intendedArrivalDate          DateTime?
   // PhD details — only relevant when studyingMastersOrPhd = "PHD"
-  phdDiscipline                  String?
-  phdSubject                     String?
-  phdSupervisorTitle             String?
-  phdSupervisorGivenName         String?
-  phdSupervisorSurname           String?
-  phdSupervisorOrganisation      String?
-  phdPublishedPapers             Boolean?
-  phdSupervisorOutsideNz         Boolean?
+  phdDiscipline                String?
+  phdSubject                   String?
+  phdSupervisorTitle           String?
+  phdSupervisorGivenName       String?
+  phdSupervisorSurname         String?
+  phdSupervisorOrganisation    String?
+  phdPublishedPapers           Boolean?
+  phdSupervisorOutsideNz       Boolean?
   // Student identification number
-  providerIssuedStudentId        Boolean?
-  studentIdNumber                String?
+  providerIssuedStudentId      Boolean?
+  studentIdNumber              String?
   // Your situation and plans — six free-text fields are PII (AES-256-GCM)
-  homeCommitmentsEncrypted       Bytes?
-  studyRelatesToPrevious         Boolean?
-  studyRelatesDetailsEncrypted   Bytes?
-  whyStudyNzEncrypted            Bytes?
-  whyThisProviderEncrypted       Bytes?
-  howCourseBenefitsEncrypted     Bytes?
-  plansAfterStudyEncrypted       Bytes?
-  studyingMultiYear              Boolean?
+  homeCommitmentsEncrypted     Bytes?
+  studyRelatesToPrevious       Boolean?
+  studyRelatesDetailsEncrypted Bytes?
+  whyStudyNzEncrypted          Bytes?
+  whyThisProviderEncrypted     Bytes?
+  howCourseBenefitsEncrypted   Bytes?
+  plansAfterStudyEncrypted     Bytes?
+  studyingMultiYear            Boolean?
 
   // Section 4 — Character (PR-VISA4)
   // Character details (4 mandatory Y/N declarations)
-  everConvicted                  Boolean?
-  underInvestigation             Boolean?
-  everDeportedExcluded           Boolean?
-  everRefusedVisa                Boolean?
+  everConvicted            Boolean?
+  underInvestigation       Boolean?
+  everDeportedExcluded     Boolean?
+  everRefusedVisa          Boolean?
   // Police certificate from the country of citizenship — the file itself
   // is uploaded via the admission documents pipeline with documentType =
   // VISA_POLICE_CERTIFICATE; these three columns capture the cert metadata.
-  policeCertIssueDate            DateTime?
-  policeCertCountryOfIssue       String?
-  policeCertInEnglish            Boolean?
+  policeCertIssueDate      DateTime?
+  policeCertCountryOfIssue String?
+  policeCertInEnglish      Boolean?
   // Other citizenships + 5+ years branch (no further inputs in this PR)
-  holdsOtherCitizenships         Boolean?
-  livedOtherCountry5Years        Boolean?
+  holdsOtherCitizenships   Boolean?
+  livedOtherCountry5Years  Boolean?
 
   // Section 5 — Health (PR-VISA5)
-  hasTuberculosis                Boolean?
-  needsRenalDialysis             Boolean?
-  hasMedicalCondition            Boolean?
-  needsResidentialCare           Boolean?
-  isPregnant                     Boolean?
-  intendedLengthOfStay           String?
-  hadMedicalExam                 Boolean?
-  medicalRefNumber               String?
-  tbCountriesNoMore              Boolean?
-  insuranceDeclarationAgreed     Boolean?
-  publicHealthAckAgreed          Boolean?
+  hasTuberculosis            Boolean?
+  needsRenalDialysis         Boolean?
+  hasMedicalCondition        Boolean?
+  needsResidentialCare       Boolean?
+  isPregnant                 Boolean?
+  intendedLengthOfStay       String?
+  hadMedicalExam             Boolean?
+  medicalRefNumber           String?
+  tbCountriesNoMore          Boolean?
+  insuranceDeclarationAgreed Boolean?
+  publicHealthAckAgreed      Boolean?
 
   // Section 7 — Employment history (PR-VISA7)
-  everGovernmentEmployed         Boolean?
-  everPrisonGuard                Boolean?
-  currentlyWorking               Boolean?
-  hadPreviousEmployment          Boolean?
-  everUnemployed                 Boolean?
+  everGovernmentEmployed Boolean?
+  everPrisonGuard        Boolean?
+  currentlyWorking       Boolean?
+  hadPreviousEmployment  Boolean?
+  everUnemployed         Boolean?
 
   // Section 8 — Relationships (PR-VISA8)
   // Note: relationshipStatus + hasChildren are sourced read-only from
   // admission.maritalStatus + admission.hasChildren (see PR-VISA8 reuse
   // notes). Only the three Y/N gates that have no admission equivalent
   // live here.
-  hasFormerPartners              Boolean?
-  hasSiblings                    Boolean?
-  hasNzContacts                  Boolean?
+  hasFormerPartners Boolean?
+  hasSiblings       Boolean?
+  hasNzContacts     Boolean?
 
   // Section 9 — Background details (PR-VISA9). Flat set of Y/N
   // declarations; all nullable so partial drafts can save.
-  heldReligiousCulturalPosition  Boolean?
-  heldPoliticalAppointment       Boolean?
-  hadPoliticalAssociation        Boolean?
-  associatedIntelligenceAgency   Boolean?
-  witnessedIllTreatment          Boolean?
-  involvedArmedConflict          Boolean?
-  associatedViolentGroup         Boolean?
-  involvedWarCrimes              Boolean?
-  memberLiberationMilitia        Boolean?
-  everDetainedImprisoned         Boolean?
+  heldReligiousCulturalPosition Boolean?
+  heldPoliticalAppointment      Boolean?
+  hadPoliticalAssociation       Boolean?
+  associatedIntelligenceAgency  Boolean?
+  witnessedIllTreatment         Boolean?
+  involvedArmedConflict         Boolean?
+  associatedViolentGroup        Boolean?
+  involvedWarCrimes             Boolean?
+  memberLiberationMilitia       Boolean?
+  everDetainedImprisoned        Boolean?
 
   // Section 10 — Military service (PR-VISA10). Three gating Y/Ns plus
   // a conditional explanation (only when D3 = true). exemptExplanation
   // is PII (free-text reason) and stored encrypted via CryptoService.
-  militaryServiceCompulsoryHome  Boolean?
-  everUndertakenMilitaryService  Boolean?
-  wasExemptFromMilitaryService   Boolean?
-  exemptExplanationEncrypted     Bytes?
+  militaryServiceCompulsoryHome Boolean?
+  everUndertakenMilitaryService Boolean?
+  wasExemptFromMilitaryService  Boolean?
+  exemptExplanationEncrypted    Bytes?
 
   // Section 11 — Travel history (PR-VISA11). Single gate Y/N; when Yes
   // the repeating visa_travel_history_entries rows hold each trip
   // (destination / pointOfEntry / otherPurpose are free-text PII and
   // stored encrypted via CryptoService, same envelope as Section 10).
-  hasTravelledInternationally    Boolean?
+  hasTravelledInternationally Boolean?
 
   // Section 12 — Immigration assistance (PR-VISA12). Single-instance
   // (no child table). Gate Y/N + capacity enum + a five-field adviser
@@ -2813,13 +2906,13 @@ model VisaApplication {
   // stored encrypted via CryptoService (AES-256-GCM, same envelope as
   // Section 10 / 11). Server-side clearing: completingOnBehalf = false
   // OR capacity ∉ {ADVISER set} nulls every downstream field on save.
-  completingOnBehalf             Boolean?
-  immigrationAssistanceCapacity  ImmigrationAssistanceCapacity?
-  adviserNumberEncrypted         Bytes?
-  adviserFullNameEncrypted       Bytes?
-  adviserEmailEncrypted          Bytes?
-  adviserContactNumberEncrypted  Bytes?
-  adviserIsPrimaryContact        Boolean?
+  completingOnBehalf            Boolean?
+  immigrationAssistanceCapacity ImmigrationAssistanceCapacity?
+  adviserNumberEncrypted        Bytes?
+  adviserFullNameEncrypted      Bytes?
+  adviserEmailEncrypted         Bytes?
+  adviserContactNumberEncrypted Bytes?
+  adviserIsPrimaryContact       Boolean?
 
   // Section 13 — Supporting documents page 1 (PR-VISA13). Three
   // parent-row fields plus a repeating visa_supporting_documents
@@ -2832,9 +2925,9 @@ model VisaApplication {
   // adviser fields. areAllDocsInEnglish is the "are all the documents
   // you intend to upload in English?" gate from the page-1 guidance
   // block.
-  livingInDifferentCountry       Boolean?
-  countryOfResidenceEncrypted    Bytes?
-  areAllDocsInEnglish            Boolean?
+  livingInDifferentCountry    Boolean?
+  countryOfResidenceEncrypted Bytes?
+  areAllDocsInEnglish         Boolean?
 
   // Section 14 — Supporting documents page 2 (PR-VISA14). 28 parent
   // flags driving a tree of conditional sections plus three encrypted
@@ -2843,55 +2936,55 @@ model VisaApplication {
   // children are reconciled server-side on save — see
   // visa.service.saveSupportingDocuments2 for the cascade-clear
   // rules. File storage is still deferred; only metadata flows.
-  tuitionFeesPaid                 Boolean?
-  tuitionPaymentMethod            TuitionPaymentMethod?
-  fundsSourceSavings              Boolean?
-  fundsSourceNZSponsor            Boolean?
-  fundsSourceInz1014              Boolean?
-  fundsSourcePrepaidAccom         Boolean?
-  fundsSourceScholarship          Boolean?
-  outwardSourceSufficientFunds    Boolean?
-  outwardSourceInz1014            Boolean?
-  outwardSourcePrepaidBooking     Boolean?
-  outwardSourceScholarship        Boolean?
-  fundsFormatBankAccount          Boolean?
-  fundsFormatProvidentFund        Boolean?
-  fundsFormatEducationLoan        Boolean?
-  fundsFormatFixedTermDeposit     Boolean?
-  fundsFormatOther                Boolean?
-  savingsSourceWages              Boolean?
-  savingsSourceSelfEmployment     Boolean?
-  savingsSourceRentalIncome       Boolean?
-  savingsSourceOther              Boolean?
-  depositExplanationEncrypted     Bytes?
-  scholarshipNameEncrypted        Bytes?
+  tuitionFeesPaid                  Boolean?
+  tuitionPaymentMethod             TuitionPaymentMethod?
+  fundsSourceSavings               Boolean?
+  fundsSourceNZSponsor             Boolean?
+  fundsSourceInz1014               Boolean?
+  fundsSourcePrepaidAccom          Boolean?
+  fundsSourceScholarship           Boolean?
+  outwardSourceSufficientFunds     Boolean?
+  outwardSourceInz1014             Boolean?
+  outwardSourcePrepaidBooking      Boolean?
+  outwardSourceScholarship         Boolean?
+  fundsFormatBankAccount           Boolean?
+  fundsFormatProvidentFund         Boolean?
+  fundsFormatEducationLoan         Boolean?
+  fundsFormatFixedTermDeposit      Boolean?
+  fundsFormatOther                 Boolean?
+  savingsSourceWages               Boolean?
+  savingsSourceSelfEmployment      Boolean?
+  savingsSourceRentalIncome        Boolean?
+  savingsSourceOther               Boolean?
+  depositExplanationEncrypted      Bytes?
+  scholarshipNameEncrypted         Bytes?
   scholarshipOrganisationEncrypted Bytes?
-  studyIs120CreditsOrMore         Boolean?
-  courseRequiresPracticalWork     Boolean?
-  tookEnglishTest                 Boolean?
-  declarationChecked              Boolean?
+  studyIs120CreditsOrMore          Boolean?
+  courseRequiresPracticalWork      Boolean?
+  tookEnglishTest                  Boolean?
+  declarationChecked               Boolean?
 
-  currentStep             Int      @default(1)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  currentStep Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  admissionApplication    AdmissionApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  otherCitizenships       VisaOtherCitizenship[]
-  tbRiskCountries         VisaTbRiskCountry[]
-  educationSupplements    VisaEducationSupplement[]
-  employmentEntries       VisaEmploymentEntry[]
-  unemploymentEntries     VisaUnemploymentEntry[]
-  partner                 VisaPartner?
-  formerPartners          VisaFormerPartner[]
-  children                VisaChild[]
-  parents                 VisaParent[]
-  siblings                VisaSibling[]
-  nzContacts              VisaNzContact[]
-  militaryServices        VisaMilitaryService[]
-  travelHistoryEntries    VisaTravelHistoryEntry[]
-  supportingDocuments     VisaSupportingDocument[]
-  otherEvidenceEntries    VisaOtherEvidenceEntry[]
-  visaCase                VisaCase?
+  admissionApplication AdmissionApplication      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  otherCitizenships    VisaOtherCitizenship[]
+  tbRiskCountries      VisaTbRiskCountry[]
+  educationSupplements VisaEducationSupplement[]
+  employmentEntries    VisaEmploymentEntry[]
+  unemploymentEntries  VisaUnemploymentEntry[]
+  partner              VisaPartner?
+  formerPartners       VisaFormerPartner[]
+  children             VisaChild[]
+  parents              VisaParent[]
+  siblings             VisaSibling[]
+  nzContacts           VisaNzContact[]
+  militaryServices     VisaMilitaryService[]
+  travelHistoryEntries VisaTravelHistoryEntry[]
+  supportingDocuments  VisaSupportingDocument[]
+  otherEvidenceEntries VisaOtherEvidenceEntry[]
+  visaCase             VisaCase?
 
   @@map("visa_applications")
 }
@@ -2907,147 +3000,147 @@ model VisaApplication {
 // parent FK so the visa_application's delete tears everything down.
 
 model VisaPartner {
-  id                       String   @id @default(cuid())
-  visaApplicationId        String   @unique
-  relationshipToApplicant  String?
-  givenNameEncrypted       Bytes?
-  middleNamesEncrypted     Bytes?
-  surnameEncrypted         Bytes?
-  gender                   String?
-  dateOfBirth              DateTime?
-  relationshipStatus       String?
-  countryOfBirth           String?
-  stateOfBirth             String?
-  cityOfBirth              String?
-  nationality              String?
-  countryOfResidence       String?
-  occupation               String?
-  holdsPassport            Boolean?
-  passportNumberEncrypted  Bytes?
-  passportCountryOfIssue   String?
-  passportIssueDate        DateTime?
-  passportExpiryDate       DateTime?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                      String    @id @default(cuid())
+  visaApplicationId       String    @unique
+  relationshipToApplicant String?
+  givenNameEncrypted      Bytes?
+  middleNamesEncrypted    Bytes?
+  surnameEncrypted        Bytes?
+  gender                  String?
+  dateOfBirth             DateTime?
+  relationshipStatus      String?
+  countryOfBirth          String?
+  stateOfBirth            String?
+  cityOfBirth             String?
+  nationality             String?
+  countryOfResidence      String?
+  occupation              String?
+  holdsPassport           Boolean?
+  passportNumberEncrypted Bytes?
+  passportCountryOfIssue  String?
+  passportIssueDate       DateTime?
+  passportExpiryDate      DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@map("visa_partner")
 }
 
 model VisaFormerPartner {
-  id                    String   @id @default(cuid())
-  visaApplicationId     String
-  givenNameEncrypted    Bytes?
-  middleNamesEncrypted  Bytes?
-  surnameEncrypted      Bytes?
-  gender                String?
-  dateOfBirth           DateTime?
-  relationshipStatus    String?
-  countryOfBirth        String?
-  nationality           String?
-  sortOrder             Int      @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  visaApplicationId    String
+  givenNameEncrypted   Bytes?
+  middleNamesEncrypted Bytes?
+  surnameEncrypted     Bytes?
+  gender               String?
+  dateOfBirth          DateTime?
+  relationshipStatus   String?
+  countryOfBirth       String?
+  nationality          String?
+  sortOrder            Int       @default(0)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  visaApplication       VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_former_partners")
 }
 
 model VisaChild {
-  id                       String   @id @default(cuid())
-  visaApplicationId        String
-  givenNameEncrypted       Bytes?
-  middleNamesEncrypted     Bytes?
-  surnameEncrypted         Bytes?
-  gender                   String?
-  dateOfBirth              DateTime?
-  countryOfBirth           String?
-  nationality              String?
-  relationshipToApplicant  String?
-  livesWithApplicant       Boolean?
-  sortOrder                Int      @default(0)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                      String    @id @default(cuid())
+  visaApplicationId       String
+  givenNameEncrypted      Bytes?
+  middleNamesEncrypted    Bytes?
+  surnameEncrypted        Bytes?
+  gender                  String?
+  dateOfBirth             DateTime?
+  countryOfBirth          String?
+  nationality             String?
+  relationshipToApplicant String?
+  livesWithApplicant      Boolean?
+  sortOrder               Int       @default(0)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_children")
 }
 
 model VisaParent {
-  id                       String   @id @default(cuid())
-  visaApplicationId        String
-  givenNameEncrypted       Bytes?
-  middleNamesEncrypted     Bytes?
-  surnameEncrypted         Bytes?
-  relationshipToApplicant  String?
-  isDeceased               Boolean?
-  gender                   String?
-  dateOfBirth              DateTime?
-  dateOfBirthUnknown       Boolean?
-  relationshipStatus       String?
-  countryOfBirth           String?
-  citizenship              String?
-  countryOfResidence       String?
-  occupation               String?
-  sortOrder                Int      @default(0)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                      String    @id @default(cuid())
+  visaApplicationId       String
+  givenNameEncrypted      Bytes?
+  middleNamesEncrypted    Bytes?
+  surnameEncrypted        Bytes?
+  relationshipToApplicant String?
+  isDeceased              Boolean?
+  gender                  String?
+  dateOfBirth             DateTime?
+  dateOfBirthUnknown      Boolean?
+  relationshipStatus      String?
+  countryOfBirth          String?
+  citizenship             String?
+  countryOfResidence      String?
+  occupation              String?
+  sortOrder               Int       @default(0)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_parents")
 }
 
 model VisaSibling {
-  id                       String   @id @default(cuid())
-  visaApplicationId        String
-  givenNameEncrypted       Bytes?
-  middleNamesEncrypted     Bytes?
-  surnameEncrypted         Bytes?
-  relationshipToApplicant  String?
-  gender                   String?
-  dateOfBirth              DateTime?
-  dateOfBirthUnknown       Boolean?
-  relationshipStatus       String?
-  countryOfBirth           String?
-  citizenship              String?
-  countryOfResidence       String?
-  occupation               String?
-  sortOrder                Int      @default(0)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                      String    @id @default(cuid())
+  visaApplicationId       String
+  givenNameEncrypted      Bytes?
+  middleNamesEncrypted    Bytes?
+  surnameEncrypted        Bytes?
+  relationshipToApplicant String?
+  gender                  String?
+  dateOfBirth             DateTime?
+  dateOfBirthUnknown      Boolean?
+  relationshipStatus      String?
+  countryOfBirth          String?
+  citizenship             String?
+  countryOfResidence      String?
+  occupation              String?
+  sortOrder               Int       @default(0)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_siblings")
 }
 
 model VisaNzContact {
-  id                       String   @id @default(cuid())
-  visaApplicationId        String
-  givenNameEncrypted       Bytes?
-  middleNamesEncrypted     Bytes?
-  surnameEncrypted         Bytes?
-  relationshipToApplicant  String?
-  phoneEncrypted           Bytes?
-  email                    String?
-  streetEncrypted          Bytes?
-  suburb                   String?
-  townCity                 String?
-  region                   String?
-  postcode                 String?
-  sortOrder                Int      @default(0)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                      String   @id @default(cuid())
+  visaApplicationId       String
+  givenNameEncrypted      Bytes?
+  middleNamesEncrypted    Bytes?
+  surnameEncrypted        Bytes?
+  relationshipToApplicant String?
+  phoneEncrypted          Bytes?
+  email                   String?
+  streetEncrypted         Bytes?
+  suburb                  String?
+  townCity                String?
+  region                  String?
+  postcode                String?
+  sortOrder               Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
-  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_nz_contacts")
@@ -3060,33 +3153,33 @@ model VisaNzContact {
 // startDate carries month-precision (we store the 1st of the month);
 // endDate is null on the CURRENT row.
 model VisaEmploymentEntry {
-  id                   String   @id @default(cuid())
-  visaApplicationId    String
-  entryKind            String
-  startDate            DateTime?
-  endDate              DateTime?
-  roleTitle            String?
-  dutiesEncrypted      Bytes?
-  countryOfWork        String?
-  stateOfWork          String?
-  supervisorName       String?
-  organisationField    String?
-  organisationCountry  String?
-  organisationState    String?
-  employerName         String?
-  employerStreet       String?
-  employerSuburb       String?
-  employerTownCity     String?
-  employerSubregion    String?
-  employerRegion       String?
-  employerPostcode     String?
-  employerPhone        String?
-  employerEmail        String?
-  sortOrder            Int      @default(0)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  visaApplicationId   String
+  entryKind           String
+  startDate           DateTime?
+  endDate             DateTime?
+  roleTitle           String?
+  dutiesEncrypted     Bytes?
+  countryOfWork       String?
+  stateOfWork         String?
+  supervisorName      String?
+  organisationField   String?
+  organisationCountry String?
+  organisationState   String?
+  employerName        String?
+  employerStreet      String?
+  employerSuburb      String?
+  employerTownCity    String?
+  employerSubregion   String?
+  employerRegion      String?
+  employerPostcode    String?
+  employerPhone       String?
+  employerEmail       String?
+  sortOrder           Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  visaApplication      VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_employment_entries")
@@ -3095,17 +3188,17 @@ model VisaEmploymentEntry {
 // Step 7 unemployment / unpaid-service periods (PR-VISA7). Both
 // free-text descriptions are PII and stored encrypted.
 model VisaUnemploymentEntry {
-  id                          String   @id @default(cuid())
-  visaApplicationId           String
-  startDate                   DateTime?
-  endDate                     DateTime?
-  activityEncrypted           Bytes?
-  financialSupportEncrypted   Bytes?
-  sortOrder                   Int      @default(0)
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  id                        String    @id @default(cuid())
+  visaApplicationId         String
+  startDate                 DateTime?
+  endDate                   DateTime?
+  activityEncrypted         Bytes?
+  financialSupportEncrypted Bytes?
+  sortOrder                 Int       @default(0)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
-  visaApplication             VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_unemployment_entries")
@@ -3125,19 +3218,19 @@ model VisaUnemploymentEntry {
 // Cascade-deletes with either parent so a deleted admission entry never
 // strands an orphan supplement.
 model VisaEducationSupplement {
-  id                    String   @id @default(cuid())
-  visaApplicationId     String
-  educationEntryId      String   @unique
-  startMonth            Int?
-  endMonth              Int?
-  institutionState      String?
-  institutionTown       String?
-  qualificationAwarded  Boolean?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  visaApplicationId    String
+  educationEntryId     String   @unique
+  startMonth           Int?
+  endMonth             Int?
+  institutionState     String?
+  institutionTown      String?
+  qualificationAwarded Boolean?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  visaApplication       VisaApplication         @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
-  educationEntry        AdmissionEducationEntry @relation(fields: [educationEntryId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication         @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  educationEntry  AdmissionEducationEntry @relation(fields: [educationEntryId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_education_supplements")
@@ -3156,7 +3249,7 @@ model VisaTbRiskCountry {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  visaApplication   VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_tb_risk_countries")
@@ -3169,24 +3262,24 @@ model VisaTbRiskCountry {
 // not month-year). Replace-on-save: visa.service.ts wipes the array
 // with deleteMany before reinserting on every Step 10 PATCH.
 model VisaMilitaryService {
-  id                 String   @id @default(cuid())
-  visaApplicationId  String
-  dateStarted        DateTime?
-  dateFinished       DateTime?
-  location           String?
-  corps              String?
-  division           String?
-  brigade            String?
-  battalion          String?
-  unit               String?
-  rank               String?
-  dutiesEncrypted    Bytes?
-  commandingOfficer  String?
-  sortOrder          Int      @default(0)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String    @id @default(cuid())
+  visaApplicationId String
+  dateStarted       DateTime?
+  dateFinished      DateTime?
+  location          String?
+  corps             String?
+  division          String?
+  brigade           String?
+  battalion         String?
+  unit              String?
+  rank              String?
+  dutiesEncrypted   Bytes?
+  commandingOfficer String?
+  sortOrder         Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  visaApplication    VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_military_services")
@@ -3312,17 +3405,17 @@ enum OtherEvidenceType {
 // "you've provided >=1 file for this type", not "you provided THIS
 // specific file"), so pre-existing CaseMessage FKs keep working.
 model VisaSupportingDocument {
-  id                 String                     @id @default(cuid())
-  visaApplicationId  String
-  documentType       VisaSupportingDocumentType
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
+  id                String                     @id @default(cuid())
+  visaApplicationId String
+  documentType      VisaSupportingDocumentType
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
 
-  visaApplication    VisaApplication            @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication    VisaApplication              @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
   files              VisaSupportingDocumentFile[]
   // PR-LIA-4: CaseMessage DOCUMENT_REQUEST rows that the client
   // fulfilled by linking THIS supporting-document row.
-  fulfilmentMessages CaseMessage[]              @relation("CaseMessageFulfilment")
+  fulfilmentMessages CaseMessage[]                @relation("CaseMessageFulfilment")
 
   @@unique([visaApplicationId, documentType])
   @@index([visaApplicationId])
@@ -3332,15 +3425,15 @@ model VisaSupportingDocument {
 // PR-FILES-2 — per-entry classification (evidenceType + optional
 // encrypted label). Files move to visa_other_evidence_entry_files.
 model VisaOtherEvidenceEntry {
-  id                    String            @id @default(cuid())
-  visaApplicationId     String
-  evidenceType          OtherEvidenceType
-  customLabelEncrypted  Bytes?
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+  id                   String            @id @default(cuid())
+  visaApplicationId    String
+  evidenceType         OtherEvidenceType
+  customLabelEncrypted Bytes?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
-  visaApplication       VisaApplication   @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
-  files                 VisaOtherEvidenceFile[]
+  visaApplication VisaApplication         @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  files           VisaOtherEvidenceFile[]
 
   @@index([visaApplicationId])
   @@map("visa_other_evidence_entries")
@@ -3362,7 +3455,7 @@ model VisaSupportingDocumentFile {
   uploadedAt               DateTime @default(now())
   createdAt                DateTime @default(now())
 
-  document                 VisaSupportingDocument @relation(fields: [visaSupportingDocumentId], references: [id], onDelete: Cascade)
+  document VisaSupportingDocument @relation(fields: [visaSupportingDocumentId], references: [id], onDelete: Cascade)
 
   @@index([visaSupportingDocumentId])
   @@map("visa_supporting_document_files")
@@ -3380,7 +3473,7 @@ model VisaOtherEvidenceFile {
   uploadedAt               DateTime @default(now())
   createdAt                DateTime @default(now())
 
-  entry                    VisaOtherEvidenceEntry @relation(fields: [visaOtherEvidenceEntryId], references: [id], onDelete: Cascade)
+  entry VisaOtherEvidenceEntry @relation(fields: [visaOtherEvidenceEntryId], references: [id], onDelete: Cascade)
 
   @@index([visaOtherEvidenceEntryId])
   @@map("visa_other_evidence_entry_files")
@@ -3410,29 +3503,29 @@ enum VisaCaseStatus {
 }
 
 model VisaCase {
-  id                    String          @id @default(cuid())
-  visaApplicationId     String          @unique
-  clientId              String
-  assignedConsultantId  String?
-  status                VisaCaseStatus  @default(DRAFT)
-  statusChangedAt       DateTime        @default(now())
+  id                   String         @id @default(cuid())
+  visaApplicationId    String         @unique
+  clientId             String
+  assignedConsultantId String?
+  status               VisaCaseStatus @default(DRAFT)
+  statusChangedAt      DateTime       @default(now())
   // userId of whoever changed status; null when system-set on creation.
-  statusChangedBy       String?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  statusChangedBy      String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
-  visaApplication       VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
-  client                User            @relation("VisaCaseClient", fields: [clientId], references: [id], onDelete: Cascade)
-  assignedConsultant    User?           @relation("VisaCaseConsultant", fields: [assignedConsultantId], references: [id])
+  visaApplication    VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  client             User            @relation("VisaCaseClient", fields: [clientId], references: [id], onDelete: Cascade)
+  assignedConsultant User?           @relation("VisaCaseConsultant", fields: [assignedConsultantId], references: [id])
 
   // PR-DASH-2 children
-  supportTickets        VisaSupportTicket[]
-  fileNotes             VisaCaseFileNote[]
+  supportTickets VisaSupportTicket[]
+  fileNotes      VisaCaseFileNote[]
 
   // PR-CONSULT-1: per-role staff assignments. A case can have at
   // most one active assignment per VisaCaseRoleSlot at any time;
   // historical assignments stay on the row with unassignedAt set.
-  assignments           VisaCaseAssignment[]
+  assignments VisaCaseAssignment[]
 
   @@index([clientId])
   @@index([assignedConsultantId])
@@ -3446,20 +3539,20 @@ model VisaCase {
 // commentary) and stored encrypted via CryptoService (AES-256-GCM,
 // same envelope as the visa-section encrypted columns).
 model AssessmentReport {
-  id                          String   @id @default(cuid())
-  clientId                    String   @unique
-  score                       Int?
-  band                        Int?
-  route                       String?
-  summaryNarrativeEncrypted   Bytes?
+  id                        String   @id @default(cuid())
+  clientId                  String   @unique
+  score                     Int?
+  band                      Int?
+  route                     String?
+  summaryNarrativeEncrypted Bytes?
   // Free-form JSON the AI bot returns alongside the narrative.
-  aiRecommendations           Json?
+  aiRecommendations         Json?
   // Wix submission id once the lead-capture pipe is wired.
-  sourceSubmissionId          String?
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  sourceSubmissionId        String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
-  client                      User     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client User @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@map("assessment_reports")
 }
@@ -3531,31 +3624,31 @@ enum VisaCaseFileNoteType {
 // rather than cascading the ticket itself (a deleted consultant
 // shouldn't tear down the client's ticket history).
 model VisaSupportTicket {
-  id                    String                @id @default(uuid())
-  clientId              String
-  caseId                String
-  assignedStaffId       String?
-  department            VisaTicketDepartment
-  subjectEncrypted      Bytes
-  status                VisaTicketStatus      @default(OPEN)
-  priority              VisaTicketPriority    @default(NORMAL)
-  lastClientMessageAt   DateTime?
-  lastStaffMessageAt    DateTime?
-  resolvedAt            DateTime?
-  closedAt              DateTime?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
+  id                  String               @id @default(uuid())
+  clientId            String
+  caseId              String
+  assignedStaffId     String?
+  department          VisaTicketDepartment
+  subjectEncrypted    Bytes
+  status              VisaTicketStatus     @default(OPEN)
+  priority            VisaTicketPriority   @default(NORMAL)
+  lastClientMessageAt DateTime?
+  lastStaffMessageAt  DateTime?
+  resolvedAt          DateTime?
+  closedAt            DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
-  client                User                  @relation("VisaSupportTicketClient", fields: [clientId], references: [id], onDelete: Cascade)
-  assignedStaff         User?                 @relation("VisaSupportTicketStaff", fields: [assignedStaffId], references: [id], onDelete: SetNull)
-  case                  VisaCase              @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  messages              VisaSupportTicketMessage[]
+  client        User                       @relation("VisaSupportTicketClient", fields: [clientId], references: [id], onDelete: Cascade)
+  assignedStaff User?                      @relation("VisaSupportTicketStaff", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  case          VisaCase                   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  messages      VisaSupportTicketMessage[]
 
   // PR-DASH-4: chat messages that escalated INTO this ticket. One
   // ticket can have at most one origin chat message (the escalation
   // event); the relation is plural because the FK column lives on
   // the message side and Prisma needs the reverse list.
-  chatEscalations       VisaChatMessage[]      @relation("ChatEscalations")
+  chatEscalations VisaChatMessage[] @relation("ChatEscalations")
 
   @@index([clientId, status])
   @@index([assignedStaffId, status])
@@ -3568,26 +3661,26 @@ model VisaSupportTicket {
 // endpoints filter it out. The author FK uses a non-named relation
 // because messages are not user-deletable.
 model VisaSupportTicketMessage {
-  id              String                          @id @default(uuid())
-  ticketId        String
-  authorId        String
-  authorRole      VisaTicketMessageAuthorRole
-  bodyEncrypted   Bytes
+  id             String                      @id @default(uuid())
+  ticketId       String
+  authorId       String
+  authorRole     VisaTicketMessageAuthorRole
+  bodyEncrypted  Bytes
   // PR-TICKETS-RICH — true when bodyEncrypted holds server-sanitized rich-text
   // HTML (staff replies via the shared RichTextEditor). false = legacy/plain
   // text (all pre-existing rows, and client messages), rendered as escaped text.
   // Distinguishes render mode without re-processing historical encrypted rows.
-  bodyIsHtml      Boolean                         @default(false)
+  bodyIsHtml     Boolean                     @default(false)
   // PR-TICKETS-RICH — file attachments (image/PDF). Array of
   // { key, name, mime, size } objects; the R2 object key is private, reads mint
   // a short-lived signed URL. NULL/absent = no attachments.
-  attachments     Json?
-  isInternalNote  Boolean                         @default(false)
-  createdAt       DateTime                        @default(now())
-  updatedAt       DateTime                        @updatedAt
+  attachments    Json?
+  isInternalNote Boolean                     @default(false)
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
 
-  ticket          VisaSupportTicket               @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author          User                            @relation(fields: [authorId], references: [id])
+  ticket VisaSupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User              @relation(fields: [authorId], references: [id])
 
   @@index([ticketId, createdAt])
   @@map("visa_support_ticket_messages")
@@ -3599,18 +3692,18 @@ model VisaSupportTicketMessage {
 // human-readable string (e.g. "Ticket opened — DOCUMENTS: 'Scholarship
 // question'"). createdById is nullable for system-emitted notes.
 model VisaCaseFileNote {
-  id                String                @id @default(uuid())
-  caseId            String
-  noteType          VisaCaseFileNoteType
+  id               String               @id @default(uuid())
+  caseId           String
+  noteType         VisaCaseFileNoteType
   // Uuid of the source row (ticket id / meeting id / etc). Not a
   // typed FK because the source table varies by noteType.
-  referenceId       String
-  summaryEncrypted  Bytes
-  createdById       String?
-  createdAt         DateTime              @default(now())
+  referenceId      String
+  summaryEncrypted Bytes
+  createdById      String?
+  createdAt        DateTime             @default(now())
 
-  case              VisaCase              @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  createdBy         User?                 @relation("VisaCaseFileNoteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  case      VisaCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("VisaCaseFileNoteCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([caseId, createdAt])
   @@index([referenceId])
@@ -3653,25 +3746,25 @@ enum VisaMeetingType {
 }
 
 model VisaMeeting {
-  id                  String              @id @default(cuid())
-  studentId           String
-  consultantId        String?
-  scheduledAt         DateTime
-  durationMinutes     Int                 @default(30)
-  status              VisaMeetingStatus   @default(SCHEDULED)
-  meetingType         VisaMeetingType     @default(CONSULTATION)
+  id              String            @id @default(cuid())
+  studentId       String
+  consultantId    String?
+  scheduledAt     DateTime
+  durationMinutes Int               @default(30)
+  status          VisaMeetingStatus @default(SCHEDULED)
+  meetingType     VisaMeetingType   @default(CONSULTATION)
   // Encrypted free-text PII (location / Zoom URL / agenda / post-meeting notes).
-  locationOrLink      String?
-  agenda              String?
-  transcriptNotes     String?
-  cancelledAt         DateTime?
-  cancelledReason     String?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  locationOrLink  String?
+  agenda          String?
+  transcriptNotes String?
+  cancelledAt     DateTime?
+  cancelledReason String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
-  student             User                @relation("StudentMeetings", fields: [studentId], references: [id])
-  consultant          User?               @relation("ConsultantMeetings", fields: [consultantId], references: [id])
-  transcriptFile      VisaMeetingTranscript?
+  student        User                   @relation("StudentMeetings", fields: [studentId], references: [id])
+  consultant     User?                  @relation("ConsultantMeetings", fields: [consultantId], references: [id])
+  transcriptFile VisaMeetingTranscript?
 
   @@index([studentId, scheduledAt])
   @@index([consultantId, scheduledAt])
@@ -3684,16 +3777,16 @@ model VisaMeeting {
 // pattern. PR-15 will attach the storage layer; this row stays the
 // stable anchor.
 model VisaMeetingTranscript {
-  id                String      @id @default(cuid())
-  meetingId         String      @unique
-  originalFilename  String
-  mimeType          String
-  sizeBytes         Int
-  uploadedById      String
-  uploadedAt        DateTime    @default(now())
+  id               String   @id @default(cuid())
+  meetingId        String   @unique
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  uploadedById     String
+  uploadedAt       DateTime @default(now())
 
-  meeting           VisaMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  uploadedBy        User        @relation(fields: [uploadedById], references: [id])
+  meeting    VisaMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  uploadedBy User        @relation(fields: [uploadedById], references: [id])
 
   @@index([uploadedById])
   @@map("visa_meeting_transcripts")
@@ -3727,48 +3820,47 @@ enum VisaChatMessageRole {
 }
 
 model VisaChatConversation {
-  id          String              @id @default(cuid())
-  studentId   String
+  id         String    @id @default(cuid())
+  studentId  String
   // Encrypted base64 (CryptoService). First user message truncated
   // to 80 chars after trim — only used as a list-row label.
-  title       String?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  archivedAt  DateTime?
+  title      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
 
-  student     User                @relation("StudentChatConversations", fields: [studentId], references: [id])
-  messages    VisaChatMessage[]
+  student  User              @relation("StudentChatConversations", fields: [studentId], references: [id])
+  messages VisaChatMessage[]
 
   @@index([studentId, updatedAt])
   @@map("visa_chat_conversations")
 }
 
 model VisaChatMessage {
-  id                  String                  @id @default(cuid())
-  conversationId      String
-  role                VisaChatMessageRole
+  id                String              @id @default(cuid())
+  conversationId    String
+  role              VisaChatMessageRole
   // Encrypted base64 (CryptoService). Cleartext only ever passes
   // through the service layer to the model and back.
-  content             String
-  tokensIn            Int?
-  tokensOut           Int?
+  content           String
+  tokensIn          Int?
+  tokensOut         Int?
   // Model identifier string (e.g. "claude-haiku-4-5-20251001").
   // Stored so future migrations across model versions can be audited.
-  modelUsed           String?
-  escalationOffered   Boolean                 @default(false)
+  modelUsed         String?
+  escalationOffered Boolean             @default(false)
   // Set when the student accepted escalation; FK to the resulting
   // support ticket so we can render a "Linked to ticket #..." badge
   // in the chat thread.
-  escalatedTicketId   String?
-  createdAt           DateTime                @default(now())
+  escalatedTicketId String?
+  createdAt         DateTime            @default(now())
 
-  conversation        VisaChatConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  escalatedTicket     VisaSupportTicket?      @relation("ChatEscalations", fields: [escalatedTicketId], references: [id])
+  conversation    VisaChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  escalatedTicket VisaSupportTicket?   @relation("ChatEscalations", fields: [escalatedTicketId], references: [id])
 
   @@index([conversationId, createdAt])
   @@map("visa_chat_messages")
 }
-
 
 // Step 11 (PR-VISA11) — Travel history child row. The gate flag
 // hasTravelledInternationally lives on the parent visa_application;
@@ -3786,22 +3878,22 @@ model VisaChatMessage {
 // with deleteMany before reinserting on every Step 11 PATCH, matching
 // the Step 10 transactional pattern.
 model VisaTravelHistoryEntry {
-  id                       String   @id @default(cuid())
-  visaApplicationId        String
-  destinationEncrypted     Bytes?
-  dateEnteredMonth         Int?
-  dateEnteredYear          Int?
-  dateExitedMonth          Int?
-  dateExitedYear           Int?
-  arrivalMode              VisaArrivalMode?
-  pointOfEntryEncrypted    Bytes?
-  purposeOfTravel          VisaPurposeOfTravel?
-  otherPurposeEncrypted    Bytes?
-  sortOrder                Int      @default(0)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                    String               @id @default(cuid())
+  visaApplicationId     String
+  destinationEncrypted  Bytes?
+  dateEnteredMonth      Int?
+  dateEnteredYear       Int?
+  dateExitedMonth       Int?
+  dateExitedYear        Int?
+  arrivalMode           VisaArrivalMode?
+  pointOfEntryEncrypted Bytes?
+  purposeOfTravel       VisaPurposeOfTravel?
+  otherPurposeEncrypted Bytes?
+  sortOrder             Int                  @default(0)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
-  visaApplication          VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_travel_history_entries")
@@ -3823,7 +3915,7 @@ model VisaOtherCitizenship {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  visaApplication   VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
+  visaApplication VisaApplication @relation(fields: [visaApplicationId], references: [id], onDelete: Cascade)
 
   @@index([visaApplicationId])
   @@map("visa_other_citizenships")
@@ -3894,9 +3986,9 @@ model VisaCaseAssignment {
   unassignedAt   DateTime?
   unassignedById String?
 
-  case           VisaCase         @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  staff          User             @relation("StaffAssignments", fields: [staffId], references: [id])
-  assignedBy     User             @relation("AssignmentsMade", fields: [assignedById], references: [id])
+  case       VisaCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  staff      User     @relation("StaffAssignments", fields: [staffId], references: [id])
+  assignedBy User     @relation("AssignmentsMade", fields: [assignedById], references: [id])
 
   @@index([caseId, roleSlot, unassignedAt])
   @@index([staffId, unassignedAt])
@@ -3904,28 +3996,28 @@ model VisaCaseAssignment {
 }
 
 model OwnerApprovalRequest {
-  id              String                   @id @default(cuid())
-  requestedById   String
-  actionType      OwnerApprovalActionType
+  id             String                  @id @default(cuid())
+  requestedById  String
+  actionType     OwnerApprovalActionType
   // Encrypted JSON payload describing the action precisely (e.g.
   // { userId, newRole } for CHANGE_STAFF_ROLE). Stored as base64
   // ciphertext in a TEXT column.
-  payload         String
-  reason          String?
-  status          OwnerApprovalStatus      @default(PENDING)
-  decidedById     String?
-  decidedAt       DateTime?
-  decisionNote    String?
+  payload        String
+  reason         String?
+  status         OwnerApprovalStatus     @default(PENDING)
+  decidedById    String?
+  decidedAt      DateTime?
+  decisionNote   String?
   // 7 days from creation; expires lazily on read.
-  expiresAt       DateTime
-  executedAt      DateTime?
-  executionError  String?
+  expiresAt      DateTime
+  executedAt     DateTime?
+  executionError String?
 
-  requestedBy     User                     @relation("OwnerApprovalRequester", fields: [requestedById], references: [id])
-  decidedBy       User?                    @relation("OwnerApprovalDecider", fields: [decidedById], references: [id])
+  requestedBy User  @relation("OwnerApprovalRequester", fields: [requestedById], references: [id])
+  decidedBy   User? @relation("OwnerApprovalDecider", fields: [decidedById], references: [id])
 
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, expiresAt])
   @@index([requestedById, createdAt])
@@ -3935,12 +4027,12 @@ model OwnerApprovalRequest {
 // Soft-disable flag for staff users — avoids deleting historical
 // data. 1:1 with User (UNIQUE userId via @id).
 model StaffActiveStatus {
-  userId           String    @id
-  isActive         Boolean   @default(true)
-  deactivatedAt    DateTime?
-  deactivatedById  String?
+  userId          String    @id
+  isActive        Boolean   @default(true)
+  deactivatedAt   DateTime?
+  deactivatedById String?
 
-  user             User      @relation("StaffActive", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("StaffActive", fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("staff_active_status")
 }
@@ -3996,7 +4088,7 @@ model PlatformSetting {
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
 
-  updatedBy   User     @relation("PlatformSettingUpdater", fields: [updatedById], references: [id])
+  updatedBy User @relation("PlatformSettingUpdater", fields: [updatedById], references: [id])
 
   @@index([category])
   @@map("platform_settings")
@@ -4095,8 +4187,8 @@ model ScorecardSubmission {
   ipAddress            String?             @db.VarChar(64)
   userAgent            String?             @db.Text
 
-  user                 User                @relation("ScorecardUser", fields: [userId], references: [id], onDelete: Cascade)
-  lead                 Lead?               @relation("ScorecardLead", fields: [leadId], references: [id])
+  user User  @relation("ScorecardUser", fields: [userId], references: [id], onDelete: Cascade)
+  lead Lead? @relation("ScorecardLead", fields: [leadId], references: [id])
 
   @@index([userId, submittedAt])
   @@index([band, submittedAt])
@@ -4158,45 +4250,45 @@ enum TrackingLinkStatus {
 }
 
 model AffiliateAgent {
-  id              String                @id @default(uuid())
-  fullName        String                @db.VarChar(200)
-  email           String?               @db.VarChar(200)
-  phone           String?               @db.VarChar(64)
-  status          AffiliateAgentStatus  @default(ACTIVE)
-  notes           String?               @db.Text
-  createdById     String
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id          String               @id @default(uuid())
+  fullName    String               @db.VarChar(200)
+  email       String?              @db.VarChar(200)
+  phone       String?              @db.VarChar(64)
+  status      AffiliateAgentStatus @default(ACTIVE)
+  notes       String?              @db.Text
+  createdById String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
-  createdBy       User                  @relation("AffiliateAgentCreator", fields: [createdById], references: [id])
+  createdBy       User           @relation("AffiliateAgentCreator", fields: [createdById], references: [id])
   trackingLinks   TrackingLink[]
-  attributedLeads Lead[]                @relation("LeadAttributedAgent")
+  attributedLeads Lead[]         @relation("LeadAttributedAgent")
 
   @@index([status, fullName])
   @@map("affiliate_agents")
 }
 
 model TrackingLink {
-  id              String                @id @default(uuid())
-  shortCode       String                @unique @db.VarChar(16)
-  channel         MarketingChannelType
-  agentId         String?
-  campaignLabel   String?               @db.VarChar(200)
-  destination     String                @db.Text
-  status          TrackingLinkStatus    @default(ACTIVE)
+  id            String               @id @default(uuid())
+  shortCode     String               @unique @db.VarChar(16)
+  channel       MarketingChannelType
+  agentId       String?
+  campaignLabel String?              @db.VarChar(200)
+  destination   String               @db.Text
+  status        TrackingLinkStatus   @default(ACTIVE)
   // Aggregated counter — incremented on /s/:shortCode redirect.
   // We keep this denormalised so the index page can show click totals
   // without scanning the click table; `TrackingLinkClick` is the
   // source of truth for forensics.
-  clickCount      Int                   @default(0)
-  createdById     String
-  createdAt       DateTime              @default(now())
-  archivedAt      DateTime?
+  clickCount    Int                  @default(0)
+  createdById   String
+  createdAt     DateTime             @default(now())
+  archivedAt    DateTime?
 
-  createdBy       User                  @relation("TrackingLinkCreator", fields: [createdById], references: [id])
-  agent           AffiliateAgent?       @relation(fields: [agentId], references: [id])
+  createdBy       User                @relation("TrackingLinkCreator", fields: [createdById], references: [id])
+  agent           AffiliateAgent?     @relation(fields: [agentId], references: [id])
   clicks          TrackingLinkClick[]
-  attributedLeads Lead[]                @relation("LeadAttributedLink")
+  attributedLeads Lead[]              @relation("LeadAttributedLink")
 
   @@index([channel, createdAt])
   @@index([agentId, createdAt])
@@ -4205,14 +4297,14 @@ model TrackingLink {
 }
 
 model TrackingLinkClick {
-  id              String                @id @default(uuid())
-  linkId          String
-  clickedAt       DateTime              @default(now())
-  ipAddress       String?               @db.VarChar(64)
-  userAgent       String?               @db.Text
-  referer         String?               @db.Text
+  id        String   @id @default(uuid())
+  linkId    String
+  clickedAt DateTime @default(now())
+  ipAddress String?  @db.VarChar(64)
+  userAgent String?  @db.Text
+  referer   String?  @db.Text
 
-  link            TrackingLink          @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  link TrackingLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
 
   @@index([linkId, clickedAt])
   @@map("tracking_link_clicks")
@@ -4241,26 +4333,26 @@ enum WixPaymentStatus {
 // only — we do NOT auto-update lead status from this row (per
 // strategic decision: payments are recorded, never actioned).
 model WixPayment {
-  id                String              @id @default(uuid())
-  wixPaymentId      String              @unique @db.VarChar(200)
-  wixBookingId      String?             @db.VarChar(200)
-  paymentType       WixPaymentType
-  amount            Decimal             @db.Decimal(10, 2)
-  currency          String              @db.VarChar(3)
-  status            WixPaymentStatus    @default(RECEIVED)
-  customerEmail     String              @db.VarChar(200)
-  customerName      String?             @db.VarChar(200)
-  customerPhone     String?             @db.VarChar(64)
-  bookingStart      DateTime?
-  bookingEnd        DateTime?
-  bookingLocation   String?             @db.VarChar(200)
-  matchedLeadId     String?
-  matchedUserId     String?
-  rawPayload        Json
-  receivedAt        DateTime            @default(now())
+  id              String           @id @default(uuid())
+  wixPaymentId    String           @unique @db.VarChar(200)
+  wixBookingId    String?          @db.VarChar(200)
+  paymentType     WixPaymentType
+  amount          Decimal          @db.Decimal(10, 2)
+  currency        String           @db.VarChar(3)
+  status          WixPaymentStatus @default(RECEIVED)
+  customerEmail   String           @db.VarChar(200)
+  customerName    String?          @db.VarChar(200)
+  customerPhone   String?          @db.VarChar(64)
+  bookingStart    DateTime?
+  bookingEnd      DateTime?
+  bookingLocation String?          @db.VarChar(200)
+  matchedLeadId   String?
+  matchedUserId   String?
+  rawPayload      Json
+  receivedAt      DateTime         @default(now())
 
-  matchedLead       Lead?               @relation("WixPaymentLead", fields: [matchedLeadId], references: [id])
-  matchedUser       User?               @relation("WixPaymentUser", fields: [matchedUserId], references: [id])
+  matchedLead Lead? @relation("WixPaymentLead", fields: [matchedLeadId], references: [id])
+  matchedUser User? @relation("WixPaymentUser", fields: [matchedUserId], references: [id])
 
   @@index([customerEmail, receivedAt])
   @@index([matchedLeadId])
@@ -4305,7 +4397,7 @@ model Document {
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 
-  case     Case @relation("CaseDocuments",   fields: [caseId],     references: [id], onDelete: Cascade)
+  case     Case @relation("CaseDocuments", fields: [caseId], references: [id], onDelete: Cascade)
   uploader User @relation("DocumentUploader", fields: [uploaderId], references: [id], onDelete: Restrict)
 
   @@index([caseId])

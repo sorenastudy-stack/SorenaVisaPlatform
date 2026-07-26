@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
-  Clock, BookOpen, KeyRound, Award, ArrowLeftRight,
+  Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 import { portalBrand } from '@/lib/portal-branding';
@@ -46,6 +46,9 @@ const COMPLIANCE_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // PR-HANDOFFS — Owner-dashboard Handoffs section (unstaffed roles + stuck cases).
 // Same oversight tier as Compliance.
 const HANDOFFS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
+// PR-NURTURE — "My follow-ups": nurture call tasks. Client Officers (assignees)
+// + admin tier (see all). Matches the nurture controller's @Roles.
+const FOLLOWUPS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 // Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
 // OWNER only. Additive; no existing role's access changes.
 const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;
@@ -87,6 +90,8 @@ const NAV: NavItem[] = [
   { label: 'staff.nav.meetings',          href: '/staff/meetings',           icon: <Calendar size={18} /> },
   // PR-WALLET slice 2: consultation bookings + outcome marker.
   { label: 'Bookings',                     href: '/staff/bookings',           icon: <CalendarClock size={18} />, roleGate: BOOKINGS_ROLES },
+  // PR-NURTURE: nurture call tasks for the assigned Client Officer.
+  { label: 'Follow-ups',                   href: '/staff/follow-ups',         icon: <PhoneCall size={18} />,   roleGate: FOLLOWUPS_ROLES },
   { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} />,       roleGate: TICKETS_ROLES },
   { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },
   { label: 'staff.nav.approvals',         href: '/staff/approvals',          icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },

@@ -24,6 +24,7 @@ import {
 } from '@/components/scorecard/ScorecardBandChip';
 // PR-CONTRACT-LEAD (Phase B) — reuse the case-detail send panel in lead mode.
 import { SendContractPanel } from '@/components/staff/cases/detail/SendContractPanel';
+import { NurtureControl } from '@/components/staff/nurture/NurtureControl';
 
 // PR-CRM-LEADS — Staff lead detail page.
 //
@@ -220,6 +221,8 @@ export default function StaffLeadDetailPage({
             leadCaseId={lead.caseId}
             onSent={() => load()}
           />
+          {/* PR-NURTURE — start/stop the post-FREE_15 nurture sequence. */}
+          <NurtureControl leadId={lead.id} />
           <StatusHistoryCard history={lead.statusHistory} />
         </div>
 

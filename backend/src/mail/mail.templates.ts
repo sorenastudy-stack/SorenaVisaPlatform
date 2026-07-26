@@ -27,6 +27,12 @@ interface WrapOpts {
   heading?: string;
   /** Override the website link in the footer (rare). */
   websiteUrl?: string;
+  /**
+   * PR-NURTURE — when set, renders a working "Unsubscribe" link in the footer.
+   * Required on every nurture + newsletter email (marketing-style sends); the
+   * transactional emails omit it (they're account-necessary, not opt-out-able).
+   */
+  unsubscribeUrl?: string;
 }
 
 export function wrapHtml(bodyHtml: string, opts: WrapOpts = {}): string {
@@ -80,6 +86,7 @@ export function wrapHtml(bodyHtml: string, opts: WrapOpts = {}): string {
           </tr>
         </table>
         <div style="color:${MUTED};font-size:11px;margin-top:12px;">You're receiving this because you have an active account with Sorena Visa.</div>
+        ${opts.unsubscribeUrl ? `<div style="color:${MUTED};font-size:11px;margin-top:6px;">Prefer not to receive these? <a href="${opts.unsubscribeUrl}" style="color:${MUTED};text-decoration:underline;">Unsubscribe</a> — you'll stop getting nurture and newsletter emails.</div>` : ''}
       </td>
     </tr>
   </table>
@@ -410,4 +417,124 @@ export function staffBookingNotificationBody(
     </p>
     <p style="color:${MUTED};font-size:13px;">This session also appears in your Sorena staff portal.</p>
   `;
+}
+
+// ─── PR-NURTURE — nurture sequence + newsletter body fragments ───────────────
+//
+// Placeholder copy: the structure, the single clear CTA, the optional
+// YouTube-thumbnail slot, and the "no need to reply" note are the built pieces;
+// the finished marketing copy + real video/blog/webinar links are TBD and slot
+// in later. Every builder returns ONLY the inner body — wrapHtml() adds the
+// shell + the unsubscribe footer.
+
+// A single primary call-to-action button (house navy/gold). Exactly one per
+// email — the nurture brief calls for one clear CTA.
+export function ctaButton(href: string, label: string): string {
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+      <tr><td style="border-radius:8px;background:${NAVY};">
+        <a href="${esc(href)}" style="display:inline-block;padding:13px 28px;color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;border-radius:8px;">${esc(label)}</a>
+      </td></tr>
+    </table>`;
+}
+
+// "You don't need to reply to this email" reassurance line (nurture brief #8).
+function noReplyNote(): string {
+  return `<p style="color:${MUTED};font-size:12px;font-style:italic;margin-top:20px;">You don't need to reply to this email — if you'd like to talk, your Sorena adviser will be in touch, or use the button above.</p>`;
+}
+
+// Optional embedded video thumbnail that links out to YouTube. Renders nothing
+// when no video is supplied, so a template degrades cleanly to text-only.
+export interface VideoSlot { youtubeUrl?: string | null; thumbnailUrl?: string | null; caption?: string | null; }
+function videoThumb(v?: VideoSlot | null): string {
+  if (!v || !v.youtubeUrl) return '';
+  const thumb = v.thumbnailUrl || `${ASSET_BASE}/nurture/video-placeholder.png`;
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:20px 0;">
+      <tr><td align="center">
+        <a href="${esc(v.youtubeUrl)}" style="text-decoration:none;">
+          <img src="${esc(thumb)}" alt="${esc(v.caption || 'Watch on YouTube')}" width="536" style="display:block;max-width:100%;border-radius:10px;border:1px solid #EFEAE0;" />
+          ${v.caption ? `<div style="color:${NAVY};font-size:13px;font-weight:600;margin-top:8px;">▶ ${esc(v.caption)}</div>` : ''}
+        </a>
+      </td></tr>
+    </table>`;
+}
+
+export interface NurtureEmailData { name: string | null; ctaUrl: string; video?: VideoSlot | null; }
+
+// Day 1 — recap the consultation + restate the pathway.
+export function nurtureRecapBody(d: NurtureEmailData): string {
+  return `
+    <p style="margin:0 0 14px;">Hi ${esc(d.name || 'there')},</p>
+    <p style="margin:0 0 14px;">Thanks again for your free 15-minute consultation with Sorena Visa. Here's a quick recap of the pathway we discussed and the next steps toward your study and visa goals.</p>
+    <p style="margin:0 0 14px;">[Consultation recap + pathway summary — copy TBD.]</p>
+    ${videoThumb(d.video)}
+    ${ctaButton(d.ctaUrl, 'View your pathway')}
+    ${noReplyNote()}`;
+}
+
+// Day 6 — address the #1 common objection (cost / timeline / documents).
+export function nurtureObjectionBody(d: NurtureEmailData): string {
+  return `
+    <p style="margin:0 0 14px;">Hi ${esc(d.name || 'there')},</p>
+    <p style="margin:0 0 14px;">One thing we hear a lot is a concern about [cost / timeline / documents]. Here's how it actually works, and why it's more manageable than it looks.</p>
+    <p style="margin:0 0 14px;">[Objection-handling copy — TBD.]</p>
+    ${videoThumb(d.video)}
+    ${ctaButton(d.ctaUrl, 'See how it works')}
+    ${noReplyNote()}`;
+}
+
+// Day 13 — a similar-student story.
+export function nurtureStoryBody(d: NurtureEmailData): string {
+  return `
+    <p style="margin:0 0 14px;">Hi ${esc(d.name || 'there')},</p>
+    <p style="margin:0 0 14px;">We wanted to share a story from a student in a situation a lot like yours — where they started, what they were unsure about, and where they are now.</p>
+    <p style="margin:0 0 14px;">[Similar-student story — copy TBD.]</p>
+    ${videoThumb(d.video)}
+    ${ctaButton(d.ctaUrl, 'Read their story')}
+    ${noReplyNote()}`;
+}
+
+// Day 17 — honest urgency (real intake deadlines, never manufactured).
+export function nurtureUrgencyBody(d: NurtureEmailData): string {
+  return `
+    <p style="margin:0 0 14px;">Hi ${esc(d.name || 'there')},</p>
+    <p style="margin:0 0 14px;">A quick, honest heads-up on timing: real intake and application deadlines are approaching, and starting sooner gives you more options. Nothing here is manufactured urgency — just the actual dates worth planning around.</p>
+    <p style="margin:0 0 14px;">[Real upcoming intake deadlines — TBD.]</p>
+    ${videoThumb(d.video)}
+    ${ctaButton(d.ctaUrl, 'Start when you’re ready')}
+    ${noReplyNote()}`;
+}
+
+// Monthly newsletter. Blog / video / webinar slots each render only if supplied
+// — an empty month never produces a broken-looking email. If ALL three are
+// empty the caller skips the send entirely (see NurtureService).
+export interface NewsletterData {
+  name: string | null;
+  ctaUrl: string;
+  blog?: { title: string; url: string } | null;
+  video?: VideoSlot | null;
+  webinars?: Array<{ title: string; dateLabel: string; url?: string | null }> | null;
+}
+export function newsletterBody(d: NewsletterData): string {
+  const blog = d.blog
+    ? `<div style="margin:0 0 20px;padding:16px;background:${OFF_WHITE};border-radius:10px;">
+         <div style="color:${GOLD};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Latest from the blog</div>
+         <a href="${esc(d.blog.url)}" style="color:${NAVY};font-size:16px;font-weight:700;text-decoration:none;display:block;margin-top:6px;">${esc(d.blog.title)}</a>
+       </div>`
+    : '';
+  const webinars = d.webinars && d.webinars.length
+    ? `<div style="margin:0 0 20px;">
+         <div style="color:${GOLD};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Upcoming webinars</div>
+         ${d.webinars.map((w) => `<div style="margin:0 0 8px;color:${BODY};font-size:14px;">📅 <strong>${esc(w.dateLabel)}</strong> — ${w.url ? `<a href="${esc(w.url)}" style="color:${NAVY};">${esc(w.title)}</a>` : esc(w.title)}</div>`).join('')}
+       </div>`
+    : '';
+  return `
+    <p style="margin:0 0 14px;">Hi ${esc(d.name || 'there')},</p>
+    <p style="margin:0 0 14px;">Here's what's new at Sorena Visa this month.</p>
+    ${blog}
+    ${videoThumb(d.video)}
+    ${webinars}
+    ${ctaButton(d.ctaUrl, 'Explore your options')}
+    ${noReplyNote()}`;
 }

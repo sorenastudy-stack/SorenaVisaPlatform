@@ -23,6 +23,13 @@ import {
   consultationConfirmationBody,
   bookingConfirmationBody,
   staffBookingNotificationBody,
+  nurtureRecapBody,
+  nurtureObjectionBody,
+  nurtureStoryBody,
+  nurtureUrgencyBody,
+  newsletterBody,
+  type VideoSlot,
+  type NewsletterData,
 } from './mail.templates';
 
 // PR-EMAIL-1 — Unified Resend-based email service.
@@ -53,7 +60,7 @@ export class MailService implements OnModuleInit {
 
   onModuleInit() {
     const apiKey = process.env.RESEND_API_KEY ?? '';
-    this.from = process.env.EMAIL_FROM ?? 'Sorena Visa <noreply@sorenavisa.co.nz>';
+    this.from = process.env.EMAIL_FROM ?? 'Sorena Visa <noreply@sorenavisa.com>';
     this.frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
 
     if (!apiKey) {
@@ -457,6 +464,94 @@ export class MailService implements OnModuleInit {
   }
 
   // ─── Internal ──────────────────────────────────────────────────────
+
+  // ─── PR-NURTURE — nurture sequence + newsletter sends ──────────────────
+  //
+  // Marketing-style sends: they go from the nurture sender (NURTURE_EMAIL_FROM,
+  // falling back to EMAIL_FROM) and carry a working unsubscribe link. Unlike the
+  // transactional `send()`, these RETURN a boolean so NurtureService can record
+  // SENT vs FAILED in the LeadNurtureSent ledger (mirroring visa-expiry).
+
+  private nurtureFrom(): string {
+    return process.env.NURTURE_EMAIL_FROM ?? this.from;
+  }
+
+  private static readonly NURTURE_SUBJECTS: Record<number, string> = {
+    1: 'A recap of your Sorena Visa consultation',
+    3: 'The one thing most people ask us about',
+    5: 'A student who started right where you are',
+    6: 'A few dates worth planning around',
+  };
+  private static readonly NURTURE_HEADINGS: Record<number, string> = {
+    1: 'Your consultation recap',
+    3: 'Let’s clear up the big question',
+    5: 'A story you might relate to',
+    6: 'Timing worth knowing about',
+  };
+
+  // Sequence emails (steps 1/3/5/6 → Day 1/6/13/17). Returns true if sent.
+  async sendNurtureSequenceEmail(
+    to: string,
+    step: number,
+    data: { name: string | null; ctaUrl: string; unsubscribeUrl: string; video?: VideoSlot | null },
+  ): Promise<boolean> {
+    const bodyData = { name: data.name, ctaUrl: data.ctaUrl, video: data.video ?? null };
+    const body =
+      step === 1 ? nurtureRecapBody(bodyData)
+      : step === 3 ? nurtureObjectionBody(bodyData)
+      : step === 5 ? nurtureStoryBody(bodyData)
+      : step === 6 ? nurtureUrgencyBody(bodyData)
+      : null;
+    if (!body) {
+      this.logger.error(`sendNurtureSequenceEmail: no email template for step ${step}`);
+      return false;
+    }
+    return this.sendReturning({
+      to,
+      from: this.nurtureFrom(),
+      subject: MailService.NURTURE_SUBJECTS[step],
+      html: wrapHtml(body, { heading: MailService.NURTURE_HEADINGS[step], unsubscribeUrl: data.unsubscribeUrl }),
+    });
+  }
+
+  // Monthly newsletter. Caller guarantees at least one content slot is present.
+  async sendNurtureNewsletter(
+    to: string,
+    data: NewsletterData & { unsubscribeUrl: string },
+  ): Promise<boolean> {
+    return this.sendReturning({
+      to,
+      from: this.nurtureFrom(),
+      subject: 'This month at Sorena Visa',
+      html: wrapHtml(newsletterBody(data), { heading: 'This month at Sorena Visa', unsubscribeUrl: data.unsubscribeUrl }),
+    });
+  }
+
+  // Like send(), but returns success (for ledger accounting) and allows a
+  // per-send `from` override. Mock mode (no API key) counts as sent.
+  private async sendReturning(args: { to: string; subject: string; html: string; from?: string }): Promise<boolean> {
+    if (!this.enabled || !this.client) {
+      this.logger.log(`[MAIL MOCK] to=${args.to} subject=${args.subject}`);
+      return true;
+    }
+    try {
+      const res = await this.client.emails.send({
+        from: args.from ?? this.from,
+        to: args.to,
+        subject: args.subject,
+        html: args.html,
+      });
+      if (res.error) {
+        this.logger.error(`Resend send failed to=${args.to} subject="${args.subject}": ${res.error.message}`);
+        return false;
+      }
+      this.logger.log(`Email sent to=${args.to} subject="${args.subject}" id=${res.data?.id ?? '?'}`);
+      return true;
+    } catch (err: any) {
+      this.logger.error(`Resend exception to=${args.to} subject="${args.subject}": ${err?.message ?? err}`);
+      return false;
+    }
+  }
 
   private async send(args: { to: string; subject: string; html: string }): Promise<void> {
     if (!this.enabled || !this.client) {
