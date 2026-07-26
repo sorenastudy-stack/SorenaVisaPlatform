@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
-  Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall, CalendarDays,
+  Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall, CalendarDays, DollarSign,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 import { portalBrand } from '@/lib/portal-branding';
@@ -51,6 +51,9 @@ const HANDOFFS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 const FOLLOWUPS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 // PR-DIARY — "My day": daily agenda (call tasks + meetings). Assignee roles + admin.
 const DIARY_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
+// PR-COMMISSIONS-UI — institutional/provider commission ledger. Money-managing
+// tier: OWNER + FINANCE (+ SUPER_ADMIN).
+const COMMISSIONS_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'] as const;
 // Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
 // OWNER only. Additive; no existing role's access changes.
 const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;
@@ -103,6 +106,9 @@ const NAV: NavItem[] = [
   // PR-HANDOFFS: unstaffed roles + stalled cases. Sits next to Compliance —
   // both are cross-case oversight surfaces for the Owner tier.
   { label: 'Handoffs',                     href: '/staff/handoffs',           icon: <ArrowLeftRight size={18} />, roleGate: HANDOFFS_ROLES },
+  // PR-COMMISSIONS-UI: institutional/provider commission ledger (revenue Sorena
+  // earns from providers). OWNER + FINANCE.
+  { label: 'Commissions',                  href: '/staff/commissions',        icon: <DollarSign size={18} />,  roleGate: COMMISSIONS_ROLES },
   // PR-DOCUSIGN-1 step 3 (Screen B): LIA credential verification queue.
   // Inline label string — no next-intl yet, matching the rest of this
   // surface's English-only labels (the .nav.* keys above are the

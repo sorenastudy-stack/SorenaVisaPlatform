@@ -40,8 +40,9 @@ export class CommissionsService {
   }
 
   async confirmCommission(id: string, actorId: string | null, userRole: string) {
-    if (!['OPERATIONS', 'SUPER_ADMIN'].includes(userRole)) {
-      throw new ForbiddenException('Only OPERATIONS and SUPER_ADMIN can confirm commissions');
+    // PR-COMMISSIONS-UI — money-managing tier (OWNER/FINANCE + SUPER_ADMIN).
+    if (!['OWNER', 'SUPER_ADMIN', 'FINANCE'].includes(userRole)) {
+      throw new ForbiddenException('Only OWNER, FINANCE and SUPER_ADMIN can confirm commissions');
     }
 
     const commission = await this.ensureCommissionExists(id);
@@ -77,8 +78,9 @@ export class CommissionsService {
   }
 
   async updateReminderDate(id: string, dto: UpdateReminderDateDto, userRole: string) {
-    if (!['ADMIN', 'SUPER_ADMIN'].includes(userRole)) {
-      throw new ForbiddenException('Only ADMIN and SUPER_ADMIN can update reminder dates');
+    // PR-COMMISSIONS-UI — money-managing tier (OWNER/FINANCE + SUPER_ADMIN).
+    if (!['OWNER', 'SUPER_ADMIN', 'FINANCE'].includes(userRole)) {
+      throw new ForbiddenException('Only OWNER, FINANCE and SUPER_ADMIN can update reminder dates');
     }
 
     await this.ensureCommissionExists(id);
@@ -95,7 +97,9 @@ export class CommissionsService {
   // role gate: the money-managing tier sees the ledger, everyone else is
   // refused. Enforced here in the service, not just the controller, so no
   // future caller (internal or a new route) can bypass it.
-  static readonly VIEW_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS', 'FINANCE'];
+  // PR-COMMISSIONS-UI — the money-managing tier reads the ledger (OWNER + FINANCE,
+  // + SUPER_ADMIN). Enforced here in the service, not just the controller.
+  static readonly VIEW_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'];
 
   async findAll(
     query: CommissionListQueryDto,

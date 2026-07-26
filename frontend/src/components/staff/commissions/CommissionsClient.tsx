@@ -1,0 +1,308 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { DollarSign, Loader2, Plus, BellRing, X, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { api } from '@/lib/api';
+import { Card, CardContent } from '@/components/ui/Card';
+
+// PR-COMMISSIONS-UI — institutional / provider commission ledger. This is revenue
+// Sorena EARNS from education providers after a student enrolls — NOT sales-rep
+// payouts (a separate future model). Read + money-lifecycle for OWNER + FINANCE;
+// recording a new commission is OWNER/SUPER_ADMIN (it reads enrolment applications,
+// which are admissions-tier gated). All actions reuse the existing CommissionsService.
+
+type Status = 'ESTIMATED' | 'CONFIRMED' | 'INVOICED' | 'PAID' | 'CANCELLED';
+
+interface Commission {
+  id: string;
+  commissionYear: number;
+  commissionType: 'PERCENTAGE' | 'FIXED';
+  commissionValue: number;
+  estimatedAmountNZD: number | null;
+  actualAmountNZD: number | null;
+  currency: string;
+  status: Status;
+  renewalReminderDate: string | null;
+  reminderSent: boolean;
+  provider: { id: string; name: string } | null;
+  programme: { id: string; name: string } | null;
+  application: { case?: { lead?: { contact?: { fullName?: string | null } | null } | null } | null } | null;
+}
+
+const STATUSES: Status[] = ['ESTIMATED', 'CONFIRMED', 'INVOICED', 'PAID', 'CANCELLED'];
+const STATUS_TONE: Record<Status, string> = {
+  ESTIMATED: 'bg-gray-100 text-gray-600',
+  CONFIRMED: 'bg-sky-100 text-sky-700',
+  INVOICED:  'bg-amber-100 text-amber-800',
+  PAID:      'bg-emerald-100 text-emerald-700',
+  CANCELLED: 'bg-rose-100 text-rose-700',
+};
+
+// The valid next lifecycle moves (mirrors the service's transition map).
+const NEXT_ACTIONS: Record<Status, Array<{ label: string; to?: Status; confirm?: boolean; tone: string }>> = {
+  ESTIMATED: [{ label: 'Confirm', confirm: true, tone: 'bg-[#1e3a5f] text-white' }, { label: 'Cancel', to: 'CANCELLED', tone: 'border border-rose-200 text-rose-600' }],
+  CONFIRMED: [{ label: 'Mark invoiced', to: 'INVOICED', tone: 'bg-[#1e3a5f] text-white' }, { label: 'Cancel', to: 'CANCELLED', tone: 'border border-rose-200 text-rose-600' }],
+  INVOICED:  [{ label: 'Mark paid', to: 'PAID', tone: 'bg-emerald-600 text-white' }, { label: 'Cancel', to: 'CANCELLED', tone: 'border border-rose-200 text-rose-600' }],
+  PAID:      [],
+  CANCELLED: [],
+};
+
+const money = (n: number | null, ccy = 'NZD') => (n == null ? '—' : `${ccy} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+const clientName = (c: Commission) => c.application?.case?.lead?.contact?.fullName ?? '—';
+const fmtDate = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-GB').format(new Date(iso)) : '—');
+const isReminderDue = (c: Commission) =>
+  !!c.renewalReminderDate && !c.reminderSent && c.status !== 'PAID' && c.status !== 'CANCELLED' && new Date(c.renewalReminderDate) <= new Date();
+
+export function CommissionsClient({ role }: { role: string }) {
+  const canRecord = role === 'OWNER' || role === 'SUPER_ADMIN';
+  const [rows, setRows] = useState<Commission[] | null>(null);
+  const [error, setError] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'' | Status>('');
+  const [providerFilter, setProviderFilter] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [showRecord, setShowRecord] = useState(false);
+
+  const load = () => {
+    const qs = new URLSearchParams();
+    if (statusFilter) qs.set('status', statusFilter);
+    if (providerFilter) qs.set('providerId', providerFilter);
+    setRows(null); setError(false);
+    api.get<Commission[]>(`/commissions${qs.toString() ? `?${qs}` : ''}`).then(setRows).catch(() => setError(true));
+  };
+  useEffect(load, [statusFilter, providerFilter]);
+
+  // Provider filter options derived from the ledger itself (no separate catalog
+  // fetch — FINANCE isn't admitted to the providers endpoint).
+  const providerOptions = useMemo(() => {
+    const m = new Map<string, string>();
+    (rows ?? []).forEach((c) => c.provider && m.set(c.provider.id, c.provider.name));
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows]);
+
+  const dueCount = (rows ?? []).filter(isReminderDue).length;
+
+  const act = async (c: Commission, fn: () => Promise<unknown>, ok: string) => {
+    setBusyId(c.id);
+    try { await fn(); toast.success(ok); load(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'Action failed'); }
+    finally { setBusyId(null); }
+  };
+  const doAction = (c: Commission, a: { label: string; to?: Status; confirm?: boolean }) => {
+    if (a.confirm) return act(c, () => api.post(`/commissions/${c.id}/confirm`, {}), 'Commission confirmed.');
+    return act(c, () => api.patch(`/commissions/${c.id}/status`, { status: a.to }), `Marked ${a.to?.toLowerCase()}.`);
+  };
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10 space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <DollarSign size={22} className="text-[#1e3a5f]" />
+            <h1 className="text-2xl font-bold text-[#1e3a5f]">Commissions</h1>
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            Institutional / provider revenue — commission Sorena earns from education providers after a student enrolls.
+          </p>
+        </div>
+        {canRecord && (
+          <button type="button" onClick={() => setShowRecord(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162d4a]">
+            <Plus size={15} /> Record commission
+          </button>
+        )}
+      </div>
+
+      {/* Renewal-reminder banner */}
+      {dueCount > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <BellRing size={16} className="text-amber-600" />
+          <span><strong>{dueCount}</strong> commission{dueCount === 1 ? '' : 's'} due for a renewal reminder.</span>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as '' | Status)}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
+          <option value="">All statuses</option>
+          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
+          <option value="">All providers</option>
+          {providerOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </select>
+      </div>
+
+      <Card><CardContent className="p-0">
+        {error && <div className="p-4"><div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">Couldn’t load the commission ledger. Please refresh.</div></div>}
+        {!rows && !error && <div className="flex items-center gap-2 p-8 text-sm text-gray-400"><Loader2 size={16} className="animate-spin" /> Loading…</div>}
+        {rows && rows.length === 0 && (
+          <div className="py-12 text-center">
+            <CheckCircle2 size={28} className="mx-auto mb-2 text-[#c9a961]" />
+            <p className="text-sm font-medium text-[#4A4A4A]">No commissions{statusFilter || providerFilter ? ' match these filters' : ' recorded yet'}</p>
+            <p className="mt-1 text-xs text-gray-400">Provider revenue will appear here as enrolments are recorded.</p>
+          </div>
+        )}
+        {rows && rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <th className="py-2.5 px-3 font-semibold">Student</th>
+                  <th className="py-2.5 px-3 font-semibold">Provider · Programme</th>
+                  <th className="py-2.5 px-3 font-semibold">Yr</th>
+                  <th className="py-2.5 px-3 font-semibold">Rate</th>
+                  <th className="py-2.5 px-3 font-semibold">Est. / Actual</th>
+                  <th className="py-2.5 px-3 font-semibold">Status</th>
+                  <th className="py-2.5 px-3 font-semibold">Renewal</th>
+                  <th className="py-2.5 px-3 font-semibold w-0"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((c) => (
+                  <tr key={c.id} className="border-b border-gray-50 hover:bg-[#faf8f3]">
+                    <td className="py-2.5 px-3 font-medium text-[#1e3a5f]">{clientName(c)}</td>
+                    <td className="py-2.5 px-3 text-gray-600">
+                      <div className="font-medium text-[#1e3a5f]">{c.provider?.name ?? '—'}</div>
+                      <div className="text-xs text-gray-400">{c.programme?.name ?? '—'}</div>
+                    </td>
+                    <td className="py-2.5 px-3 text-gray-500">{c.commissionYear}</td>
+                    <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">
+                      {c.commissionType === 'PERCENTAGE' ? `${c.commissionValue}%` : money(c.commissionValue, c.currency)}
+                    </td>
+                    <td className="py-2.5 px-3 text-gray-600 whitespace-nowrap">
+                      {money(c.estimatedAmountNZD, c.currency)} <span className="text-gray-300">/</span> {money(c.actualAmountNZD, c.currency)}
+                    </td>
+                    <td className="py-2.5 px-3"><span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_TONE[c.status]}`}>{c.status}</span></td>
+                    <td className="py-2.5 px-3 text-xs whitespace-nowrap">
+                      {c.renewalReminderDate ? (
+                        <span className={isReminderDue(c) ? 'font-semibold text-amber-700' : 'text-gray-500'}>
+                          {isReminderDue(c) && <BellRing size={11} className="mr-1 inline" />}{fmtDate(c.renewalReminderDate)}
+                        </span>
+                      ) : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        {NEXT_ACTIONS[c.status].map((a) => (
+                          <button key={a.label} type="button" disabled={busyId === c.id}
+                            onClick={() => doAction(c, a)}
+                            className={`rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 ${a.tone}`}>
+                            {busyId === c.id ? '…' : a.label}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent></Card>
+
+      {showRecord && canRecord && (
+        <RecordCommissionModal onClose={() => setShowRecord(false)} onDone={() => { setShowRecord(false); load(); }} />
+      )}
+    </div>
+  );
+}
+
+// ── Record a commission: pick case → application → enter rate/estimate ───────
+interface CaseRow { id: string; studentName: string; stage: string }
+interface AppRow { id: string; status: string; providerId: string; programmeId: string; provider: { name: string } | null; programme: { name: string } | null }
+
+function RecordCommissionModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [cases, setCases] = useState<CaseRow[]>([]);
+  const [caseId, setCaseId] = useState('');
+  const [apps, setApps] = useState<AppRow[]>([]);
+  const [appId, setAppId] = useState('');
+  const [value, setValue] = useState('');
+  const [type, setType] = useState<'PERCENTAGE' | 'FIXED'>('PERCENTAGE');
+  const [year, setYear] = useState('1');
+  const [estimated, setEstimated] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.get<{ items: CaseRow[] }>('/api/staff/cases?activeOnly=true&pageSize=200').then((d) => setCases(d.items)).catch(() => {});
+  }, []);
+  useEffect(() => {
+    setApps([]); setAppId('');
+    if (!caseId) return;
+    api.get<AppRow[]>(`/applications/${caseId}`).then(setApps).catch(() => {});
+  }, [caseId]);
+
+  const app = apps.find((a) => a.id === appId);
+
+  const submit = async () => {
+    if (!app || !value) { toast.error('Pick an application and enter a rate.'); return; }
+    setBusy(true);
+    try {
+      await api.post('/commissions', {
+        applicationId: app.id, providerId: app.providerId, programmeId: app.programmeId,
+        commissionType: type, commissionValue: Number(value),
+        commissionYear: Number(year) || 1,
+        ...(estimated ? { estimatedAmountNZD: Number(estimated) } : {}),
+      });
+      toast.success('Commission recorded.');
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not record the commission');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-[#1e3a5f]">Record commission</h2>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <p className="mb-4 text-xs text-gray-500">Provider revenue for an enrolment. Pick the student’s case and the specific programme application.</p>
+
+        <label className="mb-1 block text-xs font-semibold text-gray-600">Case (student)</label>
+        <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+          <option value="">Select a case…</option>
+          {cases.map((c) => <option key={c.id} value={c.id}>{c.studentName || c.id} · {c.stage}</option>)}
+        </select>
+
+        <label className="mb-1 block text-xs font-semibold text-gray-600">Application (programme)</label>
+        <select value={appId} onChange={(e) => setAppId(e.target.value)} disabled={!caseId} className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:bg-gray-50">
+          <option value="">{caseId ? (apps.length ? 'Select an application…' : 'No applications on this case') : 'Pick a case first'}</option>
+          {apps.map((a) => <option key={a.id} value={a.id}>{a.provider?.name ?? '—'} · {a.programme?.name ?? '—'} ({a.status})</option>)}
+        </select>
+
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Type</label>
+            <select value={type} onChange={(e) => setType(e.target.value as 'PERCENTAGE' | 'FIXED')} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+              <option value="PERCENTAGE">Percentage (%)</option>
+              <option value="FIXED">Fixed (NZD)</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Rate {type === 'PERCENTAGE' ? '(%)' : '(NZD)'}</label>
+            <input type="number" value={value} onChange={(e) => setValue(e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Year</label>
+            <input type="number" value={year} onChange={(e) => setYear(e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Estimated NZD (optional)</label>
+            <input type="number" value={estimated} onChange={(e) => setEstimated(e.target.value)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+          <button type="button" onClick={submit} disabled={busy || !app || !value}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Record
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

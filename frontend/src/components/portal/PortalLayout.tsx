@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, Briefcase, FileText,
   Shield, ShieldCheck, FileSearch, CheckSquare, BarChart2,
-  Calendar, DollarSign, MessageSquare, CreditCard, Menu, X, LogOut, Globe,
+  MessageSquare, CreditCard, Menu, X, LogOut, Globe,
   ClipboardList, LineChart, Clock, UserSquare2, BarChart3,
   Scale, Cog, type LucideIcon,
 } from 'lucide-react';
@@ -50,11 +50,13 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     { label: 'Cases',       href: '/ops/cases',        icon: <Briefcase size={18} /> },
   ],
   sales: [
+    // PR-COMMISSIONS-UI / sales cleanup: the Pipeline, Consultations, and
+    // Commissions pages were empty stubs (each blocked on the SALES role not being
+    // admitted to the underlying APIs) and were removed. Institutional commissions
+    // now live in the Owner dashboard (/staff/commissions, OWNER/FINANCE). Pipeline
+    // + consultations are served for the Owner by /staff/leads + /staff/meetings.
     { label: 'Dashboard',     href: '/sales',               icon: <LayoutDashboard size={18} /> },
     { label: 'Leads',         href: '/sales/leads',         icon: <Users size={18} /> },
-    { label: 'Pipeline',      href: '/sales/pipeline',      icon: <BarChart2 size={18} /> },
-    { label: 'Consultations', href: '/sales/consultations', icon: <Calendar size={18} /> },
-    { label: 'Commissions',   href: '/sales/commissions',   icon: <DollarSign size={18} /> },
   ],
   lia: [
     { label: 'Dashboard',       href: '/lia',              icon: <LayoutDashboard size={18} /> },
