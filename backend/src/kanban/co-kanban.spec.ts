@@ -10,6 +10,7 @@
 import { PrismaClient } from '@prisma/client';
 import { NurtureService } from '../nurture/nurture.service';
 import { KanbanService } from './kanban.service';
+import { SlaService } from '../sla/sla.service';
 
 jest.setTimeout(60000);
 
@@ -25,7 +26,7 @@ describe('CO kanban — override, sweep-skip, tickets, scoping', () => {
     prisma = new PrismaClient();
     await prisma.$connect();
     nurture = new NurtureService(prisma as any, mail);
-    kanban = new KanbanService(prisma as any);
+    kanban = new KanbanService(prisma as any, new SlaService(prisma as any));
   }, 60000);
 
   afterAll(async () => { await prisma.$disconnect(); });

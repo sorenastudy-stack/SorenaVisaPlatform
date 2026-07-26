@@ -1398,42 +1398,48 @@ model PolicyAcceptance {
 // ─── CASES ───────────────────────────────────────────────────────────────────
 
 model Case {
-  id                   String    @id @default(cuid())
-  leadId               String
-  stage                CaseStage @default(ADMISSION)
-  status               String    @default("active")
+  id                    String    @id @default(cuid())
+  leadId                String
+  stage                 CaseStage @default(ADMISSION)
+  // PR-SLA — when the case entered its CURRENT stage (stamped at every stage
+  // write). Drives the per-stage deadline; NULL falls back to createdAt.
+  stageEnteredAt        DateTime?
+  // PR-SLA — optional manual per-case deadline that overrides the computed SLA
+  // (e.g. a granted extension). NULL = use the institution-type × stage SLA.
+  stageDeadlineOverride DateTime?
+  status                String    @default("active")
   // PR-CONTRACT-CAPTURE — the visa type the LIA selected in the engagement
   // contract's `visaType` checkbox group, captured from DocuSign on envelope
   // completion (the webhook reads the LIA's selected tab). NULL until a contract
   // is fully signed. Free-text (the selected checkbox's label), not an enum, so
   // it survives template wording changes without a migration.
-  visaType             String?
-  ownerId              String?
+  visaType              String?
+  ownerId               String?
   // PR-LIA-2: the LIA (Legal & Immigration Adviser) currently
   // responsible for this case. Set automatically when the client
   // signs the contract (load-balanced auto-pick), reassignable by
   // OWNER / ADMIN / SUPER_ADMIN via PATCH /cases/:id/lia. NULL
   // until contract sign (or if no active LIA was available at sign
   // time — the case sits unassigned and an audit row records why).
-  liaId                String?
+  liaId                 String?
   // PR-LIA-3: timestamp the LIA was attached to this case (or
   // reassigned to a different LIA). Set by both auto-assignment and
   // manual reassignment paths inside the same transaction that
   // touches `liaId`. NULL when no LIA is assigned. Used by the
   // productivity report for time-to-action / time-to-resolution
   // calculations and by the case-detail "Assigned N days ago" line.
-  liaAssignedAt        DateTime?
+  liaAssignedAt         DateTime?
   // Option 1 step 4: Support and Finance slot assignees on this case.
   // Reassignable via PATCH /cases/:id/support and /cases/:id/finance.
   // Both nullable + SetNull on user delete, mirroring liaId.
-  supportId            String?
-  financeId            String?
+  supportId             String?
+  financeId             String?
   // Phase 1 (auto-assignment): the real client Consultant — owns the client
   // from eligibility through to the visa result. DISTINCT from ownerId (whose
   // auth role is CONSULTANT but semantically = "Admission Specialist"). Holds a
   // user with the CLIENT_CONSULTANT role. Nullable + SetNull, mirroring lia/
   // support/finance so the case survives a consultant hard-delete.
-  consultantId         String?
+  consultantId          String?
   // PR-LIA-7: INZ submission lifecycle. All five fields are co-managed
   // by the InzSubmissionService — they populate together when the LIA
   // submits, clear together on revert. The receipt file metadata is
@@ -1443,17 +1449,17 @@ model Case {
   // at `inzReceiptFileUrl` (a filesystem path under ./uploads/inz-receipts/);
   // we use the existing /files/signed/:token route to serve it.
   // The handover (§3 / §file-storage) explains the rationale.
-  inzApplicationNumber String?   @db.VarChar(128)
-  inzSubmittedAt       DateTime?
-  inzSubmissionNotes   String?   @db.Text
-  inzReceiptFileUrl    String?
-  inzReceiptFileName   String?
-  inzReceiptMimeType   String?
-  inzReceiptSizeBytes  Int?
-  riskLevel            RiskLevel @default(LOW)
-  notes                String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  inzApplicationNumber  String?   @db.VarChar(128)
+  inzSubmittedAt        DateTime?
+  inzSubmissionNotes    String?   @db.Text
+  inzReceiptFileUrl     String?
+  inzReceiptFileName    String?
+  inzReceiptMimeType    String?
+  inzReceiptSizeBytes   Int?
+  riskLevel             RiskLevel @default(LOW)
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   lead                  Lead                   @relation(fields: [leadId], references: [id])
   owner                 User?                  @relation("CaseOwner", fields: [ownerId], references: [id])
@@ -1719,6 +1725,28 @@ model VisaExpiryReminderSent {
   @@index([visaId, sentAt])
   @@index([sentAt])
   @@map("visa_expiry_reminders_sent")
+}
+
+// ─── SLA ──────────────────────────────────────────────────────────────────────
+
+// PR-SLA — Owner-manageable stage deadlines. One row per (institutionType, stage);
+// slaDays is editable via /staff/settings/sla with no code deploy. ADMISSION is
+// working-days-based; VISA / INZ_SUBMITTED are calendar-days (isWorkingDays). The
+// deadline for a case = stageEnteredAt + slaDays (working or calendar), unless a
+// per-case stageDeadlineOverride is set. Terminal stages (COMPLETED/WITHDRAWN) have
+// no row. A case's institutionType is its accepted/most-recent application's
+// provider.providerType, falling back to a default when unknown.
+model SlaConfig {
+  id              String       @id @default(cuid())
+  institutionType ProviderType
+  stage           CaseStage
+  slaDays         Int
+  isWorkingDays   Boolean      @default(false)
+  updatedAt       DateTime     @updatedAt
+  updatedById     String?
+
+  @@unique([institutionType, stage], name: "uniq_institution_stage")
+  @@map("sla_configs")
 }
 
 // ─── NURTURE ──────────────────────────────────────────────────────────────────

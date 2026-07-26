@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { VisaTicketDepartment } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { SlaService } from '../sla/sla.service';
 
 // PR-CO-KANBAN — Client Officer daily task kanban. A single board over the CO's
 // clients across the FULL journey: pre-contract leads (nurturing → ready to refer)
@@ -27,6 +28,9 @@ export interface KanbanCard {
   nurtureHoldReason?: string | null;
   // Case-only:
   stage?: string;
+  deadline?: Date | null;
+  daysOverdue?: number;
+  overdue?: boolean;
 }
 export interface KanbanColumn { key: string; label: string; editable: boolean; cards: KanbanCard[] }
 
@@ -40,7 +44,10 @@ const CASE_COLUMNS: Array<{ key: string; label: string }> = [
 
 @Injectable()
 export class KanbanService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sla: SlaService,
+  ) {}
 
   async getKanban(actor: StaffActor): Promise<{ columns: KanbanColumn[] }> {
     const isAdmin = ADMIN_TIER.has(actor.role);
@@ -82,23 +89,27 @@ export class KanbanService {
       else readyToRefer.push(card);
     }
 
-    // ── Cases (mine): grouped by stage. Read-only to the CO.
+    // ── Cases (mine): grouped by stage. Read-only to the CO, but each carries its
+    //    SLA deadline + overdue day-counter (institution-type-aware, PR-SLA).
     const cases = await this.prisma.case.findMany({
       where: { ...(isAdmin ? {} : { consultantId: actor.userId }) },
       select: {
-        id: true, stage: true,
+        id: true, stage: true, stageEnteredAt: true, stageDeadlineOverride: true, createdAt: true,
         consultant: { select: { name: true } },
         lead: { select: { contact: { select: { id: true, fullName: true } } } },
       },
       orderBy: { updatedAt: 'desc' },
     });
+    const deadlines = await this.sla.computeForCases(cases);
     const byStage = new Map<string, KanbanCard[]>();
     for (const c of cases) {
+      const d = deadlines.get(c.id);
       const card: KanbanCard = {
         kind: 'CASE', id: c.id, contactId: c.lead?.contact?.id ?? null,
         clientName: c.lead?.contact?.fullName ?? null,
         officerName: c.consultant?.name ?? null,
         href: `/staff/cases/${c.id}`, editable: false, stage: String(c.stage),
+        deadline: d?.deadline ?? null, daysOverdue: d?.daysOverdue ?? 0, overdue: d?.overdue ?? false,
       };
       const arr = byStage.get(String(c.stage)) ?? [];
       arr.push(card);

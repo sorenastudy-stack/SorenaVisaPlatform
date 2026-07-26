@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SlaModule } from '../sla/sla.module';
 import { KanbanService } from './kanban.service';
 import { KanbanController } from './kanban.controller';
 
@@ -7,7 +8,7 @@ import { KanbanController } from './kanban.controller';
 // raise-ticket (POST /staff/tickets). The manual ADVANCE/POSTPONE override lives in
 // NurtureModule (POST /staff/nurture/:leadId/override).
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, SlaModule],
   controllers: [KanbanController],
   providers: [KanbanService],
 })

@@ -17,6 +17,7 @@ interface Card {
   href: string; editable: boolean;
   nurtureStage?: string; nurtureHeldUntil?: string | null; nurtureHoldReason?: string | null;
   stage?: string;
+  deadline?: string | null; daysOverdue?: number; overdue?: boolean;
 }
 interface Column { key: string; label: string; editable: boolean; cards: Card[] }
 
@@ -106,6 +107,13 @@ function CardView({ card, onChanged, onRaiseTicket }: { card: Card; onChanged: (
       {held && (
         <div className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
           On hold until {fmtDate(card.nurtureHeldUntil)}{card.nurtureHoldReason ? ` · ${card.nurtureHoldReason}` : ''}
+        </div>
+      )}
+
+      {/* PR-SLA — red overdue day-counter on case cards past their stage SLA. */}
+      {card.kind === 'CASE' && card.overdue && (
+        <div className="mt-2 rounded-md bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700">
+          {card.daysOverdue} day{card.daysOverdue === 1 ? '' : 's'} overdue
         </div>
       )}
 

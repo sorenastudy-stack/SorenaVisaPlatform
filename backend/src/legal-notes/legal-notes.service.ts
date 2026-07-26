@@ -139,7 +139,7 @@ export class LegalNotesService {
       if (dto.decision === LegalDecisionDto.WITHDRAWN) {
         await tx.case.update({
           where: { id: caseId },
-          data: { stage: 'WITHDRAWN' },
+          data: { stage: 'WITHDRAWN', stageEnteredAt: new Date() },
         });
       }
 

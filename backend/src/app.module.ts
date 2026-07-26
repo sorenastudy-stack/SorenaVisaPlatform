@@ -52,6 +52,7 @@ import { HandoffsModule } from './handoffs/handoffs.module';
 import { NurtureModule } from './nurture/nurture.module';
 import { DiaryModule } from './diary/diary.module';
 import { KanbanModule } from './kanban/kanban.module';
+import { SlaModule } from './sla/sla.module';
 
 @Module({
   imports: [
@@ -162,6 +163,9 @@ import { KanbanModule } from './kanban/kanban.module';
     // PR-CO-KANBAN: Client Officer daily task kanban (journey board) + staff/CO
     // raise-ticket. Manual nurture override lives in NurtureModule.
     KanbanModule,
+    // PR-SLA: Owner-manageable, institution-type-varying stage deadlines +
+    // overdue-by-officer report. Exports SlaService (used by the kanban cards).
+    SlaModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`

@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
   Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall, CalendarDays, DollarSign, LayoutGrid,
+  Timer, AlertTriangle,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 import { portalBrand } from '@/lib/portal-branding';
@@ -56,6 +57,9 @@ const KANBAN_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CON
 // PR-COMMISSIONS-UI — institutional/provider commission ledger. Money-managing
 // tier: OWNER + FINANCE (+ SUPER_ADMIN).
 const COMMISSIONS_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'] as const;
+// PR-SLA — overdue-by-officer report (owner tier) + the editable SLA config screen.
+const SLA_REPORT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
+const SLA_SETTINGS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
 // OWNER only. Additive; no existing role's access changes.
 const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;
@@ -110,6 +114,9 @@ const NAV: NavItem[] = [
   // PR-HANDOFFS: unstaffed roles + stalled cases. Sits next to Compliance —
   // both are cross-case oversight surfaces for the Owner tier.
   { label: 'Handoffs',                     href: '/staff/handoffs',           icon: <ArrowLeftRight size={18} />, roleGate: HANDOFFS_ROLES },
+  // PR-SLA: overdue cases by officer + the editable stage-SLA config.
+  { label: 'Overdue cases',                href: '/staff/sla-report',         icon: <AlertTriangle size={18} />, roleGate: SLA_REPORT_ROLES },
+  { label: 'Stage SLAs',                   href: '/staff/settings/sla',       icon: <Timer size={18} />,       roleGate: SLA_SETTINGS_ROLES },
   // PR-COMMISSIONS-UI: institutional/provider commission ledger (revenue Sorena
   // earns from providers). OWNER + FINANCE.
   { label: 'Commissions',                  href: '/staff/commissions',        icon: <DollarSign size={18} />,  roleGate: COMMISSIONS_ROLES },

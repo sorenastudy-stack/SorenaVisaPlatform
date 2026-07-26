@@ -163,7 +163,7 @@ export class VisaService {
 
       await tx.case.update({
         where: { id: caseId },
-        data: { stage: 'COMPLETED' },
+        data: { stage: 'COMPLETED', stageEnteredAt: new Date() },
       });
 
       await tx.auditLog.create({
@@ -301,7 +301,7 @@ export class VisaService {
 
       await tx.case.update({
         where: { id: caseId },
-        data: { stage: 'COMPLETED' },
+        data: { stage: 'COMPLETED', stageEnteredAt: new Date() },
       });
 
       await tx.auditLog.create({
@@ -516,7 +516,7 @@ export class VisaService {
 
       await tx.case.update({
         where: { id: caseId },
-        data: { stage: 'INZ_SUBMITTED' },
+        data: { stage: 'INZ_SUBMITTED', stageEnteredAt: new Date() },
       });
 
       await tx.auditLog.create({
@@ -528,7 +528,7 @@ export class VisaService {
           entityId: caseId,
           oldValue: previousSnapshot as Prisma.InputJsonValue,
           newValue: {
-            stage: 'INZ_SUBMITTED',
+            stage: 'INZ_SUBMITTED', stageEnteredAt: new Date(),
             reasonEncryptedBase64: reasonEncrypted.toString('base64'),
             reasonLength: dto.reason.length,
           } as Prisma.InputJsonValue,

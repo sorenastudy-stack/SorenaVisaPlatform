@@ -140,7 +140,7 @@ export class InzSubmissionService {
       const u = await tx.case.update({
         where: { id: caseId },
         data: {
-          stage: 'INZ_SUBMITTED',
+          stage: 'INZ_SUBMITTED', stageEnteredAt: new Date(),
           inzApplicationNumber: dto.inzApplicationNumber.trim(),
           inzSubmittedAt: submittedAt,
           inzSubmissionNotes: dto.notes?.trim() || null,
@@ -332,7 +332,7 @@ export class InzSubmissionService {
       const u = await tx.case.update({
         where: { id: caseId },
         data: {
-          stage: 'VISA',
+          stage: 'VISA', stageEnteredAt: new Date(),
           inzApplicationNumber: null,
           inzSubmittedAt: null,
           inzSubmissionNotes: null,
@@ -356,7 +356,7 @@ export class InzSubmissionService {
           entityId: caseId,
           oldValue: previousSnapshot as Prisma.InputJsonValue,
           newValue: {
-            stage: 'VISA',
+            stage: 'VISA', stageEnteredAt: new Date(),
             reasonEncryptedBase64: reasonEncrypted.toString('base64'),
             reasonLength: dto.reason.length,
           } as Prisma.InputJsonValue,
