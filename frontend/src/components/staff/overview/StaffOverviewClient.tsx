@@ -176,6 +176,7 @@ function DashboardView({ dash }: { dash: Dashboard }) {
 interface Shortcut { label: string; href: string; desc: string; icon: LucideIcon; }
 
 const SHORTCUTS: Record<string, Shortcut> = {
+  diary:    { label: 'My day',       href: '/staff/diary',       desc: 'Today’s calls & meetings + overdue', icon: CalendarClock },
   cases:    { label: 'Cases',       href: '/staff/cases',       desc: 'Client cases you can view', icon: Briefcase },
   meetings: { label: 'My Meetings', href: '/staff/meetings',    desc: 'Your upcoming & past sessions', icon: CalendarClock },
   tickets:  { label: 'Tickets',     href: '/staff/tickets',     desc: 'Support requests to action', icon: Inbox },
@@ -187,9 +188,9 @@ const SHORTCUTS: Record<string, Shortcut> = {
 // Role → the sections that role can actually reach (mirrors the sidebar gates,
 // so a launchpad card never links somewhere the user would be 403'd).
 const ROLE_SHORTCUTS: Record<string, string[]> = {
-  LIA:        ['cases', 'meetings', 'licence', 'documents', 'tickets'],
-  CONSULTANT: ['cases', 'meetings', 'leads', 'documents', 'tickets'],
-  CLIENT_CONSULTANT: ['cases', 'documents', 'tickets'],
+  LIA:        ['diary', 'cases', 'meetings', 'licence', 'documents', 'tickets'],
+  CONSULTANT: ['diary', 'cases', 'meetings', 'leads', 'documents', 'tickets'],
+  CLIENT_CONSULTANT: ['diary', 'cases', 'documents', 'tickets'],
   SUPPORT:    ['tickets', 'cases'],
 };
 

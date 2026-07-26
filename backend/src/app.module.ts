@@ -50,6 +50,7 @@ import { AuditModule } from './audit/audit.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { HandoffsModule } from './handoffs/handoffs.module';
 import { NurtureModule } from './nurture/nurture.module';
+import { DiaryModule } from './diary/diary.module';
 
 @Module({
   imports: [
@@ -154,6 +155,9 @@ import { NurtureModule } from './nurture/nurture.module';
     // PR-NURTURE: post-FREE_15 nurture sequence (4 emails + 3 call tasks / 21
     // days) → indefinite monthly newsletter, with unsubscribe. Daily cron.
     NurtureModule,
+    // PR-DIARY: Client Officer daily agenda (today + missed) over nurture call
+    // tasks + consultation meetings. Read-only.
+    DiaryModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min/IP from `default`
