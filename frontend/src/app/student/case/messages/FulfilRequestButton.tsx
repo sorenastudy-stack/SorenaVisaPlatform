@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, FilePlus2, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { CheckCircle2, FilePlus2, X, ArrowRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 
 // PR-LIA-4 — Client-side "fulfil document request" overlay.
@@ -36,6 +37,7 @@ export function FulfilRequestButton({
   requestedDocType: string | null;
 }) {
   const router = useRouter();
+  const t = useTranslations('caseMessages.fulfil');
   const [open, setOpen] = useState(false);
   const [docs, setDocs] = useState<VisaSupportingDocument[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,7 +56,7 @@ export function FulfilRequestButton({
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(e instanceof ApiError ? e.message : 'Failed to load your files.');
+        setError(e instanceof ApiError ? e.message : t('loadFilesError'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -70,7 +72,7 @@ export function FulfilRequestButton({
       setOpen(false);
       router.refresh();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to link the file.');
+      setError(e instanceof ApiError ? e.message : t('linkError'));
     } finally {
       setSubmittingId(null);
     }
@@ -88,7 +90,7 @@ export function FulfilRequestButton({
         className="min-h-[48px] inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-amber-700 transition-colors"
       >
         <FilePlus2 size={16} />
-        Upload / link document
+        {t('button')}
       </button>
 
       {open && (
@@ -100,7 +102,7 @@ export function FulfilRequestButton({
                 <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                   <FilePlus2 size={18} className="text-amber-700" />
                 </div>
-                <h2 className="text-lg font-bold text-[#1E3A5F]">Choose a file to share</h2>
+                <h2 className="text-lg font-bold text-[#1E3A5F]">{t('chooseFile')}</h2>
               </div>
               <button type="button" onClick={() => setOpen(false)} disabled={!!submittingId} className="text-gray-400 hover:text-gray-700 disabled:opacity-50 flex-shrink-0">
                 <X size={20} />
@@ -108,30 +110,30 @@ export function FulfilRequestButton({
             </div>
 
             <p className="text-sm text-[#4A4A4A] mb-3 leading-relaxed">
-              Pick one of your already-uploaded files to share with your specialist.
+              {t('pickIntro')}
               {requestedDocType && (
                 <>
-                  {' '}They asked for: <strong>{requestedDocType}</strong>.
+                  {' '}{t('theyAskedFor')} <strong>{requestedDocType}</strong>
                 </>
               )}
             </p>
 
             {loading ? (
-              <p className="text-sm text-[#4A4A4A]/60 py-6 text-center">Loading your files…</p>
+              <p className="text-sm text-[#4A4A4A]/60 py-6 text-center">{t('loading')}</p>
             ) : error ? (
               <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>
             ) : docs.length === 0 ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p className="mb-2">You haven&apos;t uploaded any visa supporting documents yet.</p>
+                <p className="mb-2">{t('noneTitle')}</p>
                 <Link href="/student/documents" className="font-semibold text-amber-800 underline">
-                  Go to Visa Section to upload one first
+                  {t('goUpload')}
                 </Link>
               </div>
             ) : (
               <ul className="space-y-2">
                 {matchHint && (
                   <li className="text-xs text-emerald-700 font-semibold mb-1">
-                    ✓ Suggested match: {matchHint.documentType}
+                    ✓ {t('suggestedMatch')} {matchHint.documentType}
                   </li>
                 )}
                 {docs.map((d) => (
@@ -148,7 +150,7 @@ export function FulfilRequestButton({
                     >
                       {submittingId === d.id ? '…' : (
                         <>
-                          <CheckCircle2 size={14} /> Use this file
+                          <CheckCircle2 size={14} /> {t('useThisFile')}
                         </>
                       )}
                     </button>
@@ -158,9 +160,9 @@ export function FulfilRequestButton({
             )}
 
             <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-[#4A4A4A]/70">
-              Need to upload a different file?{' '}
-              <Link href="/student/documents" className="font-semibold text-[#1E3A5F] hover:text-[#b28f4e]">
-                Open Visa Section →
+              {t('needDifferent')}{' '}
+              <Link href="/student/documents" className="inline-flex items-center gap-1 font-semibold text-[#1E3A5F] hover:text-[#b28f4e]">
+                {t('openVisaSection')} <ArrowRight size={12} className="rtl:rotate-180" />
               </Link>
             </div>
           </div>

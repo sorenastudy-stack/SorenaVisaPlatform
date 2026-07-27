@@ -1,4 +1,41 @@
 {
+  "caseMessages": {
+    "backToPortal": "Back to portal",
+    "title": "Messages with your specialist",
+    "subtitle": "Direct conversation with your Sorena specialist. Document requests appear here too.",
+    "loadError": "Failed to load messages.",
+    "emptyTitle": "No messages yet",
+    "emptyBody": "Your specialist will reach out here when needed.",
+    "sendReply": "Send a reply",
+    "progressUpdate": "Progress update",
+    "specialist": "Sorena specialist",
+    "docRequested": "Document requested:",
+    "fulfilled": "Fulfilled",
+    "youShared": "You shared:",
+    "you": "You",
+    "fulfil": {
+      "button": "Upload / link document",
+      "chooseFile": "Choose a file to share",
+      "pickIntro": "Pick one of your already-uploaded files to share with your specialist.",
+      "theyAskedFor": "They asked for:",
+      "loading": "Loading your files…",
+      "noneTitle": "You haven't uploaded any visa supporting documents yet.",
+      "goUpload": "Go to Visa Section to upload one first",
+      "suggestedMatch": "Suggested match:",
+      "useThisFile": "Use this file",
+      "needDifferent": "Need to upload a different file?",
+      "openVisaSection": "Open Visa Section",
+      "loadFilesError": "Failed to load your files.",
+      "linkError": "Failed to link the file."
+    },
+    "composer": {
+      "placeholder": "Type your reply…",
+      "counter": "{count} / 5000 (min 10)",
+      "sending": "Sending…",
+      "send": "Send",
+      "sendError": "Failed to send reply."
+    }
+  },
   "studentHome": {
     "wrongPortal": { "title": "Wrong portal", "body": "This portal is for student users. If you're staff, please use the Sales or Admin portal.", "back": "Back to Login" },
     "settingUp": "We're setting things up — your case will appear here soon.",

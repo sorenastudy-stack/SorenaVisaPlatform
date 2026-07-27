@@ -1,7 +1,9 @@
+import { getTranslations, getLocale } from 'next-intl/server';
 import { MessageCircle, FilePlus2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { BackLink } from '@/components/ui/BackLink';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
+import { relativeTime } from '@/lib/date';
 import { ReplyComposer } from './ReplyComposer';
 import { FulfilRequestButton } from './FulfilRequestButton';
 
@@ -27,43 +29,26 @@ interface CaseMessage {
   createdAt: string;
 }
 
-const DATE_TIME_FMT = new Intl.DateTimeFormat('en-NZ', {
-  day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-});
-
-function formatWhen(date: string): string {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return '—';
-  const diffMs = Date.now() - d.getTime();
-  const minutes = Math.floor(diffMs / 60_000);
-  const hours = Math.floor(diffMs / 3_600_000);
-  const days = Math.floor(diffMs / 86_400_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days <= 7) return `${days}d ago`;
-  return DATE_TIME_FMT.format(d);
-}
-
 export default async function StudentCaseMessagesPage() {
+  const t = await getTranslations('caseMessages');
+  const locale = (await getLocale()) as 'en' | 'fa';
+
   let messages: CaseMessage[] = [];
   let errorMsg: string | null = null;
 
   try {
     messages = await apiServer.get<CaseMessage[]>('/students/me/case-messages');
   } catch (e) {
-    errorMsg = e instanceof ApiServerError ? e.message : 'Failed to load messages.';
+    errorMsg = e instanceof ApiServerError ? e.message : t('loadError');
   }
 
   return (
     <div className="max-w-3xl">
-      <BackLink href="/student" label="Back to portal" />
+      <BackLink href="/student" label={t('backToPortal')} />
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[#1E3A5F]">Messages with your specialist</h1>
-        <p className="text-sm text-[#4A4A4A]/70 mt-1">
-          Direct conversation with your Sorena specialist. Document requests appear here too.
-        </p>
+        <h1 className="text-2xl font-bold text-[#1E3A5F]">{t('title')}</h1>
+        <p className="text-sm text-[#4A4A4A]/70 mt-1">{t('subtitle')}</p>
       </div>
 
       {errorMsg && (
@@ -77,15 +62,13 @@ export default async function StudentCaseMessagesPage() {
           {messages.length === 0 ? (
             <div className="py-10 text-center">
               <MessageCircle size={32} className="mx-auto text-[#1E3A5F]/30 mb-3" />
-              <p className="text-[#4A4A4A] font-medium">No messages yet</p>
-              <p className="text-sm text-[#4A4A4A]/60 mt-1">
-                Your specialist will reach out here when needed.
-              </p>
+              <p className="text-[#4A4A4A] font-medium">{t('emptyTitle')}</p>
+              <p className="text-sm text-[#4A4A4A]/60 mt-1">{t('emptyBody')}</p>
             </div>
           ) : (
             <ul className="space-y-3">
               {messages.map((m) => (
-                <ClientMessageBubble key={m.id} message={m} />
+                <ClientMessageBubble key={m.id} message={m} locale={locale} />
               ))}
             </ul>
           )}
@@ -94,7 +77,7 @@ export default async function StudentCaseMessagesPage() {
 
       <Card>
         <CardContent>
-          <h2 className="text-sm font-semibold text-[#1E3A5F] mb-3">Send a reply</h2>
+          <h2 className="text-sm font-semibold text-[#1E3A5F] mb-3">{t('sendReply')}</h2>
           <ReplyComposer />
         </CardContent>
       </Card>
@@ -102,16 +85,19 @@ export default async function StudentCaseMessagesPage() {
   );
 }
 
-function ClientMessageBubble({ message }: { message: CaseMessage }) {
+async function ClientMessageBubble({ message, locale }: { message: CaseMessage; locale: 'en' | 'fa' }) {
+  const t = await getTranslations('caseMessages');
+  const when = relativeTime(message.createdAt, locale);
+
   if (message.kind === 'PROGRESS_UPDATE') {
     return (
       <li className="rounded-xl border border-[#1E3A5F]/30 bg-[#1E3A5F]/5 p-4">
         <div className="flex items-center gap-2 mb-2">
           <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-[#1E3A5F] text-white">
-            Progress update
+            {t('progressUpdate')}
           </span>
-          <span className="text-xs text-[#4A4A4A]/70 ml-auto">
-            {message.authorName ?? 'Sorena specialist'} · {formatWhen(message.createdAt)}
+          <span className="text-xs text-[#4A4A4A]/70 ms-auto">
+            {message.authorName ?? t('specialist')} · {when}
           </span>
         </div>
         <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap leading-relaxed">{message.body}</p>
@@ -126,21 +112,21 @@ function ClientMessageBubble({ message }: { message: CaseMessage }) {
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <FilePlus2 size={14} className="text-amber-700" />
           <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
-            Document requested: {message.requestedDocType ?? '—'}
+            {t('docRequested')} {message.requestedDocType ?? '—'}
           </span>
           {fulfilled && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              <CheckCircle2 size={12} /> Fulfilled
+              <CheckCircle2 size={12} /> {t('fulfilled')}
             </span>
           )}
-          <span className="text-xs text-amber-700/80 ml-auto">
-            {message.authorName ?? 'Sorena specialist'} · {formatWhen(message.createdAt)}
+          <span className="text-xs text-amber-700/80 ms-auto">
+            {message.authorName ?? t('specialist')} · {when}
           </span>
         </div>
         <p className="text-sm text-amber-900 whitespace-pre-wrap leading-relaxed">{message.body}</p>
         {fulfilled ? (
           <div className="mt-2 pt-2 border-t border-amber-200 text-xs text-amber-800">
-            <span className="font-semibold">You shared:</span> {message.fulfilledByFileName ?? '—'}
+            <span className="font-semibold">{t('youShared')}</span> {message.fulfilledByFileName ?? '—'}
           </div>
         ) : (
           <div className="mt-3 pt-3 border-t border-amber-200">
@@ -151,7 +137,8 @@ function ClientMessageBubble({ message }: { message: CaseMessage }) {
     );
   }
 
-  // Plain MESSAGE — client right-aligned gold (their own side), LIA left-aligned white.
+  // Plain MESSAGE — client's own side vs the specialist's. justify-* is logical
+  // (flips under RTL); the own-side gold vs neutral styling is unchanged.
   const isOwn = message.authorRole === 'CLIENT';
   return (
     <li className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
@@ -164,9 +151,9 @@ function ClientMessageBubble({ message }: { message: CaseMessage }) {
       >
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs font-semibold text-[#1E3A5F]">
-            {isOwn ? 'You' : (message.authorName ?? 'Sorena specialist')}
+            {isOwn ? t('you') : (message.authorName ?? t('specialist'))}
           </span>
-          <span className="text-xs text-[#4A4A4A]/60">· {formatWhen(message.createdAt)}</span>
+          <span className="text-xs text-[#4A4A4A]/60">· {when}</span>
         </div>
         <p className="text-sm text-[#1E3A5F] whitespace-pre-wrap leading-relaxed">{message.body}</p>
       </div>
