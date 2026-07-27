@@ -228,7 +228,7 @@ export function ClientShell({ children, session, portalStage, navItems, backHref
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={toggleLocale}
+              onClick={() => { toggleLocale(); router.refresh(); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 transition-colors min-h-[40px]"
               title={locale === 'en' ? 'Switch to Persian' : 'Switch to English'}
             >

@@ -1,18 +1,26 @@
-// PR-DATE-DISPLAY — single shared date-formatting helper for the whole app.
+// PR-DATE-DISPLAY / PR-I18N-1 — single shared date-formatting helper.
 //
-// GOAL: every date the user sees is DAY-FIRST New Zealand style — "8 Jul 2026"
-// (never US "Jul 8" / "7/8/2026"). This is DISPLAY ONLY; stored and POSTed
-// values stay ISO YYYY-MM-DD and never pass through here on the way out.
+// GOAL: every date the user sees is DAY-FIRST — English "8 Jul 2026" (en-NZ), and
+// in Persian the SAME (Gregorian) calendar rendered with Persian month names +
+// Persian digits — "۸ ژوئیه ۲۰۲۶" — via the `fa-IR-u-ca-gregory` locale. We keep
+// the Gregorian calendar deliberately (locked decision): clients cross-reference
+// these against their passport / INZ / visa documents, which are all Gregorian.
+// DISPLAY ONLY; stored/POSTed values stay ISO and never pass through here.
 //
 // Two rules baked in:
-//  • A pure calendar date ("YYYY-MM-DD", no time) is anchored to UTC so it
-//    never shifts a day across the NZ/Iran timezone boundary.
-//  • A full timestamp ("...T..Z") is shown in the runtime-local timezone,
-//    matching the previous behaviour — we only change the FORMAT, not the tz.
+//  • A pure calendar date ("YYYY-MM-DD", no time) is anchored to UTC so it never
+//    shifts a day across the NZ/Iran timezone boundary.
+//  • A full timestamp ("...T..Z") is shown in the runtime-local timezone.
 
 const YMD_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 type DateValue = string | number | Date | null | undefined;
+export type DateLocale = 'en' | 'fa';
+
+// Persian keeps the Gregorian calendar (u-ca-gregory) — only month names +
+// digits localise. English stays en-NZ (day-first).
+const intlLocale = (locale: DateLocale): string =>
+  locale === 'fa' ? 'fa-IR-u-ca-gregory' : 'en-NZ';
 
 function toDate(value: DateValue): Date | null {
   if (value == null || value === '') return null;
@@ -22,40 +30,39 @@ function toDate(value: DateValue): Date | null {
 }
 
 /**
- * Day-first calendar date, e.g. "8 Jul 2026". Returns '' for empty/invalid
- * input (or the original string if it was an unparseable non-empty string).
+ * Day-first calendar date — "8 Jul 2026" (en) / "۸ ژوئیه ۲۰۲۶" (fa). Returns ''
+ * for empty/invalid input (or the original string if it was unparseable).
  */
-export function formatDate(value: DateValue): string {
+export function formatDate(value: DateValue, locale: DateLocale = 'en'): string {
   if (value == null || value === '') return '';
 
   // Pure YYYY-MM-DD → anchor UTC so date-only values never drift a day.
   if (typeof value === 'string' && YMD_ONLY.test(value.trim())) {
     const d = new Date(`${value.trim()}T00:00:00Z`);
-    return new Intl.DateTimeFormat('en-NZ', {
+    return new Intl.DateTimeFormat(intlLocale(locale), {
       day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC',
     }).format(d);
   }
 
   const d = toDate(value);
   if (!d) return typeof value === 'string' ? value : '';
-  // Timestamp → runtime-local tz (unchanged behaviour), day-first format.
-  return new Intl.DateTimeFormat('en-NZ', {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     day: 'numeric', month: 'short', year: 'numeric',
   }).format(d);
 }
 
 /**
- * Day-first date + time, e.g. "8 Jul 2026, 1:30 pm". Pass { weekday: 'long' }
- * for "Wednesday, 8 Jul 2026, 1:30 pm", or a `timeZone` to pin the zone
- * (defaults to runtime-local, matching prior behaviour).
+ * Day-first date + time — "8 Jul 2026, 1:30 pm". Pass { weekday: 'long' } for a
+ * weekday prefix, a `timeZone` to pin the zone (defaults to runtime-local), and
+ * `locale: 'fa'` for Persian month names + digits (Gregorian).
  */
 export function formatDateTime(
   value: DateValue,
-  opts: { weekday?: 'long' | 'short'; timeZone?: string } = {},
+  opts: { weekday?: 'long' | 'short'; timeZone?: string; locale?: DateLocale } = {},
 ): string {
   const d = toDate(value);
   if (!d) return typeof value === 'string' ? (value ?? '') : '';
-  return new Intl.DateTimeFormat('en-NZ', {
+  return new Intl.DateTimeFormat(intlLocale(opts.locale ?? 'en'), {
     ...(opts.weekday ? { weekday: opts.weekday } : {}),
     day: 'numeric', month: 'short', year: 'numeric',
     hour: 'numeric', minute: '2-digit',

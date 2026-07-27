@@ -1710,45 +1710,40 @@
     "headerTitle": "پرونده من",
     "signOut": "خروج",
     "nav": {
-      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
-      "myCase": "My Case",
-      "documents": "Documents",
-      "wallet": "Wallet",
-      "messages": "Messages & support",
-      "back": "Back",
-      "dashboard": "Home",
-      "visa": "Visa application",
-      "apply": "Apply / Study",
-      "payments": "Payments"
+      "myCase": "پرونده من",
+      "documents": "مدارک",
+      "wallet": "کیف پول",
+      "messages": "پیام‌ها و پشتیبانی",
+      "back": "بازگشت",
+      "dashboard": "خانه",
+      "visa": "درخواست ویزا",
+      "apply": "درخواست تحصیل",
+      "payments": "پرداخت‌ها"
     },
     "relogin": {
-      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
-      "title": "You're all set!",
-      "body": "Please sign in again to unlock your next steps.",
-      "button": "Sign in again"
+      "title": "همه‌چیز آماده است!",
+      "body": "برای دسترسی به مراحل بعدی، لطفاً دوباره وارد شوید.",
+      "button": "ورود دوباره"
     },
     "contractReady": {
-      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
-      "title": "Your contract is ready",
-      "body": "Please check your email to review and sign your engagement letter."
+      "title": "قرارداد شما آماده است",
+      "body": "لطفاً ایمیل خود را بررسی کنید تا قرارداد همکاری را مرور و امضا کنید."
     },
     "assessment": {
-      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
-      "title": "Your readiness assessment",
-      "completed": "Completed",
-      "pdf": "Download your assessment (PDF)"
+      "title": "ارزیابی آمادگی شما",
+      "completed": "تکمیل‌شده",
+      "pdf": "دریافت ارزیابی (PDF)"
     },
     "stage2": {
-      "_TODO": "TODO(i18n-fa): Persian translations pending — values below are English placeholders. Replace with Persian.",
-      "heading": "Your active case",
-      "study": "Choose your field of study",
-      "studyBody": "Select and rank the programmes you want to apply to.",
-      "visa": "Visa application questions",
-      "visaBody": "Complete your INZ visa application details.",
-      "documents": "Educational documents",
-      "documentsBody": "Upload your qualifications and transcripts.",
-      "tickets": "Messages & support",
-      "ticketsBody": "Ask your team a question or track a request."
+      "heading": "پرونده فعال شما",
+      "study": "رشته تحصیلی خود را انتخاب کنید",
+      "studyBody": "برنامه‌هایی را که می‌خواهید برای آن‌ها درخواست دهید، انتخاب و اولویت‌بندی کنید.",
+      "visa": "پرسش‌های درخواست ویزا",
+      "visaBody": "اطلاعات درخواست ویزای INZ خود را تکمیل کنید.",
+      "documents": "مدارک تحصیلی",
+      "documentsBody": "مدارک و ریزنمرات خود را بارگذاری کنید.",
+      "tickets": "پیام‌ها و پشتیبانی",
+      "ticketsBody": "از تیم خود سؤال بپرسید یا یک درخواست را پیگیری کنید."
     },
     "case": {
       "heading": "پرونده شما",

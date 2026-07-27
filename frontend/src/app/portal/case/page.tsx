@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, getLocale } from 'next-intl/server';
 import { ArrowRight, FileText, Sparkles, Users, Wallet, ListChecks, Clock, MessageSquare, CheckCircle2, Award, Mail, GraduationCap, ClipboardList, FolderOpen, ShieldCheck } from 'lucide-react';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { getSession } from '@/lib/auth';
@@ -42,13 +42,11 @@ interface AssessmentResult {
   submittedAt:  string;
 }
 
-function formatDate(iso: string | null): string | null {
-  // Day-first NZ style ("8 Jul 2026") via the shared helper.
-  return iso ? fmtDate(iso) : null;
-}
-
 export default async function MyCasePage() {
   const t = await getTranslations();
+  // Locale-aware dates: English "8 Jul 2026" / Persian "۸ ژوئیه ۲۰۲۶" (Gregorian).
+  const locale = (await getLocale()) as 'en' | 'fa';
+  const formatDate = (iso: string | null): string | null => (iso ? fmtDate(iso, locale) : null);
 
   let caseData: MyCase | null = null;
   let notFound = false;
@@ -287,7 +285,7 @@ export default async function MyCasePage() {
           <Wallet size={16} className="text-[#b28f4e]" />
           <span className="text-sm font-bold uppercase tracking-wide text-gray-500">My wallet</span>
         </div>
-        <ArrowRight size={16} className="text-gray-300" />
+        <ArrowRight size={16} className="text-gray-300 rtl:rotate-180" />
       </Link>
 
       {/* ── Readiness assessment (if the client has a result) ────────── */}
@@ -305,7 +303,7 @@ export default async function MyCasePage() {
               href="/portal/report"
               className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#162d4a] transition-colors"
             >
-              View full report <ArrowRight size={14} />
+              View full report <ArrowRight size={14} className="rtl:rotate-180" />
             </Link>
             <AssessmentPdfButton submissionId={assessment.submissionId} />
           </div>
@@ -367,10 +365,10 @@ export default async function MyCasePage() {
             <Clock size={16} className="text-[#b28f4e]" />
             <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">Your case timeline</h2>
           </div>
-          <ol className="relative border-l border-gray-200 pl-5 space-y-4">
+          <ol className="relative border-s border-gray-200 ps-5 space-y-4">
             {caseData.timeline.map((e, i) => (
               <li key={i} className="relative">
-                <span className="absolute -left-[23px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#c9a961] ring-2 ring-white" aria-hidden />
+                <span className="absolute ltr:-left-[23px] rtl:-right-[23px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#c9a961] ring-2 ring-white" aria-hidden />
                 <p className="text-sm font-medium text-[#1e3a5f]">{e.label}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{formatDate(e.date)}</p>
               </li>
@@ -396,7 +394,7 @@ export default async function MyCasePage() {
               {t('portal.case.documents.cardBody')}
             </p>
           </div>
-          <ArrowRight size={20} className="text-[#1e3a5f] mt-2 flex-shrink-0" />
+          <ArrowRight size={20} className="text-[#1e3a5f] mt-2 flex-shrink-0 rtl:rotate-180" />
         </div>
       </Link>
     </div>
@@ -416,7 +414,7 @@ function Stage2Card({ href, icon, title, body }: { href: string; icon: React.Rea
         <p className="text-sm font-bold text-[#1e3a5f]">{title}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{body}</p>
       </div>
-      <ArrowRight size={16} className="mt-1 flex-shrink-0 text-gray-300" />
+      <ArrowRight size={16} className="mt-1 flex-shrink-0 text-gray-300 rtl:rotate-180" />
     </Link>
   );
 }

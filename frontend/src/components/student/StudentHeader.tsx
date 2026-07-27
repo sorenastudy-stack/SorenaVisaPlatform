@@ -34,7 +34,7 @@ export function StudentHeader({
             className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-[#1E3A5F]/15 text-[#1E3A5F]/70 hover:bg-[#FAF8F3] hover:text-[#1E3A5F] transition-colors flex-shrink-0"
             aria-label="Back to Dashboard"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={18} className="rtl:rotate-180" />
           </Link>
         )}
         <div className="relative flex-shrink-0">
