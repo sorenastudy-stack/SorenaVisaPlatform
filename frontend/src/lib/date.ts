@@ -69,3 +69,22 @@ export function formatDateTime(
     ...(opts.timeZone ? { timeZone: opts.timeZone } : {}),
   }).format(d);
 }
+
+/**
+ * Locale-aware relative time — "5 minutes ago" (en) / "۵ دقیقه پیش" (fa, Persian
+ * digits). Replaces the per-page English-only `timeAgo`/`formatWhen`. Returns ''
+ * for empty/invalid input.
+ */
+export function relativeTime(value: DateValue, locale: DateLocale = 'en'): string {
+  const d = toDate(value);
+  if (!d) return '';
+  const min = Math.round((Date.now() - d.getTime()) / 60_000);
+  const rtf = new Intl.RelativeTimeFormat(locale === 'fa' ? 'fa' : 'en', { numeric: 'auto' });
+  if (min < 1) return locale === 'fa' ? 'همین حالا' : 'just now';
+  if (min < 60) return rtf.format(-min, 'minute');
+  const hr = Math.round(min / 60);
+  if (hr < 24) return rtf.format(-hr, 'hour');
+  const day = Math.round(hr / 24);
+  if (day < 30) return rtf.format(-day, 'day');
+  return rtf.format(-Math.round(day / 30), 'month');
+}

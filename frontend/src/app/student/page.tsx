@@ -1,8 +1,11 @@
 import Link from 'next/link';
+import { getTranslations, getLocale } from 'next-intl/server';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StudentHeader } from '@/components/student/StudentHeader';
 import { PayInvoiceButton } from '@/components/portal/PayInvoiceButton';
+import { relativeTime } from '@/lib/date';
+import { formatMoney } from '@/lib/money';
 import {
   FileText, MessageCircle, CreditCard, ArrowRight,
   CheckCircle, Clock, AlertCircle, Folder
@@ -66,52 +69,19 @@ interface Invoice {
   payments?: Payment[];
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function firstName(fullName: string): string {
-  return fullName?.split(' ')[0] ?? 'there';
-}
-
-function formatCurrency(amount: string | number, currency = 'NZD'): string {
-  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-  // currencyDisplay: 'code' → "USD 200.00", matching the /student/payments row.
-  return new Intl.NumberFormat('en-NZ', {
-    style: 'currency',
-    currency,
-    currencyDisplay: 'code',
-  }).format(num);
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}d ago`;
-  return `${Math.floor(day / 30)}mo ago`;
-}
-
-function stageLabel(stage: string): string {
-  return stage.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-}
-
-function stageSubline(stage: string): string {
-  const map: Record<string, string> = {
-    ADMISSION: "We're working on your university admission — great progress so far.",
-    VISA: "Your visa application is being prepared — stay close, we may need documents.",
-    ONBOARDING: "Almost there! Final onboarding steps are underway.",
-    COMPLETED: "Your case is complete. Congratulations on this milestone!",
-    ACTIVE: "Your case is moving forward — here's what's happening.",
-  };
-  return map[stage] ?? "Your case is in progress — we'll keep you updated every step of the way.";
-}
+const KNOWN_STAGES = new Set(['ADMISSION', 'VISA', 'INZ_SUBMITTED', 'COMPLETED', 'WITHDRAWN', 'ONBOARDING', 'ACTIVE']);
+const SUBLINE_STAGES = new Set(['ADMISSION', 'VISA', 'ONBOARDING', 'COMPLETED', 'ACTIVE']);
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function StudentDashboard() {
+  const t = await getTranslations('studentHome');
+  const locale = (await getLocale()) as 'en' | 'fa';
+  // Persian stage names come from the dictionary; unknown enums fall back to a
+  // de-underscored label. Sublines map to their stage, else a warm fallback.
+  const stageName = (s: string) => (KNOWN_STAGES.has(s) ? t(`stages.${s}`) : s.replace(/_/g, ' '));
+  const subline = (s: string) => t(`subline.${SUBLINE_STAGES.has(s) ? s : 'fallback'}`);
+
   // Fetch all data server-side, fail gracefully
   let profile: ContactProfile | null = null;
   let profileError = false;
@@ -122,7 +92,6 @@ export default async function StudentDashboard() {
     if (err instanceof ApiServerError && (err.statusCode === 403 || err.statusCode === 401)) {
       profileError = true;
     }
-    // 404 also means no student profile
     if (err instanceof ApiServerError && err.statusCode === 404) {
       profileError = true;
     }
@@ -133,15 +102,13 @@ export default async function StudentDashboard() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center max-w-md">
           <AlertCircle size={40} className="text-[#b28f4e] mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-[#1E3A5F] mb-2">Wrong portal</h2>
-          <p className="text-[#4A4A4A] mb-6">
-            This portal is for student users. If you&apos;re staff, please use the Sales or Admin portal.
-          </p>
+          <h2 className="text-xl font-bold text-[#1E3A5F] mb-2">{t('wrongPortal.title')}</h2>
+          <p className="text-[#4A4A4A] mb-6">{t('wrongPortal.body')}</p>
           <Link
             href="/login"
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#c9a961] text-[#1E3A5F] font-semibold hover:bg-[#b28f4e] transition-colors"
           >
-            Back to Login
+            {t('wrongPortal.back')}
           </Link>
         </div>
       </div>
@@ -162,16 +129,11 @@ export default async function StudentDashboard() {
   if (ticketsResult.status === 'fulfilled' && Array.isArray(ticketsResult.value)) tickets = ticketsResult.value as Ticket[];
   if (invoicesResult.status === 'fulfilled' && Array.isArray(invoicesResult.value)) invoices = invoicesResult.value as Invoice[];
 
-  const name = firstName(profile.fullName);
-  // The specific payable invoice (the engagement fee, in practice) to send the
-  // client to checkout for. Restricted to the statuses the pay-link endpoint
-  // accepts, and used for BOTH the Pay-now button and the amount shown — in the
-  // invoice's own currency (matching the /student/payments row).
   const outstandingInvoice =
     invoices.find((inv) => ['SENT', 'OVERDUE'].includes(inv.status)) ?? null;
   const latestTicket = tickets[0] ?? null;
   const latestMessage = latestTicket?.messages?.[0] ?? null;
-  const newMessages = tickets.filter(t => t.status === 'AWAITING_CLIENT').length;
+  const newMessages = tickets.filter((t) => t.status === 'AWAITING_CLIENT').length;
 
   return (
     <div className="space-y-6">
@@ -179,25 +141,25 @@ export default async function StudentDashboard() {
       <StudentHeader
         name={profile.fullName}
         photoUrl={profile.photoUrl ?? null}
-        subtitle={caseData ? stageSubline(caseData.stage) : "We're setting things up — your case will appear here soon."}
+        subtitle={caseData ? subline(caseData.stage) : t('settingUp')}
       />
 
       {/* CTA card */}
       <div className="rounded-2xl bg-[#1E3A5F] text-white p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[#b28f4e] text-xs font-semibold uppercase tracking-wider mb-1">Your Case</p>
+          <p className="text-[#b28f4e] text-xs font-semibold uppercase tracking-wider mb-1">{t('yourCase')}</p>
           <h2 className="text-xl font-bold">
-            {caseData ? `Stage: ${stageLabel(caseData.stage)}` : 'Case not yet assigned'}
+            {caseData ? t('stageLabel', { stage: stageName(caseData.stage) }) : t('caseNotAssigned')}
           </h2>
           <p className="text-white/70 text-sm mt-1">
-            {caseData ? stageSubline(caseData.stage) : 'Your case will be assigned once your application is reviewed.'}
+            {caseData ? subline(caseData.stage) : t('caseWillBeAssigned')}
           </p>
         </div>
         <Link
           href="/student/case"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#c9a961] text-[#1E3A5F] font-semibold hover:bg-[#b28f4e] transition-colors whitespace-nowrap flex-shrink-0"
         >
-          View My Case <ArrowRight size={16} />
+          {t('viewMyCase')} <ArrowRight size={16} className="rtl:rotate-180" />
         </Link>
       </div>
 
@@ -212,9 +174,9 @@ export default async function StudentDashboard() {
                   <FileText size={20} className="text-[#b28f4e]" />
                 </div>
                 <div>
-                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Visa Section</p>
-                  <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">Upload Area</p>
-                  <p className="text-xs text-[#4A4A4A]/70 mt-1">View and upload your visa section →</p>
+                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">{t('visaSection')}</p>
+                  <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">{t('uploadArea')}</p>
+                  <p className="text-xs text-[#4A4A4A]/70 mt-1">{t('uploadAreaSub')}</p>
                 </div>
               </div>
             </CardContent>
@@ -230,12 +192,12 @@ export default async function StudentDashboard() {
                   <MessageCircle size={20} className="text-[#1E3A5F]" />
                 </div>
                 <div>
-                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Messages</p>
+                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">{t('messages')}</p>
                   <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">
-                    {newMessages > 0 ? `${newMessages} awaiting you` : tickets.length > 0 ? 'All caught up' : 'No messages yet'}
+                    {newMessages > 0 ? t('messagesAwaiting', { count: newMessages }) : tickets.length > 0 ? t('messagesAllCaught') : t('messagesNone')}
                   </p>
                   <p className="text-xs text-[#4A4A4A]/70 mt-1">
-                    {newMessages > 0 ? 'We replied — check your messages →' : 'Need help? Send us a message →'}
+                    {newMessages > 0 ? t('messagesReplied') : t('messagesNeedHelp')}
                   </p>
                 </div>
               </div>
@@ -243,10 +205,7 @@ export default async function StudentDashboard() {
           </Card>
         </Link>
 
-        {/* Payments — when a balance is due, offer the SAME Pay-now checkout the
-            My Case page uses (Stripe redirect) right here, instead of routing to
-            the history page (which was a dead end pre-payment). When paid up, the
-            tile links to the payment history. */}
+        {/* Payments */}
         {outstandingInvoice ? (
           <Card className="h-full">
             <CardContent className="pt-5">
@@ -255,18 +214,18 @@ export default async function StudentDashboard() {
                   <CreditCard size={20} className="text-[#c9a961]" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Payments</p>
+                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">{t('payments')}</p>
                   <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">
-                    {formatCurrency(outstandingInvoice.amount, outstandingInvoice.currency)}
+                    {formatMoney(Number(outstandingInvoice.amount), outstandingInvoice.currency)}
                   </p>
-                  <p className="text-xs text-[#4A4A4A]/70 mt-1">Outstanding balance</p>
+                  <p className="text-xs text-[#4A4A4A]/70 mt-1">{t('outstandingBalance')}</p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <PayInvoiceButton invoiceId={outstandingInvoice.id} label="Pay now" />
+                    <PayInvoiceButton invoiceId={outstandingInvoice.id} label={t('payNow')} />
                     <Link
                       href="/student/payments"
-                      className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b28f4e] transition-colors"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#1E3A5F] hover:text-[#b28f4e] transition-colors"
                     >
-                      History →
+                      {t('history')} <ArrowRight size={12} className="rtl:rotate-180" />
                     </Link>
                   </div>
                 </div>
@@ -282,9 +241,9 @@ export default async function StudentDashboard() {
                     <CreditCard size={20} className="text-[#15a86b]" />
                   </div>
                   <div>
-                    <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">Payments</p>
-                    <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">All paid up</p>
-                    <p className="text-xs text-[#4A4A4A]/70 mt-1">No pending payments</p>
+                    <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">{t('payments')}</p>
+                    <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">{t('allPaidUp')}</p>
+                    <p className="text-xs text-[#4A4A4A]/70 mt-1">{t('noPending')}</p>
                   </div>
                 </div>
               </CardContent>
@@ -300,7 +259,7 @@ export default async function StudentDashboard() {
           <CardHeader>
             <CardTitle className="text-[#1E3A5F] flex items-center gap-2">
               <MessageCircle size={16} className="text-[#b28f4e]" />
-              Latest Message
+              {t('latestMessage')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -310,25 +269,25 @@ export default async function StudentDashboard() {
                 <p className="text-sm text-[#4A4A4A] line-clamp-3">{latestMessage.body.slice(0, 160)}{latestMessage.body.length > 160 ? '…' : ''}</p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-[#4A4A4A]/50">
-                    {latestMessage.sender?.name ?? 'Sorena Team'} · {timeAgo(latestMessage.createdAt)}
+                    {latestMessage.sender?.name ?? t('sorenaTeam')} · {relativeTime(latestMessage.createdAt, locale)}
                   </span>
                   <Link
                     href="/student/case/messages"
-                    className="text-xs font-semibold text-[#1E3A5F] hover:text-[#b28f4e] transition-colors"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#1E3A5F] hover:text-[#b28f4e] transition-colors"
                   >
-                    View all →
+                    {t('viewAll')} <ArrowRight size={12} className="rtl:rotate-180" />
                   </Link>
                 </div>
               </div>
             ) : (
               <div className="text-center py-4">
                 <MessageCircle size={28} className="text-[#4A4A4A]/20 mx-auto mb-2" />
-                <p className="text-sm text-[#4A4A4A]/60">No messages yet.</p>
+                <p className="text-sm text-[#4A4A4A]/60">{t('noMessagesYet')}</p>
                 <Link
                   href="/student/case/messages"
-                  className="mt-2 inline-block text-sm font-semibold text-[#b28f4e] hover:underline"
+                  className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#b28f4e] hover:underline"
                 >
-                  Send us a message →
+                  {t('sendMessage')} <ArrowRight size={14} className="rtl:rotate-180" />
                 </Link>
               </div>
             )}
@@ -340,18 +299,18 @@ export default async function StudentDashboard() {
           <CardHeader>
             <CardTitle className="text-[#1E3A5F] flex items-center gap-2">
               <Clock size={16} className="text-[#b28f4e]" />
-              Recent Activity
+              {t('recentActivity')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {tickets.length > 0 ? (
               <ol className="space-y-3">
-                {tickets.slice(0, 3).map(t => (
-                  <li key={t.id} className="flex items-start gap-3">
+                {tickets.slice(0, 3).map((ticket) => (
+                  <li key={ticket.id} className="flex items-start gap-3">
                     <span className="mt-1.5 w-2 h-2 rounded-full bg-[#c9a961] flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm text-[#1E3A5F] font-medium truncate">{t.subject}</p>
-                      <p className="text-xs text-[#4A4A4A]/60">{timeAgo(t.updatedAt)}</p>
+                      <p className="text-sm text-[#1E3A5F] font-medium truncate">{ticket.subject}</p>
+                      <p className="text-xs text-[#4A4A4A]/60">{relativeTime(ticket.updatedAt, locale)}</p>
                     </div>
                   </li>
                 ))}
@@ -359,12 +318,12 @@ export default async function StudentDashboard() {
             ) : caseData ? (
               <div className="text-center py-4">
                 <CheckCircle size={28} className="text-[#15a86b] mx-auto mb-2" />
-                <p className="text-sm text-[#4A4A4A]/60">Your case is active and progressing.</p>
+                <p className="text-sm text-[#4A4A4A]/60">{t('caseActive')}</p>
               </div>
             ) : (
               <div className="text-center py-4">
                 <Folder size={28} className="text-[#4A4A4A]/20 mx-auto mb-2" />
-                <p className="text-sm text-[#4A4A4A]/60">Activity will appear here once your case begins.</p>
+                <p className="text-sm text-[#4A4A4A]/60">{t('activityWillAppear')}</p>
               </div>
             )}
           </CardContent>
