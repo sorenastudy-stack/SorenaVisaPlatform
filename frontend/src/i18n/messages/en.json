@@ -1723,7 +1723,9 @@
       "dashboard": "Home",
       "visa": "Visa application",
       "apply": "Apply / Study",
-      "payments": "Payments"
+      "payments": "Payments",
+      "myAssessment": "My Assessment",
+      "booking": "Booking"
     },
     "relogin": {
       "title": "You're all set!",

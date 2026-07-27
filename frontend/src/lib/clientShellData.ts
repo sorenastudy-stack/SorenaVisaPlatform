@@ -46,16 +46,16 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
   if (!isStudent) {
     const navItems: ClientNavItem[] = [
       { labelKey: 'portal.nav.myCase',    href: '/portal/case',           iconName: 'briefcase', exact: true },
-      // Inline English label (no dot) — renders literally, skips next-intl.
+      // Keyed via next-intl (PR-I18N-2: portal.nav.myAssessment / booking).
       // Persian is frozen; /portal/report already exists (404 → /portal/case).
-      { labelKey: 'My Assessment',        href: '/portal/report',         iconName: 'sparkles' },
+      { labelKey: 'portal.nav.myAssessment', href: '/portal/report',      iconName: 'sparkles' },
       { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText', lockedUntilPaid: true },
       // PR-PORTAL-PAYMENTS: LEAD-reachable Payments page (STUDENT nav already has
       // its own further down). Own-data-scoped server-side.
       { labelKey: 'portal.nav.payments',  href: '/portal/payments',       iconName: 'creditCard' },
-      // Inline English label (no dot) — renders literally, skips next-intl.
+      // Keyed via next-intl (PR-I18N-2: portal.nav.myAssessment / booking).
       // Bare /portal/booking = the standing chooser (all three types, always).
-      { labelKey: 'Booking',              href: '/portal/booking',        iconName: 'calendar' },
+      { labelKey: 'portal.nav.booking',              href: '/portal/booking',        iconName: 'calendar' },
       { labelKey: 'portal.nav.wallet',    href: '/portal/wallet',         iconName: 'wallet' },
     ];
     return { navItems, portalStage, paymentUnlocked };
@@ -87,12 +87,12 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
   const navItems: ClientNavItem[] = [
     { labelKey: 'portal.nav.dashboard', href: '/student',               iconName: 'dashboard',     exact: true },
     { labelKey: 'portal.nav.myCase',    href: '/student/case',          iconName: 'briefcase',     exact: true },
-    // Inline English label (no dot) — renders literally, skips next-intl.
+    // Keyed via next-intl (PR-I18N-2: portal.nav.myAssessment / booking).
     // Persian is frozen; /portal/report already exists (404 → /portal/case).
-    { labelKey: 'My Assessment',        href: '/portal/report',         iconName: 'sparkles' },
+    { labelKey: 'portal.nav.myAssessment',        href: '/portal/report',         iconName: 'sparkles' },
     { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText',      lockedUntilPaid: true },
-    // Inline English label (no dot) — renders literally, skips next-intl.
-    { labelKey: 'Booking',              href: '/portal/booking',        iconName: 'calendar' },
+    // Keyed via next-intl (PR-I18N-2: portal.nav.myAssessment / booking).
+    { labelKey: 'portal.nav.booking',              href: '/portal/booking',        iconName: 'calendar' },
     { labelKey: 'portal.nav.visa',      href: '/student/documents',     iconName: 'visa',          lockedUntilPaid: true },
     ...(hasCase
       ? [{ labelKey: 'portal.nav.apply', href: '/student/admission', iconName: 'clipboard' as const, lockedUntilPaid: true }]

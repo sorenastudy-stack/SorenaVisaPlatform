@@ -82,9 +82,10 @@ This is the **spine**, not full coverage. Still English in Persian mode (by scop
   dashboard, and the `/student/case/messages` folder (~290 strings from the scan). Their
   RTL BiDi artifacts (e.g. ".You have no upcoming sessions", literal `→` glyphs) persist
   until those strings are translated.
-- **Two inline-label nav items — "My Assessment" and "Booking"** — set as literal strings
-  in `clientShellData.ts` (no i18n key), so they bypass next-intl. Not in the approved 26;
-  a 2-string follow-up (add `portal.nav.myAssessment` / `portal.nav.booking`).
+- ~~Two inline-label nav items — "My Assessment" and "Booking"~~ **RESOLVED** in the
+  follow-up: keyed as `portal.nav.myAssessment` («ارزیابی من») / `portal.nav.booking`
+  («رزرو وقت») in both dictionaries, with `clientShellData.ts` switched from the literal
+  strings to those keys. The whole client nav is now Persian.
 - **Inline date/relative-time + currency** outside `lib/date.ts` — `timeAgo`, `formatWhen`,
   the 7 currency formatters, and the other inline `Intl.DateTimeFormat` sites still
   hardcode `en`. A shared `formatMoney` + `Intl.RelativeTimeFormat('fa')` come later.
