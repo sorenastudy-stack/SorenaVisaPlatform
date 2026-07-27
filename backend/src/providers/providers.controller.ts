@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -21,14 +22,20 @@ import { CreateProgrammeDto } from './dto/create-programme.dto';
 import { ProgrammeListQueryDto } from './dto/programme-filter.dto';
 import { ProviderListQueryDto } from './dto/provider-list-filter.dto';
 import { CreateRequirementDto } from './dto/create-requirement.dto';
+import { CreateScholarshipDto } from './dto/create-scholarship.dto';
+import { UpdateScholarshipDto } from './dto/update-scholarship.dto';
 
 // Provider/programme catalog — institutional reference data (not user PII), but
 // the reads were allow-all and several writes (faculties/programmes/agreement
 // terms/requirements) were ungated, so any authenticated user could mutate the
-// catalog and commercial agreement terms. Reads → admission-handling staff;
-// writes → admin. (create / approve / reject were already ADMIN-gated.)
+// catalog and commercial agreement terms. Reads → admission-handling staff.
+// PROVIDER_ADMIN = the Owner-only tier for the commercial provider terms
+// (create/edit provider, agreement, commissions, scholarships) — PR-UNIVERSITIES
+// tightened these from ADMIN to OWNER/SUPER_ADMIN. CATALOG_ADMIN (still incl.
+// ADMIN) remains for programme/faculty curation + approve/reject.
 const CATALOG_READ = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS', 'CONSULTANT'] as const;
 const CATALOG_ADMIN = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
+const PROVIDER_ADMIN = ['OWNER', 'SUPER_ADMIN'] as const;
 
 @Controller('providers')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,7 +43,7 @@ export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
   @Post()
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles(...PROVIDER_ADMIN)
   create(@Body() dto: CreateProviderDto, @Req() req: any) {
     return this.providersService.createProvider(dto, req.user?.id ?? null);
   }
@@ -84,7 +91,7 @@ export class ProvidersController {
   }
 
   @Patch(':id')
-  @Roles(...CATALOG_ADMIN)
+  @Roles(...PROVIDER_ADMIN)
   update(
     @Param('id') providerId: string,
     @Body() dto: UpdateProviderDto,
@@ -93,12 +100,48 @@ export class ProvidersController {
   }
 
   @Patch(':id/agreement')
-  @Roles(...CATALOG_ADMIN)
+  @Roles(...PROVIDER_ADMIN)
   updateAgreement(
     @Param('id') providerId: string,
     @Body() dto: UpdateAgreementDto,
   ) {
     return this.providersService.updateAgreement(providerId, dto);
+  }
+
+  // ── Scholarships (PR-UNIVERSITIES) — Owner-only writes ─────────────────
+  @Get(':id/scholarships')
+  @Roles(...CATALOG_READ)
+  findScholarships(@Param('id') providerId: string) {
+    return this.providersService.findScholarships(providerId);
+  }
+
+  @Post(':id/scholarships')
+  @Roles(...PROVIDER_ADMIN)
+  addScholarship(
+    @Param('id') providerId: string,
+    @Body() dto: CreateScholarshipDto,
+    @Req() req: any,
+  ) {
+    return this.providersService.addScholarship(providerId, dto, req.user?.id ?? null);
+  }
+
+  @Patch('scholarships/:scholarshipId')
+  @Roles(...PROVIDER_ADMIN)
+  updateScholarship(
+    @Param('scholarshipId') scholarshipId: string,
+    @Body() dto: UpdateScholarshipDto,
+    @Req() req: any,
+  ) {
+    return this.providersService.updateScholarship(scholarshipId, dto, req.user?.id ?? null);
+  }
+
+  @Delete('scholarships/:scholarshipId')
+  @Roles(...PROVIDER_ADMIN)
+  deleteScholarship(
+    @Param('scholarshipId') scholarshipId: string,
+    @Req() req: any,
+  ) {
+    return this.providersService.deleteScholarship(scholarshipId, req.user?.id ?? null);
   }
 
   @Patch('programmes/:programmeId/approve')

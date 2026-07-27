@@ -21,6 +21,8 @@ import { CreateProgrammeDto } from './dto/create-programme.dto';
 import { ProviderListQueryDto } from './dto/provider-list-filter.dto';
 import { ProgrammeListQueryDto } from './dto/programme-filter.dto';
 import { CreateRequirementDto } from './dto/create-requirement.dto';
+import { CreateScholarshipDto } from './dto/create-scholarship.dto';
+import { UpdateScholarshipDto } from './dto/update-scholarship.dto';
 
 @Injectable()
 export class ProvidersService {
@@ -256,6 +258,124 @@ export class ProvidersService {
     }
 
     return requirements;
+  }
+
+  // ── Scholarships (PR-UNIVERSITIES) ──────────────────────────────────────
+  // Owner-managed reference data: what Sorena can offer per provider, scoped by
+  // applicant nationality and (optionally) a programme or qualification level.
+
+  async findScholarships(providerId: string) {
+    await this.ensureProviderExists(providerId);
+    return this.prisma.providerScholarship.findMany({
+      where: { providerId },
+      orderBy: [{ isActive: 'desc' }, { nationality: 'asc' }, { createdAt: 'desc' }],
+      include: { programme: { select: { id: true, name: true, level: true } } },
+    });
+  }
+
+  async addScholarship(providerId: string, dto: CreateScholarshipDto, actorId: string | null) {
+    await this.ensureProviderExists(providerId);
+    await this.assertProgrammeBelongsToProvider(dto.programmeId, providerId);
+
+    const scholarship = await this.prisma.providerScholarship.create({
+      data: {
+        providerId,
+        nationality: dto.nationality.trim().toUpperCase(),
+        programmeId: dto.programmeId ?? null,
+        level: dto.level ?? null,
+        name: dto.name.trim(),
+        amountType: dto.amountType ?? CommissionType.FIXED,
+        amountValue: dto.amountValue,
+        currency: dto.currency?.trim().toUpperCase() ?? 'NZD',
+        eligibilityNotes: dto.eligibilityNotes?.trim() || null,
+        isActive: dto.isActive ?? true,
+        updatedById: actorId,
+      },
+    });
+
+    await this.eventsService.emit(
+      'SCHOLARSHIP_CREATED',
+      'PROVIDER_SCHOLARSHIP',
+      scholarship.id,
+      null,
+      EventSource.USER,
+      actorId,
+      { providerId, nationality: scholarship.nationality, name: scholarship.name },
+    );
+
+    return scholarship;
+  }
+
+  async updateScholarship(scholarshipId: string, dto: UpdateScholarshipDto, actorId: string | null) {
+    const existing = await this.ensureScholarshipExists(scholarshipId);
+    if (dto.programmeId !== undefined) {
+      await this.assertProgrammeBelongsToProvider(dto.programmeId, existing.providerId);
+    }
+
+    const scholarship = await this.prisma.providerScholarship.update({
+      where: { id: scholarshipId },
+      data: {
+        ...(dto.nationality !== undefined ? { nationality: dto.nationality.trim().toUpperCase() } : {}),
+        ...(dto.programmeId !== undefined ? { programmeId: dto.programmeId ?? null } : {}),
+        ...(dto.level !== undefined ? { level: dto.level ?? null } : {}),
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.amountType !== undefined ? { amountType: dto.amountType } : {}),
+        ...(dto.amountValue !== undefined ? { amountValue: dto.amountValue } : {}),
+        ...(dto.currency !== undefined ? { currency: dto.currency?.trim().toUpperCase() ?? 'NZD' } : {}),
+        ...(dto.eligibilityNotes !== undefined ? { eligibilityNotes: dto.eligibilityNotes?.trim() || null } : {}),
+        ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+        updatedById: actorId,
+      },
+    });
+
+    await this.eventsService.emit(
+      'SCHOLARSHIP_UPDATED',
+      'PROVIDER_SCHOLARSHIP',
+      scholarshipId,
+      null,
+      EventSource.USER,
+      actorId,
+      { providerId: existing.providerId },
+    );
+
+    return scholarship;
+  }
+
+  async deleteScholarship(scholarshipId: string, actorId: string | null) {
+    const existing = await this.ensureScholarshipExists(scholarshipId);
+    await this.prisma.providerScholarship.delete({ where: { id: scholarshipId } });
+
+    await this.eventsService.emit(
+      'SCHOLARSHIP_DELETED',
+      'PROVIDER_SCHOLARSHIP',
+      scholarshipId,
+      null,
+      EventSource.USER,
+      actorId,
+      { providerId: existing.providerId, name: existing.name },
+    );
+
+    return { id: scholarshipId, deleted: true };
+  }
+
+  // A programme reference (when given) must belong to the same provider.
+  private async assertProgrammeBelongsToProvider(programmeId: string | null | undefined, providerId: string) {
+    if (!programmeId) return;
+    const programme = await this.prisma.educationProgramme.findUnique({
+      where: { id: programmeId },
+      select: { providerId: true },
+    });
+    if (!programme || programme.providerId !== providerId) {
+      throw new BadRequestException('Programme does not belong to this provider');
+    }
+  }
+
+  private async ensureScholarshipExists(id: string) {
+    const scholarship = await this.prisma.providerScholarship.findUnique({ where: { id } });
+    if (!scholarship) {
+      throw new NotFoundException('Scholarship not found');
+    }
+    return scholarship;
   }
 
   private async ensureProviderExists(id: string) {

@@ -2186,6 +2186,7 @@ model EducationProvider {
   programmes   EducationProgramme[]
   applications Application[]
   commissions  Commission[]
+  scholarships ProviderScholarship[]
 
   @@map("education_providers")
 }
@@ -2227,11 +2228,41 @@ model EducationProgramme {
   applications     Application[]
   commissions      Commission[]
   admissionChoices AdmissionProgrammeChoice[]
+  scholarships     ProviderScholarship[]
 
   @@index([providerId])
   @@index([level])
   @@index([reviewStatus])
   @@map("education_programmes")
+}
+
+// PR-UNIVERSITIES — a scholarship Sorena can offer for a provider, scoped by
+// applicant NATIONALITY (ISO code) and optionally to a specific programme or a
+// qualification level. Owner-managed institutional reference data that feeds the
+// commissions context and (future) AI offer-generation / recommendation engine.
+// Amount reuses CommissionType: PERCENTAGE (of tuition) or FIXED (in `currency`).
+model ProviderScholarship {
+  id               String              @id @default(cuid())
+  providerId       String
+  nationality      String // ISO country code of the applicant nationality it applies to
+  programmeId      String? // optional — scope to a single programme
+  level            QualificationLevel? // optional — scope to a qualification level
+  name             String
+  amountType       CommissionType      @default(FIXED)
+  amountValue      Float
+  currency         String              @default("NZD")
+  eligibilityNotes String?
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  updatedById      String?
+
+  provider  EducationProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  programme EducationProgramme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+
+  @@index([providerId])
+  @@index([nationality])
+  @@map("provider_scholarships")
 }
 
 model ProgrammeRequirement {
