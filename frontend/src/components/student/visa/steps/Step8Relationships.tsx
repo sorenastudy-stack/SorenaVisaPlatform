@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
+import { useLocaleStore } from '@/lib/stores/localeStore';
 import {
   useVisa,
   type VisaPartnerRow,
@@ -161,6 +162,7 @@ function SelectField({
 
 export function Step8Relationships() {
   const t = useTranslations();
+  const locale = useLocaleStore((s) => s.locale);
   const {
     visa,
     readonly,
@@ -402,73 +404,37 @@ export function Step8Relationships() {
     return missing;
   };
 
-  // Field-name → human label for the validation toast. Keeps the
-  // generic "Please complete every required field" message but tacks
-  // on the specific labels of what's missing so the user doesn't have
-  // to hunt through the whole form for red borders.
-  const FIELD_LABELS: Record<string, string> = {
-    relationshipToApplicant: 'relationship',
-    givenName:               'given name',
-    middleNames:             'middle names',
-    surname:                 'surname',
-    gender:                  'gender',
-    dateOfBirth:             'date of birth',
-    relationshipStatus:      'marital status',
-    countryOfBirth:          'country of birth',
-    stateOfBirth:            'state of birth',
-    cityOfBirth:             'city of birth',
-    nationality:             'nationality',
-    countryOfResidence:      'country of residence',
-    occupation:              'occupation',
-    holdsPassport:           'holds passport (Yes/No)',
-    passportNumber:          'passport number',
-    passportCountryOfIssue:  'passport country',
-    passportIssueDate:       'passport issue date',
-    passportExpiryDate:      'passport expiry date',
-    isDeceased:              'is deceased (Yes/No)',
-    citizenship:             'citizenship',
-    phone:                   'phone',
-    email:                   'email',
-    street:                  'street',
-    townCity:                'town/city',
-    livesWithApplicant:      'lives with applicant (Yes/No)',
-  };
+    // Field-name → localised label for the validation toast (visaStep8.fields.*),
+    // falling back to the raw internal key if unmapped.
+    const fieldLabel = (field: string): string =>
+      t.has(`visaStep8.fields.${field}`) ? t(`visaStep8.fields.${field}`) : field;
 
   const labelForMissingKey = (key: string): string => {
-    // Top-level keys.
-    switch (key) {
-      case 'maritalStatusMissing': return 'Marital status (from admission)';
-      case 'partnerMissing':       return 'Partner details';
-      case 'hasFormerPartners':    return '"Do you have former partners?" Yes/No';
-      case 'formerPartnersEmpty':  return 'Add at least one former partner';
-      case 'childrenEmpty':        return 'Add at least one child';
-      case 'parentsEmpty':         return 'Add at least one parent';
-      case 'hasSiblings':          return '"Do you have siblings?" Yes/No';
-      case 'siblingsEmpty':        return 'Add at least one sibling';
-      case 'hasNzContacts':        return '"Do you have NZ contacts?" Yes/No';
-      case 'nzContactsEmpty':      return 'Add at least one NZ contact';
-    }
+    // Top-level keys → visaStep8.missing.*
+    if (t.has(`visaStep8.missing.${key}`)) return t(`visaStep8.missing.${key}`);
     const parts = key.split('.');
     // Partner-prefixed (singleton, no rowId): partner.<field>
     if (parts[0] === 'partner' && parts.length === 2) {
-      return `Partner's ${FIELD_LABELS[parts[1]] ?? parts[1]}`;
+      return t('visaStep8.partnerField', { field: fieldLabel(parts[1]) });
     }
     // Indexed entities: <prefix>.<rowId>.<field>
     if (parts.length === 3) {
       const [prefix, rowId, field] = parts;
-      const fieldLabel = FIELD_LABELS[field] ?? field;
-      const lookup: Record<string, { rows: { id: string }[]; label: string }> = {
-        formerPartner: { rows: formerPartners,  label: 'Former partner' },
-        child:         { rows: childrenRows,    label: 'Child' },
-        parent:        { rows: parents,         label: 'Parent' },
-        sibling:       { rows: siblings,        label: 'Sibling' },
-        nzContact:     { rows: nzContacts,      label: 'NZ contact' },
+      const lookup: Record<string, { rows: { id: string }[]; groupKey: string }> = {
+        formerPartner: { rows: formerPartners,  groupKey: 'formerPartner' },
+        child:         { rows: childrenRows,    groupKey: 'child' },
+        parent:        { rows: parents,         groupKey: 'parent' },
+        sibling:       { rows: siblings,        groupKey: 'sibling' },
+        nzContact:     { rows: nzContacts,      groupKey: 'nzContact' },
       };
       const entry = lookup[prefix];
       if (entry) {
         const idx = entry.rows.findIndex((r) => r.id === rowId);
-        const nLabel = idx >= 0 ? ` ${idx + 1}` : '';
-        return `${entry.label}${nLabel} ${fieldLabel}`;
+        const group = t(`visaStep8.groups.${entry.groupKey}`);
+        const fl = fieldLabel(field);
+        return idx >= 0
+          ? t('visaStep8.entityField', { group, n: idx + 1, field: fl })
+          : t('visaStep8.entityFieldNoNum', { group, field: fl });
       }
     }
     return key;
@@ -481,8 +447,9 @@ export function Step8Relationships() {
       // legible — extra items are summarised as "+N more".
       const labels = Array.from(new Set(missing.map(labelForMissingKey)));
       const sample = labels.slice(0, 6);
-      const more = labels.length > 6 ? `, +${labels.length - 6} more` : '';
-      toast.error(`Please complete: ${sample.join(', ')}${more}`);
+      const sep = locale === 'fa' ? '، ' : ', ';
+      const more = labels.length > 6 ? t('visaStep8.more', { count: labels.length - 6 }) : '';
+      toast.error(t('visaStep8.pleaseComplete', { list: sample.join(sep) + more }));
       return;
     }
     setSaving(true);

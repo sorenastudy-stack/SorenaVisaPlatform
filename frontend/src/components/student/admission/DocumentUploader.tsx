@@ -7,6 +7,8 @@ import { Upload, FileText, Eye, Download, Trash2 } from 'lucide-react';
 import { useAdmission } from './AdmissionFormContext';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/date';
+import { formatBytes } from '@/lib/bytes';
+import { useLocaleStore } from '@/lib/stores/localeStore';
 import { useDocumentReviewStatuses } from '@/components/documents/useDocumentReviewStatuses';
 import { DocumentReviewBadge } from '@/components/documents/DocumentReviewBadge';
 
@@ -22,11 +24,6 @@ const BACKEND =
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:3001';
 
-function fmtBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1_048_576).toFixed(1)} MB`;
-}
 
 export function DocumentUploader({
   documentType,
@@ -50,6 +47,7 @@ export function DocumentUploader({
   educationEntryId?: string;
 }) {
   const t = useTranslations();
+  const locale = useLocaleStore((s) => s.locale);
   const { documents, uploadDocument, deleteDocument } = useAdmission();
   const { statusFor } = useDocumentReviewStatuses();
   const [uploading, setUploading] = useState(false);
@@ -145,7 +143,7 @@ export function DocumentUploader({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-sorena-navy">{doc.fileName}</p>
             <p className="text-xs text-sorena-navy/40">
-              {fmtBytes(doc.fileSizeBytes)} · {formatDate(doc.uploadedAt)}
+              {formatBytes(doc.fileSizeBytes, locale)} · {formatDate(doc.uploadedAt, locale)}
             </p>
             {(() => {
               const review = statusFor('ADMISSION', doc.id);
