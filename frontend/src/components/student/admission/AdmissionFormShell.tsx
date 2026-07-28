@@ -49,7 +49,7 @@ export function AdmissionFormShell({ session, initialData }: Props) {
       .then((res) =>
         setData({ exists: true, application: res.application, programmeChoices: [], educationEntries: [], documents: [] })
       )
-      .catch(() => toast.error('Could not start your application. Please refresh.'))
+      .catch(() => toast.error(t('admissionStartError')))
       .finally(() => setLoading(false));
   }, [initialData]);
 

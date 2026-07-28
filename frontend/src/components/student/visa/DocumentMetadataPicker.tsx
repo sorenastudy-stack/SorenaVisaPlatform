@@ -4,6 +4,8 @@ import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Trash2, Upload, Download, Loader2, AlertCircle, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { formatBytes } from '@/lib/bytes';
+import { useLocaleStore } from '@/lib/stores/localeStore';
 import { useDocumentReviewStatuses } from '@/components/documents/useDocumentReviewStatuses';
 import { DocumentReviewBadge } from '@/components/documents/DocumentReviewBadge';
 
@@ -53,22 +55,14 @@ const API_URL =
 const ACCEPTED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  const mb = kb / 1024;
-  return `${mb.toFixed(2)} MB`;
-}
-
-function formatTime(iso: string): string {
+// Compact uploaded-at stamp — "DD/MM HH:MM", localised (Persian digits +
+// Gregorian months in fa). File SIZE uses the shared formatBytes helper.
+export function formatUploadedAt(iso: string, locale: 'en' | 'fa'): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${dd}/${mm} ${hh}:${min}`;
+  return new Intl.DateTimeFormat(locale === 'fa' ? 'fa-IR-u-ca-gregory' : 'en-GB', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d);
 }
 
 export interface ServerPayload {
@@ -105,6 +99,7 @@ export function DocumentMetadataPicker({
   ariaInvalid,
 }: Props) {
   const t = useTranslations();
+  const locale = useLocaleStore((s) => s.locale);
   const { statusFor } = useDocumentReviewStatuses();
   const review = metadata ? statusFor('VISA_SUPPORTING', metadata.id) : null;
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -184,7 +179,7 @@ export function DocumentMetadataPicker({
                 ? caught.message
                 : caught instanceof Error
                   ? caught.message
-                  : 'Upload failed',
+                  : t('visaDocsUploadFailed'),
           });
         }
       })();
@@ -200,7 +195,7 @@ export function DocumentMetadataPicker({
       const absolute = url.startsWith('http') ? url : `${API_URL}${url}`;
       window.open(absolute, '_blank', 'noopener');
     } catch (caught) {
-      setTopError(caught instanceof ApiError ? caught.message : 'Failed to open file.');
+      setTopError(caught instanceof ApiError ? caught.message : t('visaDocsOpenFailed'));
     }
   };
 
@@ -230,7 +225,7 @@ export function DocumentMetadataPicker({
         return n;
       });
       setTopError(
-        caught instanceof ApiError ? caught.message : 'Failed to delete file.',
+        caught instanceof ApiError ? caught.message : t('visaDocsDeleteFailed'),
       );
     }
   };
@@ -294,14 +289,14 @@ export function DocumentMetadataPicker({
                   {f.originalFilename}
                 </p>
                 <p className="text-xs text-sorena-navy/60">
-                  {formatSize(f.sizeBytes)} · {formatTime(f.uploadedAt)}
+                  {formatBytes(f.sizeBytes, locale)} · {formatUploadedAt(f.uploadedAt, locale)}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => onDownload(f)}
-                title={`Download ${f.originalFilename}`}
-                aria-label={`Download ${f.originalFilename}`}
+                title={t('visaDocsDownloadFile', { name: f.originalFilename })}
+                aria-label={t('visaDocsDownloadFile', { name: f.originalFilename })}
                 className="flex h-12 min-w-12 items-center justify-center rounded-lg border border-sorena-navy/30 bg-white text-sorena-navy transition-colors hover:border-[#c9a961] hover:text-[#c9a961]"
               >
                 <Download size={16} />
@@ -309,8 +304,8 @@ export function DocumentMetadataPicker({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(f)}
-                title={`Delete ${f.originalFilename}`}
-                aria-label={`Delete ${f.originalFilename}`}
+                title={t('visaDocsDeleteFile', { name: f.originalFilename })}
+                aria-label={t('visaDocsDeleteFile', { name: f.originalFilename })}
                 className="flex h-12 min-w-12 items-center justify-center rounded-lg border border-red-300 bg-white text-red-600 transition-colors hover:bg-red-50"
               >
                 <Trash2 size={16} />
@@ -337,15 +332,15 @@ export function DocumentMetadataPicker({
                   {p.name}
                 </p>
                 <p className="text-xs text-sorena-navy/60">
-                  {p.status === 'uploading' ? 'Uploading…' : p.error}
+                  {p.status === 'uploading' ? t('visaDocsUploading') : p.error}
                 </p>
               </div>
               {p.status === 'error' && (
                 <button
                   type="button"
                   onClick={() => removePending(p.localId)}
-                  title="Dismiss"
-                  aria-label="Dismiss"
+                  title={t('visaDocsDismiss')}
+                  aria-label={t('visaDocsDismiss')}
                   className="flex h-10 min-w-10 items-center justify-center rounded text-sorena-navy/50 hover:bg-sorena-navy/5"
                 >
                   <X size={16} />
@@ -380,8 +375,8 @@ export function DocumentMetadataPicker({
         <Upload size={18} className="text-sorena-navy/50" />
         <p className="text-sm font-semibold text-sorena-navy">
           {visibleFiles.length === 0
-            ? <>Drop files here, or <span className="underline">browse</span></>
-            : <>Add another file — drop here, or <span className="underline">browse</span></>}
+            ? t.rich('visaDocsDropzone', { browse: (c) => <span className="underline">{c}</span> })
+            : t.rich('visaDocsDropzoneMore', { browse: (c) => <span className="underline">{c}</span> })}
         </p>
         <p className="text-xs text-sorena-navy/50">
           {t('visaDocsPickerAcceptedTypes')}
@@ -417,6 +412,7 @@ export function ConfirmDeleteOverlay({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useTranslations();
   return (
     <div
       role="dialog"
@@ -429,11 +425,13 @@ export function ConfirmDeleteOverlay({
         className="w-full max-w-sm rounded-xl border border-sorena-navy/10 bg-white p-5 shadow-xl"
       >
         <h3 className="mb-2 text-base font-bold text-sorena-navy">
-          Delete file?
+          {t('visaDocsDeleteConfirmTitle')}
         </h3>
         <p className="mb-4 text-sm text-sorena-navy/70">
-          Delete <span className="font-medium text-sorena-navy">{fileName}</span>?
-          This can&rsquo;t be undone.
+          {t.rich('visaDocsDeleteConfirmBody', {
+            name: fileName,
+            b: (c) => <span className="font-medium text-sorena-navy">{c}</span>,
+          })}
         </p>
         <div className="flex justify-end gap-2">
           <button
@@ -441,14 +439,14 @@ export function ConfirmDeleteOverlay({
             onClick={onCancel}
             className="h-12 rounded-lg border border-sorena-navy/20 bg-white px-4 text-sm font-semibold text-sorena-navy transition-colors hover:bg-sorena-navy/5"
           >
-            Cancel
+            {t('visaDocsCancel')}
           </button>
           <button
             type="button"
             onClick={onConfirm}
             className="h-12 rounded-lg border border-red-600 bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-700"
           >
-            Delete
+            {t('visaDocsDelete')}
           </button>
         </div>
       </div>

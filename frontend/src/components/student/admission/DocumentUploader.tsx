@@ -198,7 +198,7 @@ export function DocumentUploader({
         >
           <Upload size={20} className="text-sorena-navy/40" />
           <p className="text-center text-sm text-sorena-navy/60">
-            {uploading ? 'Uploading…' : t('admissionUploadDropzone')}
+            {uploading ? t('admissionUploading') : t('admissionUploadDropzone')}
           </p>
           <p className="text-xs text-sorena-navy/40">
             {t('admissionUploadAllowedTypes')} · {t('admissionUploadMaxSize')}

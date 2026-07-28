@@ -4,7 +4,9 @@ import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Trash2, Upload, Download, Loader2, AlertCircle, X, Lock } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import { ConfirmDeleteOverlay, type VisaDocumentFile } from './DocumentMetadataPicker';
+import { formatBytes } from '@/lib/bytes';
+import { useLocaleStore } from '@/lib/stores/localeStore';
+import { ConfirmDeleteOverlay, formatUploadedAt, type VisaDocumentFile } from './DocumentMetadataPicker';
 
 // PR-FILES-2 — Step-14 other-evidence: each entry now holds a list
 // of files. The entry can be created with only the classification
@@ -40,23 +42,6 @@ export interface OtherEvidenceEntry {
   files: VisaDocumentFile[];
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  return `${(kb / 1024).toFixed(2)} MB`;
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${dd}/${mm} ${hh}:${min}`;
-}
-
 interface ServerPayload {
   otherEvidence: OtherEvidenceEntry[];
   [key: string]: unknown;
@@ -82,6 +67,7 @@ interface CardProps {
 
 export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
   const t = useTranslations();
+  const locale = useLocaleStore((s) => s.locale);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [evidenceType, setEvidenceType] = useState<OtherEvidenceType>(entry.evidenceType);
   const [customLabel, setCustomLabel] = useState<string>(entry.customLabel ?? '');
@@ -175,7 +161,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
                 ? caught.message
                 : caught instanceof Error
                   ? caught.message
-                  : 'Upload failed',
+                  : t('visaDocsUploadFailed'),
           });
         }
       })();
@@ -191,7 +177,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
       const absolute = url.startsWith('http') ? url : `${API_URL}${url}`;
       window.open(absolute, '_blank', 'noopener');
     } catch (caught) {
-      setTopError(caught instanceof ApiError ? caught.message : 'Failed to open file.');
+      setTopError(caught instanceof ApiError ? caught.message : t('visaDocsOpenFailed'));
     }
   };
 
@@ -216,7 +202,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
         n.delete(file.id);
         return n;
       });
-      setTopError(caught instanceof ApiError ? caught.message : 'Failed to delete file.');
+      setTopError(caught instanceof ApiError ? caught.message : t('visaDocsDeleteFailed'));
     }
   };
 
@@ -229,7 +215,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
       );
       onServerChange(next);
     } catch (caught) {
-      setTopError(caught instanceof Error ? caught.message : 'Failed to delete entry.');
+      setTopError(caught instanceof Error ? caught.message : t('visaDocsDeleteEntryFailed'));
     }
   };
 
@@ -278,7 +264,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
             )}
           </span>
           <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-sorena-navy/50">
-            <Lock size={11} /> Locked once files are attached. Delete the entry to change.
+            <Lock size={11} /> {t('visaDocsLockedNote')}
           </span>
         </div>
       ) : (
@@ -348,14 +334,14 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
                   {f.originalFilename}
                 </p>
                 <p className="text-xs text-sorena-navy/60">
-                  {formatSize(f.sizeBytes)} · {formatTime(f.uploadedAt)}
+                  {formatBytes(f.sizeBytes, locale)} · {formatUploadedAt(f.uploadedAt, locale)}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => onDownload(f)}
-                title={`Download ${f.originalFilename}`}
-                aria-label={`Download ${f.originalFilename}`}
+                title={t('visaDocsDownloadFile', { name: f.originalFilename })}
+                aria-label={t('visaDocsDownloadFile', { name: f.originalFilename })}
                 className="flex h-12 min-w-12 items-center justify-center rounded-lg border border-sorena-navy/30 bg-white text-sorena-navy transition-colors hover:border-[#c9a961] hover:text-[#c9a961]"
               >
                 <Download size={16} />
@@ -363,8 +349,8 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
               <button
                 type="button"
                 onClick={() => setConfirmDeleteFile(f)}
-                title={`Delete ${f.originalFilename}`}
-                aria-label={`Delete ${f.originalFilename}`}
+                title={t('visaDocsDeleteFile', { name: f.originalFilename })}
+                aria-label={t('visaDocsDeleteFile', { name: f.originalFilename })}
                 className="flex h-12 min-w-12 items-center justify-center rounded-lg border border-red-300 bg-white text-red-600 transition-colors hover:bg-red-50"
               >
                 <Trash2 size={16} />
@@ -389,15 +375,15 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-sorena-navy">{p.name}</p>
                 <p className="text-xs text-sorena-navy/60">
-                  {p.status === 'uploading' ? 'Uploading…' : p.error}
+                  {p.status === 'uploading' ? t('visaDocsUploading') : p.error}
                 </p>
               </div>
               {p.status === 'error' && (
                 <button
                   type="button"
                   onClick={() => removePending(p.localId)}
-                  title="Dismiss"
-                  aria-label="Dismiss"
+                  title={t('visaDocsDismiss')}
+                  aria-label={t('visaDocsDismiss')}
                   className="flex h-10 min-w-10 items-center justify-center rounded text-sorena-navy/50 hover:bg-sorena-navy/5"
                 >
                   <X size={16} />
@@ -432,8 +418,8 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
         <Upload size={18} className="text-sorena-navy/50" />
         <p className="text-sm font-semibold text-sorena-navy">
           {visibleFiles.length === 0
-            ? <>Drop files here, or <span className="underline">browse</span></>
-            : <>Add another file — drop here, or <span className="underline">browse</span></>}
+            ? t.rich('visaDocsDropzone', { browse: (c) => <span className="underline">{c}</span> })
+            : t.rich('visaDocsDropzoneMore', { browse: (c) => <span className="underline">{c}</span> })}
         </p>
         <p className="text-xs text-sorena-navy/50">
           {t('visaDocsPickerAcceptedTypes')}
@@ -451,7 +437,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
       )}
       {confirmDeleteEntry && (
         <ConfirmDeleteOverlay
-          fileName={`${typeLabel}${entry.customLabel ? ` (${entry.customLabel})` : ''} and all its files`}
+          fileName={t('visaDocsDeleteEntryName', { label: `${typeLabel}${entry.customLabel ? ` (${entry.customLabel})` : ''}` })}
           onCancel={() => setConfirmDeleteEntry(false)}
           onConfirm={onConfirmDeleteEntry}
         />
@@ -540,7 +526,7 @@ export function OtherEvidenceAdder({ onServerChange }: AdderProps) {
         disabled={busy}
         className="h-12 self-start rounded-lg border border-sorena-navy bg-sorena-navy px-4 text-sm font-semibold text-white transition-colors hover:bg-sorena-navy/90 disabled:opacity-40"
       >
-        {busy ? 'Adding…' : 'Add entry'}
+        {busy ? t('visaDocs2AddingEntry') : t('visaDocs2AddEntry')}
       </button>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>

@@ -24,7 +24,7 @@ export function StepFooter({ isAgent }: { isAgent: boolean }) {
       toast.success(t('admissionSavedToast'));
       router.push('/student');
     } catch {
-      toast.error('Could not save progress. Please try again.');
+      toast.error(t('admissionSaveError'));
     }
   };
 
@@ -48,7 +48,7 @@ export function StepFooter({ isAgent }: { isAgent: boolean }) {
       if (err instanceof ApiError && err.statusCode === 400) {
         toast.error(err.message);
       } else {
-        toast.error('Could not submit. Please try again.');
+        toast.error(t('admissionSubmitError'));
       }
     }
   };
