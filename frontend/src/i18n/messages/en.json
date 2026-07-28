@@ -85,6 +85,19 @@
     }
   },
   "booking": {
+    "reasons": {
+      "NO_SUBMISSION": "Take your free assessment first to unlock consultations.",
+      "FREE15_BAND": "Your free 15-minute consultation opens once your assessment reaches Band 4 or above.",
+      "FREE15_HARDSTOP": "Available after your Licensed Immigration Adviser clears the blocking item on your file.",
+      "FREE15_USED": "You've already used your free consultation. Choose a paid session to continue.",
+      "FREE15_OK": "You qualify to start your application journey. This free 15-minute session confirms your pathway and next steps, and is required before we open your case file.",
+      "GAP_BAND_MISMATCH": "The Gap-Closing session is for Band 3 profiles; your assessment is {band}.",
+      "GAP_HARDSTOP": "A legal issue on your file must be cleared by an adviser before a Gap-Closing session applies.",
+      "GAP_OK": "Your assessment shows real potential with specific areas to close first. This paid 30-minute session with an Admission Specialist gives you a structured improvement plan.",
+      "LIA_NO_ADVISER": "No licensed adviser is available to book right now. Please check back soon.",
+      "LIA_OK_HARDSTOP": "A specific legal issue on your file needs your Licensed Immigration Adviser. This paid 30-minute session resolves the blocking item so you can move forward.",
+      "LIA_OK_GENERAL": "Book a paid 30-minute consultation with our Licensed Immigration Adviser for tailored legal guidance on your case."
+    },
     "chooserTitle": "Book a consultation",
     "chooserSubtitle": "Choose the session that fits where you are.",
     "loadOptionsError": "Couldn't load your booking options. Please refresh.",

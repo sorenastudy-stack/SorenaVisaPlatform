@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { formatMoneyCents } from '@/lib/money';
 import {
   getBookingEligibility,
+  reasonText,
   type BookingEligibility,
   type BookingType,
   type TypeEligibility,
@@ -142,7 +143,7 @@ function BookingTypeCard({
             >
               <Lock size={15} /> {t('notAvailable')}
             </button>
-            <p className="mt-2 text-xs italic leading-relaxed text-sorena-text/60">{item.reason}</p>
+            <p className="mt-2 text-xs italic leading-relaxed text-sorena-text/60">{reasonText(item, t)}</p>
           </>
         )}
       </div>

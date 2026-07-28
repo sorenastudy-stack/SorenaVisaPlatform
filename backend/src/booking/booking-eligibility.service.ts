@@ -18,16 +18,35 @@ import { getSessionPricing } from './session-pricing';
 // when one exists, else fall back to the submission's lead. `hardStopSource`
 // reports which, for provenance.
 //
-// The reason strings are plain English and returned in the payload — both the
-// report and the (future) booking page render identical copy with NO next-intl
-// keys (Persian is frozen).
+// The reason strings are plain English and returned in the payload as a FALLBACK.
+// Phase 30 (i18n): each verdict also carries a stable `reasonCode` (+ optional
+// `reasonParams`) drawn from a fixed set, so the frontend can map it to a
+// translated next-intl string (t('booking.reasons.<CODE>')) and render Persian.
+// The English `reason` remains the fallback if a code is ever unmapped.
 
 export type PrimaryType = BookingSessionType;
+
+// Fixed set of reason codes — 1:1 with the REASONS copy below, plus the one
+// dynamic (band-interpolated) case. The frontend maps these to t() strings.
+export type BookingReasonCode =
+  | 'NO_SUBMISSION'
+  | 'FREE15_BAND'
+  | 'FREE15_HARDSTOP'
+  | 'FREE15_USED'
+  | 'FREE15_OK'
+  | 'GAP_BAND_MISMATCH'
+  | 'GAP_HARDSTOP'
+  | 'GAP_OK'
+  | 'LIA_NO_ADVISER'
+  | 'LIA_OK_HARDSTOP'
+  | 'LIA_OK_GENERAL';
 
 export interface TypeEligibility {
   type: BookingSessionType;
   eligible: boolean;
-  reason: string; // human English — why available (eligible) or why blocked
+  reason: string; // human English — FALLBACK; prefer reasonCode for display
+  reasonCode: BookingReasonCode; // stable key → t('booking.reasons.<CODE>')
+  reasonParams?: Record<string, string>; // e.g. { band: 'Band 3' } for interpolation
   paid: boolean;
   currency: string;       // ISO 4217, e.g. 'USD'
   priceCents: number;     // base — the WALLET amount (no fee)
@@ -143,11 +162,11 @@ export class BookingEligibilityService {
     freeUsed: boolean,
   ): TypeEligibility {
     const base = { ...getSessionPricing('FREE_15') };
-    if (!hasSubmission)   return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION };
-    if (!isHighBand(band)) return { ...base, eligible: false, reason: REASONS.FREE15_BAND };
-    if (liveHardStop)     return { ...base, eligible: false, reason: REASONS.FREE15_HARDSTOP };
-    if (freeUsed)         return { ...base, eligible: false, reason: REASONS.FREE15_USED };
-    return { ...base, eligible: true, reason: REASONS.FREE15_OK };
+    if (!hasSubmission)   return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION, reasonCode: 'NO_SUBMISSION' };
+    if (!isHighBand(band)) return { ...base, eligible: false, reason: REASONS.FREE15_BAND, reasonCode: 'FREE15_BAND' };
+    if (liveHardStop)     return { ...base, eligible: false, reason: REASONS.FREE15_HARDSTOP, reasonCode: 'FREE15_HARDSTOP' };
+    if (freeUsed)         return { ...base, eligible: false, reason: REASONS.FREE15_USED, reasonCode: 'FREE15_USED' };
+    return { ...base, eligible: true, reason: REASONS.FREE15_OK, reasonCode: 'FREE15_OK' };
   }
 
   private evalGap(
@@ -156,10 +175,10 @@ export class BookingEligibilityService {
     liveHardStop: boolean,
   ): TypeEligibility {
     const base = { ...getSessionPricing('GAP_CLOSING') };
-    if (!hasSubmission)      return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION };
-    if (band !== 'BAND_3')   return { ...base, eligible: false, reason: `The Gap-Closing session is for Band 3 profiles; your assessment is ${bandLabel(band)}.` };
-    if (liveHardStop)        return { ...base, eligible: false, reason: REASONS.GAP_HARDSTOP };
-    return { ...base, eligible: true, reason: REASONS.GAP_OK };
+    if (!hasSubmission)      return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION, reasonCode: 'NO_SUBMISSION' };
+    if (band !== 'BAND_3')   return { ...base, eligible: false, reason: `The Gap-Closing session is for Band 3 profiles; your assessment is ${bandLabel(band)}.`, reasonCode: 'GAP_BAND_MISMATCH', reasonParams: { band: bandLabel(band) } };
+    if (liveHardStop)        return { ...base, eligible: false, reason: REASONS.GAP_HARDSTOP, reasonCode: 'GAP_HARDSTOP' };
+    return { ...base, eligible: true, reason: REASONS.GAP_OK, reasonCode: 'GAP_OK' };
   }
 
   // Flag-3 change: LIA is a paid service, ALWAYS bookable when a verified adviser
@@ -171,9 +190,11 @@ export class BookingEligibilityService {
     liveHardStop: boolean,
   ): TypeEligibility {
     const base = { ...getSessionPricing('LIA') };
-    if (!hasSubmission)        return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION };
-    if (!liaAdviserAvailable)  return { ...base, eligible: false, reason: REASONS.LIA_NO_ADVISER };
-    return { ...base, eligible: true, reason: liveHardStop ? REASONS.LIA_OK_HARDSTOP : REASONS.LIA_OK_GENERAL };
+    if (!hasSubmission)        return { ...base, eligible: false, reason: REASONS.NO_SUBMISSION, reasonCode: 'NO_SUBMISSION' };
+    if (!liaAdviserAvailable)  return { ...base, eligible: false, reason: REASONS.LIA_NO_ADVISER, reasonCode: 'LIA_NO_ADVISER' };
+    return liveHardStop
+      ? { ...base, eligible: true, reason: REASONS.LIA_OK_HARDSTOP, reasonCode: 'LIA_OK_HARDSTOP' }
+      : { ...base, eligible: true, reason: REASONS.LIA_OK_GENERAL, reasonCode: 'LIA_OK_GENERAL' };
   }
 
   // Headline CTA for the report (unchanged behaviour): hard stop → LIA; else
