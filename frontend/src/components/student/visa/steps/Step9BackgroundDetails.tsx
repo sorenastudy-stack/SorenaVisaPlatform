@@ -103,7 +103,7 @@ export function Step9BackgroundDetails() {
 
   // ── Building blocks (mirror steps 1-8) ────────────────────────────
 
-  const Asterisk = () => <span className="ml-0.5 text-red-500">*</span>;
+  const Asterisk = () => <span className="ms-0.5 text-red-500">*</span>;
 
   const YesNo = ({
     value, onChange, ariaInvalid,

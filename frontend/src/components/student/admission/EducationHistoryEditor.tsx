@@ -446,7 +446,7 @@ function SavedEntryCard({
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryCountryLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <CountrySelect
             value={country || null}
@@ -465,7 +465,7 @@ function SavedEntryCard({
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryFieldOfStudyLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -628,7 +628,7 @@ function DraftEntryCard({
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryLevelLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <select
             value={draft.qualificationLevel}
@@ -645,7 +645,7 @@ function DraftEntryCard({
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryInstitutionLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -659,7 +659,7 @@ function DraftEntryCard({
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryCountryLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <CountrySelect
             value={draft.country || null}
@@ -671,7 +671,7 @@ function DraftEntryCard({
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionEducationHistoryFieldOfStudyLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <input
             type="text"

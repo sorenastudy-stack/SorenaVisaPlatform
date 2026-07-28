@@ -180,7 +180,7 @@ export function Step1IdentityDetails() {
 
   // ── Reusable building blocks ────────────────────────────────────────────
 
-  const Asterisk = () => <span className="ml-0.5 text-red-500">*</span>;
+  const Asterisk = () => <span className="ms-0.5 text-red-500">*</span>;
 
   const YesNo = ({
     value, onChange, ariaInvalid,
@@ -556,7 +556,7 @@ export function Step1IdentityDetails() {
         <h3 className="text-xl font-bold text-sorena-navy">{t('visaPhotoSubsectionTitle')}</h3>
         <p className="mt-2 text-sm text-sorena-navy/70">{t('visaPhotoExplanation')}</p>
         <p className="mt-3 text-sm text-sorena-navy/70">{t('visaPhotoRequirementsIntro')}</p>
-        <ul className="mt-1 list-disc space-y-1 pl-6 text-sm text-sorena-navy/70">
+        <ul className="mt-1 list-disc space-y-1 ps-6 text-sm text-sorena-navy/70">
           <li>{t('visaPhotoRequirementType')}</li>
           <li>{t('visaPhotoRequirementSize')}</li>
           <li>{t('visaPhotoRequirementDimensions')}</li>

@@ -98,7 +98,7 @@ export function Step7AgentDetails() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep7CounsellorFirstNameLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <input
           type="text"
@@ -113,7 +113,7 @@ export function Step7AgentDetails() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep7CounsellorLastNameLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <input
           type="text"
@@ -128,7 +128,7 @@ export function Step7AgentDetails() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep7CounsellorEmailLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <input
           type="email"
@@ -143,7 +143,7 @@ export function Step7AgentDetails() {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep7AnotherBranchLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </p>
         <div className="flex gap-2">
           <button
@@ -179,7 +179,7 @@ export function Step7AgentDetails() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep7BranchAgentCodeLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -193,7 +193,7 @@ export function Step7AgentDetails() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep7BranchNameLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -221,7 +221,7 @@ export function Step7AgentDetails() {
         />
         <span dir="ltr" className="text-sm text-sorena-navy/80 text-left">
           {t('admissionStep7DeclarationText')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </span>
       </label>
 

@@ -247,7 +247,7 @@ export function Step3Eligibility() {
 
   // ── Building blocks ─────────────────────────────────────────────────────
 
-  const Asterisk = () => <span className="ml-0.5 text-red-500">*</span>;
+  const Asterisk = () => <span className="ms-0.5 text-red-500">*</span>;
 
   const YesNo = ({
     value, onChange, ariaInvalid,
@@ -660,7 +660,7 @@ export function Step3Eligibility() {
       <div className="mt-2 border-t border-sorena-navy/10 pt-6">
         <h3 className="text-xl font-bold text-sorena-navy">{t('visaEligibilitySubsectionSituationPlans')}</h3>
         <p className="mt-2 text-sm text-sorena-navy/70">{t('visaEligibilitySituationIntro')}</p>
-        <ul className="mt-1 list-disc space-y-1 pl-6 text-sm text-sorena-navy/70">
+        <ul className="mt-1 list-disc space-y-1 ps-6 text-sm text-sorena-navy/70">
           <li>{t('visaEligibilitySituationBullet1')}</li>
           <li>{t('visaEligibilitySituationBullet2')}</li>
           <li>{t('visaEligibilitySituationBullet3')}</li>

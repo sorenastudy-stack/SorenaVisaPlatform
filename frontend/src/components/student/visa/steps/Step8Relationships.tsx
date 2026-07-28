@@ -114,7 +114,7 @@ function NameInput({
   return (
     <div>
       <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
-        {label}{asterisk && <span className="ml-0.5 text-red-500">*</span>}
+        {label}{asterisk && <span className="ms-0.5 text-red-500">*</span>}
       </label>
       <input
         type="text"
@@ -144,7 +144,7 @@ function SelectField({
   return (
     <div>
       <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
-        {label}{asterisk && <span className="ml-0.5 text-red-500">*</span>}
+        {label}{asterisk && <span className="ms-0.5 text-red-500">*</span>}
       </label>
       <select
         value={value}
@@ -473,7 +473,7 @@ export function Step8Relationships() {
 
   // ── UI building blocks ────────────────────────────────────────────
 
-  const Asterisk = () => <span className="ml-0.5 text-red-500">*</span>;
+  const Asterisk = () => <span className="ms-0.5 text-red-500">*</span>;
 
   const YesNo = ({
     value, onChange, ariaInvalid,

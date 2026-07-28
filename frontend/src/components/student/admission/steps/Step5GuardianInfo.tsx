@@ -138,7 +138,7 @@ export function Step5GuardianInfo() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep5RelationshipLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <select
           value={guardianRelationship ?? ''}
@@ -156,7 +156,7 @@ export function Step5GuardianInfo() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep5FirstNameLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <input
           type="text"
@@ -171,7 +171,7 @@ export function Step5GuardianInfo() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep5LastNameLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <input
           type="text"
@@ -186,7 +186,7 @@ export function Step5GuardianInfo() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep5EmailLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <input
           type="email"
@@ -201,7 +201,7 @@ export function Step5GuardianInfo() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep5MobileLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <input
           type="text"
@@ -230,7 +230,7 @@ export function Step5GuardianInfo() {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep5AddressSameAsLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </p>
         <div className="flex gap-2">
           <button
@@ -270,7 +270,7 @@ export function Step5GuardianInfo() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep5StreetLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -284,7 +284,7 @@ export function Step5GuardianInfo() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep5SuburbLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -298,7 +298,7 @@ export function Step5GuardianInfo() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep5CityLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -325,7 +325,7 @@ export function Step5GuardianInfo() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep5CountryLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <CountrySelect
               value={guardianCountry || null}
@@ -337,7 +337,7 @@ export function Step5GuardianInfo() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep5PostcodeLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="text"

@@ -127,7 +127,7 @@ export function DocumentUploader({
     <div className="flex flex-col gap-2">
       <label className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ms-0.5 text-red-500">*</span>}
       </label>
 
       {helperText && (

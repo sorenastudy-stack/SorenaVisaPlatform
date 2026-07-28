@@ -184,7 +184,7 @@ export function Step3EducationEnglish() {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep3Question1Label')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </p>
         <div className="flex gap-2">
           <button
@@ -220,7 +220,7 @@ export function Step3EducationEnglish() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep3TestNameLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -246,7 +246,7 @@ export function Step3EducationEnglish() {
         <div>
           <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionStep3Question2Label')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </p>
           <p className="mt-1 whitespace-pre-line text-sm text-sorena-navy/60">
             {t('admissionStep3Question2Helper')}
@@ -294,7 +294,7 @@ export function Step3EducationEnglish() {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep3SchoolCountryLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </p>
         <div className="flex gap-2">
           <button
@@ -328,7 +328,7 @@ export function Step3EducationEnglish() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep3SchoolNameLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <input
           type="text"
@@ -343,7 +343,7 @@ export function Step3EducationEnglish() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep3SchoolQualificationLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <select
           value={schoolQualification ?? ''}
@@ -361,7 +361,7 @@ export function Step3EducationEnglish() {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep3QualificationCompletedLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </p>
         <div className="flex gap-2">
           <button
@@ -397,7 +397,7 @@ export function Step3EducationEnglish() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep3QualYearStartLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -415,7 +415,7 @@ export function Step3EducationEnglish() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep3QualYearEndLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -439,7 +439,7 @@ export function Step3EducationEnglish() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep3LastYearOfSchoolLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -457,7 +457,7 @@ export function Step3EducationEnglish() {
           <div>
             <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
               {t('admissionStep3HighestQualificationLabel')}
-              <span className="ml-0.5 text-red-500">*</span>
+              <span className="ms-0.5 text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -475,7 +475,7 @@ export function Step3EducationEnglish() {
         <p className="text-sm text-sorena-navy/80">
           {t('admissionStep3UploadTranscriptsHelper')}
         </p>
-        <ul className="list-disc space-y-1 pl-6 text-sm text-sorena-navy/80">
+        <ul className="list-disc space-y-1 ps-6 text-sm text-sorena-navy/80">
           <li>{t('admissionStep3UploadTranscriptsBullet1')}</li>
           <li>{t('admissionStep3UploadTranscriptsBullet2')}</li>
         </ul>
@@ -523,7 +523,7 @@ export function Step3EducationEnglish() {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep3HasDisabilityLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </p>
         <div className="flex gap-2">
           <button
@@ -558,7 +558,7 @@ export function Step3EducationEnglish() {
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionStep3DisabilityDetailsLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <textarea
             rows={4}
@@ -574,7 +574,7 @@ export function Step3EducationEnglish() {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep3NeedsEvacAssistanceLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </p>
         <div className="flex gap-2">
           <button
@@ -609,7 +609,7 @@ export function Step3EducationEnglish() {
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionStep3EvacDetailsLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <textarea
             rows={4}

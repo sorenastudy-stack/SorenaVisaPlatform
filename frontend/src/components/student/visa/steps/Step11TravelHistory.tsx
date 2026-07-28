@@ -252,7 +252,7 @@ export function Step11TravelHistory() {
 
   // ── Building blocks ───────────────────────────────────────────────
 
-  const Asterisk = () => <span className="ml-0.5 text-red-500">*</span>;
+  const Asterisk = () => <span className="ms-0.5 text-red-500">*</span>;
 
   const YesNo = ({
     value, onChange, ariaInvalid,

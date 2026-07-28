@@ -77,7 +77,7 @@ function TextField({
   return (
     <div>
       <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
-        {label}<span className="ml-0.5 text-red-500">*</span>
+        {label}<span className="ms-0.5 text-red-500">*</span>
       </label>
       <input
         type="text"
@@ -271,7 +271,7 @@ export function Step10MilitaryHistory() {
 
   // ── Building blocks ───────────────────────────────────────────────
 
-  const Asterisk = () => <span className="ml-0.5 text-red-500">*</span>;
+  const Asterisk = () => <span className="ms-0.5 text-red-500">*</span>;
 
   const YesNo = ({
     value, onChange, ariaInvalid,

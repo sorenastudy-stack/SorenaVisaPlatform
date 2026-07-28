@@ -255,7 +255,7 @@ export function DocumentMetadataPicker({
     >
       <label className="mb-1 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ms-0.5 text-red-500">*</span>}
       </label>
       {helpText && (
         <p className="mb-2 text-xs text-sorena-navy/50">{helpText}</p>

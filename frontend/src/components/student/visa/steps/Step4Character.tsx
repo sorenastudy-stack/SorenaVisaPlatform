@@ -195,7 +195,7 @@ export function Step4Character() {
 
   // ── Reusable building blocks (mirror Step 1/2/3) ────────────────────────
 
-  const Asterisk = () => <span className="ml-0.5 text-red-500">*</span>;
+  const Asterisk = () => <span className="ms-0.5 text-red-500">*</span>;
 
   const YesNo = ({
     value, onChange, ariaInvalid,
@@ -330,7 +330,7 @@ export function Step4Character() {
       <InfoNote>{t('visaCharacterNotCitizenOfPassportNote')}</InfoNote>
 
       <p className="text-sm text-sorena-navy/70">{t('visaCharacterForExampleIntro')}</p>
-      <ul className="-mt-3 list-disc space-y-1 pl-6 text-sm text-sorena-navy/70">
+      <ul className="-mt-3 list-disc space-y-1 ps-6 text-sm text-sorena-navy/70">
         <li>{t('visaCharacterAmericanSamoaExample')}</li>
         <li>{t('visaCharacterBritishNationalExample')}</li>
       </ul>

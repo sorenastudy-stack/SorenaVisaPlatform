@@ -294,7 +294,7 @@ export function OtherEvidenceCard({ entry, onServerChange }: CardProps) {
             <div>
               <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
                 {t('visaDocs2CustomLabelLabel')}
-                <span className="ml-0.5 text-red-500">*</span>
+                <span className="ms-0.5 text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -510,7 +510,7 @@ export function OtherEvidenceAdder({ onServerChange }: AdderProps) {
         <div>
           <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('visaDocs2CustomLabelLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </label>
           <input
             type="text"

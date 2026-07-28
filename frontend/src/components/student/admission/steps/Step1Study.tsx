@@ -201,7 +201,7 @@ export function Step1Study() {
         <p className="text-base leading-relaxed text-sorena-navy/80">{t('admissionStep1WelcomeIntro')}</p>
         <div className="flex flex-col gap-3">
           <p className="text-base leading-relaxed text-sorena-navy/80">{t('admissionStep1DocumentsIntro')}</p>
-          <ul className="list-disc space-y-1 pl-6 text-base text-sorena-navy/80">
+          <ul className="list-disc space-y-1 ps-6 text-base text-sorena-navy/80">
             <li>{t('admissionStep1Doc1')}</li>
             <li>{t('admissionStep1Doc2')}</li>
             <li>{t('admissionStep1Doc3')}</li>

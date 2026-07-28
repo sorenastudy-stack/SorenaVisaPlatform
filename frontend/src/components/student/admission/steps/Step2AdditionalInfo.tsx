@@ -193,7 +193,7 @@ export function Step2AdditionalInfo() {
         <div className="flex flex-col gap-2">
           <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
             {t('admissionStep2HasChildrenLabel')}
-            <span className="ml-0.5 text-red-500">*</span>
+            <span className="ms-0.5 text-red-500">*</span>
           </p>
           <div className="flex gap-2">
             <button
@@ -258,7 +258,7 @@ export function Step2AdditionalInfo() {
       <div className="flex flex-col gap-2">
         <p className="text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep2Question1Label')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </p>
         <div className="flex gap-2">
           <button

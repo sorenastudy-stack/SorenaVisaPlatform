@@ -147,7 +147,7 @@ export function Step2AddressContact() {
 
   // ── Building blocks (kept local to mirror Step 1's shape) ───────────────
 
-  const Asterisk = () => <span className="ml-0.5 text-red-500">*</span>;
+  const Asterisk = () => <span className="ms-0.5 text-red-500">*</span>;
 
   const YesNo = ({
     value, onChange, ariaInvalid,

@@ -47,7 +47,7 @@ export function Step6Accommodation() {
       <div>
         <label className="mb-1.5 block text-sm font-bold uppercase tracking-wide text-sorena-navy">
           {t('admissionStep6AccommodationLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </label>
         <select
           value={accommodationType ?? ''}

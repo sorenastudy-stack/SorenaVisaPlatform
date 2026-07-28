@@ -55,7 +55,7 @@ export function Step8Acceptance() {
         />
         <span className="text-sm text-sorena-navy/80">
           {t('admissionStep8AcceptanceLabel')}
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="ms-0.5 text-red-500">*</span>
         </span>
       </label>
     </div>
