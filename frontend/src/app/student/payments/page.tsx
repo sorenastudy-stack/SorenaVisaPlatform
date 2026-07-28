@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { apiServer } from '@/lib/apiServer';
 import { StudentHeader } from '@/components/student/StudentHeader';
 import { PaymentsView, PAYABLE_STATUSES, type PaymentRow, type InvoiceRow } from '@/components/portal/PaymentsView';
@@ -9,6 +10,7 @@ import { PaymentsView, PAYABLE_STATUSES, type PaymentRow, type InvoiceRow } from
 interface MeResponse { fullName: string; photoUrl: string | null }
 
 export default async function StudentPaymentsPage() {
+  const t = await getTranslations('paymentsView');
   let me: MeResponse = { fullName: 'Your Account', photoUrl: null };
   try {
     me = await apiServer.get<MeResponse>('/students/me');
@@ -34,7 +36,7 @@ export default async function StudentPaymentsPage() {
 
   return (
     <div>
-      <StudentHeader name={me.fullName} photoUrl={me.photoUrl} subtitle="Your payments." showBack />
+      <StudentHeader name={me.fullName} photoUrl={me.photoUrl} subtitle={t('studentSubtitle')} showBack />
       <PaymentsView payments={payments} outstanding={outstanding} loadError={loadError} />
     </div>
   );

@@ -1,4 +1,59 @@
 {
+  "wallet": {
+    "backToCase": "My case",
+    "title": "My wallet",
+    "availableCredit": "Available credit",
+    "loading": "Loading…",
+    "creditPolicy": "Wallet credit never expires and can be used across Sorena services. It isn't cash-redeemable (except where legally required) and isn't transferable.",
+    "activity": "Activity",
+    "loadError": "Couldn't load your wallet. Please refresh.",
+    "empty": "No activity yet. Credit from eligible cancellations will appear here.",
+    "balancePrefix": "bal",
+    "types": {
+      "REFUND_CANCEL_FULL": "Refund — cancelled early",
+      "REFUND_CANCEL_LATE": "Refund — late cancellation",
+      "REFUND_NO_SHOW": "Refund — no-show",
+      "SPEND_BOOKING": "Used for a booking",
+      "CASH_REDEMPTION": "Cash-out",
+      "ADJUSTMENT": "Adjustment"
+    }
+  },
+  "paymentGate": {
+    "awaitingSignature": {
+      "title": "Sign your engagement letter first",
+      "body": "We've emailed you the engagement letter to review and sign. Once it's signed, your payment opens here automatically — there's nothing to pay until then.",
+      "action": "Back to My Case"
+    },
+    "processing": {
+      "title": "Payment received — we're confirming it",
+      "body": "Thanks — we've got your receipt. We'll confirm once the funds land, usually within a few business days, and your full access opens automatically then. Nothing more to do for now.",
+      "action": "View my case"
+    },
+    "locked": {
+      "title": "Your full access opens once we confirm your payment",
+      "body": "To keep your application moving, your documents and forms unlock as soon as your account-opening payment is confirmed. You can still see your case status and complete your payment now — it only takes a moment.",
+      "action": "Go to payment"
+    }
+  },
+  "paymentsView": {
+    "pageTitle": "Payments",
+    "pageSubtitle": "Your account-opening fee and any other charges — and where each stands.",
+    "studentSubtitle": "Your payments.",
+    "outstanding": "Outstanding",
+    "accountOpeningFee": "Account opening fee",
+    "invoiceFallback": "Invoice {number}",
+    "due": "due {date}",
+    "loadError": "We couldn't load your payments right now. Please refresh.",
+    "emptyTitle": "No payments yet",
+    "emptyBody": "Your payments and receipts will appear here once you've made one.",
+    "emptyCompleted": "No completed payments yet.",
+    "status": {
+      "paid": "Paid",
+      "pending": "Pending",
+      "failed": "Failed",
+      "refunded": "Refunded"
+    }
+  },
   "cancelBooking": {
     "button": "Cancel booking",
     "loadError": "Could not load cancellation details.",

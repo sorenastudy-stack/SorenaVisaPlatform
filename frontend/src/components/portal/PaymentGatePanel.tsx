@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { Lock, Clock, ArrowRight, Mail } from 'lucide-react';
 
 // Piece #4 — the calm "full access opens once we confirm your payment" gate.
@@ -13,8 +14,13 @@ import { Lock, Clock, ArrowRight, Mail } from 'lucide-react';
 //   • locked (default)  — an invoice exists, unpaid: guide them to the pay screen.
 // No dark patterns: plain language, one clear action (or none when there's
 // nothing to do yet).
+//
+// I18N (Phase 30): async server component so it can pull copy via
+// getTranslations('paymentGate'). "engagement letter" → «قرارداد همکاری» (the
+// contract, matching portal.contractReady); the locked-state payment aligns to
+// the account-opening fee terminology («افتتاح اکانت»).
 
-export function PaymentGatePanel({
+export async function PaymentGatePanel({
   processing = false,
   awaitingSignature = false,
   payHref = '/portal/case',
@@ -23,6 +29,8 @@ export function PaymentGatePanel({
   awaitingSignature?: boolean;
   payHref?: string;
 }) {
+  const t = await getTranslations('paymentGate');
+
   if (awaitingSignature) {
     return (
       <section className="mx-auto max-w-2xl rounded-2xl border border-[#c9a961]/40 bg-[#faf8f3] p-6 text-center shadow-sm ring-1 ring-[#c9a961]/10 md:p-10">
@@ -30,18 +38,17 @@ export function PaymentGatePanel({
           <Mail size={26} className="text-[#b28f4e]" />
         </div>
         <h1 className="text-xl font-bold leading-tight text-[#1e3a5f] md:text-2xl">
-          Sign your engagement letter first
+          {t('awaitingSignature.title')}
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[#4A4A4A]/80">
-          We&apos;ve emailed you the engagement letter to review and sign. Once it&apos;s signed,
-          your payment opens here automatically — there&apos;s nothing to pay until then.
+          {t('awaitingSignature.body')}
         </p>
         <Link
           href="/portal/case"
           className="mt-6 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-[#1e3a5f]/25 px-5 py-2.5 text-sm font-semibold text-[#1e3a5f] transition-colors hover:bg-[#1e3a5f]/5"
         >
-          Back to My Case
-          <ArrowRight size={16} />
+          {t('awaitingSignature.action')}
+          <ArrowRight size={16} className="rtl:rotate-180" />
         </Link>
       </section>
     );
@@ -55,20 +62,18 @@ export function PaymentGatePanel({
             <Clock size={22} className="text-[#b28f4e]" />
           </div>
           <h1 className="text-xl font-bold leading-tight text-[#1e3a5f]">
-            Payment received — we&apos;re confirming it
+            {t('processing.title')}
           </h1>
         </div>
         <p className="mt-3 text-sm leading-relaxed text-[#4A4A4A]/80">
-          Thanks — we&apos;ve got your receipt. We&apos;ll confirm once the funds land, usually within
-          a few business days, and your full access opens automatically then. Nothing more to do
-          for now.
+          {t('processing.body')}
         </p>
         <Link
           href={payHref}
           className="mt-5 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-[#1e3a5f]/25 px-5 py-2.5 text-sm font-semibold text-[#1e3a5f] transition-colors hover:bg-[#1e3a5f]/5"
         >
-          View my case
-          <ArrowRight size={16} />
+          {t('processing.action')}
+          <ArrowRight size={16} className="rtl:rotate-180" />
         </Link>
       </section>
     );
@@ -80,19 +85,17 @@ export function PaymentGatePanel({
         <Lock size={26} className="text-[#1e3a5f]" />
       </div>
       <h1 className="text-xl font-bold leading-tight text-[#1e3a5f] md:text-2xl">
-        Your full access opens once we confirm your payment
+        {t('locked.title')}
       </h1>
       <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[#4A4A4A]/80">
-        To keep your application moving, your documents and forms unlock as soon as your engagement
-        payment is confirmed. You can still see your case status and complete your payment now — it
-        only takes a moment.
+        {t('locked.body')}
       </p>
       <Link
         href={payHref}
         className="mt-6 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#162d4a]"
       >
-        Go to payment
-        <ArrowRight size={16} />
+        {t('locked.action')}
+        <ArrowRight size={16} className="rtl:rotate-180" />
       </Link>
     </section>
   );
