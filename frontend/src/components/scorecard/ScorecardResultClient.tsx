@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -9,11 +10,13 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/date';
-import { BAND_META, CATEGORY_META, RESULT_STRINGS } from '@/lib/scorecard/labels';
+import { formatMoneyCents } from '@/lib/money';
+import { useLocaleStore } from '@/lib/stores/localeStore';
+import { BAND_META, CATEGORY_META } from '@/lib/scorecard/labels';
 import {
   getBookingEligibility,
   findType,
-  money,
+  reasonText,
   type BookingEligibility,
 } from '@/lib/booking/eligibility';
 import { downloadPdf } from '@/lib/scorecard/pdf-download';
@@ -36,7 +39,14 @@ import type { ScorecardResultPayload } from '@/app/scorecard/result/page';
 // Fix 7: Bands 4-6 + Band 3 render real CTA buttons that fire the
 //        booking-opened audit row AND open the placeholder URL in a
 //        new tab. Real Wix / Stripe URLs land in PR-SCORECARD-4 / 5.
-// Fix 9: scorecard pages render in English only.
+// Phase 30 (i18n): chrome now renders via t('scorecard.*') in both locales
+//        (this component is shared by /portal/report AND public /scorecard/result).
+//        Band names + category names come from t(); "Band N" itself stays Latin
+//        (brand term). Booking reasons reuse reasonText() (booking.reasons.*).
+//        Backend-GENERATED data — the next-action prose (nextActionContent /
+//        nextActionTextEn), hard-stop name/reason/resolution, risk-flag labels,
+//        gate labels, and the user's own answers — is left in its source language
+//        (English); localising it needs backend keying (out of scope here).
 
 const BAND_COLOR_CLASSES: Record<string, { bg: string; text: string; border: string }> = {
   gray:    { bg: 'bg-gray-100',     text: 'text-gray-700',    border: 'border-gray-200' },
@@ -49,6 +59,9 @@ const BAND_COLOR_CLASSES: Record<string, { bg: string; text: string; border: str
 
 export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }) {
   const router = useRouter();
+  const t = useTranslations('scorecard');
+  const tb = useTranslations('booking'); // for reasonText (booking.reasons.*)
+  const locale = useLocaleStore((s) => s.locale);
   const [openAnswerLog, setOpenAnswerLog] = useState(false);
   const [bookingClicked, setBookingClicked] = useState(!!data.consultationBookedAt);
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -68,7 +81,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
   const bandMeta = BAND_META[data.band];
   const colorClasses = BAND_COLOR_CLASSES[bandMeta?.color ?? 'gray'];
   const applicantName = data.answers?.full_name ?? '';
-  const generatedDate = formatDate(data.submittedAt);
+  const generatedDate = formatDate(data.submittedAt, locale);
 
   // Shared booking handler: all booking now lives INSIDE the client
   // portal. Each CTA maps to a booking "type" that the portal
@@ -85,7 +98,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
       await api.post(`/scorecard/${data.submissionId}/booking-opened`, {});
       setBookingClicked(true);
     } catch {
-      setBookingError(RESULT_STRINGS.bookingError);
+      setBookingError(t('result.bookingError'));
     }
     // Navigate regardless of audit outcome — getting the user into the
     // portal matters more than the tracking row.
@@ -101,21 +114,21 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
           <div className="flex items-center gap-3 mb-2">
             <Award size={24} className="text-[#b8941f]" />
             <h1 className="text-2xl md:text-3xl font-extrabold text-[#1E3A5F]">
-              {RESULT_STRINGS.headerTitle}
+              {t('result.headerTitle')}
             </h1>
           </div>
           {applicantName && (
             <p className="text-base text-[#1E3A5F] font-semibold mb-1">{applicantName}</p>
           )}
           <p className="text-xs text-[#4A4A4A]/60">
-            {RESULT_STRINGS.generatedOn.replace('{date}', generatedDate)}
+            {t('result.generatedOn', { date: generatedDate })}
           </p>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Total score */}
             <div className="rounded-xl bg-[#1E3A5F] text-white p-5 text-center">
               <div className="text-xs uppercase tracking-wider opacity-80 mb-1">
-                {RESULT_STRINGS.totalScoreLabel}
+                {t('result.totalScore')}
               </div>
               <div className="text-4xl font-extrabold">
                 {data.totalScore}<span className="text-xl opacity-70"> / 100</span>
@@ -124,13 +137,13 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             {/* Band */}
             <div className={`rounded-xl ${colorClasses.bg} ${colorClasses.border} border p-5 text-center`}>
               <div className={`text-xs uppercase tracking-wider ${colorClasses.text} opacity-80 mb-1`}>
-                {RESULT_STRINGS.bandLabel}
+                {t('result.bandLabel')}
               </div>
               <div className={`text-xl font-extrabold ${colorClasses.text} leading-tight`}>
                 {data.band.replace('BAND_', 'Band ')}
               </div>
               <div className={`text-xs ${colorClasses.text} opacity-80 mt-1`}>
-                {bandMeta ? bandMeta.name : data.bandName}
+                {t.has(`bands.${data.band}`) ? t(`bands.${data.band}`) : data.bandName}
               </div>
               <div className={`text-xs font-mono ${colorClasses.text} opacity-60 mt-0.5`}>
                 {data.bandRange}
@@ -146,8 +159,8 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                 data.executionEligible ? 'text-emerald-700' : 'text-gray-600'
               }`}>
                 {data.executionEligible
-                  ? RESULT_STRINGS.executionEligible
-                  : RESULT_STRINGS.notYetEligible}
+                  ? t('result.executionEligible')
+                  : t('result.notYetEligible')}
               </div>
               {data.executionEligible
                 ? <CheckCircle2 size={28} className="text-emerald-600 mx-auto" />
@@ -161,7 +174,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={18} className="text-[#b8941f]" />
             <h2 className="text-lg font-bold text-[#1E3A5F]">
-              {RESULT_STRINGS.nextActionTitle}
+              {t('result.nextActionTitle')}
             </h2>
           </div>
           {/* Polish PR: render structured content as a proper bulleted
@@ -199,8 +212,10 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               {/* No submission — edge case (the report needs one); stay honest */}
               {!elig.hasSubmission && (
                 <p className="text-sm text-[#4A4A4A] leading-relaxed">
-                  {findType(elig, 'FREE_15')?.reason ??
-                    'Take your free assessment first to unlock consultations.'}
+                  {(() => {
+                    const f = findType(elig, 'FREE_15');
+                    return f ? reasonText(f, tb) : tb('reasons.NO_SUBMISSION');
+                  })()}
                 </p>
               )}
 
@@ -210,11 +225,11 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                   <div className="inline-flex items-center gap-2 mb-2">
                     <BookOpen size={16} className="text-[#1E3A5F]" />
                     <span className="text-sm font-semibold text-[#1E3A5F]">
-                      {RESULT_STRINGS.nurtureTitle}
+                      {t('result.nurtureTitle')}
                     </span>
                   </div>
                   <p className="text-sm text-[#4A4A4A] leading-relaxed">
-                    {RESULT_STRINGS.nurtureBody}
+                    {t('result.nurtureBody')}
                   </p>
                 </div>
               )}
@@ -226,10 +241,10 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                 const isGap = elig.primaryType === 'GAP_CLOSING';
                 return (
                   <div>
-                    <WhyThisMatters text={primary.reason} />
+                    <WhyThisMatters text={reasonText(primary, tb)} />
                     {elig.primaryType === 'LIA' ? (
                       <LiaConsultationButton
-                        priceLabel={money(primary.priceCents, primary.currency)}
+                        label={t('result.bookLia', { price: formatMoneyCents(primary.priceCents, primary.currency) })}
                         disabled={!primary.eligible}
                         onClick={() => handleBookingNavigate('lia')}
                       />
@@ -238,8 +253,8 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                         disabled={!primary.eligible}
                         icon={isGap ? <CreditCard size={18} /> : <Calendar size={18} />}
                         label={isGap
-                          ? `Book your Gap-Closing Session (${money(primary.priceCents, primary.currency)})`
-                          : 'Book your free 15-minute consultation'}
+                          ? t('result.bookGap', { price: formatMoneyCents(primary.priceCents, primary.currency) })
+                          : t('result.bookFree')}
                         onClick={() => handleBookingNavigate(isGap ? 'gap' : 'free15')}
                       />
                     )}
@@ -264,10 +279,10 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                       className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-3 rounded-xl bg-gray-100 text-[#1E3A5F]/70 font-semibold text-sm cursor-not-allowed opacity-60"
                     >
                       <Lock size={14} />
-                      Book your free 15-minute consultation
+                      {t('result.bookFree')}
                     </button>
                     <p className="mt-2 text-xs text-[#4A4A4A]/60 italic leading-relaxed">
-                      {free.reason}
+                      {reasonText(free, tb)}
                     </p>
                   </div>
                 );
@@ -276,7 +291,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               <BookingFooter
                 clicked={bookingClicked}
                 error={bookingError}
-                clickedText={RESULT_STRINGS.bookFreeRecorded}
+                clickedText={t('result.bookFreeRecorded')}
               />
             </div>
           )}
@@ -286,10 +301,10 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         {data.shouldShowMalaysiaCallout && (
           <div className="bg-emerald-50 rounded-2xl border-2 border-emerald-200 p-6 md:p-8 mb-6">
             <h2 className="text-lg font-bold text-emerald-900 mb-3">
-              {RESULT_STRINGS.malaysiaCalloutTitle}
+              {t('result.malaysiaTitle')}
             </h2>
             <p className="text-sm text-emerald-900 leading-relaxed">
-              {RESULT_STRINGS.malaysiaCalloutBody}
+              {t('result.malaysiaBody')}
             </p>
           </div>
         )}
@@ -297,7 +312,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         {/* Category breakdown */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 mb-6">
           <h2 className="text-lg font-bold text-[#1E3A5F] mb-4">
-            {RESULT_STRINGS.categoryBreakdown}
+            {t('result.categoryBreakdown')}
           </h2>
           <div className="space-y-4">
             {[1, 2, 3, 4].map((cat) => {
@@ -308,7 +323,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                 <div key={cat}>
                   <div className="flex items-center justify-between text-sm mb-1.5">
                     <span className="font-semibold text-[#1E3A5F]">
-                      {meta.name}
+                      {t(`categories.${cat}`)}
                     </span>
                     <span className="font-mono text-[#4A4A4A]">
                       {score} / {meta.max} ({pct}%)
@@ -327,7 +342,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         {data.hardStops.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-red-200 p-6 md:p-8 mb-6">
             <h2 className="text-lg font-bold text-red-800 mb-4 flex items-center gap-2">
-              <Lock size={18} /> {RESULT_STRINGS.hardStopsTitle}
+              <Lock size={18} /> {t('result.hardStopsTitle')}
             </h2>
             <ul className="space-y-3">
               {data.hardStops.map((h) => (
@@ -337,7 +352,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                     <span className="font-bold text-red-900">{h.name}</span>
                   </div>
                   <p className="text-sm text-red-800 mb-1">{h.reason}</p>
-                  <p className="text-xs text-red-900/80"><strong>Resolution:</strong> {h.resolution}</p>
+                  <p className="text-xs text-red-900/80"><strong>{t('result.resolution')}</strong> {h.resolution}</p>
                 </li>
               ))}
             </ul>
@@ -348,7 +363,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         {data.riskFlags.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-6 md:p-8 mb-6">
             <h2 className="text-lg font-bold text-amber-800 mb-3 flex items-center gap-2">
-              <AlertTriangle size={18} /> {RESULT_STRINGS.riskFlagsTitle}
+              <AlertTriangle size={18} /> {t('result.riskFlagsTitle')}
             </h2>
             <div className="flex items-center gap-2 flex-wrap">
               {data.riskFlags.map((f) => (
@@ -367,7 +382,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         {data.gateResults && data.gateResults.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 mb-6">
             <h2 className="text-lg font-bold text-[#1E3A5F] mb-4">
-              {RESULT_STRINGS.fiveGateTitle}
+              {t('result.fiveGateTitle')}
             </h2>
             <ul className="space-y-1.5">
               {data.gateResults.map((g) => (
@@ -390,7 +405,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               onClick={() => setOpenAnswerLog((o) => !o)}
               className="text-sm font-semibold text-[#1E3A5F] hover:text-[#b8941f] inline-flex items-center gap-1"
             >
-              {openAnswerLog ? '▾' : '▸'} {RESULT_STRINGS.fullAnswerLog}
+              {openAnswerLog ? '▾' : '▸'} {t('result.fullAnswerLog')}
             </button>
             {openAnswerLog && (
               <div className="mt-4 space-y-2">
@@ -415,7 +430,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             href="/portal/case"
             className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]"
           >
-            {RESULT_STRINGS.backToDashboard} <ArrowRight size={14} />
+            {t('result.backToDashboard')} <ArrowRight size={14} className="rtl:rotate-180" />
           </Link>
         </div>
       </div>
@@ -445,13 +460,14 @@ function PrimaryBookingButton({
       className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#F3CE49] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#F3CE49]"
     >
       {disabled ? <Lock size={16} /> : icon}
-      {label} {disabled ? '' : '→'}
+      {label}
+      {!disabled && <ArrowRight size={16} className="rtl:rotate-180" />}
       {!disabled && <ExternalLink size={14} />}
     </button>
   );
 }
 
-function LiaConsultationButton({ onClick, priceLabel, disabled = false }: { onClick: () => void; priceLabel: string; disabled?: boolean }) {
+function LiaConsultationButton({ onClick, label, disabled = false }: { onClick: () => void; label: string; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -461,7 +477,8 @@ function LiaConsultationButton({ onClick, priceLabel, disabled = false }: { onCl
       className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 font-bold text-base hover:bg-amber-100 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-amber-50"
     >
       {disabled ? <Lock size={18} /> : <Scale size={18} />}
-      Book your LIA Consultation ({priceLabel}) {disabled ? '' : '→'}
+      {label}
+      {!disabled && <ArrowRight size={16} className="rtl:rotate-180" />}
       {!disabled && <ExternalLink size={14} />}
     </button>
   );
@@ -491,6 +508,7 @@ function BookingFooter({
 function PdfDownloadButton({
   submissionId, applicantName,
 }: { submissionId: string; applicantName: string }) {
+  const t = useTranslations('scorecard.result');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -502,7 +520,7 @@ function PdfDownloadButton({
     try {
       await downloadPdf(`/scorecard/${submissionId}/pdf`, fallback);
     } catch (e: any) {
-      setErr('Could not generate PDF. Please try again or contact your case advisor.');
+      setErr(t('pdfError'));
     } finally {
       setBusy(false);
     }
@@ -516,7 +534,8 @@ function PdfDownloadButton({
         className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl border-2 border-[#1E3A5F] text-[#1E3A5F] text-sm font-bold hover:bg-[#1E3A5F]/5 transition-colors disabled:opacity-50"
       >
         <Download size={14} />
-        {busy ? 'Preparing PDF…' : 'Download your report (PDF) →'}
+        {busy ? t('pdfPreparing') : t('pdfDownload')}
+        {!busy && <ArrowRight size={14} className="rtl:rotate-180" />}
       </button>
       {err && (
         <span className="text-xs text-red-700">{err}</span>

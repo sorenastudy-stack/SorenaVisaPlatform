@@ -1,4 +1,48 @@
 {
+  "scorecard": {
+    "result": {
+      "headerTitle": "Your assessment result",
+      "generatedOn": "Generated on {date}",
+      "totalScore": "Total score",
+      "bandLabel": "Band",
+      "executionEligible": "Execution eligible",
+      "notYetEligible": "Not yet eligible",
+      "nextActionTitle": "Your next best action",
+      "nurtureTitle": "We have designed a learning pathway tailored to your profile",
+      "nurtureBody": "Free resources to help you build readiness over the next 3-6 months. We will email you a personalised learning plan.",
+      "malaysiaTitle": "You also qualify for Malaysia",
+      "malaysiaBody": "You are eligible for both New Zealand AND Malaysia. As a Sorena-certified agent for both countries, we charge no service fees — universities pay us a commission upon successful enrollment. You only pay the INZ visa fee + our one-time USD 200 account opening fee.",
+      "categoryBreakdown": "Category breakdown",
+      "hardStopsTitle": "Hard stops",
+      "resolution": "Resolution:",
+      "riskFlagsTitle": "Risk flags",
+      "fiveGateTitle": "Execution eligibility — 5-gate check",
+      "fullAnswerLog": "Full answer log",
+      "backToDashboard": "Back to dashboard",
+      "bookFreeRecorded": "Booking link opened. Your case advisor has been notified.",
+      "bookingError": "Could not register your booking request. Please try again.",
+      "bookFree": "Book your free 15-minute consultation",
+      "bookGap": "Book your Gap-Closing Session ({price})",
+      "bookLia": "Book your LIA Consultation ({price})",
+      "pdfPreparing": "Preparing PDF…",
+      "pdfDownload": "Download your report (PDF)",
+      "pdfError": "Could not generate PDF. Please try again or contact your case advisor."
+    },
+    "bands": {
+      "BAND_1": "Cold / Unready",
+      "BAND_2": "Early Stage / Fragile",
+      "BAND_3": "Developing / Consultable",
+      "BAND_4": "Viable / Structured Opportunity",
+      "BAND_5": "Strong / Near Execution Ready",
+      "BAND_6": "Premium / Execution Ready"
+    },
+    "categories": {
+      "1": "Profile & migration stability",
+      "2": "Academic & career foundation",
+      "3": "Financial & operational readiness",
+      "4": "Immigration & risk assessment"
+    }
+  },
   "wallet": {
     "backToCase": "My case",
     "title": "My wallet",
