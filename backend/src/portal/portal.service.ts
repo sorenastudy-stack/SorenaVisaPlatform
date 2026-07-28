@@ -628,11 +628,11 @@ export class PortalService {
         steps.push({
           kind: 'INVOICE',
           // Display-only: NEVER surface the raw invoice id/number to a client.
-          // Engagement invoices read as a friendly "Pay engagement fee"; every
-          // other invoice uses its human description ("Pay visa application
+          // The account-opening (ENG-) invoice reads as "Pay account opening fee";
+          // every other invoice uses its human description ("Pay visa application
           // service fee"). Amount/due/invoiceId are unchanged.
           label: inv.invoiceNumber.startsWith('ENG-')
-            ? 'Pay engagement fee'
+            ? 'Pay account opening fee'
             : `Pay ${inv.description.trim().toLowerCase()}`,
           detail: `${inv.currency} ${inv.amount.toString()}${inv.dueDate ? ` · due ${inv.dueDate.toISOString().slice(0, 10)}` : ''}`,
           invoiceId: inv.id,

@@ -44,26 +44,31 @@ Went through the review gate (the Phase-28 batch pattern) before shipping:
 - **booking:** the cancellation/refund policy (retention 100% / 80% / 20% / 75% / 25%
   with **Persian digits**, the cash-refundable clause) + `CancelBookingButton`.
 
-## 3. Follow-ups flagged (not done — need a decision or the backend)
+## 3. Resolved after this phase
 
-- **English "engagement fee" → "Account opening fee".** The Persian is now the
-  correct product term, but the **English source still says "Engagement fee"**
-  (case/pay labels + backend `buildNextSteps` "Pay engagement fee" + `PaymentsView`).
-  Recommend a small follow-up to rename the EN copy so EN and FA match.
-- **Backend-generated strings stay English** — they can't be keyed from the frontend:
-  - the booking ineligibility `item.reason` (e.g. "Take your free assessment first to
-    unlock consultations"), from `GET /booking/eligibility`;
-  - the case-message `requestedDocType` enum value shown after "Document requested:".
-  Both need the backend to return a key or localized text.
-- **Remaining currency/relative-time sites outside these 4 areas** (WalletClient,
-  PaymentsView) still hardcode `en-NZ` — route them through `formatMoney` later.
+- **English "engagement fee" → "Account opening fee"** (follow-up commit). The EN
+  source now matches the Persian «هزینه افتتاح اکانت» everywhere it's *shown*:
+  `casePay.engagementFee` / `engagementInvoice`, `PaymentsView`, the backend
+  `buildNextSteps` label, and the invoice `description` set in `contracts.service`.
+  (Internal helper/key names and the `ENG-` invoice prefix keep the old word — that's
+  concept-level, not user-facing. Invoices already created with the old description
+  keep it; new ones use the new text.)
 
-## 4. What is NOT in this phase (still English in Persian mode)
+## 4. Deferred — the next Persian/RTL phase (one scoped piece)
 
-Other client surfaces not in the four areas — the wallet page, the payment-gate
-panel, the assessment/report view, and the deep 14-step visa/admission forms
-(~68 low-visibility form-RTL cosmetics + their strings). These are a separate,
-scoped follow-up.
+Everything still English in Persian mode is grouped here as **one** future phase to
+scope, not scattered follow-ups:
+
+- **Backend-generated copy** — can't be keyed from the frontend; needs the backend to
+  return a key / localized text: the booking ineligibility `item.reason` (e.g. "Take
+  your free assessment first to unlock consultations") from `GET /booking/eligibility`,
+  and the case-message `requestedDocType` enum shown after "Document requested:".
+- **Client surfaces not in the four areas:** the wallet page (`WalletClient`), the
+  payment-gate panel (`PaymentGatePanel`), the assessment / report view, and the deep
+  14-step visa + admission forms (~68 low-visibility form-RTL cosmetics + their strings).
+- **Remaining currency / relative-time sites** outside the four areas (`WalletClient`,
+  `PaymentsView`) still hardcode `en-NZ` — route them through `formatMoney` /
+  `relativeTime`.
 
 ## 5. How to test
 

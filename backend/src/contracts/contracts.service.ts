@@ -1439,7 +1439,7 @@ export class ContractsService {
             caseId,
             contactId,
             invoiceNumber,
-            description: 'Engagement fee',
+            description: 'Account opening fee',
             amount:      new Prisma.Decimal(amountCents).div(100),
             currency,
             status:      'SENT',

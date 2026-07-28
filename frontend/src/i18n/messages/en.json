@@ -104,8 +104,8 @@
   "casePay": {
     "backToCase": "Back to my case",
     "loadError": "We couldn't load your payment options. Please go back to your case and try again.",
-    "engagementFee": "Engagement fee",
-    "engagementInvoice": "Engagement invoice {number}",
+    "engagementFee": "Account opening fee",
+    "engagementInvoice": "Account opening invoice {number}",
     "paidTitle": "Payment received",
     "paidBody": "Thanks — your payment is confirmed. Your full access is open. There's nothing more to do here.",
     "processingTitle": "Payment received — we're confirming it",

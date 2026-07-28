@@ -57,7 +57,7 @@ export function PaymentsView({
             >
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-[#1e3a5f]">
-                  {inv.invoiceNumber?.startsWith('ENG-') ? 'Engagement fee' : inv.description || `Invoice ${inv.invoiceNumber}`}
+                  {inv.invoiceNumber?.startsWith('ENG-') ? 'Account opening fee' : inv.description || `Invoice ${inv.invoiceNumber}`}
                 </p>
                 <p className="mt-0.5 text-xs text-[#4A4A4A]/70">
                   {formatInvoiceAmount(inv.amount, inv.currency)}
