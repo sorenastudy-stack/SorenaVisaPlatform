@@ -219,7 +219,7 @@ export function Step7AgentDetails() {
           onChange={(e) => setStep7Fields({ agentDeclarationAgreed: e.target.checked })}
           className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-sorena-navy/20 accent-sorena-navy"
         />
-        <span className="text-sm text-sorena-navy/80">
+        <span dir="ltr" className="text-sm text-sorena-navy/80 text-left">
           {t('admissionStep7DeclarationText')}
           <span className="ml-0.5 text-red-500">*</span>
         </span>

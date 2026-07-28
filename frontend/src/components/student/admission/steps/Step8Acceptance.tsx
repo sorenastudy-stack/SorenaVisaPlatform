@@ -34,8 +34,10 @@ export function Step8Acceptance() {
         <p className="mt-1 text-sm text-sorena-navy/60">{t('admissionStep8Helper')}</p>
       </div>
 
-      {/* Terms block */}
-      <div className="flex flex-col gap-3 rounded-xl border border-sorena-navy/10 bg-white p-5">
+      {/* Terms block — statutory declaration, kept ENGLISH in both locales
+          (decision #4); dir=ltr so the English reads left-aligned inside the
+          RTL page (a no-op in English mode). */}
+      <div dir="ltr" className="flex flex-col gap-3 rounded-xl border border-sorena-navy/10 bg-white p-5 text-left">
         <p className="text-sm leading-relaxed text-sorena-navy/80">{t('admissionStep8TermsP1')}</p>
         <p className="text-sm leading-relaxed text-sorena-navy/80">{t('admissionStep8TermsP2')}</p>
         <p className="text-sm leading-relaxed text-sorena-navy/80">{t('admissionStep8TermsP3')}</p>

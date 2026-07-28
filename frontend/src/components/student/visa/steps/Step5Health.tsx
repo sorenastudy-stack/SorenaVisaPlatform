@@ -458,7 +458,9 @@ export function Step5Health() {
         <h3 className="text-xl font-bold text-sorena-navy">{t('visaHealthSubsectionInsurance')}</h3>
       </div>
       <p className="text-sm text-sorena-navy/70">{t('visaHealthInsuranceIntro')}</p>
-      <div className="flex flex-col gap-3 rounded-xl border border-sorena-navy/10 bg-white p-5">
+      {/* Statutory insurance declaration — kept ENGLISH in both locales
+          (decision #4); dir=ltr for correct left-alignment in the RTL page. */}
+      <div dir="ltr" className="flex flex-col gap-3 rounded-xl border border-sorena-navy/10 bg-white p-5 text-left">
         <p className="text-sm leading-relaxed text-sorena-navy/80">{t('visaHealthInsuranceP1')}</p>
         <p className="text-sm leading-relaxed text-sorena-navy/80">{t('visaHealthInsuranceP2')}</p>
         <p className="text-sm leading-relaxed text-sorena-navy/80">{t('visaHealthInsuranceP3')}</p>
