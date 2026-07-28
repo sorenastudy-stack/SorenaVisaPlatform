@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { FileText, Trash2, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/date';
+import { formatBytes } from '@/lib/bytes';
+import { useLocaleStore } from '@/lib/stores/localeStore';
 
 // PR-VISA2 fix — INZ visa photo uploader.
 // Reuses the admission-documents pipeline (same endpoints, same signed-URL
@@ -40,11 +42,6 @@ interface PhotoDoc {
   uploadedAt: string;
 }
 
-function fmtBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1_048_576).toFixed(1)} MB`;
-}
 
 // Resolve a File's intrinsic pixel dimensions via Image API. Used only for
 // client-side INZ validation; the file is sent unmodified to the server.
@@ -76,6 +73,7 @@ export function VisaPhotoUploader({
   onPhotoChange: (hasPhoto: boolean) => void;
 }) {
   const t = useTranslations();
+  const locale = useLocaleStore((s) => s.locale);
   const [photos, setPhotos] = useState<PhotoDoc[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -172,7 +170,7 @@ export function VisaPhotoUploader({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-sorena-navy">{doc.fileName}</p>
             <p className="text-xs text-sorena-navy/40">
-              {fmtBytes(doc.fileSizeBytes)} · {formatDate(doc.uploadedAt)}
+              {formatBytes(doc.fileSizeBytes, locale)} · {formatDate(doc.uploadedAt, locale)}
             </p>
           </div>
           <button

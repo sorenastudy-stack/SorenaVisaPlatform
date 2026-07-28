@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ExternalLink, Paperclip, Download } from 'lucide-react';
+import { formatBytes } from '@/lib/bytes';
+import { useLocaleStore } from '@/lib/stores/localeStore';
 import {
   useVisa,
   type EducationEntryRow,
@@ -67,14 +69,10 @@ type AdmissionDocument = {
   uploadedAt: string;
 };
 
-function fmtBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1_048_576) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1_048_576).toFixed(1)} MB`;
-}
 
 export function Step6EducationHistory() {
   const t = useTranslations();
+  const locale = useLocaleStore((s) => s.locale);
   const {
     setActiveStep,
     patchVisa,
@@ -440,7 +438,7 @@ export function Step6EducationHistory() {
                       <p className="text-xs font-medium text-sorena-navy">{docTypeLabel}</p>
                       <p className="truncate text-xs text-sorena-navy/60">
                         {doc.fileName}{' '}
-                        <span className="text-sorena-navy/40">({fmtBytes(doc.fileSizeBytes)})</span>
+                        <span className="text-sorena-navy/40">({formatBytes(doc.fileSizeBytes, locale)})</span>
                       </p>
                     </div>
                     <button
