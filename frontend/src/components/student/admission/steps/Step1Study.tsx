@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { useAdmission } from '../AdmissionFormContext';
 import { api, ApiError } from '@/lib/api';
+import { useLocaleStore } from '@/lib/stores/localeStore';
 
 interface Programme {
   id: string;
@@ -20,12 +21,17 @@ interface IntakeOption {
   label: string;
 }
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
+// Gregorian month + year, localised — "March 2027" / "مارس ۲۰۲۷" (Persian month
+// names + digits via fa-IR-u-ca-gregory). Keeps the Gregorian calendar (locked
+// decision) so intakes line up with INZ / university dates.
+type Loc = 'en' | 'fa';
+function intakeLabel(month: number, year: number, locale: Loc): string {
+  return new Intl.DateTimeFormat(locale === 'fa' ? 'fa-IR-u-ca-gregory' : 'en-NZ', {
+    month: 'long', year: 'numeric',
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
 
-function upcomingIntakes(intakeMonths: number[]): IntakeOption[] {
+function upcomingIntakes(intakeMonths: number[], locale: Loc): IntakeOption[] {
   const now   = new Date();
   const curYr = now.getFullYear();
   const curMo = now.getMonth() + 1;
@@ -33,7 +39,7 @@ function upcomingIntakes(intakeMonths: number[]): IntakeOption[] {
   for (let yr = curYr; yr <= curYr + 2; yr++) {
     for (const m of [...intakeMonths].sort((a, b) => a - b)) {
       if (yr === curYr && m < curMo) continue;
-      out.push({ month: m, year: yr, label: `${MONTH_NAMES[m - 1]} ${yr}` });
+      out.push({ month: m, year: yr, label: intakeLabel(m, yr, locale) });
     }
   }
   return out;
@@ -52,6 +58,7 @@ function SearchableSelect({
   placeholder: string;
   disabled?: boolean;
 }) {
+  const t = useTranslations();
   const [query, setQuery] = useState('');
   const [open, setOpen]   = useState(false);
   const selected          = options.find(o => o.value === value);
@@ -90,7 +97,7 @@ function SearchableSelect({
       )}
       {open && !disabled && filtered.length === 0 && query && (
         <div className="absolute z-20 mt-1 w-full rounded-lg border border-sorena-navy/20 bg-white px-3 py-2 text-sm text-sorena-navy/50 shadow-lg">
-          No results
+          {t('admissionStep1NoResults')}
         </div>
       )}
     </div>
@@ -99,6 +106,7 @@ function SearchableSelect({
 
 export function Step1Study() {
   const t = useTranslations();
+  const locale = useLocaleStore((s) => s.locale);
   const { programmeChoices, addProgrammeChoice, removeProgrammeChoice, reorderProgrammeChoices } =
     useAdmission();
 
@@ -122,7 +130,7 @@ export function Step1Study() {
   const availableProgrammes = programmes.filter(p => !chosenProgIds.has(p.id));
 
   const selectedProg  = programmes.find(p => p.id === selectedProgId);
-  const intakeOptions = selectedProg ? upcomingIntakes(selectedProg.intakeMonths) : [];
+  const intakeOptions = selectedProg ? upcomingIntakes(selectedProg.intakeMonths, locale) : [];
   const intakeValue   = selectedIntakeMonth && selectedIntakeYear
     ? `${selectedIntakeMonth}-${selectedIntakeYear}` : '';
   const canAdd        = !!selectedProgId && !!selectedIntakeMonth && !!selectedIntakeYear && !adding;
@@ -267,7 +275,7 @@ export function Step1Study() {
           disabled={!canAdd}
           className="self-end rounded-lg bg-sorena-navy px-5 py-2.5 text-base font-semibold text-white transition-colors hover:bg-sorena-navy/90 disabled:opacity-40"
         >
-          {adding ? 'Adding…' : t('admissionStep1AddButton')}
+          {adding ? t('admissionStep1Adding') : t('admissionStep1AddButton')}
         </button>
       </div>
 
@@ -291,14 +299,14 @@ export function Step1Study() {
                   {getProgLabel(choice.programmeId)}
                 </p>
                 <p className="text-sm text-sorena-navy/50">
-                  {MONTH_NAMES[choice.intakeMonth - 1]} {choice.intakeYear}
+                  {intakeLabel(choice.intakeMonth, choice.intakeYear, locale)}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <button
                   onClick={() => handleMove(idx, 'up')}
                   disabled={idx === 0 || reordering}
-                  title="Move up"
+                  title={t('admissionStep1MoveUp')}
                   className="rounded p-1 text-sorena-navy/40 transition-colors hover:bg-sorena-navy/5 hover:text-sorena-navy disabled:opacity-25"
                 >
                   <ChevronUp size={16} />
@@ -306,7 +314,7 @@ export function Step1Study() {
                 <button
                   onClick={() => handleMove(idx, 'down')}
                   disabled={idx === sorted.length - 1 || reordering}
-                  title="Move down"
+                  title={t('admissionStep1MoveDown')}
                   className="rounded p-1 text-sorena-navy/40 transition-colors hover:bg-sorena-navy/5 hover:text-sorena-navy disabled:opacity-25"
                 >
                   <ChevronDown size={16} />
