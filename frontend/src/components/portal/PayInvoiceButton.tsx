@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { CreditCard, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -15,7 +16,8 @@ import { api } from '@/lib/api';
 //
 // Strings are hardcoded English to match the surrounding next-steps section
 // (its heading + the "Open" link are hardcoded too — no lone i18n call).
-export function PayInvoiceButton({ invoiceId, label = 'Pay now' }: { invoiceId: string; label?: string }) {
+export function PayInvoiceButton({ invoiceId, label }: { invoiceId: string; label?: string }) {
+  const t = useTranslations('casePay.payButton');
   const [busy, setBusy] = useState(false);
 
   const handlePay = async () => {
@@ -27,7 +29,7 @@ export function PayInvoiceButton({ invoiceId, label = 'Pay now' }: { invoiceId: 
       );
       window.location.href = url; // hand off to Stripe's hosted page
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not start payment');
+      toast.error(err instanceof Error ? err.message : t('error'));
       setBusy(false);
     }
   };
@@ -40,7 +42,7 @@ export function PayInvoiceButton({ invoiceId, label = 'Pay now' }: { invoiceId: 
       className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-6 text-[#faf8f3] font-semibold min-h-[48px] hover:bg-[#162d4a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >
       {busy ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-      {busy ? 'Redirecting…' : label}
+      {busy ? t('redirecting') : (label ?? t('payNow'))}
     </button>
   );
 }

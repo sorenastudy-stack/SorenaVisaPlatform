@@ -1,4 +1,61 @@
 {
+  "casePay": {
+    "backToCase": "Back to my case",
+    "loadError": "We couldn't load your payment options. Please go back to your case and try again.",
+    "engagementFee": "Engagement fee",
+    "engagementInvoice": "Engagement invoice {number}",
+    "paidTitle": "Payment received",
+    "paidBody": "Thanks — your payment is confirmed. Your full access is open. There's nothing more to do here.",
+    "processingTitle": "Payment received — we're confirming it",
+    "processingBody": "Thanks — we've got your receipt. We'll confirm once the funds land, usually within a few business days. Your full access opens then.",
+    "title": "Complete your payment",
+    "secure": "Your payment is secure. Your full access opens once we've confirmed your payment.",
+    "payByCard": "Pay by card",
+    "cardFeeNote": "Includes a {fee} card processing fee. Prefer to avoid it? Pay by bank transfer below.",
+    "payByCardAmount": "Pay {amount} by card",
+    "payByBank": "Pay by bank transfer",
+    "recommended": "Recommended · no fee",
+    "bank": {
+      "bank": "Bank",
+      "address": "Bank Address",
+      "accountName": "Account Name",
+      "accountNumber": "Account Number",
+      "swift": "SWIFT Code",
+      "particular": "Particular",
+      "code": "Code",
+      "reference": "Reference",
+      "codeHint": "Your Client ID (leave blank if new)"
+    },
+    "yourFullName": "your full name",
+    "processingTimes": "Please note that payment processing times vary by method: card payments typically clear to our account within 4–7 business days, while international bank transfers can take anywhere from 1 to 10 business days depending on your bank — your booking is confirmed once the funds have settled.",
+    "alreadyPaidBank": "Already paid by bank transfer?",
+    "cantPay": "Can't pay by card or bank transfer?",
+    "partnerIntro": "If card or bank transfer isn't available in your region, you can send your payment securely through our partner exchange service using this link:",
+    "payViaPartner": "Pay via partner exchange",
+    "alreadyPaidPartner": "Already paid via partner exchange?",
+    "receipt": {
+      "invalidType": "Please upload a PDF, JPG, or PNG.",
+      "tooLarge": "File exceeds the 10 MB limit.",
+      "uploaded": "Receipt uploaded — we're confirming your payment.",
+      "uploadFailed": "Upload failed. Please try again.",
+      "uploading": "Uploading…",
+      "uploadButton": "Upload your receipt",
+      "hint": "Already paid by {method}? Upload your receipt to confirm. PDF, JPG, or PNG, up to 10 MB.",
+      "methodBank": "bank transfer",
+      "methodExchange": "partner exchange"
+    },
+    "payButton": {
+      "payNow": "Pay now",
+      "redirecting": "Redirecting…",
+      "error": "Could not start payment"
+    },
+    "copy": {
+      "copiedLabel": "Copied {label}",
+      "copyLabel": "Copy {label}",
+      "copied": "Copied",
+      "copy": "Copy"
+    }
+  },
   "caseMessages": {
     "backToPortal": "Back to portal",
     "title": "Messages with your specialist",

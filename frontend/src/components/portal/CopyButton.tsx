@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Copy, Check } from 'lucide-react';
 
 // Small copy-to-clipboard control for a single value (e.g. a bank-detail
@@ -9,6 +10,7 @@ import { Copy, Check } from 'lucide-react';
 // check for ~1.5s on success; silently no-ops if the clipboard API is
 // unavailable (older/insecure contexts) — the value is also select-all.
 export function CopyButton({ value, label = 'value' }: { value: string; label?: string }) {
+  const t = useTranslations('casePay.copy');
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -25,8 +27,8 @@ export function CopyButton({ value, label = 'value' }: { value: string; label?: 
     <button
       type="button"
       onClick={handleCopy}
-      aria-label={copied ? `Copied ${label}` : `Copy ${label}`}
-      title={copied ? 'Copied' : 'Copy'}
+      aria-label={copied ? t('copiedLabel', { label }) : t('copyLabel', { label })}
+      title={copied ? t('copied') : t('copy')}
       className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-[#1e3a5f]/55 hover:text-[#1e3a5f] hover:bg-[#1e3a5f]/5 transition-colors"
     >
       {copied ? <Check size={16} className="text-[#b28f4e]" /> : <Copy size={16} />}
