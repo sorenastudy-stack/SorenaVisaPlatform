@@ -172,7 +172,22 @@ Also verified structurally via `tsc --noEmit` + per-namespace en/fa parity — w
 caught the duplicate-`payments` shadowing bug that would have crashed the payments
 page at runtime.
 
-## 8. Security / rollback
+## 8. Sign-off
+
+- **Copy approved (2026-07-29):** band names (`scorecard.bands.*`), the Malaysia
+  callout (`scorecard.result.malaysiaBody` — the **USD 200** figure confirmed
+  correct, consistent with project pricing), and all 11 `booking.reasons.*` —
+  approved as drafted. The 53 legal keys are English (no copy to approve).
+- **Step 9 live verification confirmed** (English INZ questions inside the
+  Persian page); backend build root cause was the stale
+  `tsconfig.build.tsbuildinfo`.
+- **Deferred, not urgent (owner decision):** the inline statutory **question
+  labels** stay English but are *not* `dir="ltr"`-wrapped, so under RTL the
+  trailing `?`/`*` sit at the visual left. Left as-is intentionally — the only
+  `dir="ltr"` blocks are the prominent multi-paragraph declarations (admission
+  Step 7/8, visa health insurance).
+
+## 9. Security / rollback
 
 Frontend display copy + one additive backend field (`reasonCode`, with the
 English `reason` preserved as fallback) — no auth/PII/endpoint/schema change.
