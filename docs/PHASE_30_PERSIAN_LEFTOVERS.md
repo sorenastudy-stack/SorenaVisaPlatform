@@ -148,12 +148,29 @@ Set `NEXT_LOCALE=fa` (or toggle the globe) at 390 px:
 - **Forms uploaders** — file sizes "۱٫۵ MB" (Persian digits, Latin unit); Step 1
   intake "مارس ۲۰۲۷".
 
-> Live happy-path screenshots (wallet balance, payments list, gate states) were
-> **not** captured: the backend `nest build` in this environment emits no
-> `dist/main` (a local build-tooling issue, unrelated to these changes), so the
-> API couldn't be booted to seed data. Correctness was verified via `tsc --noEmit`
-> + per-namespace en/fa parity checks (which also caught the duplicate-`payments`
-> shadowing bug that would have crashed the payments page at runtime).
+### Live verification (follow-up)
+
+The backend build issue was **a stale incremental-build cache**: a root
+`tsconfig.build.tsbuildinfo` recorded `main.ts` as "already emitted", so
+`nest build` (with `deleteOutDir`) re-created `dist/` but skipped `dist/main.js`,
+leaving `node dist/main` → `MODULE_NOT_FOUND`. Fix: `rm tsconfig.build.tsbuildinfo`
+(+ `dist/`) then rebuild — `dist/main.js` emits and the API boots on `:3001`.
+*(If it recurs after a partial/interrupted build, clear that tsbuildinfo.)*
+
+With the backend up + the demo student seeded (`seed-demo.cjs` → paid student;
+`seed-visa-state.cjs` → admission app so the visa section unlocks + `currentStep`
+bumped so all steps are reachable), a live Persian (`NEXT_LOCALE=fa`, 390 px) pass
+on **visa Step 9 (Background)** confirms decision #4 visually: the page chrome is
+Persian (title «بخش ویزا», section «اطلاعات سوابق», subsection titles, Yes/No
+«بله»/«خیر») while the **INZ 1200 statutory questions render in English**
+(religious/cultural position, political appointment, ill-treatment of prisoners,
+war crimes, detention). Automated assertion: Q5/Q8/Q10 English text + Persian
+section-title + Persian Yes/No all present in one `rtl/fa` page.
+(Screenshots: `scratchpad/shots-p30/visa-step9-fa*.png`.)
+
+Also verified structurally via `tsc --noEmit` + per-namespace en/fa parity — which
+caught the duplicate-`payments` shadowing bug that would have crashed the payments
+page at runtime.
 
 ## 8. Security / rollback
 
