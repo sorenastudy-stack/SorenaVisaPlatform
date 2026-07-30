@@ -2179,6 +2179,15 @@ model EducationProvider {
   bonusType            CommissionType?
   bonusValue           Float?
   notes                String?
+  // PR-PHASE32 — recommendation enrichment (v1 rich). Descriptions/aboutUrl are
+  // AI-seeded → staff-approved; ranking* is STAFF-ENTERED ONLY (never AI-invented
+  // — fabrication risk on a compliance-sensitive claim). Shown to applicants only
+  // once the provider is APPROVED (status).
+  descriptionEn        String?
+  aboutUrl             String?
+  rankingTier          String?
+  rankingScore         Float?
+  rankingSource        String?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
@@ -2219,6 +2228,11 @@ model EducationProgramme {
   aiLastRunAt    DateTime?
   reviewStatus   ReviewStatus       @default(PENDING)
   isActive       Boolean            @default(false)
+  // PR-PHASE32 — recommendation enrichment (AI-seeded → staff-approved).
+  descriptionEn  String?
+  descriptionFa  String?
+  careerOutcomes String[]
+  highlights     String[]
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -2229,11 +2243,94 @@ model EducationProgramme {
   commissions      Commission[]
   admissionChoices AdmissionProgrammeChoice[]
   scholarships     ProviderScholarship[]
+  studyFields      ProgrammeStudyField[]
 
   @@index([providerId])
   @@index([level])
   @@index([reviewStatus])
   @@map("education_programmes")
+}
+
+// ─── PR-PHASE32 — StudyField taxonomy (matching + Q30 field-relatedness) ──────
+// Canonical field-of-study vocabulary tagged on BOTH the questionnaire (Q13/Q32)
+// and programmes. Anchors: (a) field→programme matching, (b) the Q30 progression
+// constraint, (c) the deferred per-field YouTube feature (reserved columns).
+
+model StudyFieldCategory {
+  id               String   @id @default(cuid())
+  key              String   @unique
+  nameEn           String
+  nameFa           String
+  // TRUE only for "Management & Business" — its fields are always selectable at
+  // Q32 regardless of the applicant's prior-qualification field (Q13).
+  alwaysSelectable Boolean  @default(false)
+  displayOrder     Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  fields StudyField[]
+
+  @@map("study_field_categories")
+}
+
+model StudyField {
+  id                String   @id @default(cuid())
+  key               String   @unique
+  nameEn            String
+  nameFa            String
+  categoryId        String
+  // Preserves q16's per-field scoring weight (0–4) so the scoring engine stays
+  // byte-identical when Q13's field options are backed by this taxonomy.
+  backgroundWeight  Int      @default(0)
+  displayOrder      Int      @default(0)
+  isActive          Boolean  @default(true)
+  // RESERVED — deferred YouTube per-field explainer + evergreen videos. Not built.
+  explainerVideoId  String?
+  evergreenVideoIds String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  category      StudyFieldCategory    @relation(fields: [categoryId], references: [id])
+  relationsFrom StudyFieldRelation[]  @relation("SourceField")
+  relationsTo   StudyFieldRelation[]  @relation("TargetField")
+  programmes    ProgrammeStudyField[]
+
+  @@index([categoryId])
+  @@map("study_fields")
+}
+
+// Directed edge: an applicant whose prior qualification is in `sourceField` MAY
+// progress to `targetField` at Q32. AI-seeded → staff-approved (reviewStatus).
+model StudyFieldRelation {
+  id            String       @id @default(cuid())
+  sourceFieldId String
+  targetFieldId String
+  reviewStatus  ReviewStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  updatedById   String?
+
+  sourceField StudyField @relation("SourceField", fields: [sourceFieldId], references: [id], onDelete: Cascade)
+  targetField StudyField @relation("TargetField", fields: [targetFieldId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceFieldId, targetFieldId])
+  @@index([sourceFieldId])
+  @@map("study_field_relations")
+}
+
+// A programme may span more than one field; `isPrimary` marks the main one.
+model ProgrammeStudyField {
+  programmeId  String
+  studyFieldId String
+  isPrimary    Boolean @default(false)
+
+  programme  EducationProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  studyField StudyField         @relation(fields: [studyFieldId], references: [id], onDelete: Cascade)
+
+  @@id([programmeId, studyFieldId])
+  @@index([studyFieldId])
+  @@map("programme_study_fields")
 }
 
 // PR-UNIVERSITIES — a scholarship Sorena can offer for a provider, scoped by
