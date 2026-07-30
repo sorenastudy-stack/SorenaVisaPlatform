@@ -125,6 +125,51 @@ describe('scorecard scoring engine — Maryam Karimi sample (SAMPLE_Scoring_Repo
   });
 });
 
+// ─── Phase 32 reference battery — GOLDEN CI GATE ──────────────────────
+//
+// Freezes the full decision output (total, band, executionEligible, hardStops)
+// for a fixed set of profiles. The Phase 32 questionnaire redesign (Option A)
+// keeps every scored answer key, so scoring MUST stay byte-identical — this
+// battery is the guard: any questionnaire/weight edit that would move a decision
+// fails here before merge. Do NOT "adjust" an expectation to make a change pass;
+// a red cell means the change altered an eligibility decision and needs review.
+
+// Borderline-gate: cat2 raw = 13 (one point above the Gate-2 cat2>=12 line),
+// cat1/3/4 capped, no hard stops. The eligibility-flip stress case.
+const BORDERLINE_ANSWERS: Record<string, string> = {
+  ...MARYAM_ANSWERS,
+  q15_highest_qual: 'Diploma', q16_field_main: 'Other', q17_gpa: 'Average',
+  q18_years_since: '10+ years', q19_docs_translated: 'Partially', q20_publications: 'No',
+  q21_english_cert: 'No certificate', q22_english_score: 'No test taken', q24_studied_english: 'No',
+  q26_field_change: 'No', q27_study_goal: 'English language only', q28_work_after_grad: 'No',
+  q29_years_work: 'None', q30_work_relevance: 'Unrelated', q31_occupation: 'Unemployed',
+  q41_apply_timeline: 'Within 3 months',
+};
+const withOverride = (o: Record<string, string>) => ({ ...MARYAM_ANSWERS, ...o });
+
+describe('Phase 32 golden reference battery (frozen decision output)', () => {
+  const cases: Array<{
+    name: string; answers: Record<string, string>;
+    total: number; band: string; eligible: boolean; hardStops: string[];
+  }> = [
+    { name: 'Maryam',           answers: MARYAM_ANSWERS,     total: 100, band: 'BAND_6', eligible: true,  hardStops: [] },
+    { name: 'Borderline-gate',  answers: BORDERLINE_ANSWERS, total: 78,  band: 'BAND_5', eligible: true,  hardStops: [] },
+    { name: 'HS1 funding',      answers: withOverride({ q33_funds: 'Less than NZD 10,000' }),                                       total: 100, band: 'BAND_6', eligible: false, hardStops: ['HS1'] },
+    { name: 'HS3 english',      answers: withOverride({ q21_english_cert: 'No certificate', q22_english_score: 'Below IELTS 5' }), total: 100, band: 'BAND_6', eligible: false, hardStops: ['HS3'] },
+    { name: 'HS4 legal',        answers: withOverride({ q49_breach: 'Yes' }),                                                       total: 100, band: 'BAND_6', eligible: false, hardStops: ['HS4'] },
+    { name: 'HS5 timeline',     answers: withOverride({ q41_apply_timeline: 'Immediately', q40_docs_ready: 'Not ready' }),         total: 100, band: 'BAND_6', eligible: false, hardStops: ['HS5'] },
+    { name: 'HS6 medical',      answers: withOverride({ q47_medical: 'Serious / unresolved' }),                                     total: 99,  band: 'BAND_6', eligible: false, hardStops: ['HS6'] },
+  ];
+
+  it.each(cases)('$name → frozen total/band/eligibility/hard-stops', (c) => {
+    const r = score(c.answers);
+    expect(r.total).toBe(c.total);
+    expect(r.band.enumValue).toBe(c.band);
+    expect(r.execution.eligible).toBe(c.eligible);
+    expect(r.hardStops.map((h) => h.code)).toEqual(c.hardStops);
+  });
+});
+
 // ─── Hard stops — one test per HS1..HS6 ───────────────────────────────
 
 describe('detectHardStops()', () => {
