@@ -90,6 +90,9 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
     // Keyed via next-intl (PR-I18N-2: portal.nav.myAssessment / booking).
     // Persian is frozen; /portal/report already exists (404 → /portal/case).
     { labelKey: 'portal.nav.myAssessment',        href: '/portal/report',         iconName: 'sparkles' },
+    // PR-RECS-1 — programme matches (read-only list + sort). Inline English label
+    // (no dot → literal, keeps Persian frozen). Payment-gated to match the endpoint.
+    { labelKey: 'Recommendations',      href: '/student/recommendations', iconName: 'graduationCap', lockedUntilPaid: true },
     { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText',      lockedUntilPaid: true },
     // Keyed via next-intl (PR-I18N-2: portal.nav.myAssessment / booking).
     { labelKey: 'portal.nav.booking',              href: '/portal/booking',        iconName: 'calendar' },

@@ -109,9 +109,13 @@ Endpoints:
   preferred-field / NZD-budget questions to the **live `/scorecard`** — would
   resolve the coarseness precisely without redesigning anything. Worth prioritising
   reasonably soon rather than letting it linger.
-- **No frontend yet.** This slice is backend + persistence + endpoints. The
-  student-portal recommendations page (sortable list UI) is the natural next UI
-  step; the endpoints are ready for it.
+- **Frontend (shipped).** Student-portal page at `/student/recommendations`
+  (`RecommendationsClient.tsx`) — read-only ranked list + sort (Best match /
+  tuition / start / duration / city / featured), navy/gold palette, mobile-first,
+  one primary action ("Find my matches") on the empty state. Handles the
+  engagement-paid gate (403 → calm "unlock after payment" panel). Nav item added
+  to the client shell (payment-locked, inline label so Persian stays frozen).
+  Slot-selection UI is NOT here (slice 2).
 - **Impl B (v2 `/assessment`).** Drops in behind `MATCH_CRITERIA_RESOLVER` when
   `/assessment` goes live — but needs **new per-student v2 persistence** first
   (the v2 flow currently saves nothing).
