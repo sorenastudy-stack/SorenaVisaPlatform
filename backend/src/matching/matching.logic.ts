@@ -265,6 +265,103 @@ export interface AssignedSlot {
   unmetMandatory: boolean; // mandatory position with no eligible programme to fill it
 }
 
+// ── Slot-selection ENFORCEMENT (PR-RECS-2, slice 2) — the safety gate ─────────
+// DISTINCT from assignPrioritySlots (the one-time suggestion): this validates
+// WHATEVER the final selection is, however it was built (staff swap OR client
+// reorder OR auto-fill), against the live slotRules. A permutation preserves the
+// programme SET but NOT per-position type constraints — swapping the mandatory-ITP
+// slot with a PTE slot lands a College in the Polytechnic safety slot — so every
+// write path re-validates here; reorder is not a validation-exempt fast path.
+//
+// SECURITY: `institutionType` on each entry is SERVER-RESOLVED by the caller (from
+// the programme's provider) — never the client's claim. A null/unknown type fails
+// closed (treated as disallowed).
+export interface SlotSelectionEntry {
+  position: number;
+  programmeId: string | null;      // null = empty slot
+  institutionType: InstitutionType | null; // server-resolved real type of programmeId
+}
+export type SlotErrorCode =
+  | 'MANDATORY_EMPTY'       // mandatory position left empty (wrongly-skipped safety net)
+  | 'MANDATORY_WRONG_TYPE'  // mandatory position holds a disallowed type (e.g. Slot 4 = University)
+  | 'DISALLOWED_TYPE'       // non-mandatory position holds a type not in allowedTypes
+  | 'DUPLICATE_PROGRAMME'   // same programme in more than one slot
+  | 'MISSING_POSITION'      // a required position 1..slotCount is absent
+  | 'EXTRA_POSITION'        // a position outside 1..slotCount, or a repeated position
+  | 'BAD_COUNT';            // selection length != slotCount
+export interface SlotValidationError { position: number | null; code: SlotErrorCode; message: string }
+export interface SlotValidationResult { valid: boolean; errors: SlotValidationError[] }
+
+const SLOT_ERROR_ORDER: SlotErrorCode[] = [
+  'BAD_COUNT', 'MISSING_POSITION', 'EXTRA_POSITION', 'DUPLICATE_PROGRAMME',
+  'MANDATORY_EMPTY', 'MANDATORY_WRONG_TYPE', 'DISALLOWED_TYPE',
+];
+
+export function validateSlotSelection(
+  selection: SlotSelectionEntry[],
+  slotRules: SlotRule[],
+  slotCount: number,
+): SlotValidationResult {
+  const errors: SlotValidationError[] = [];
+  const rulesByPos = new Map(slotRules.map((r) => [r.position, r]));
+
+  // 1. Count.
+  if (selection.length !== slotCount) {
+    errors.push({ position: null, code: 'BAD_COUNT', message: `Expected ${slotCount} slots, received ${selection.length}.` });
+  }
+
+  // 2. Position integrity — each of 1..slotCount present exactly once; nothing out of range.
+  const byPos = new Map<number, SlotSelectionEntry>();
+  for (const e of selection) {
+    if (e.position < 1 || e.position > slotCount) {
+      errors.push({ position: e.position, code: 'EXTRA_POSITION', message: `Position ${e.position} is outside 1..${slotCount}.` });
+      continue;
+    }
+    if (byPos.has(e.position)) {
+      errors.push({ position: e.position, code: 'EXTRA_POSITION', message: `Position ${e.position} is listed more than once.` });
+      continue;
+    }
+    byPos.set(e.position, e);
+  }
+  for (let p = 1; p <= slotCount; p++) {
+    if (!byPos.has(p)) errors.push({ position: p, code: 'MISSING_POSITION', message: `Position ${p} is missing.` });
+  }
+
+  // 3. Duplicate programmes across slots (a programme fills at most one slot).
+  const positionsByProg = new Map<string, number[]>();
+  for (const e of byPos.values()) {
+    if (e.programmeId) positionsByProg.set(e.programmeId, [...(positionsByProg.get(e.programmeId) ?? []), e.position]);
+  }
+  for (const [, positions] of positionsByProg) {
+    if (positions.length > 1) {
+      for (const pos of positions) {
+        errors.push({ position: pos, code: 'DUPLICATE_PROGRAMME', message: `This programme is used in more than one slot (positions ${positions.join(', ')}).` });
+      }
+    }
+  }
+
+  // 4. Per-position type + mandatory rules.
+  for (let p = 1; p <= slotCount; p++) {
+    const rule = rulesByPos.get(p);
+    const entry = byPos.get(p);
+    if (!rule || !entry) continue; // integrity error already recorded
+    const allowed = new Set(rule.allowedTypes);
+    if (entry.programmeId == null) {
+      if (rule.mandatory) errors.push({ position: p, code: 'MANDATORY_EMPTY', message: `Slot ${p} must be filled (requires ${rule.allowedTypes.join(' / ')}).` });
+      continue; // non-mandatory empty is allowed
+    }
+    if (!entry.institutionType || !allowed.has(entry.institutionType)) {
+      const code: SlotErrorCode = rule.mandatory ? 'MANDATORY_WRONG_TYPE' : 'DISALLOWED_TYPE';
+      errors.push({ position: p, code, message: `Slot ${p} requires ${rule.allowedTypes.join(' / ')}; this programme is ${entry.institutionType ?? 'an unknown type'}.` });
+    }
+  }
+
+  // Deterministic order (position asc, then a fixed code order) so callers + the
+  // golden battery see a stable errors array.
+  errors.sort((a, b) => (a.position ?? -1) - (b.position ?? -1) || SLOT_ERROR_ORDER.indexOf(a.code) - SLOT_ERROR_ORDER.indexOf(b.code));
+  return { valid: errors.length === 0, errors };
+}
+
 export function assignPrioritySlots(
   ranked: Array<{ programmeId: string; institutionType?: InstitutionType | null }>,
   slotRules: SlotRule[],

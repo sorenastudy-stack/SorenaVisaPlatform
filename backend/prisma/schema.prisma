@@ -2298,6 +2298,8 @@ model EducationProgramme {
   // PR-RECS-1 — persisted recommendation-list snapshots referencing this
   // programme. Virtual back-relation (FK on recommendation_items.programmeId).
   recommendationItems RecommendationItem[]
+  // PR-RECS-2 — priority-slot assignments referencing this programme.
+  prioritySlots       PrioritySlot[]
 
   @@index([providerId])
   @@index([level])
@@ -4851,8 +4853,13 @@ model RecommendationList {
   createdAt      DateTime                     @default(now())
   updatedAt      DateTime                     @updatedAt
 
+  // PR-RECS-2 — priority-slot commit timestamp (null until CONFIRMED). Status
+  // CONFIRMED + confirmedAt = the slots are locked.
+  confirmedAt DateTime?
+
   case  Case                 @relation(fields: [caseId], references: [id], onDelete: Cascade)
   items RecommendationItem[]
+  slots PrioritySlot[]
 
   @@index([caseId])
   @@index([caseId, status])
@@ -4875,4 +4882,31 @@ model RecommendationItem {
   @@unique([recommendationListId, programmeId])
   @@index([recommendationListId])
   @@map("recommendation_items")
+}
+
+// PR-RECS-2 (slice 2) — the applicant's priority-slot selection (PRD_4 §8).
+// Children of a RecommendationList; the list's status drives the lock state
+// (GENERATED/VIEWED = editable draft, CONFIRMED = locked). One row per slot
+// position. `programmeId` null = empty slot (allowed for non-mandatory positions
+// pre-confirm; mandatory positions must be filled at confirm).
+//
+// Deliberately does NOT snapshot the slot RULES (mandatory / allowedTypes /
+// preferred) or the programme's institutionType — those are read LIVE (rules from
+// CountryExecutionConfig, type from the programme) so the safety-critical checks
+// always use authoritative current data. The immutable "what rules were enforced
+// + what was chosen" audit lives in the PRIORITY_SLOTS_CONFIRMED event payload.
+model PrioritySlot {
+  id                   String   @id @default(cuid())
+  recommendationListId String
+  position             Int // 1..slotCount (positions come from CountryExecutionConfig)
+  programmeId          String? // null = empty slot
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  recommendationList RecommendationList  @relation(fields: [recommendationListId], references: [id], onDelete: Cascade)
+  programme          EducationProgramme? @relation(fields: [programmeId], references: [id])
+
+  @@unique([recommendationListId, position])
+  @@index([recommendationListId])
+  @@map("priority_slots")
 }
