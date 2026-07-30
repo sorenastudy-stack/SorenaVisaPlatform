@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
-  rankRecommendations,
+  rankRecommendations, allowedFieldIds,
   type MatchCriteria, type ProgrammeForMatch, type FieldNode, type RelationEdge, type QualLevel,
 } from './matching.logic';
 
@@ -12,6 +12,30 @@ import {
 @Injectable()
 export class MatchingService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Active StudyFields for rendering the Q13 (qualification) + Q32 (preferred)
+  // pickers. Includes the category's alwaysSelectable flag.
+  async listStudyFields() {
+    return this.prisma.studyField.findMany({
+      where: { isActive: true },
+      orderBy: [{ category: { displayOrder: 'asc' } }, { displayOrder: 'asc' }],
+      select: {
+        id: true, key: true, nameEn: true, nameFa: true,
+        category: { select: { key: true, nameEn: true, nameFa: true, alwaysSelectable: true } },
+      },
+    });
+  }
+
+  // Server-authoritative Q30 allowed-field set for a given prior-qualification
+  // field. The Q32 UI filters to exactly this — it can never diverge from the
+  // matcher, which re-derives the same set.
+  async allowedFieldIdsFor(qualificationFieldId: string | null): Promise<string[]> {
+    const fields = await this.prisma.studyField.findMany({ select: { id: true, category: { select: { alwaysSelectable: true } } } });
+    const rels = await this.prisma.studyFieldRelation.findMany({ where: { reviewStatus: 'APPROVED' }, select: { sourceFieldId: true, targetFieldId: true } });
+    const nodes: FieldNode[] = fields.map((f) => ({ id: f.id, categoryAlwaysSelectable: f.category.alwaysSelectable }));
+    const edges: RelationEdge[] = rels.map((r) => ({ ...r, approved: true }));
+    return [...allowedFieldIds(qualificationFieldId, nodes, edges)];
+  }
 
   async recommend(criteria: MatchCriteria) {
     const fields = await this.prisma.studyField.findMany({
