@@ -8,6 +8,9 @@ import { StudentRecommendationsController } from './student-recommendations.cont
 import { StaffRecommendationsController } from './staff-recommendations.controller';
 import { ScorecardCriteriaResolver } from '../matching/criteria/scorecard-criteria.resolver';
 import { MATCH_CRITERIA_RESOLVER } from '../matching/criteria/match-criteria-resolver';
+import { PrioritySlotsService } from './priority-slots.service';
+import { StudentPrioritySlotsController } from './student-priority-slots.controller';
+import { StaffPrioritySlotsController } from './staff-priority-slots.controller';
 
 // PR-RECS-1 (slice 1) — persisted recommendation lists.
 //
@@ -16,9 +19,13 @@ import { MATCH_CRITERIA_RESOLVER } from '../matching/criteria/match-criteria-res
 // is a one-line change here — the service/controllers are untouched.
 @Module({
   imports: [PrismaModule, MatchingModule, CryptoModule],
-  controllers: [StudentRecommendationsController, StaffRecommendationsController],
+  controllers: [
+    StudentRecommendationsController, StaffRecommendationsController,
+    StudentPrioritySlotsController, StaffPrioritySlotsController,
+  ],
   providers: [
     RecommendationsService,
+    PrioritySlotsService,
     EventsService,
     ScorecardCriteriaResolver,
     { provide: MATCH_CRITERIA_RESOLVER, useExisting: ScorecardCriteriaResolver },
