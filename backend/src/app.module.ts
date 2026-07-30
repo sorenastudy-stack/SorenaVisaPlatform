@@ -13,6 +13,7 @@ import { IntakeModule } from './intake/intake.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { ProvidersModule } from './providers/providers.module';
+import { MatchingModule } from './matching/matching.module';
 import { AiModule } from './ai/ai.module';
 import { CasesModule } from './cases/cases.module';
 import { ApplicationsModule } from './applications/applications.module';
@@ -80,6 +81,7 @@ import { SlaModule } from './sla/sla.module';
     SubscriptionsModule,
     AcquisitionModule,
     ProvidersModule,
+    MatchingModule,
     AiModule,
     CasesModule,
     ApplicationsModule,
