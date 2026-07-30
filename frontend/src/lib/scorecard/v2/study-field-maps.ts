@@ -32,6 +32,12 @@ export const STUDYFIELD_TO_Q16: Record<string, string> = {
   law_government: 'Law, Politics & Government', // 2
   general_interdisciplinary: 'General / Interdisciplinary', // 1
   other: 'Other', // 0
+  // PR-PHASE34 — new fields have no scored q16 option → 'Other' (0), preserving
+  // byte-identical scoring for a qualification in one of these areas.
+  personal_services: 'Other', // 0
+  sport_recreation: 'Other', // 0
+  social_community: 'Other', // 0
+  foundation_pathways: 'Other', // 0
 };
 
 export const STUDYFIELD_TO_Q25: Record<string, string> = {
@@ -54,4 +60,8 @@ export const STUDYFIELD_TO_Q25: Record<string, string> = {
   law_government: 'Other',
   general_interdisciplinary: 'Other',
   other: 'Other',
+  personal_services: 'Other',
+  sport_recreation: 'Other',
+  social_community: 'Other',
+  foundation_pathways: 'Other',
 };

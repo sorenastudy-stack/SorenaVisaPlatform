@@ -184,7 +184,7 @@ export const ASSESSMENT_V2: V2SectionDef[] = [
     id: 8, title: 'Study Preferences',
     questions: [
       { id: 'preferred-fields', heading: 'Preferred field(s) of study', fields: [{ key: 'q32_preferred_fields', type: 'studyfield-multi', label: 'Preferred field(s) of study', required: true, helper: 'Restricted to fields related to your qualification, plus Business & Management.' }] },
-      { id: 'desired-level', heading: 'Desired qualification level', fields: [{ key: 'q33_desired_level', type: 'select', label: 'Desired qualification level', options: ['DIPLOMA', 'BACHELOR', 'POSTGRADUATE_DIPLOMA', 'MASTER', 'PHD'], required: true }] },
+      { id: 'desired-level', heading: 'Desired qualification level', fields: [{ key: 'q33_desired_level', type: 'select', label: 'Desired qualification level', options: ['CERTIFICATE', 'DIPLOMA', 'BACHELOR', 'POSTGRADUATE_DIPLOMA', 'MASTER', 'PHD'], required: true }] },
       { id: 'budget', heading: 'Tuition budget', fields: [{ key: 'q34_tuition_budget', type: 'number', label: 'Tuition budget per year (NZD)', required: false, helper: 'Approximate — helps rank affordable programmes.' }] },
       { id: 'location', heading: 'Preferred location', fields: [{ key: 'q43_city', type: 'select', label: 'Preferred location in New Zealand', options: opts('q43_city'), required: true }] },
       {

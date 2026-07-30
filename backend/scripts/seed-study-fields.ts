@@ -41,6 +41,13 @@ const FIELDS: Array<{ key: string; nameEn: string; nameFa: string; cat: string; 
   { key: 'law_government',           nameEn: 'Law, Politics & Government', nameFa: 'حقوق، سیاست و دولت', cat: 'other', w: 2 },
   { key: 'general_interdisciplinary', nameEn: 'General / Interdisciplinary', nameFa: 'عمومی / میان‌رشته‌ای', cat: 'other', w: 1 },
   { key: 'other',                    nameEn: 'Other', nameFa: 'سایر', cat: 'other', w: 0 },
+  // PR-PHASE34 — added for the NZ ITP import (subject areas with no prior fit).
+  // backgroundWeight 0: these map to q16 'Other' (no scored q16 option existed for
+  // them, so byte-identical scoring is preserved).
+  { key: 'personal_services',   nameEn: 'Personal Services (Beauty & Hair)', nameFa: 'خدمات فردی (زیبایی و آرایش)', cat: 'other', w: 0 },
+  { key: 'sport_recreation',    nameEn: 'Sport & Recreation', nameFa: 'ورزش و تفریحات', cat: 'health', w: 0 },
+  { key: 'social_community',    nameEn: 'Social & Community Services', nameFa: 'خدمات اجتماعی و اجتماع‌محور', cat: 'education', w: 0 },
+  { key: 'foundation_pathways', nameEn: 'Foundation & Pathways', nameFa: 'دوره‌های پایه و آماده‌سازی', cat: 'other', w: 0 },
 ];
 
 // Directed progression edges (source qual field → allowed target). Management &

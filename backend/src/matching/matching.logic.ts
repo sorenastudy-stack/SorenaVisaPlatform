@@ -18,12 +18,13 @@
 // whole engine is unit-testable without a database.
 
 export type QualLevel =
-  | 'DIPLOMA' | 'GRADUATE_CERTIFICATE' | 'GRADUATE_DIPLOMA' | 'BACHELOR'
+  | 'CERTIFICATE' | 'DIPLOMA' | 'GRADUATE_CERTIFICATE' | 'GRADUATE_DIPLOMA' | 'BACHELOR'
   | 'POSTGRADUATE_CERTIFICATE' | 'POSTGRADUATE_DIPLOMA' | 'MASTER' | 'PHD';
 
 // Progression ladder (low → high) for "meets the minimum level" checks.
+// PR-PHASE34 — CERTIFICATE is the lowest rung (NZ Certificates, NZQF 3–5).
 const LEVEL_ORDER: QualLevel[] = [
-  'DIPLOMA', 'GRADUATE_CERTIFICATE', 'GRADUATE_DIPLOMA', 'BACHELOR',
+  'CERTIFICATE', 'DIPLOMA', 'GRADUATE_CERTIFICATE', 'GRADUATE_DIPLOMA', 'BACHELOR',
   'POSTGRADUATE_CERTIFICATE', 'POSTGRADUATE_DIPLOMA', 'MASTER', 'PHD',
 ];
 

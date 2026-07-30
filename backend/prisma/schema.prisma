@@ -289,6 +289,7 @@ enum ProviderStatus {
 }
 
 enum QualificationLevel {
+  CERTIFICATE // PR-PHASE34 — NZ Certificate (NZQF 3–5); lowest rung of the ladder
   DIPLOMA
   GRADUATE_CERTIFICATE
   GRADUATE_DIPLOMA
@@ -297,6 +298,30 @@ enum QualificationLevel {
   POSTGRADUATE_DIPLOMA
   MASTER
   PHD
+}
+
+// PR-PHASE34 — NZ regulatory institution type (distinct from the looser
+// providerType). Authoritative for the staff approval UI + institution grouping.
+enum InstitutionType {
+  UNIVERSITY
+  ITP // Institutes of Technology and Polytechnics
+  PTE // Private Training Establishments
+}
+
+// PR-PHASE34 — data-verification state of an imported programme (distinct from
+// reviewStatus, which is the staff decision to OFFER it).
+enum VerificationStatus {
+  VERIFIED
+  UNVERIFIED
+  NEEDS_RECHECK
+}
+
+// PR-PHASE34 — intake basis, per the source Data Rules (projected 2027 dates must
+// be reconfirmed before application; published dates are firm).
+enum IntakeBasis {
+  REMAINING // remaining intakes in the current year
+  PUBLISHED // officially published future dates
+  PROJECTED // projected/estimated — needs reconfirmation
 }
 
 enum NZQFLevel {
@@ -2160,21 +2185,26 @@ model Commission {
 // ─── EDUCATION PROVIDERS ─────────────────────────────────────────────────────
 
 model EducationProvider {
-  id                   String          @id @default(cuid())
+  id                   String           @id @default(cuid())
   name                 String
   providerType         ProviderType
-  country              String          @default("NZ")
+  // PR-PHASE34 — NZ regulatory type (authoritative; providerType kept for now,
+  // flagged for later consolidation). legalEntityName = source "Provider Entity"
+  // (the legal body) vs `name` = the recognisable brand.
+  institutionType      InstitutionType?
+  legalEntityName      String?
+  country              String           @default("NZ")
   city                 String?
   websiteUrl           String?
-  status               ProviderStatus  @default(PENDING)
+  status               ProviderStatus   @default(PENDING)
   agreementUrl         String?
   agreementStartDate   DateTime?
   agreementEndDate     DateTime?
   agreementRenewalDate DateTime?
-  commissionY1Type     CommissionType  @default(PERCENTAGE)
-  commissionY1Value    Float           @default(0)
-  commissionY2Type     CommissionType  @default(PERCENTAGE)
-  commissionY2Value    Float           @default(0)
+  commissionY1Type     CommissionType   @default(PERCENTAGE)
+  commissionY1Value    Float            @default(0)
+  commissionY2Type     CommissionType   @default(PERCENTAGE)
+  commissionY2Value    Float            @default(0)
   volumeTarget         Float?
   bonusType            CommissionType?
   bonusValue           Float?
@@ -2188,8 +2218,8 @@ model EducationProvider {
   rankingTier          String?
   rankingScore         Float?
   rankingSource        String?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   faculties    EducationFaculty[]
   programmes   EducationProgramme[]
@@ -2214,27 +2244,43 @@ model EducationFaculty {
 }
 
 model EducationProgramme {
-  id             String             @id @default(cuid())
-  providerId     String
-  facultyId      String?
-  name           String
-  level          QualificationLevel
-  nzqfLevel      NZQFLevel
-  durationMonths Int?
-  tuitionFeeNZD  Float?
-  currency       String             @default("NZD")
-  intakeMonths   Int[]
-  aiPopulated    Boolean            @default(false)
-  aiLastRunAt    DateTime?
-  reviewStatus   ReviewStatus       @default(PENDING)
-  isActive       Boolean            @default(false)
+  id                    String              @id @default(cuid())
+  providerId            String
+  facultyId             String?
+  name                  String
+  level                 QualificationLevel
+  nzqfLevel             NZQFLevel
+  durationMonths        Int?
+  tuitionFeeNZD         Float?
+  currency              String              @default("NZD")
+  intakeMonths          Int[]
+  aiPopulated           Boolean             @default(false)
+  aiLastRunAt           DateTime?
+  reviewStatus          ReviewStatus        @default(PENDING)
+  isActive              Boolean             @default(false)
   // PR-PHASE32 — recommendation enrichment (AI-seeded → staff-approved).
-  descriptionEn  String?
-  descriptionFa  String?
-  careerOutcomes String[]
-  highlights     String[]
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  descriptionEn         String?
+  descriptionFa         String?
+  careerOutcomes        String[]
+  highlights            String[]
+  // PR-PHASE34 — imported source fields (NZ ITP/University/PTE programme data).
+  majorStrand           String?
+  qualificationType     String? // raw source label, e.g. "New Zealand Certificate", "Bachelor's Degree"
+  deliveryMode          String? // On-campus / Blended / Online
+  studentVisaSuitable   Boolean?
+  campusCity            String? // per-programme campus (may differ from provider.city)
+  durationText          String? // raw source, e.g. "1 year", "18 weeks"
+  feeBasis              String? // per year / whole programme / per credit
+  feeYear               Int? // the year the fee applies to (tracked separately from intake year)
+  fee2027Status         String? // confirmed / projected
+  scholarshipNote       String? // free-text (NOT the nationality-scoped ProviderScholarship)
+  programmeUrl          String? // official programme page — RAG monitoring source #1
+  verificationSourceUrl String? // secondary verification source — RAG monitoring source #2
+  verifiedAt            DateTime?
+  verificationStatus    VerificationStatus? // data-verification state (≠ reviewStatus)
+  notes                 String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   provider         EducationProvider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
   faculty          EducationFaculty?          @relation(fields: [facultyId], references: [id])
@@ -2244,6 +2290,7 @@ model EducationProgramme {
   admissionChoices AdmissionProgrammeChoice[]
   scholarships     ProviderScholarship[]
   studyFields      ProgrammeStudyField[]
+  intakes          ProgrammeIntake[]
 
   @@index([providerId])
   @@index([level])
@@ -2375,6 +2422,11 @@ model ProgrammeRequirement {
   interviewRequired      Boolean      @default(false)
   documentsRequired      String[]
   additionalNotes        String?
+  // PR-PHASE34 — raw source requirement text (kept verbatim; englishOverallMin is
+  // parsed from englishRequirementText where it's cleanly extractable).
+  englishRequirementText String?
+  academicPrerequisites  String?
+  otherRequirements      String?
   aiPopulated            Boolean      @default(false)
   reviewStatus           ReviewStatus @default(PENDING)
   createdAt              DateTime     @default(now())
@@ -2383,6 +2435,25 @@ model ProgrammeRequirement {
   programme EducationProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
 
   @@map("programme_requirements")
+}
+
+// PR-PHASE34 — one intake occurrence for a programme. Distinct rows for remaining
+// 2026, published 2027, and projected 2027 dates; `needsReconfirmation` is set for
+// PROJECTED intakes (source Data Rules require reconfirmation before application).
+model ProgrammeIntake {
+  id                  String      @id @default(cuid())
+  programmeId         String
+  year                Int
+  label               String // date or month text, e.g. "Feb 2027", "17 Feb 2026"
+  basis               IntakeBasis
+  needsReconfirmation Boolean     @default(false)
+  createdAt           DateTime    @default(now())
+
+  programme EducationProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  @@index([programmeId])
+  @@index([year, basis])
+  @@map("programme_intakes")
 }
 
 // ─── CRM EVENTS ──────────────────────────────────────────────────────────────
