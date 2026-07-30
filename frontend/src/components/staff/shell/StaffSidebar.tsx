@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
   Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall, CalendarDays, DollarSign, LayoutGrid,
-  Timer, AlertTriangle, GraduationCap,
+  Timer, AlertTriangle, GraduationCap, Globe2,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 import { portalBrand } from '@/lib/portal-branding';
@@ -62,6 +62,9 @@ const SLA_REPORT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 const SLA_SETTINGS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // PR-UNIVERSITIES — Owner-only institution catalog (commissions + scholarships).
 const UNIVERSITIES_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
+// PR-OWNER-1 — per-country institution distribution + AI agent config. OWNER edits;
+// SUPER_ADMIN may view (edit controls gate in-page; backend enforces OWNER on write).
+const COUNTRY_CONFIG_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // Piece #3: accountant confirm-payments queue — FINANCE (the accountant) +
 // OWNER only. Additive; no existing role's access changes.
 const PAYMENTS_CONFIRM_ROLES = ['OWNER', 'FINANCE'] as const;
@@ -123,6 +126,8 @@ const NAV: NavItem[] = [
   // earns from providers). OWNER + FINANCE.
   { label: 'Commissions',                  href: '/staff/commissions',        icon: <DollarSign size={18} />,  roleGate: COMMISSIONS_ROLES },
   { label: 'Universities',                 href: '/staff/universities',       icon: <GraduationCap size={18} />, roleGate: UNIVERSITIES_ROLES },
+  // PR-OWNER-1: per-country institution distribution + AI agent config.
+  { label: 'Country Config',               href: '/staff/country-config',     icon: <Globe2 size={18} />,      roleGate: COUNTRY_CONFIG_ROLES },
   // PR-DOCUSIGN-1 step 3 (Screen B): LIA credential verification queue.
   // Inline label string — no next-intl yet, matching the rest of this
   // surface's English-only labels (the .nav.* keys above are the

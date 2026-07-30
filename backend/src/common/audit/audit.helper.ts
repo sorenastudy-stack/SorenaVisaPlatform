@@ -509,6 +509,29 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
         : 'Visa step saved';
     case 'CONTRACT_SENT':
       return 'Contract sent to client';
+    case 'COUNTRY_EXECUTION_CONFIG_UPDATED': {
+      // PR-OWNER-1: newValue { countryCode, changedFields }.
+      const code = pickString(newV, 'countryCode');
+      const fields = (typeof newV === 'object' && newV !== null && Array.isArray((newV as { changedFields?: unknown }).changedFields))
+        ? ((newV as { changedFields: string[] }).changedFields).join(', ')
+        : null;
+      if (code && fields) return `Execution config updated for ${code} (${fields})`;
+      if (code)           return `Execution config updated for ${code}`;
+      return 'Country execution config updated';
+    }
+    case 'COUNTRY_AI_CONFIG_UPDATED': {
+      // PR-OWNER-1: newValue { countryCode, changedFields }.
+      const code = pickString(newV, 'countryCode');
+      return code ? `AI config updated for ${code}` : 'Country AI config updated';
+    }
+    case 'AI_AGENT_CONFIG_UPDATED': {
+      // PR-OWNER-1: newValue { countryCode, agentType, changedFields }.
+      const code = pickString(newV, 'countryCode');
+      const agent = pickString(newV, 'agentType');
+      if (code && agent) return `AI agent ${agent} updated for ${code}`;
+      if (agent)         return `AI agent ${agent} config updated`;
+      return 'AI agent config updated';
+    }
     default:
       return humaniseEventType(event);
   }

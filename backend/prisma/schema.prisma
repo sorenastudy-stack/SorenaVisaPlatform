@@ -4642,3 +4642,169 @@ model Document {
   @@index([status])
   @@map("documents")
 }
+
+// ─── DOMAIN 16 — COUNTRY INTELLIGENCE & MONETISATION CONFIG (partial) ──────────
+// PR-OWNER-1 (slice a) — Owner-editable, PER-COUNTRY config that this phase
+// scopes down to exactly two of RPD_16's nine sections:
+//   • CountryExecutionConfig — the slot/ratio fields (§ Execution mode).
+//   • CountryAIConfig + AIAgentConfig — the per-agent settings (§ AI config).
+// The full 9-section CountryConfig validation gate (pricing, legal, visa, scoring,
+// activation) is OUT OF SCOPE. There is intentionally NO Country model — country
+// is keyed by ISO 3166-1 alpha-2 `countryCode` string, matching every existing
+// convention (User.countryOfResidence, EducationProvider.country, …).
+//
+// Actor attribution follows the SlaConfig convention: `updatedById` is a bare
+// column (NOT a Prisma relation) so this whole block is purely additive — it adds
+// only new tables + enums and never ALTERs `users`. Who-did-what is captured in
+// the audit_logs row (actorNameSnapshot / actorRoleSnapshot) on every mutation.
+
+// Per-country execution config. 1:1 with a country (unique countryCode).
+model CountryExecutionConfig {
+  id          String @id @default(cuid())
+  countryCode String @unique // ISO 3166-1 alpha-2 (e.g. "NZ")
+
+  // Total priority slots offered to a student over the whole journey (PRD_4 §8).
+  slotCount Int @default(5)
+
+  // Per slot-position rules. JSON array (not a child table — per the approved
+  // sketch §4a): [{ position:Int, allowedTypes:InstitutionType[], mandatory:Bool }].
+  // e.g. NZ default: slot 4 = [ITP] mandatory, slot 5 = [PTE] mandatory.
+  slotRules Json
+
+  // Default recommendation sort weighting by institution type. JSON object keyed
+  // by InstitutionType, higher = ranked earlier. Replaces the (never-implemented)
+  // hardcoded "College > Polytechnic > University" default. NZ default encodes
+  // PTE > ITP > UNIVERSITY (College > Polytechnic > University in InstitutionType
+  // vocabulary — see the seed for the mapping, which is editable via this table).
+  institutionTypeWeighting Json
+
+  // Bare actor column — NOT a User relation (SlaConfig convention). Nullable so a
+  // seed/migration row can exist before any human edit.
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("country_execution_configs")
+}
+
+// AI guidance strictness (PRD_13 §7 — NZ vs non-NZ posture).
+enum AIGuidanceLevel {
+  STRICT
+  MODERATE
+  LOW
+}
+
+// The 9 AI agents (PRD_13). Names checked against the existing referral-agency
+// models (AgentProfile / AffiliateAgent) — no collision; these are AI agents.
+enum AIAgentType {
+  USER_GUIDANCE
+  COUNTRY_COMPARE
+  QUALIFICATION_SUPPORT
+  RECOMMENDATION_EXPLAIN
+  CASE_ASSISTANT
+  SOP_GENERATION
+  CV_GENERATION
+  AI_COMPANION
+  AUTOMATION_TRIGGER
+}
+
+// Prompt governance lifecycle (PRD_13 §8). This phase ships the MODEL as a stub
+// (versioned storage) — the Draft→Review→Approve→Deploy review-workflow UI is
+// deferred; if a review/approval step is wanted later it reuses the existing
+// OwnerApprovalRequest pattern (SUPER_ADMIN proposes → OWNER approves), NOT a new
+// role. No "Compliance Admin" role exists in this system.
+enum PromptVersionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  DEPLOYED
+  RETIRED
+}
+
+enum PromptType {
+  SYSTEM
+  COUNTRY
+  DOMAIN
+  TASK
+  ESCALATION
+}
+
+// Per-country AI config (1:1 with a country). Parent of the per-agent rows.
+model CountryAIConfig {
+  id          String @id @default(cuid())
+  countryCode String @unique // ISO 3166-1 alpha-2
+
+  guidanceLevel      AIGuidanceLevel @default(MODERATE)
+  sopGateEnforcement Boolean         @default(true) // are the 3 SOP quality gates enforced
+
+  // Country-level active prompt (an agent row may override with its own).
+  activePromptVersionId String?
+  activePromptVersion   PromptVersion? @relation("CountryAIActivePrompt", fields: [activePromptVersionId], references: [id])
+
+  agents AIAgentConfig[]
+
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("country_ai_configs")
+}
+
+// Per-agent settings within a country's AI config. One row per (country, agent).
+model AIAgentConfig {
+  id                String @id @default(cuid())
+  countryAIConfigId String
+
+  agentType AIAgentType
+  enabled   Boolean     @default(true)
+
+  // How many options this agent surfaces to a student in one interaction. Only
+  // meaningful for surfacing agents (e.g. RECOMMENDATION_EXPLAIN); null = n/a.
+  // NOTE: distinct from CountryExecutionConfig.slotCount (the committed 1..N
+  // priority list) — see the handover for the slotCount-vs-maxOptionsShown note.
+  maxOptionsShown Int?
+
+  // Agent-specific prompt override (falls back to the country active prompt).
+  promptVersionId String?
+  promptVersion   PromptVersion? @relation("AIAgentPrompt", fields: [promptVersionId], references: [id])
+
+  // Catch-all for agent-specific knobs not worth a dedicated column yet.
+  settingsJson Json?
+
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  countryAIConfig CountryAIConfig @relation(fields: [countryAIConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([countryAIConfigId, agentType])
+  @@index([countryAIConfigId])
+  @@map("ai_agent_configs")
+}
+
+// Versioned prompt (governance stub this phase — see PromptVersionStatus note).
+// createdById/reviewedById/approvedById are bare columns (no User relation),
+// consistent with the rest of this block.
+model PromptVersion {
+  id         String              @id @default(cuid())
+  promptType PromptType
+  label      String
+  content    String              @db.Text
+  version    Int                 @default(1)
+  status     PromptVersionStatus @default(DRAFT)
+
+  createdById  String?
+  reviewedById String?
+  approvedById String?
+  deployedAt   DateTime?
+  retiredAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Back-relations (both sides are new tables — no existing model touched).
+  activeForCountries CountryAIConfig[] @relation("CountryAIActivePrompt")
+  agentConfigs       AIAgentConfig[]   @relation("AIAgentPrompt")
+
+  @@index([promptType, status])
+  @@map("prompt_versions")
+}
