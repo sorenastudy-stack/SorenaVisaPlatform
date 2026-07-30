@@ -113,6 +113,7 @@ export class MatchingService {
         careerOutcomes: p.careerOutcomes,
         highlights: p.highlights,
         rankingTier: p.provider.rankingTier,
+        institutionType: p.provider.institutionType, // PR-RECS-1 — snapshot for the persisted list + slot rules
         scholarships: scholarshipsFor(p).map((s) => ({ name: s.name })),
         fitScore: r.fitScore,
         whyThisFits: r.why, // deterministic dimensions → Recommendation Explanation Agent renders prose

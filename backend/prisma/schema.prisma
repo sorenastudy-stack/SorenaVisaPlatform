@@ -1532,6 +1532,10 @@ model Case {
   // ACCOUNT_OPENING webhook branch consults before firing the LIA
   // auto-assign — it's the durable record of the trigger event.
   payments              Payment[]
+  // PR-RECS-1 — generated programme recommendation lists for this case (1:many;
+  // regeneration supersedes the prior list). Virtual back-relation — the FK lives
+  // on recommendation_lists.caseId, so this adds no column to `cases`.
+  recommendationLists   RecommendationList[]
 
   @@index([leadId])
   @@index([stage])
@@ -2282,15 +2286,18 @@ model EducationProgramme {
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
-  provider         EducationProvider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  faculty          EducationFaculty?          @relation(fields: [facultyId], references: [id])
-  requirements     ProgrammeRequirement?
-  applications     Application[]
-  commissions      Commission[]
-  admissionChoices AdmissionProgrammeChoice[]
-  scholarships     ProviderScholarship[]
-  studyFields      ProgrammeStudyField[]
-  intakes          ProgrammeIntake[]
+  provider            EducationProvider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  faculty             EducationFaculty?          @relation(fields: [facultyId], references: [id])
+  requirements        ProgrammeRequirement?
+  applications        Application[]
+  commissions         Commission[]
+  admissionChoices    AdmissionProgrammeChoice[]
+  scholarships        ProviderScholarship[]
+  studyFields         ProgrammeStudyField[]
+  intakes             ProgrammeIntake[]
+  // PR-RECS-1 — persisted recommendation-list snapshots referencing this
+  // programme. Virtual back-relation (FK on recommendation_items.programmeId).
+  recommendationItems RecommendationItem[]
 
   @@index([providerId])
   @@index([level])
@@ -4807,4 +4814,65 @@ model PromptVersion {
 
   @@index([promptType, status])
   @@map("prompt_versions")
+}
+
+// ─── RECOMMENDATION LISTS (PR-RECS-1, slice 1) ────────────────────────────────
+// A persisted, client-viewable ranked recommendation list per Case (PRD_4 §8 +
+// Recommendation_Domain §8). Generated from a resolved MatchCriteria (via the
+// resolveMatchCriteria seam — Impl A reverse-maps the live /scorecard submission
+// today; Impl B swaps in the full-fidelity v2 /assessment later without touching
+// this schema). 1:many per case — regeneration writes a NEW list and marks the
+// prior one SUPERSEDED. Hung off Case so the Admission Specialist (Case.ownerId)
+// sees it via the existing case-access pattern. Slot selection (slice 2) will
+// reference a CONFIRMED list. Purely additive: new tables only.
+
+enum RecommendationListStatus {
+  GENERATED // freshly produced, not yet reviewed
+  VIEWED // client opened it
+  CONFIRMED // slice 2 — priority slots locked (reserved)
+  SUPERSEDED // a newer regeneration replaced it
+}
+
+enum RecommendationCriteriaSource {
+  SCORECARD // Impl A — reverse-mapped from the live /scorecard submission
+  ASSESSMENT // Impl B — full-fidelity v2 /assessment (future drop-in)
+}
+
+model RecommendationList {
+  id             String                       @id @default(cuid())
+  caseId         String
+  status         RecommendationListStatus     @default(GENERATED)
+  criteriaSource RecommendationCriteriaSource
+  // Snapshot of the resolved MatchCriteria used to generate this list — for
+  // reproducibility/audit + a "based on X" summary. No PII (StudyField ids,
+  // levels, bands; nationality is an ISO code).
+  criteriaJson   Json
+  generatedAt    DateTime                     @default(now())
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  case  Case                 @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  items RecommendationItem[]
+
+  @@index([caseId])
+  @@index([caseId, status])
+  @@map("recommendation_lists")
+}
+
+model RecommendationItem {
+  id                   String           @id @default(cuid())
+  recommendationListId String
+  programmeId          String
+  rank                 Int // 1-based ranked position at generation
+  fitScore             Float // FROZEN snapshot — depends on Owner-editable config
+  institutionType      InstitutionType? // snapshot — drives slice-2 slot rules + display
+  whyJson              Json? // whyThisFits dimensions snapshot
+  createdAt            DateTime         @default(now())
+
+  recommendationList RecommendationList @relation(fields: [recommendationListId], references: [id], onDelete: Cascade)
+  programme          EducationProgramme @relation(fields: [programmeId], references: [id])
+
+  @@unique([recommendationListId, programmeId])
+  @@index([recommendationListId])
+  @@map("recommendation_items")
 }
