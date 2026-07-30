@@ -39,6 +39,15 @@ export class ScorecardPublicController {
   //   • { mode:'created' }  → new LEAD; a "create your password" link was
   //                           emailed. NO session (client sets a password first).
   //   • { mode:'existing' } → a magic-link was emailed; no session.
+  // PR-PHASE33 — score-only preview for the redesigned assessment (no lead
+  // created, nothing persisted). Byte-identical to the real engine; feeds the
+  // v2 result screen. Behind the new /assessment route only (not live).
+  @Post('public/score-preview')
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
+  previewScore(@Body() dto: SubmitScorecardDto) {
+    return this.scorecard.previewScore(dto.answers);
+  }
+
   @Post('public/submit')
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   async publicSubmit(@Body() dto: SubmitScorecardDto, @Req() req: any) {

@@ -814,6 +814,29 @@ export class ScorecardService {
     };
   }
 
+  // PR-PHASE33 — score-only preview for the redesigned (v2) assessment. Runs the
+  // SAME engine (byte-identical), but creates NO lead and persists nothing —
+  // used by the v2 result screen to show eligibility + band alongside the
+  // matching recommendations at the end of Step 1. Answers arrive already
+  // completed by the frontend (buildScoringAnswers → fillHiddenAnswers).
+  previewScore(answers: Record<string, string>): ScorecardResultPayload {
+    const result = score(answers);
+    const routing = determineRouting(
+      result.band.enumValue as ScorecardBand,
+      result.hardStops,
+      result.execution.eligible,
+    );
+    return this.toPayload({
+      submissionId: 'preview',
+      result,
+      routing,
+      submittedAt: new Date(),
+      leadId: null,
+      consultationBookedAt: null,
+      includeAnswers: false,
+    });
+  }
+
   private toPayload(args: {
     submissionId: string;
     result: ScoreResult;
