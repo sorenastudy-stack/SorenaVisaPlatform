@@ -120,11 +120,39 @@ summariser cases.
 - **Reads open to SUPER_ADMIN** (writes OWNER-only). If you want the config
   fully Owner-exclusive (SUPER_ADMIN can't even view), flip the `GET` roles.
 
-## 8. Next — slice (b) (NOT started; needs sign-off first)
+## 8. Slice (b) — matcher wiring (DONE)
 
-Wire `matching.logic.ts` to read `CountryExecutionConfig` and add an
-**institution-type-weighted term** to the fit score, plus a **separate** 5-slot
-priority-list assignment function (PRD_4 treats list-generation and slot-selection
-as two steps). Before writing it I'll report which tests/callers depend on the
-current matcher output shape and confirm the weighting approach (new independent
-weighted component vs. multiplier) against how the existing five weights combine.
+Signed off: **new 6th weighted component** (not a multiplier) + **freeze-then-change**.
+
+**Step 1 (commit `b17859e`)** — golden fit-score battery
+(`matching.golden.spec.ts`) freezing the exact current 5-factor `softScore` values
++ `rankRecommendations` order, mirroring `scoring.spec.ts`. Committed before any
+formula change so the change is a provable diff.
+
+**Step 2 (this commit)** — the change, in `matching.logic.ts` + `matching.service.ts`:
+- **6th component.** When a per-country `institutionTypeWeighting` is supplied,
+  `softScore` adds institution type as an **independent, additive** component. The
+  prior five weights are scaled by `(1 - 0.15)` so all six sum to 1.00; institution
+  contributes `W_INST = 0.15`. **Not a multiplier** — a low-weighted type nudges
+  rank but can never suppress a strong match on the other five (the failure mode we
+  explicitly avoided for a visa/education-outcome engine).
+- **Institution factor** = the type's configured weight normalised so the
+  top-weighted type = 1.0 (NZ: PTE 1.0, ITP 0.875, UNIVERSITY 0.625). **Un-typed /
+  unknown → neutral 0.5** (never penalised to zero).
+- **Legacy path untouched.** No weighting supplied → the original 5-weight formula
+  runs byte-identical. The step-1 golden battery still passes unchanged, proving it.
+- **`assignPrioritySlots`** — a **separate** pure function (PRD_4's 2nd step): given
+  an already-ranked list + `slotRules`, greedily fills each position by allowed
+  types (+ `preferred`), one programme per slot, flagging `unmetMandatory`. Ranking
+  and slot-filling are **not** conflated.
+- **Service wiring.** `matching.service.recommend()` loads the NZ
+  `CountryExecutionConfig` weighting and maps `provider.institutionType` onto each
+  programme. No config row → weighting undefined → legacy path. (All programmes are
+  NZ today; multi-destination keys off `provider.country` later.)
+
+**Verified:** matching + scoring gate **69/69** (legacy golden byte-identical +
+9 new config-present/slot fixtures with exact frozen values). Build clean.
+
+**Deliberately NOT wired this phase:** `assignPrioritySlots` has no endpoint yet —
+the applicant-facing slot-selection flow is separate (out-of-scope) work; the
+function + its behavior are unit-frozen and ready for that consumer.

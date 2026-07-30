@@ -52,12 +52,20 @@ export interface MatchCriteria {
   workWhileStudying?: boolean;          // Q36
 }
 
+// PR-OWNER-1 (slice b) — NZ regulatory institution type (Phase 34). Drives the
+// optional 6th soft-score component; null/absent → neutral (never a hard filter).
+export type InstitutionType = 'UNIVERSITY' | 'ITP' | 'PTE';
+// A per-country institution-type weighting from CountryExecutionConfig, e.g.
+// { PTE: 0.4, ITP: 0.35, UNIVERSITY: 0.25 }. Higher = ranked earlier.
+export type InstitutionWeighting = Record<string, number>;
+
 export interface ProgrammeForMatch {
   id: string;
   approved: boolean;         // programme.reviewStatus === 'APPROVED' && isActive
   providerApproved: boolean; // provider.status === 'APPROVED'
   studyFieldIds: string[];
   level: QualLevel;
+  institutionType?: InstitutionType | null; // provider.institutionType (Phase 34)
   tuitionFeeNZD?: number | null;
   intakeMonths: number[];
   city?: string | null;
@@ -123,26 +131,64 @@ export function passesHardFilter(
 }
 
 // ── Soft score — weighted preference alignment, 0..1 ─────────────────────────
+// Legacy 5-factor weights (sum to 1.00). Used verbatim when NO per-country
+// institution weighting is supplied → byte-identical to pre-slice-(b) behavior
+// (frozen in matching.golden.spec.ts).
 const WEIGHTS = { field: 0.35, location: 0.15, scholarship: 0.15, ranking: 0.20, budget: 0.15 };
 
-export function softScore(p: ProgrammeForMatch, c: MatchCriteria): number {
+// PR-OWNER-1 (slice b) — when a CountryExecutionConfig weighting IS supplied, the
+// engine adds institution type as a 6th INDEPENDENT component. The prior five are
+// scaled by (1 - W_INST) so all six still sum to 1.00 (relative importance of the
+// five is preserved); institution contributes W_INST. This is an additive
+// component, NOT a multiplier — a low-weighted institution type nudges rank but
+// can never suppress an otherwise-strong match on the other five factors.
+const W_INST = 0.15;
+const WEIGHTS6 = {
+  field: WEIGHTS.field * (1 - W_INST),
+  location: WEIGHTS.location * (1 - W_INST),
+  scholarship: WEIGHTS.scholarship * (1 - W_INST),
+  ranking: WEIGHTS.ranking * (1 - W_INST),
+  budget: WEIGHTS.budget * (1 - W_INST),
+  institution: W_INST,
+};
+// Programmes with no institution type score NEUTRAL — never penalised to zero.
+const NEUTRAL_INSTITUTION_FACTOR = 0.5;
+
+// Institution factor ∈ [0,1]: the type's configured weight normalised so the
+// TOP-weighted type maps to 1.0. Un-typed / unknown-in-map → neutral.
+export function institutionFactor(type: InstitutionType | null | undefined, weighting: InstitutionWeighting): number {
+  if (!type) return NEUTRAL_INSTITUTION_FACTOR;
+  const v = weighting[type];
+  if (v == null) return NEUTRAL_INSTITUTION_FACTOR;
+  const values = Object.values(weighting).filter((x) => typeof x === 'number');
+  const max = values.length ? Math.max(...values) : 0;
+  return max > 0 ? Math.max(0, Math.min(1, v / max)) : NEUTRAL_INSTITUTION_FACTOR;
+}
+
+export function softScore(p: ProgrammeForMatch, c: MatchCriteria, weighting?: InstitutionWeighting | null): number {
+  const useInst = weighting != null && Object.keys(weighting).length > 0;
+  const W = useInst ? WEIGHTS6 : WEIGHTS;
   let s = 0;
   // Field: exact match to a stated preference scores full; otherwise (allowed but
   // not explicitly preferred) scores partial.
   const preferredHit = c.preferredFieldIds.length > 0 && p.studyFieldIds.some((f) => c.preferredFieldIds.includes(f));
-  s += WEIGHTS.field * (preferredHit ? 1 : 0.5);
+  s += W.field * (preferredHit ? 1 : 0.5);
   // Location
   const locAny = !c.locationPref || c.locationPref.length === 0 || c.locationPref.includes('flexible');
-  s += WEIGHTS.location * (locAny ? 0.6 : c.locationPref!.includes(p.city ?? '') ? 1 : 0);
+  s += W.location * (locAny ? 0.6 : c.locationPref!.includes(p.city ?? '') ? 1 : 0);
   // Scholarship available for nationality
-  s += WEIGHTS.scholarship * ((p.scholarshipsForNationality?.length ?? 0) > 0 ? 1 : 0);
+  s += W.scholarship * ((p.scholarshipsForNationality?.length ?? 0) > 0 ? 1 : 0);
   // Ranking (staff-entered, 0..100)
-  s += WEIGHTS.ranking * (p.rankingScore != null ? Math.max(0, Math.min(1, p.rankingScore / 100)) : 0.4);
+  s += W.ranking * (p.rankingScore != null ? Math.max(0, Math.min(1, p.rankingScore / 100)) : 0.4);
   // Budget headroom (further under budget = better; unknown = neutral)
   if (c.tuitionBudgetNZD != null && p.tuitionFeeNZD != null && c.tuitionBudgetNZD > 0) {
-    s += WEIGHTS.budget * Math.max(0, Math.min(1, 1 - p.tuitionFeeNZD / c.tuitionBudgetNZD));
+    s += W.budget * Math.max(0, Math.min(1, 1 - p.tuitionFeeNZD / c.tuitionBudgetNZD));
   } else {
-    s += WEIGHTS.budget * 0.5;
+    s += W.budget * 0.5;
+  }
+  // 6th component — institution-type weighting (only when a country config supplied).
+  if (useInst) {
+    s += WEIGHTS6.institution * institutionFactor(p.institutionType, weighting!);
   }
   return Math.round(s * 1000) / 1000;
 }
@@ -151,12 +197,17 @@ export function softScore(p: ProgrammeForMatch, c: MatchCriteria): number {
 export type WhyVerdict = 'match' | 'meets' | 'within' | 'aligns' | 'partial';
 export interface WhyDimension { dim: string; verdict: WhyVerdict; detail: string }
 
-export function whyThisFits(p: ProgrammeForMatch, c: MatchCriteria, allowed: Set<string>): WhyDimension[] {
+export function whyThisFits(p: ProgrammeForMatch, c: MatchCriteria, allowed: Set<string>, weighting?: InstitutionWeighting | null): WhyDimension[] {
   const w: WhyDimension[] = [];
   const preferredHit = c.preferredFieldIds.length > 0 && p.studyFieldIds.some((f) => c.preferredFieldIds.includes(f));
   w.push(preferredHit
     ? { dim: 'field', verdict: 'match', detail: 'Matches your preferred field of study.' }
     : { dim: 'field', verdict: 'aligns', detail: 'A field open to your background (related to your prior study, or Business & Management).' });
+  // PR-OWNER-1 (slice b) — surface the institution-type dimension only when a
+  // per-country weighting is active and the programme has a known type.
+  if (weighting != null && Object.keys(weighting).length > 0 && p.institutionType) {
+    w.push({ dim: 'institution', verdict: 'aligns', detail: `Institution type (${p.institutionType}) matches the preferred mix for this country.` });
+  }
   if (p.req?.minQualificationLevel) {
     w.push({ dim: 'level', verdict: 'meets', detail: `Your qualification meets the entry level (${p.req.minQualificationLevel}).` });
   }
@@ -184,10 +235,56 @@ export function rankRecommendations(
   c: MatchCriteria,
   fields: FieldNode[],
   relations: RelationEdge[],
+  weighting?: InstitutionWeighting | null, // PR-OWNER-1: per-country institution weighting (optional)
 ): Recommendation[] {
   const allowed = allowedFieldIds(c.qualificationFieldId, fields, relations);
   return programmes
     .filter((p) => passesHardFilter(p, c, allowed))
-    .map((p) => ({ programmeId: p.id, fitScore: softScore(p, c), why: whyThisFits(p, c, allowed) }))
+    .map((p) => ({ programmeId: p.id, fitScore: softScore(p, c, weighting), why: whyThisFits(p, c, allowed, weighting) }))
     .sort((a, b) => b.fitScore - a.fitScore);
+}
+
+// ── Priority-slot assignment (PRD_4 §8 — a DISTINCT step from ranking) ────────
+// PR-OWNER-1 (slice b). PRD_4 treats "generate the ranked list" and "fill the N
+// confirmed priority slots" as two separate steps. This function is that second
+// step: given an ALREADY-ranked list + the country's slotRules, it greedily fills
+// each position with the highest-ranked still-unused programme whose institution
+// type is allowed for that position (preferring `preferred` when set). One
+// programme fills at most one slot. It never re-ranks — ranking already happened.
+export interface SlotRule {
+  position: number;
+  allowedTypes: InstitutionType[];
+  mandatory?: boolean;
+  preferred?: InstitutionType;
+}
+export interface AssignedSlot {
+  position: number;
+  programmeId: string | null;
+  mandatory: boolean;
+  allowedTypes: InstitutionType[];
+  unmetMandatory: boolean; // mandatory position with no eligible programme to fill it
+}
+
+export function assignPrioritySlots(
+  ranked: Array<{ programmeId: string; institutionType?: InstitutionType | null }>,
+  slotRules: SlotRule[],
+  slotCount: number,
+): AssignedSlot[] {
+  const used = new Set<string>();
+  const rules = [...slotRules].sort((a, b) => a.position - b.position).slice(0, slotCount);
+  return rules.map((rule) => {
+    const allowed = new Set(rule.allowedTypes);
+    const eligible = ranked.filter((r) => !used.has(r.programmeId) && r.institutionType && allowed.has(r.institutionType));
+    // Prefer the `preferred` type first (highest-ranked of that type), else the
+    // highest-ranked eligible programme overall.
+    const pick = (rule.preferred ? eligible.find((r) => r.institutionType === rule.preferred) : undefined) ?? eligible[0];
+    if (pick) used.add(pick.programmeId);
+    return {
+      position: rule.position,
+      programmeId: pick?.programmeId ?? null,
+      mandatory: !!rule.mandatory,
+      allowedTypes: rule.allowedTypes,
+      unmetMandatory: !!rule.mandatory && !pick,
+    };
+  });
 }

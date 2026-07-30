@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   rankRecommendations, allowedFieldIds,
   type MatchCriteria, type ProgrammeForMatch, type FieldNode, type RelationEdge, type QualLevel,
+  type InstitutionType, type InstitutionWeighting,
 } from './matching.logic';
 
 // PR-PHASE32 — Matching Engine service: hydrates the pure ranking core from the
@@ -54,6 +55,13 @@ export class MatchingService {
       include: { requirements: true, studyFields: { select: { studyFieldId: true } }, provider: true },
     });
 
+    // PR-OWNER-1 (slice b) — the destination-country institution-type weighting
+    // (Owner-editable). All programmes are NZ today; when multiple destinations
+    // exist this would key off the programme's provider.country. No config row →
+    // weighting undefined and the matcher runs the legacy 5-factor path unchanged.
+    const execConfig = await this.prisma.countryExecutionConfig.findUnique({ where: { countryCode: 'NZ' } });
+    const weighting = (execConfig?.institutionTypeWeighting as unknown as InstitutionWeighting | null) ?? undefined;
+
     const scholarships = criteria.nationality
       ? await this.prisma.providerScholarship.findMany({ where: { isActive: true, nationality: criteria.nationality } })
       : [];
@@ -70,6 +78,7 @@ export class MatchingService {
       providerApproved: true,
       studyFieldIds: p.studyFields.map((sf) => sf.studyFieldId),
       level: p.level as QualLevel,
+      institutionType: (p.provider.institutionType as InstitutionType | null) ?? null,
       tuitionFeeNZD: p.tuitionFeeNZD,
       intakeMonths: p.intakeMonths,
       city: p.provider.city,
@@ -84,7 +93,7 @@ export class MatchingService {
       rankingScore: p.provider.rankingScore,
     }));
 
-    const recs = rankRecommendations(forMatch, criteria, fieldNodes, relEdges);
+    const recs = rankRecommendations(forMatch, criteria, fieldNodes, relEdges, weighting);
     const byId = new Map(programmes.map((p) => [p.id, p]));
 
     return recs.map((r) => {

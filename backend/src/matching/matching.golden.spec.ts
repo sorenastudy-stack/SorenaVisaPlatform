@@ -11,8 +11,8 @@
 // only engages when a CountryExecutionConfig weighting is supplied. New fixtures
 // with institution types + weighting are added alongside (not replacing) these.
 import {
-  softScore, rankRecommendations,
-  type MatchCriteria, type ProgrammeForMatch, type FieldNode, type RelationEdge,
+  softScore, rankRecommendations, institutionFactor, assignPrioritySlots,
+  type MatchCriteria, type ProgrammeForMatch, type FieldNode, type RelationEdge, type SlotRule,
 } from './matching.logic';
 
 const FIELDS: FieldNode[] = [
@@ -65,6 +65,86 @@ describe('GOLDEN — rankRecommendations order + fitScores (legacy)', () => {
       ['it-noloc-pref', 0.597],
       ['it-plain', 0.558],
       ['mgmt-ok', 0.547],
+    ]);
+  });
+});
+
+// ── PR-OWNER-1 (slice b) — the NEW 6th (institution) component ────────────────
+// When a per-country institutionTypeWeighting is supplied, institution type is a
+// 6th independent, additive component; the other five are scaled by (1 - 0.15).
+const W = { PTE: 0.4, ITP: 0.35, UNIVERSITY: 0.25 }; // NZ seed weighting
+
+describe('GOLDEN — institutionFactor (weight normalised so top type = 1.0)', () => {
+  it('maps each type to its normalised factor; un-typed/unknown → neutral 0.5', () => {
+    expect(institutionFactor('PTE', W)).toBe(1);          // top weight → 1.0
+    expect(institutionFactor('ITP', W)).toBeCloseTo(0.875, 5);
+    expect(institutionFactor('UNIVERSITY', W)).toBe(0.625);
+    expect(institutionFactor(null, W)).toBe(0.5);         // un-typed → neutral
+    expect(institutionFactor('ITP', {})).toBe(0.5);       // empty weighting → neutral
+  });
+});
+
+describe('GOLDEN — softScore with institution weighting (6-factor)', () => {
+  // Same base programme (ranking 60, tuition 30k, preferred field 'it'); ONLY the
+  // institution type varies, isolating the 6th component. Criteria has no
+  // scholarship/location so those factors are constant.
+  const CFG_C: MatchCriteria = { qualificationFieldId: 'eng', preferredFieldIds: ['it'], desiredLevels: [], currentHighestLevel: 'BACHELOR', tuitionBudgetNZD: 40000, ieltsEquivalent: 7.0 };
+  const base = (t: 'UNIVERSITY' | 'ITP' | 'PTE' | null) => prog({ id: `x-${t}`, institutionType: t, rankingScore: 60 });
+  it('freezes exact 6-factor scores by institution type', () => {
+    expect(softScore(base('UNIVERSITY'), CFG_C, W)).toBe(0.602);
+    expect(softScore(base('ITP'), CFG_C, W)).toBe(0.639);
+    expect(softScore(base('PTE'), CFG_C, W)).toBe(0.658);
+    expect(softScore(base(null), CFG_C, W)).toBe(0.583); // un-typed → neutral institution factor
+  });
+  it('with the SAME inputs but NO weighting, stays on the legacy path (0.597)', () => {
+    expect(softScore(base('PTE'), CFG_C)).toBe(0.597);
+    expect(softScore(base(null), CFG_C)).toBe(0.597);
+  });
+  it('reorders so a strongly-weighted type can outrank a higher-ranked weaker type', () => {
+    const FIELDS2: FieldNode[] = [{ id: 'it', categoryAlwaysSelectable: false }, { id: 'eng', categoryAlwaysSelectable: false }];
+    const RELS2: RelationEdge[] = [{ sourceFieldId: 'eng', targetFieldId: 'it', approved: true }];
+    const progs = [
+      prog({ id: 'uni-a', institutionType: 'UNIVERSITY', rankingScore: 90 }),
+      prog({ id: 'itp-a', institutionType: 'ITP', rankingScore: 65 }),
+      prog({ id: 'pte-a', institutionType: 'PTE', rankingScore: 60 }),
+    ];
+    const recs = rankRecommendations(progs, CFG_C, FIELDS2, RELS2, W);
+    expect(recs.map((r) => [r.programmeId, r.fitScore])).toEqual([
+      ['pte-a', 0.658], // PTE weighting lifts it above the higher-ranked University
+      ['uni-a', 0.653],
+      ['itp-a', 0.648],
+    ]);
+  });
+});
+
+describe('GOLDEN — assignPrioritySlots (distinct 2nd step, NZ slotRules)', () => {
+  const SLOT_RULES: SlotRule[] = [
+    { position: 1, allowedTypes: ['UNIVERSITY'], mandatory: false },
+    { position: 2, allowedTypes: ['UNIVERSITY'], mandatory: false },
+    { position: 3, allowedTypes: ['UNIVERSITY', 'ITP', 'PTE'], mandatory: false, preferred: 'PTE' },
+    { position: 4, allowedTypes: ['ITP'], mandatory: true },
+    { position: 5, allowedTypes: ['PTE'], mandatory: true },
+  ];
+  const ranked = [
+    { programmeId: 'uni-a', institutionType: 'UNIVERSITY' as const },
+    { programmeId: 'uni-b', institutionType: 'UNIVERSITY' as const },
+    { programmeId: 'itp-a', institutionType: 'ITP' as const },
+    { programmeId: 'pte-a', institutionType: 'PTE' as const },
+    { programmeId: 'pte-b', institutionType: 'PTE' as const },
+  ];
+  it('fills each position respecting allowedTypes + preferred, one programme per slot', () => {
+    const slots = assignPrioritySlots(ranked, SLOT_RULES, 5);
+    expect(slots.map((s) => [s.position, s.programmeId, s.unmetMandatory])).toEqual([
+      [1, 'uni-a', false], [2, 'uni-b', false], [3, 'pte-a', false], [4, 'itp-a', false], [5, 'pte-b', false],
+    ]);
+  });
+  it('flags unmetMandatory when a mandatory type has no eligible programme', () => {
+    const noPte = ranked.filter((r) => r.institutionType !== 'PTE');
+    const slots = assignPrioritySlots(noPte, SLOT_RULES, 5);
+    expect(slots.map((s) => [s.position, s.programmeId, s.unmetMandatory])).toEqual([
+      [1, 'uni-a', false], [2, 'uni-b', false], [3, 'itp-a', false],
+      [4, null, true],  // mandatory ITP — itp-a already used at slot 3
+      [5, null, true],  // mandatory PTE — none available
     ]);
   });
 });
