@@ -100,6 +100,14 @@ export class CountryConfigService {
       data.institutionTypeWeighting = dto.institutionTypeWeighting as Prisma.InputJsonValue;
       changed.push('institutionTypeWeighting');
     }
+    // PR-INTAKE-1 — intake-timing tunables (months).
+    for (const f of ['intakeMinLeadMonths', 'intakeMaxWindowMonths', 'liaLeadMonths'] as const) {
+      const v = dto[f];
+      if (v === undefined) continue;
+      if (!Number.isInteger(v) || v < 0 || v > 60) throw new BadRequestException(`${f} must be a whole number of months (0–60).`);
+      (data as Record<string, unknown>)[f] = v;
+      changed.push(f);
+    }
     if (changed.length === 0) throw new BadRequestException('No editable fields supplied.');
 
     const row = await this.prisma.$transaction(async (tx) => {

@@ -4675,6 +4675,18 @@ model CountryExecutionConfig {
   // Total priority slots offered to a student over the whole journey (PRD_4 §8).
   slotCount Int @default(5)
 
+  // PR-INTAKE-1 — intake-timing rules (Owner-editable, genuinely per-country: they
+  // encode this destination's visa-processing SLA + LIA lead time).
+  //   intakeMinLeadMonths  — earliest intake OFFERED to a student = at least this
+  //                          many months out (the "5-month rule" floor).
+  //   intakeMaxWindowMonths — offer/eligibility ceiling (display window cap).
+  //   liaLeadMonths        — a completed application must be SUBMITTED at least this
+  //                          many months before the assigned intake's start (LIA
+  //                          needs the file this early; the "4-month rule").
+  intakeMinLeadMonths   Int @default(5)
+  intakeMaxWindowMonths Int @default(12)
+  liaLeadMonths         Int @default(4)
+
   // Per slot-position rules. JSON array (not a child table — per the approved
   // sketch §4a): [{ position:Int, allowedTypes:InstitutionType[], mandatory:Bool }].
   // e.g. NZ default: slot 4 = [ITP] mandatory, slot 5 = [PTE] mandatory.

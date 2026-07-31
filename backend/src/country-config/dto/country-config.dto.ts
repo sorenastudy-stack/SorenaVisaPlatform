@@ -23,6 +23,16 @@ export class UpdateExecutionConfigDto {
   // { UNIVERSITY:number, ITP:number, PTE:number } — any subset; each 0..1.
   @IsOptional() @IsObject()
   institutionTypeWeighting?: Record<string, unknown>;
+
+  // PR-INTAKE-1 — intake-timing tunables (months).
+  @IsOptional() @IsInt() @Min(0) @Max(24)
+  intakeMinLeadMonths?: number;
+
+  @IsOptional() @IsInt() @Min(1) @Max(60)
+  intakeMaxWindowMonths?: number;
+
+  @IsOptional() @IsInt() @Min(0) @Max(24)
+  liaLeadMonths?: number;
 }
 
 // PATCH country-level AI config.

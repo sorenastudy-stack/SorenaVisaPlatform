@@ -47,7 +47,7 @@ async function seedCountry(code: string) {
   const exec = await prisma.countryExecutionConfig.findUnique({ where: { countryCode: code } });
   if (!exec) {
     await prisma.countryExecutionConfig.create({
-      data: { countryCode: code, slotCount: 5, slotRules: NZ_SLOT_RULES, institutionTypeWeighting: NZ_WEIGHTING },
+      data: { countryCode: code, slotCount: 5, slotRules: NZ_SLOT_RULES, institutionTypeWeighting: NZ_WEIGHTING, intakeMinLeadMonths: 5, intakeMaxWindowMonths: 12, liaLeadMonths: 4 },
     });
   }
 
