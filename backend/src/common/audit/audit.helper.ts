@@ -509,6 +509,16 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
         : 'Visa step saved';
     case 'CONTRACT_SENT':
       return 'Contract sent to client';
+    case 'PROGRAMME_CHOICE_ADDED':
+    case 'PROGRAMME_CHOICE_REMOVED':
+    case 'PROGRAMME_CHOICE_REORDERED': {
+      // PR-ADMISSION-SHARED: newValue { actorSide: 'STUDENT'|'STAFF', action, programmeLabel }.
+      const who = pickString(newV, 'actorSide') === 'STAFF' ? 'Admission Specialist' : 'Student';
+      const label = pickString(newV, 'programmeLabel') ?? 'a programme';
+      if (event === 'PROGRAMME_CHOICE_ADDED')     return `${who} added ${label} to the programme list`;
+      if (event === 'PROGRAMME_CHOICE_REMOVED')   return `${who} removed ${label} from the programme list`;
+      return `${who} reordered the programme priority list`;
+    }
     case 'COUNTRY_EXECUTION_CONFIG_UPDATED': {
       // PR-OWNER-1: newValue { countryCode, changedFields }.
       const code = pickString(newV, 'countryCode');

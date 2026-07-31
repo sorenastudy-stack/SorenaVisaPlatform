@@ -13,6 +13,9 @@ import { MailService } from '../../mail/mail.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { encryptPiiFields, decryptPiiFields } from './admission-encryption.util';
+import {
+  buildProgrammeChoiceAuditData, programmeLabel, type ProgrammeChoiceAction,
+} from './programme-choice-notice';
 import { isValidCountryCode } from '../../common/country-codes';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
@@ -738,7 +741,7 @@ export class AdmissionService {
     userId: string,
     body: { programmeId: string; intakeMonth: number; intakeYear: number },
   ) {
-    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const { contact, caseRecord } = await this.resolveContactAndCase(userId);
 
     const application = await this.prisma.admissionApplication.findFirst({
       where: { caseId: caseRecord.id },
@@ -782,8 +785,12 @@ export class AdmissionService {
         intakeYear,
         priority,
       },
-      include: { programme: { select: { name: true } } },
+      include: { programme: { select: { name: true, provider: { select: { name: true } } } } },
     });
+
+    // PR-ADMISSION-SHARED — student edit: case-history only, no notification.
+    await this.logProgrammeChoiceHistory(caseRecord.id, 'ADDED', contact,
+      programmeLabel(choice.programme.provider?.name, choice.programme.name));
 
     return {
       id: choice.id,
@@ -795,12 +802,37 @@ export class AdmissionService {
     };
   }
 
+  // PR-ADMISSION-SHARED — best-effort case-history write for a student-side
+  // programme-choice edit. Records to the CRM-case audit trail for future
+  // analytics/dispute/audit; does NOT notify anyone (student self-edit). Never
+  // fails the underlying action — a logging error only warns.
+  private async logProgrammeChoiceHistory(
+    caseId: string,
+    action: ProgrammeChoiceAction,
+    contact: { id: string; fullName?: string | null; userId?: string | null } | null,
+    label: string | null,
+  ) {
+    try {
+      await this.prisma.auditLog.create({
+        data: buildProgrammeChoiceAuditData({
+          caseId, action, actorSide: 'STUDENT',
+          actorId: contact?.userId ?? null,
+          actorName: contact?.fullName ?? null,
+          actorRole: 'STUDENT',
+          programmeLabel: label,
+        }),
+      });
+    } catch {
+      // audit is best-effort — never block the student's action on a log failure.
+    }
+  }
+
   async deleteProgrammeChoice(userId: string, choiceId: string) {
-    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const { contact, caseRecord } = await this.resolveContactAndCase(userId);
 
     const application = await this.prisma.admissionApplication.findFirst({
       where: { caseId: caseRecord.id },
-      include: { programmeChoices: { orderBy: { priority: 'asc' } } },
+      include: { programmeChoices: { orderBy: { priority: 'asc' }, include: { programme: { select: { name: true, provider: { select: { name: true } } } } } } },
     });
     if (!application) throw new NotFoundException('Application not found');
     if (application.status !== 'DRAFT') {
@@ -821,10 +853,14 @@ export class AdmissionService {
         }),
       ),
     );
+
+    // PR-ADMISSION-SHARED — student edit: case-history only, no notification.
+    await this.logProgrammeChoiceHistory(caseRecord.id, 'REMOVED', contact,
+      programmeLabel(choice.programme?.provider?.name, choice.programme?.name));
   }
 
   async reorderProgrammeChoices(userId: string, orderedIds: string[]) {
-    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const { contact, caseRecord } = await this.resolveContactAndCase(userId);
 
     const application = await this.prisma.admissionApplication.findFirst({
       where: { caseId: caseRecord.id },
@@ -859,6 +895,9 @@ export class AdmissionService {
         }),
       ),
     );
+
+    // PR-ADMISSION-SHARED — student edit: case-history only, no notification.
+    await this.logProgrammeChoiceHistory(caseRecord.id, 'REORDERED', contact, null);
 
     return this.loadFullApplication(caseRecord.id);
   }

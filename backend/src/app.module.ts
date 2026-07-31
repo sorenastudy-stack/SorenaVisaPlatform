@@ -47,6 +47,7 @@ import { MarketingModule } from './marketing/marketing.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { CountryConfigModule } from './country-config/country-config.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { StaffAdmissionChoicesModule } from './staff/admission-choices/staff-admission-choices.module';
 import { BookingModule } from './booking/booking.module';
 import { WalletModule } from './wallet/wallet.module';
 import { AuditModule } from './audit/audit.module';
@@ -146,6 +147,7 @@ import { SlaModule } from './sla/sla.module';
     PlatformSettingsModule,
     CountryConfigModule,
     RecommendationsModule,
+    StaffAdmissionChoicesModule,
     // PR-BOOKING-3: native in-portal booking. Stage 3 = FREE_15 flow
     // (GET /booking/slots, POST /booking/confirm, GET /booking/mine),
     // gated to LEAD/STUDENT.
