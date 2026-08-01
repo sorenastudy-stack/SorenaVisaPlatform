@@ -53,6 +53,7 @@
     "passport-jwt": "^4.0.1",
     "pdf-lib": "^1.17.1",
     "pdfkit": "0.18.0",
+    "playwright": "^1.62.1",
     "reflect-metadata": "^0.2.1",
     "resend": "^6.12.4",
     "rxjs": "^7.8.1",
