@@ -14,6 +14,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService, EventSource } from '../events/events.service';
 import { ProgrammeImportService } from './import/programme-import.service';
+import { CatalogSyncService } from './websync/catalog-sync.service';
+import { changeProposalToUpdate, type ChangedFields } from './websync/catalog-sync.logic';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateAgreementDto } from './dto/update-agreement.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
@@ -31,6 +33,7 @@ export class ProvidersService {
     private prisma: PrismaService,
     private eventsService: EventsService,
     private programmeImport: ProgrammeImportService,
+    private catalogSync: CatalogSyncService,
   ) {}
 
   // PR-CATALOG-1 — Owner-panel Excel import for ONE institution. Runs the shared
@@ -71,6 +74,156 @@ export class ProvidersService {
       studyField: p.studyFields[0]?.studyField ?? null,
       intakeCount: p._count.intakes,
     }));
+  }
+
+  // PR-CATALOG-2 — the ONE Owner review queue, unioning three PENDING kinds:
+  //   programmes  — Excel-imported programmes awaiting first approval (existing).
+  //   changes     — field changes the web check found on an approved programme.
+  //   candidates  — new programmes the web check discovered (highest-confidence first).
+  // Nothing here is visible to students until per-item approval.
+  async reviewQueue() {
+    const provider = { select: { id: true, name: true, status: true, institutionType: true } };
+    const [programmes, changes, candidates] = await Promise.all([
+      this.pendingProgrammes(),
+      this.prisma.programmeChangeProposal.findMany({
+        where: { status: 'PENDING' },
+        orderBy: { detectedAt: 'desc' },
+        include: { programme: { select: { id: true, name: true, campusCity: true, nzqfLevel: true, provider } } },
+      }),
+      this.prisma.programmeCandidate.findMany({
+        where: { status: 'PENDING' },
+        orderBy: [{ confidence: 'desc' }, { detectedAt: 'desc' }],
+        include: { provider },
+      }),
+    ]);
+    return {
+      programmes,
+      changes: changes.map((c) => ({
+        id: c.id,
+        programmeId: c.programmeId,
+        programmeName: c.programme.name,
+        campusCity: c.programme.campusCity,
+        nzqfLevel: c.programme.nzqfLevel,
+        changedFields: c.changedFields,
+        sourceUrl: c.sourceUrl,
+        detectedAt: c.detectedAt,
+        provider: c.programme.provider,
+      })),
+      candidates: candidates.map((c) => {
+        const prog = ((c.proposedData as any)?.programme ?? {}) as Record<string, unknown>;
+        return {
+          id: c.id,
+          name: (prog.name as string) ?? '(unnamed)',
+          level: (prog.level as string) ?? null,
+          nzqfLevel: c.nzqfLevel,
+          campusCity: c.campusCity,
+          tuitionFeeNZD: (prog.tuitionFeeNZD as number) ?? null,
+          studyFieldKey: ((c.proposedData as any)?.studyFieldKey as string) ?? null,
+          detectedFields: c.detectedFields,
+          confidence: c.confidence,
+          sourceUrl: c.sourceUrl,
+          detectedAt: c.detectedAt,
+          provider: c.provider,
+        };
+      }),
+    };
+  }
+
+  // Manual "sync now" for one institution (Owner) — the same sweep the monthly cron runs,
+  // scoped to this provider. Returns the run report so the Owner sees what it found.
+  async syncNow(providerId: string) {
+    await this.ensureProviderExists(providerId);
+    return this.catalogSync.runSweep({ providerId });
+  }
+
+  // Approve a web-detected field change → apply it to the live (already-approved) programme.
+  async approveChange(id: string, actorId: string | null) {
+    const proposal = await this.prisma.programmeChangeProposal.findUnique({ where: { id } });
+    if (!proposal) throw new NotFoundException('Change proposal not found');
+    if (proposal.status !== 'PENDING') throw new BadRequestException('Change proposal already reviewed');
+
+    const update = changeProposalToUpdate(proposal.changedFields as ChangedFields);
+    await this.prisma.$transaction([
+      this.prisma.educationProgramme.update({ where: { id: proposal.programmeId }, data: update }),
+      this.prisma.programmeChangeProposal.update({
+        where: { id },
+        data: { status: 'APPROVED', reviewedById: actorId, reviewedAt: new Date() },
+      }),
+    ]);
+    await this.eventsService.emit(
+      'PROGRAMME_UPDATED', 'EDUCATION_PROGRAMME', proposal.programmeId, null,
+      EventSource.USER, actorId, { via: 'web-sync change', fields: Object.keys(update) },
+    );
+    return { ok: true };
+  }
+
+  async rejectChange(id: string, actorId: string | null) {
+    const proposal = await this.prisma.programmeChangeProposal.findUnique({ where: { id } });
+    if (!proposal) throw new NotFoundException('Change proposal not found');
+    if (proposal.status !== 'PENDING') throw new BadRequestException('Change proposal already reviewed');
+    await this.prisma.programmeChangeProposal.update({
+      where: { id },
+      data: { status: 'REJECTED', reviewedById: actorId, reviewedAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  // Approve a discovered new-programme candidate → materialise a real APPROVED programme via
+  // the same shape the Excel importer produces (proposedData.programme). Rejecting keeps the
+  // row REJECTED so the dedupe never re-surfaces it next sweep.
+  async approveCandidate(id: string, actorId: string | null) {
+    const cand = await this.prisma.programmeCandidate.findUnique({ where: { id } });
+    if (!cand) throw new NotFoundException('Candidate not found');
+    if (cand.status !== 'PENDING') throw new BadRequestException('Candidate already reviewed');
+
+    const data = (cand.proposedData as any)?.programme as Record<string, any> | undefined;
+    if (!data?.name) throw new BadRequestException('Candidate has no usable programme data');
+    const studyFieldKey = (cand.proposedData as any)?.studyFieldKey as string | undefined;
+    const intakes = ((cand.proposedData as any)?.intakes ?? []) as Array<Record<string, any>>;
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const prog = await tx.educationProgramme.create({
+        // proposedData is dynamic JSON (rowToProgrammeData output incl. providerId/name/
+        // level/nzqfLevel) — the fields are all present at runtime; cast past the static check.
+        data: {
+          ...data,
+          verifiedAt: data.verifiedAt ? new Date(data.verifiedAt) : null,
+          reviewStatus: ReviewStatus.APPROVED,
+          isActive: true,
+        } as any,
+      });
+      if (studyFieldKey) {
+        const sf = await tx.studyField.findFirst({ where: { key: studyFieldKey }, select: { id: true } });
+        if (sf) {
+          await tx.programmeStudyField.create({ data: { programmeId: prog.id, studyFieldId: sf.id, isPrimary: true } });
+        }
+      }
+      if (intakes.length) {
+        await tx.programmeIntake.createMany({ data: intakes.map((it) => ({ ...it, programmeId: prog.id })) as any });
+      }
+      await tx.programmeCandidate.update({
+        where: { id },
+        data: { status: 'APPROVED', reviewedById: actorId, reviewedAt: new Date() },
+      });
+      return prog;
+    });
+
+    await this.eventsService.emit(
+      'PROGRAMME_CREATED', 'EDUCATION_PROGRAMME', created.id, null,
+      EventSource.USER, actorId, { via: 'web-sync candidate', programmeName: created.name },
+    );
+    return created;
+  }
+
+  async rejectCandidate(id: string, actorId: string | null) {
+    const cand = await this.prisma.programmeCandidate.findUnique({ where: { id } });
+    if (!cand) throw new NotFoundException('Candidate not found');
+    if (cand.status !== 'PENDING') throw new BadRequestException('Candidate already reviewed');
+    await this.prisma.programmeCandidate.update({
+      where: { id },
+      data: { status: 'REJECTED', reviewedById: actorId, reviewedAt: new Date() },
+    });
+    return { ok: true };
   }
 
   async createProvider(dto: CreateProviderDto, actorId: string | null) {

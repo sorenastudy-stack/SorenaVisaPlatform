@@ -22,6 +22,11 @@ export class UpdateProviderDto {
   @IsOptional()
   websiteUrl?: string;
 
+  // PR-CATALOG-2 — the programme-listing/index page the monthly discovery crawl starts from.
+  @IsUrl()
+  @IsOptional()
+  catalogueUrl?: string;
+
   @IsEnum(CommissionType)
   @IsOptional()
   commissionY1Type?: CommissionType;

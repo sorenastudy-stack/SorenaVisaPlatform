@@ -107,6 +107,15 @@ export class ProvidersController {
     return this.providersService.pendingProgrammes();
   }
 
+  // PR-CATALOG-2 — the unified review queue (pending programmes + web-sync change
+  // proposals + new-programme candidates). Declared before `:id` so "review-queue" is
+  // never captured as a provider id.
+  @Get('review-queue')
+  @Roles(...CATALOG_ADMIN)
+  reviewQueue() {
+    return this.providersService.reviewQueue();
+  }
+
   @Get(':id')
   @Roles(...CATALOG_READ)
   findOne(@Param('id') providerId: string) {
@@ -189,6 +198,38 @@ export class ProvidersController {
       programmeId,
       req.user?.id ?? null,
     );
+  }
+
+  // ── PR-CATALOG-2 — web-sync review actions + manual trigger ────────────────
+  // Manual "sync now" for one institution (same sweep the monthly cron runs).
+  @Post(':id/sync-now')
+  @Roles(...PROVIDER_ADMIN)
+  syncNow(@Param('id') providerId: string) {
+    return this.providersService.syncNow(providerId);
+  }
+
+  @Patch('change-proposals/:id/approve')
+  @Roles(...CATALOG_ADMIN)
+  approveChange(@Param('id') id: string, @Req() req: any) {
+    return this.providersService.approveChange(id, req.user?.id ?? null);
+  }
+
+  @Patch('change-proposals/:id/reject')
+  @Roles(...CATALOG_ADMIN)
+  rejectChange(@Param('id') id: string, @Req() req: any) {
+    return this.providersService.rejectChange(id, req.user?.id ?? null);
+  }
+
+  @Patch('candidates/:id/approve')
+  @Roles(...CATALOG_ADMIN)
+  approveCandidate(@Param('id') id: string, @Req() req: any) {
+    return this.providersService.approveCandidate(id, req.user?.id ?? null);
+  }
+
+  @Patch('candidates/:id/reject')
+  @Roles(...CATALOG_ADMIN)
+  rejectCandidate(@Param('id') id: string, @Req() req: any) {
+    return this.providersService.rejectCandidate(id, req.user?.id ?? null);
   }
 
   @Post('programmes/:programmeId/requirements')
