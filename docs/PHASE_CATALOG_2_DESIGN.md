@@ -1,8 +1,9 @@
 # PR-CATALOG-2 (Piece 2) — Monthly automated web re-sync: change monitoring + new-programme discovery
 
-**Status:** DESIGN ONLY — nothing built yet. This is the pre-build design of record,
-approved before any code (same process as every phase). Supersedes the short "Piece 2"
-stub at the bottom of `PHASE_CATALOG_1_PROGRAMME_APPROVAL.md`.
+**Status:** BUILT + VERIFIED (2026-08-01). This started as the pre-build design of record
+(approved before any code) and is now the as-built reference. Supersedes the short "Piece 2"
+stub at the bottom of `PHASE_CATALOG_1_PROGRAMME_APPROVAL.md`. Build summary + commit trail
+in §9.
 
 **Date:** 2026-08-01
 **Scope decision (Owner):** build the *fuller* version from day one —
@@ -248,3 +249,49 @@ is inherently noisier** and is an *assistive* aid needing the guards above plus 
 Owner correction. **Manual Excel import stays the reliable default and the fallback for any
 institution that's JS-locked, bot-walled, or has no configured `catalogueUrl`.** Automation
 narrows the manual gap; it does not replace the human review gate.
+
+## 9. As-built summary (what shipped)
+
+All under `backend/src/providers/websync/`, freeze-then-change discipline throughout (pure
+logic golden-tested before wiring; I/O behind interfaces; integration smokes with fakes,
+run then deleted). Commit trail:
+
+| Step | Commit | What |
+|---|---|---|
+| Design | `b22a233` | this doc (pre-build) |
+| 1 | `cdd3543` | additive migration — `ProgrammeCandidate` + `EducationProvider.catalogueUrl` |
+| 2 | `bff062e` | `ClaudeService.extractJson` (additive) + pure extraction logic (golden 16/16) |
+| 3 | `987b9f2` | `PageFetchService` axios→Playwright ladder + pure fetch logic (golden 13/13) |
+| 4 | `e72b682` | `CatalogSyncService` sweep orchestrator + pure logic (golden 11/11); smoke 12/12 |
+| 5 | `217bca2` | monthly `@Cron` + `WebSyncModule` wiring; app boots, cron registered |
+| 6a | `2e3f603` | unified `review-queue` + change/candidate approval + `sync-now` (backend); smoke 13/13 |
+| 6b | `0569c53` | review-queue UI (3 sections) + catalogueUrl field + "Run web check now" (frontend) |
+
+**Confirmed deviations (both approved):**
+- **Selective headless** — Playwright is present from v1 but `PageFetchService` escalates a
+  single URL to Chromium only when the static HTML under-renders (`looksJsEmpty`). Dynamically
+  imported; a missing browser degrades to static-only, never crashes boot.
+- **Additive `ClaudeService.extractJson`** — new method (real `system` field, 4096 tokens,
+  429/5xx backoff); existing `chat()` untouched.
+
+**Data-model note (as designed):** two tables. `ProgrammeChangeProposal` unchanged (field
+diffs); new sibling `ProgrammeCandidate` (new-programme discoveries, FK→Provider,
+`proposedData` full record, `confidence`, dedupe key). One queue via UNION at the endpoint.
+
+**Verification:** pure golden batteries 40/40 (extract 16 + fetch 13 + sync 11); two
+integration smokes against the real DB — orchestrator 12/12 (incl. a 2nd sweep proven
+idempotent) and approval-flow 13/13 (fee-diff applied to live programme, candidate
+materialised APPROVED+active with study field + intake, rejects clean, double-review
+refused). Backend gate `jest src/providers src/matching src/scorecard` = 145/145. Backend +
+frontend production builds clean; app boots with routes mapped.
+
+**Build gotcha for next time:** `nest build` is unreliably incremental on this Windows box
+(twice left `dist` missing files — `main.js`, `acquisition.module.js`). Always
+`rm -rf dist tsconfig.build.tsbuildinfo && npm run build` before boot-probing. And `prisma
+generate` needs the running backend stopped first (Windows holds the query-engine DLL open).
+
+**Not yet exercised in production:** the live crawl against real institution sites. Every
+golden/smoke run used fakes or canned pages (no live network), so the extraction quality,
+anti-bot behaviour, and per-site reliability are still unproven against real catalogues —
+exactly the honest caveat in §3/§8. First real signal will come from an Owner setting a
+`catalogueUrl` and clicking **Run web check now**.

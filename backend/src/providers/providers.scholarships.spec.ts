@@ -22,7 +22,8 @@ describe('ProviderScholarship CRUD + gating', () => {
   beforeAll(async () => {
     prisma = new PrismaClient();
     await prisma.$connect();
-    svc = new ProvidersService(prisma as any, events);
+    // scholarship methods use neither the importer nor the web-sync service → stub them.
+    svc = new ProvidersService(prisma as any, events, {} as any, {} as any);
   }, 60000);
 
   afterAll(async () => { await prisma.$disconnect(); });
