@@ -35,8 +35,9 @@ const AGENT_LABEL: Record<string, string> = {
   AUTOMATION_TRIGGER: 'Automation Trigger',
 };
 
-interface SlotRule { position: number; allowedTypes: string[]; mandatory?: boolean; preferred?: string }
-interface ExecutionConfig { id: string; countryCode: string; slotCount: number; slotRules: SlotRule[]; institutionTypeWeighting: Record<string, number>; intakeMinLeadMonths: number; intakeMaxWindowMonths: number; liaLeadMonths: number; updatedAt: string }
+interface MandatorySlot { position: number; institutionType: string }
+interface SlotRuleConfig { enabled: boolean; mandatorySlots: MandatorySlot[] }
+interface ExecutionConfig { id: string; countryCode: string; slotCount: number; slotRules: SlotRuleConfig; institutionTypeWeighting: Record<string, number>; intakeMinLeadMonths: number; intakeMaxWindowMonths: number; liaLeadMonths: number; updatedAt: string }
 interface AgentConfig { id: string; agentType: string; enabled: boolean; maxOptionsShown: number | null }
 interface AIConfig { id: string; countryCode: string; guidanceLevel: string; sopGateEnforcement: boolean; agents: AgentConfig[] }
 interface CountryDetail { countryCode: string; execution: ExecutionConfig | null; ai: AIConfig | null }
@@ -127,18 +128,22 @@ export function CountryConfigClient({ viewerRole }: { viewerRole: string }) {
     finally { setSaving(null); }
   };
 
-  // ── Slot-rule editing ────────────────────────────────────────────────────
-  const setSlotRules = (rules: SlotRule[]) => setExec((p) => (p ? { ...p, slotRules: rules } : p));
-  const toggleAllowed = (i: number, t: InstitutionType) => {
-    if (!exec) return;
-    const rules = structuredClone(exec.slotRules);
-    const set = new Set(rules[i].allowedTypes);
-    set.has(t) ? set.delete(t) : set.add(t);
-    rules[i].allowedTypes = [...set];
-    setSlotRules(rules);
+  // ── Mandatory-slot rule editing (PR-SLOTRULES) ─────────────────────────────
+  // slotRules = { enabled, mandatorySlots:[{position, institutionType}] }. Each listed
+  // position requires that exact type; all other positions are unconstrained.
+  const setSlotRules = (sr: SlotRuleConfig) => setExec((p) => (p ? { ...p, slotRules: sr } : p));
+  const mandatory = exec?.slotRules?.mandatorySlots ?? [];
+  const rulesEnabled = exec?.slotRules?.enabled ?? false;
+  const setEnabled = (enabled: boolean) => setSlotRules({ enabled, mandatorySlots: mandatory });
+  const setMandatory = (rows: MandatorySlot[]) => setSlotRules({ enabled: rulesEnabled, mandatorySlots: rows });
+  const nextPosition = () => {
+    const used = new Set(mandatory.map((m) => m.position));
+    for (let p = 1; p <= (exec?.slotCount ?? 5); p++) if (!used.has(p)) return p;
+    return exec?.slotCount ?? 5;
   };
-  const addSlot = () => exec && setSlotRules([...exec.slotRules, { position: exec.slotRules.length + 1, allowedTypes: ['UNIVERSITY'], mandatory: false }]);
-  const removeSlot = (i: number) => exec && setSlotRules(exec.slotRules.filter((_, idx) => idx !== i).map((r, idx) => ({ ...r, position: idx + 1 })));
+  const addMandatory = () => setMandatory([...mandatory, { position: nextPosition(), institutionType: 'ITP' }].sort((a, b) => a.position - b.position));
+  const removeMandatory = (i: number) => setMandatory(mandatory.filter((_, idx) => idx !== i));
+  const updateMandatory = (i: number, patch: Partial<MandatorySlot>) => setMandatory(mandatory.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
 
   const disabled = !isOwner;
 
@@ -213,34 +218,43 @@ export function CountryConfigClient({ viewerRole }: { viewerRole: string }) {
                 </div>
               </div>
 
-              {/* Slot rules */}
+              {/* Mandatory institution-type positions (PR-SLOTRULES) */}
               <div>
-                <div className="text-sm text-gray-700 mb-2">Per-slot rules <span className="text-xs text-gray-500">(allowed institution types + mandatory flag per position)</span></div>
-                <div className="space-y-2">
-                  {exec.slotRules.map((rule, i) => (
-                    <div key={i} className="flex items-center gap-3 flex-wrap rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2">
-                      <span className="text-xs font-semibold text-[#1e3a5f] w-14">Slot {rule.position}</span>
-                      <div className="flex gap-3">
-                        {INSTITUTION_TYPES.map((t) => (
-                          <label key={t} className="flex items-center gap-1 text-xs text-gray-600">
-                            <input type="checkbox" disabled={disabled} checked={rule.allowedTypes.includes(t)} onChange={() => toggleAllowed(i, t)} />
-                            {TYPE_LABEL[t]}
+                <label className="flex items-center gap-2 text-sm text-gray-700 mb-1">
+                  <input type="checkbox" disabled={disabled} checked={rulesEnabled} onChange={(e) => setEnabled(e.target.checked)} />
+                  <span className="font-medium">Require specific institution types at set positions</span>
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  When on, a student can’t submit their programme list until each listed priority position holds the required institution type — every other position is free to be anything. Turning this off (or removing all rows) disables the requirement entirely.
+                </p>
+                {rulesEnabled && (
+                  <>
+                    <div className="space-y-2">
+                      {mandatory.length === 0 && <p className="text-xs text-gray-400">No mandatory positions yet — add one below.</p>}
+                      {mandatory.map((m, i) => (
+                        <div key={i} className="flex items-center gap-3 flex-wrap rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2">
+                          <label className="text-xs text-gray-600">Priority position
+                            <input type="number" min={1} max={exec.slotCount} disabled={disabled} value={m.position}
+                              onChange={(e) => updateMandatory(i, { position: Number(e.target.value) })}
+                              className="ml-2 w-16 rounded-lg border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50" />
                           </label>
-                        ))}
-                      </div>
-                      <label className="flex items-center gap-1 text-xs text-gray-600 ml-2">
-                        <input type="checkbox" disabled={disabled} checked={!!rule.mandatory}
-                          onChange={(e) => { const r = structuredClone(exec.slotRules); r[i].mandatory = e.target.checked; setSlotRules(r); }} />
-                        Mandatory
-                      </label>
-                      {!disabled && (
-                        <button onClick={() => removeSlot(i)} className="ml-auto text-gray-400 hover:text-red-600" title="Remove slot"><Trash2 size={15} /></button>
-                      )}
+                          <label className="text-xs text-gray-600">must be a
+                            <select disabled={disabled} value={m.institutionType}
+                              onChange={(e) => updateMandatory(i, { institutionType: e.target.value })}
+                              className="ml-2 rounded-lg border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50">
+                              {INSTITUTION_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                            </select>
+                          </label>
+                          {!disabled && (
+                            <button onClick={() => removeMandatory(i)} className="ml-auto text-gray-400 hover:text-red-600" title="Remove"><Trash2 size={15} /></button>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                {!disabled && (
-                  <button onClick={addSlot} className="mt-2 inline-flex items-center gap-1 text-sm text-[#1e3a5f] hover:underline"><Plus size={15} /> Add slot</button>
+                    {!disabled && (
+                      <button onClick={addMandatory} className="mt-2 inline-flex items-center gap-1 text-sm text-[#1e3a5f] hover:underline"><Plus size={15} /> Add mandatory position</button>
+                    )}
+                  </>
                 )}
               </div>
 

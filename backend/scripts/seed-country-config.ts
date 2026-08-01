@@ -18,14 +18,16 @@ import { PrismaClient, AIAgentType, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// PRD_4 §8 default 5-slot structure (see file header for the vocab mapping).
-const NZ_SLOT_RULES: Prisma.InputJsonValue = [
-  { position: 1, allowedTypes: ['UNIVERSITY'], mandatory: false },
-  { position: 2, allowedTypes: ['UNIVERSITY'], mandatory: false },
-  { position: 3, allowedTypes: ['UNIVERSITY', 'ITP', 'PTE'], mandatory: false, preferred: 'PTE' }, // College-preferred
-  { position: 4, allowedTypes: ['ITP'], mandatory: true },  // mandatory Polytechnic
-  { position: 5, allowedTypes: ['PTE'], mandatory: true },  // mandatory College
-];
+// PR-SLOTRULES — PRD_4 §8 default: within a 5-slot list, position 4 must be a
+// Polytechnic (ITP) and position 5 a College (PTE). Every other position is
+// unconstrained. All three types are equal, symmetric config entries.
+const NZ_SLOT_RULES: Prisma.InputJsonValue = {
+  enabled: true,
+  mandatorySlots: [
+    { position: 4, institutionType: 'ITP' }, // mandatory Polytechnic
+    { position: 5, institutionType: 'PTE' }, // mandatory College
+  ],
+};
 
 // Default recommendation sort weighting — higher = ranked earlier. Encodes the
 // PRD's "College > Polytechnic > University" default.

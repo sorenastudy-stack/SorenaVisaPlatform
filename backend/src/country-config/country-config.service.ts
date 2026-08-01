@@ -72,7 +72,7 @@ export class CountryConfigService {
 
   async updateExecution(
     countryCode: string,
-    dto: { slotCount?: number; slotRules?: unknown[]; institutionTypeWeighting?: Record<string, unknown> },
+    dto: { slotCount?: number; slotRules?: Record<string, unknown>; institutionTypeWeighting?: Record<string, unknown> },
     actor: Actor,
   ) {
     const code = this.normCode(countryCode);
@@ -91,7 +91,7 @@ export class CountryConfigService {
       changed.push('slotCount');
     }
     if (dto.slotRules !== undefined) {
-      this.validateSlotRules(dto.slotRules);
+      this.validateSlotRules(dto.slotRules, dto.slotCount ?? existing.slotCount);
       data.slotRules = dto.slotRules as Prisma.InputJsonValue;
       changed.push('slotRules');
     }
@@ -230,22 +230,29 @@ export class CountryConfigService {
     return c;
   }
 
-  private validateSlotRules(rules: unknown[]) {
-    if (!Array.isArray(rules) || rules.length === 0) throw new BadRequestException('slotRules must be a non-empty array.');
+  // PR-SLOTRULES — validate the Owner-configurable mandatory-type rule object:
+  //   { enabled: bool, mandatorySlots: [{ position: 1..slotCount, institutionType: valid }] }.
+  // All three types are equal, symmetric values. Empty mandatorySlots is allowed (rule off).
+  private validateSlotRules(rules: unknown, slotCount: number) {
+    if (typeof rules !== 'object' || rules === null || Array.isArray(rules)) {
+      throw new BadRequestException('slotRules must be an object { enabled, mandatorySlots }.');
+    }
+    const r = rules as Record<string, unknown>;
+    if (typeof r.enabled !== 'boolean') throw new BadRequestException('slotRules.enabled must be a boolean.');
+    if (!Array.isArray(r.mandatorySlots)) throw new BadRequestException('slotRules.mandatorySlots must be an array.');
+
     const positions = new Set<number>();
-    for (const r of rules) {
-      if (typeof r !== 'object' || r === null) throw new BadRequestException('Each slot rule must be an object.');
-      const rule = r as Record<string, unknown>;
-      const pos = rule.position;
-      if (!Number.isInteger(pos) || (pos as number) < 1) throw new BadRequestException('Each slot rule needs a positive integer position.');
-      if (positions.has(pos as number)) throw new BadRequestException(`Duplicate slot position ${pos}.`);
+    for (const m of r.mandatorySlots) {
+      if (typeof m !== 'object' || m === null) throw new BadRequestException('Each mandatory slot must be an object.');
+      const slot = m as Record<string, unknown>;
+      const pos = slot.position;
+      if (!Number.isInteger(pos) || (pos as number) < 1) throw new BadRequestException('Each mandatory slot needs a positive integer position.');
+      if ((pos as number) > slotCount) throw new BadRequestException(`Mandatory slot position ${pos} exceeds the total slot count (${slotCount}).`);
+      if (positions.has(pos as number)) throw new BadRequestException(`Duplicate mandatory slot position ${pos}.`);
       positions.add(pos as number);
-      if (!Array.isArray(rule.allowedTypes) || rule.allowedTypes.length === 0) throw new BadRequestException(`Slot ${pos}: allowedTypes must be a non-empty array.`);
-      for (const t of rule.allowedTypes) {
-        if (typeof t !== 'string' || !VALID_TYPES.has(t)) throw new BadRequestException(`Slot ${pos}: invalid institution type "${t}". Allowed: ${[...VALID_TYPES].join(', ')}.`);
+      if (typeof slot.institutionType !== 'string' || !VALID_TYPES.has(slot.institutionType)) {
+        throw new BadRequestException(`Mandatory slot ${pos}: invalid institution type. Allowed: ${[...VALID_TYPES].join(', ')}.`);
       }
-      if (rule.mandatory !== undefined && typeof rule.mandatory !== 'boolean') throw new BadRequestException(`Slot ${pos}: mandatory must be boolean.`);
-      if (rule.preferred !== undefined && (typeof rule.preferred !== 'string' || !VALID_TYPES.has(rule.preferred))) throw new BadRequestException(`Slot ${pos}: preferred must be a valid institution type.`);
     }
   }
 

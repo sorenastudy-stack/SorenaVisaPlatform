@@ -4702,9 +4702,11 @@ model CountryExecutionConfig {
   intakeMaxWindowMonths Int @default(12)
   liaLeadMonths         Int @default(4)
 
-  // Per slot-position rules. JSON array (not a child table — per the approved
-  // sketch §4a): [{ position:Int, allowedTypes:InstitutionType[], mandatory:Bool }].
-  // e.g. NZ default: slot 4 = [ITP] mandatory, slot 5 = [PTE] mandatory.
+  // PR-SLOTRULES — Owner-configurable mandatory institution-type rule. JSON object:
+  //   { enabled: Bool, mandatorySlots: [{ position: Int, institutionType: InstitutionType }] }
+  // Each mandatory position requires exactly that type at that priority; every other
+  // position is unconstrained. enabled:false or empty mandatorySlots => rule off. All three
+  // institution types are equal, symmetric entries. e.g. NZ default: pos 4 = ITP, pos 5 = PTE.
   slotRules Json
 
   // Default recommendation sort weighting by institution type. JSON object keyed

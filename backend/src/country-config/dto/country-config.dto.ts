@@ -1,5 +1,5 @@
 import {
-  IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min,
+  IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, Min,
 } from 'class-validator';
 
 // PR-OWNER-1 (slice a) — DTOs for the Owner-editable per-country config.
@@ -16,9 +16,9 @@ export class UpdateExecutionConfigDto {
   @IsOptional() @IsInt() @Min(1) @Max(20)
   slotCount?: number;
 
-  // [{ position:int, allowedTypes:InstitutionType[], mandatory:bool, preferred?:InstitutionType }]
-  @IsOptional() @IsArray()
-  slotRules?: unknown[];
+  // { enabled:bool, mandatorySlots:[{ position:int, institutionType:InstitutionType }] }
+  @IsOptional() @IsObject()
+  slotRules?: Record<string, unknown>;
 
   // { UNIVERSITY:number, ITP:number, PTE:number } — any subset; each 0..1.
   @IsOptional() @IsObject()
