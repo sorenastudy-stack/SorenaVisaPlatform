@@ -7,6 +7,7 @@ import {
   buildProgrammeChoiceAuditData, programmeLabel, studentTicketNotice,
   type ProgrammeChoiceAction,
 } from '../../students/admission/programme-choice-notice';
+import { notifyAdmissionTicket } from '../../students/admission/admission-ticket.util';
 
 // PR-ADMISSION-SHARED — Admission Officer (CONSULTANT) CRUD over the SAME
 // AdmissionProgrammeChoice list the student edits in Apply/Study Step 1. One
@@ -136,57 +137,11 @@ export class StaffAdmissionChoicesService {
   //    thread per case; append a SYSTEM message per action. Best-effort. ────────
   private async notifyStudent(caseId: string, action: ProgrammeChoiceAction, label: string | null, actor: Actor) {
     try {
-      const { visaCaseId, clientId } = await this.ensureVisaCase(caseId);
-
-      let ticket = await this.prisma.visaSupportTicket.findFirst({
-        where: { caseId: visaCaseId, department: 'ADMISSIONS', status: { in: ['OPEN', 'IN_PROGRESS'] } },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true },
-      });
-      if (!ticket) {
-        ticket = await this.prisma.visaSupportTicket.create({
-          data: {
-            clientId, caseId: visaCaseId, department: 'ADMISSIONS',
-            subjectEncrypted: this.crypto.encrypt('Your programme list') as never,
-            status: 'OPEN', priority: 'NORMAL',
-          },
-          select: { id: true },
-        });
-      }
-
-      await this.prisma.visaSupportTicketMessage.create({
-        data: {
-          ticketId: ticket.id,
-          authorId: actor.id!, // the officer who made the change (attributable)
-          authorRole: 'SYSTEM', // auto-generated notice, not a conversational reply
-          bodyEncrypted: this.crypto.encrypt(studentTicketNotice(action, label ?? '')) as never,
-        },
-      });
-      await this.prisma.visaSupportTicket.update({
-        where: { id: ticket.id },
-        data: { lastStaffMessageAt: new Date(), status: 'OPEN' },
+      await notifyAdmissionTicket(this.prisma, this.crypto, {
+        caseId, message: studentTicketNotice(action, label ?? ''), authorId: actor.id,
       });
     } catch (e) {
       this.logger.warn(`programme-choice student notification failed for case ${caseId}: ${(e as Error).message}`);
     }
-  }
-
-  // Resolve (creating if needed) the student's VisaCase for the ticket. Mirrors
-  // DashboardService.ensureDashboardRows but keyed off the CRM caseId.
-  private async ensureVisaCase(caseId: string): Promise<{ visaCaseId: string; clientId: string }> {
-    const app = await this.prisma.admissionApplication.findFirst({ where: { caseId }, select: { id: true } });
-    if (!app) throw new Error('no admission application');
-    const kase = await this.prisma.case.findUnique({
-      where: { id: caseId },
-      select: { lead: { select: { contact: { select: { userId: true } } } } },
-    });
-    const clientId = kase?.lead?.contact?.userId;
-    if (!clientId) throw new Error('no student user for case');
-
-    let visaApp = await this.prisma.visaApplication.findUnique({ where: { applicationId: app.id }, select: { id: true } });
-    if (!visaApp) visaApp = await this.prisma.visaApplication.create({ data: { applicationId: app.id }, select: { id: true } });
-    let visaCase = await this.prisma.visaCase.findUnique({ where: { visaApplicationId: visaApp.id }, select: { id: true } });
-    if (!visaCase) visaCase = await this.prisma.visaCase.create({ data: { visaApplicationId: visaApp.id, clientId, status: 'DRAFT' }, select: { id: true } });
-    return { visaCaseId: visaCase.id, clientId };
   }
 }

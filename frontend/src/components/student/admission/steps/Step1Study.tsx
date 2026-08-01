@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Trash2, AlertTriangle } from 'lucide-react';
 import { useAdmission } from '../AdmissionFormContext';
 import { api, ApiError } from '@/lib/api';
 import { useLocaleStore } from '@/lib/stores/localeStore';
@@ -13,12 +13,16 @@ interface Programme {
   name: string;
   providerName: string;
   intakeMonths: number[];
+  // PR-INTAKE-1 (Slice 2) — server-authoritative: only intakes inside the 5–12
+  // month offer window, each flagged `conditional` when in a later calendar year.
+  eligibleIntakes: { month: number; year: number; conditional: boolean }[];
 }
 
 interface IntakeOption {
   month: number;
   year: number;
   label: string;
+  conditional: boolean;
 }
 
 // Gregorian month + year, localised — "March 2027" / "مارس ۲۰۲۷" (Persian month
@@ -31,18 +35,16 @@ function intakeLabel(month: number, year: number, locale: Loc): string {
   }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
 
-function upcomingIntakes(intakeMonths: number[], locale: Loc): IntakeOption[] {
-  const now   = new Date();
-  const curYr = now.getFullYear();
-  const curMo = now.getMonth() + 1;
-  const out: IntakeOption[] = [];
-  for (let yr = curYr; yr <= curYr + 2; yr++) {
-    for (const m of [...intakeMonths].sort((a, b) => a - b)) {
-      if (yr === curYr && m < curMo) continue;
-      out.push({ month: m, year: yr, label: intakeLabel(m, yr, locale) });
-    }
-  }
-  return out;
+// PR-INTAKE-1 (Slice 2) — intake options come from the SERVER's eligible list
+// (already 5–12 month window-filtered), mapped to localised labels here.
+function toIntakeOptions(
+  eligible: { month: number; year: number; conditional: boolean }[],
+  locale: Loc,
+): IntakeOption[] {
+  return eligible.map((e) => ({
+    month: e.month, year: e.year, conditional: e.conditional,
+    label: intakeLabel(e.month, e.year, locale),
+  }));
 }
 
 function SearchableSelect({
@@ -130,9 +132,15 @@ export function Step1Study() {
   const availableProgrammes = programmes.filter(p => !chosenProgIds.has(p.id));
 
   const selectedProg  = programmes.find(p => p.id === selectedProgId);
-  const intakeOptions = selectedProg ? upcomingIntakes(selectedProg.intakeMonths, locale) : [];
+  const intakeOptions = selectedProg ? toIntakeOptions(selectedProg.eligibleIntakes, locale) : [];
   const intakeValue   = selectedIntakeMonth && selectedIntakeYear
     ? `${selectedIntakeMonth}-${selectedIntakeYear}` : '';
+  // PR-INTAKE-1 (Slice 2) — is the currently-picked intake a conditional offer?
+  const selectedIntakeConditional = intakeOptions.some(
+    (o) => o.month === selectedIntakeMonth && o.year === selectedIntakeYear && o.conditional,
+  );
+  // A programme is selected but has no offerable intake inside the window.
+  const noIntakesInWindow = !!selectedProgId && intakeOptions.length === 0;
   const canAdd        = !!selectedProgId && !!selectedIntakeMonth && !!selectedIntakeYear && !adding;
 
   const handleAdd = async () => {
@@ -269,6 +277,20 @@ export function Step1Study() {
             </select>
           </div>
         </div>
+
+        {/* PR-INTAKE-1 (Slice 2) — inline English (no t() key → keeps Persian frozen,
+            same pattern as ClientShell/StaffSidebar). */}
+        {noIntakesInWindow && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            No intake dates are currently available for this programme within the application window. Please choose another programme, or check back later.
+          </p>
+        )}
+        {selectedIntakeConditional && (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <span>This intake is in {selectedIntakeYear} — any offer for it is <strong>conditional on the institution&apos;s acceptance</strong>.</span>
+          </div>
+        )}
 
         <button
           onClick={handleAdd}

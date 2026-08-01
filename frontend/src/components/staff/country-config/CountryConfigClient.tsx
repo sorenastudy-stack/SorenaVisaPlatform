@@ -36,7 +36,7 @@ const AGENT_LABEL: Record<string, string> = {
 };
 
 interface SlotRule { position: number; allowedTypes: string[]; mandatory?: boolean; preferred?: string }
-interface ExecutionConfig { id: string; countryCode: string; slotCount: number; slotRules: SlotRule[]; institutionTypeWeighting: Record<string, number>; updatedAt: string }
+interface ExecutionConfig { id: string; countryCode: string; slotCount: number; slotRules: SlotRule[]; institutionTypeWeighting: Record<string, number>; intakeMinLeadMonths: number; intakeMaxWindowMonths: number; liaLeadMonths: number; updatedAt: string }
 interface AgentConfig { id: string; agentType: string; enabled: boolean; maxOptionsShown: number | null }
 interface AIConfig { id: string; countryCode: string; guidanceLevel: string; sopGateEnforcement: boolean; agents: AgentConfig[] }
 interface CountryDetail { countryCode: string; execution: ExecutionConfig | null; ai: AIConfig | null }
@@ -91,6 +91,9 @@ export function CountryConfigClient({ viewerRole }: { viewerRole: string }) {
     try {
       await api.patch(`/staff/settings/country-config/${selected}/execution`, {
         slotCount: exec.slotCount,
+        intakeMinLeadMonths: exec.intakeMinLeadMonths,
+        intakeMaxWindowMonths: exec.intakeMaxWindowMonths,
+        liaLeadMonths: exec.liaLeadMonths,
         slotRules: exec.slotRules,
         institutionTypeWeighting: exec.institutionTypeWeighting,
       });
@@ -175,6 +178,21 @@ export function CountryConfigClient({ viewerRole }: { viewerRole: string }) {
                   className="w-24 rounded-lg border border-gray-300 px-3 py-1.5 text-sm disabled:bg-gray-50" />
                 <span className="text-xs text-gray-500">Total options offered to a student over the whole journey.</span>
               </div>
+
+              {/* PR-INTAKE-1 — intake-timing tunables (months) */}
+              {([
+                ['intakeMinLeadMonths', 'Min intake lead (months)', 'Earliest intake offered — at least this many months out.'],
+                ['intakeMaxWindowMonths', 'Max intake window (months)', 'Latest intake offered — display/eligibility ceiling.'],
+                ['liaLeadMonths', 'LIA lead (months)', 'Completed application must be submitted this many months before the intake start.'],
+              ] as const).map(([key, label, hint]) => (
+                <div key={key} className="flex items-center gap-3">
+                  <label className="text-sm text-gray-700 w-40">{label}</label>
+                  <input type="number" min={0} max={60} value={exec[key]} disabled={disabled}
+                    onChange={(e) => setExec({ ...exec, [key]: Number(e.target.value) })}
+                    className="w-24 rounded-lg border border-gray-300 px-3 py-1.5 text-sm disabled:bg-gray-50" />
+                  <span className="text-xs text-gray-500">{hint}</span>
+                </div>
+              ))}
 
               {/* Weighting */}
               <div>

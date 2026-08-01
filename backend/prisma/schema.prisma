@@ -1536,6 +1536,8 @@ model Case {
   // regeneration supersedes the prior list). Virtual back-relation — the FK lives
   // on recommendation_lists.caseId, so this adds no column to `cases`.
   recommendationLists   RecommendationList[]
+  // PR-INTAKE-1 (Slice 3) — auto-reassignment / manual-review tasks for this case.
+  admissionTasks        AdmissionTask[]
 
   @@index([leadId])
   @@index([stage])
@@ -2755,15 +2757,19 @@ enum AdmissionDocumentType {
 }
 
 model AdmissionApplication {
-  id            String                     @id @default(cuid())
-  caseId        String
-  contactId     String
-  agentId       String?
-  status        AdmissionApplicationStatus @default(DRAFT)
-  currentStep   Int                        @default(1)
-  submittedAt   DateTime?
-  lockedAt      DateTime?
-  termsAgreedAt DateTime?
+  id                 String                     @id @default(cuid())
+  caseId             String
+  contactId          String
+  agentId            String?
+  status             AdmissionApplicationStatus @default(DRAFT)
+  currentStep        Int                        @default(1)
+  // PR-INTAKE-1 (Slice 3) — set true only in the no-valid-next-intake edge case at
+  // submit: the auto-reassignment could not pick a term, so this needs manual
+  // intervention (surfaced as an urgent AdmissionTask + this visible flag).
+  intakeReviewNeeded Boolean                    @default(false)
+  submittedAt        DateTime?
+  lockedAt           DateTime?
+  termsAgreedAt      DateTime?
 
   // Step 2 — Additional student info
   // dateOfBirth is plaintext for now; candidate for encryption in a future
@@ -4921,4 +4927,42 @@ model PrioritySlot {
   @@unique([recommendationListId, position])
   @@index([recommendationListId])
   @@map("priority_slots")
+}
+
+// ─── ADMISSION OFFICER TASKS (PR-INTAKE-1, Slice 3) ───────────────────────────
+// A minimal, focused to-do surface for the Admission Officer, created by the
+// submit-time intake-reassignment flow. INTAKE_REASSIGNED = the system moved the
+// student to a new term (routine follow-up: re-apply for it). INTAKE_REASSIGN_FAILED
+// = no valid next term found (urgent: manual review). Assigned to the case's
+// Admission Specialist (Case.consultantId); null → unassigned queue. Deliberately
+// NOT overloading NurtureCallTask (nurture-call-specific). Actor columns are bare
+// (no User relation) to keep the migration additive.
+enum AdmissionTaskType {
+  INTAKE_REASSIGNED
+  INTAKE_REASSIGN_FAILED
+}
+
+enum AdmissionTaskStatus {
+  OPEN
+  DONE
+}
+
+model AdmissionTask {
+  id           String              @id @default(cuid())
+  caseId       String
+  assignedToId String? // = Case.consultantId at creation; null → unassigned queue
+  type         AdmissionTaskType
+  status       AdmissionTaskStatus @default(OPEN)
+  urgent       Boolean             @default(false) // true for INTAKE_REASSIGN_FAILED
+  title        String // human, e.g. "Re-apply Maryam for Feb 2027 (Bachelor of IT)"
+  referenceId  String? // the AdmissionProgrammeChoice id, when applicable
+  createdAt    DateTime            @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([assignedToId, status])
+  @@index([caseId])
+  @@map("admission_tasks")
 }

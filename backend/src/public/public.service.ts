@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { generateClientId } from '../leads/client-id';
 import { PrismaService } from '../prisma/prisma.service';
+import { eligibleIntakes, isConditionalOffer } from '../matching/intake-window';
 import { EventsService } from '../events/events.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { HighRiskEngineService } from '../scoring/high-risk-engine.service';
@@ -237,10 +238,25 @@ export class PublicService {
       },
       orderBy: [{ provider: { name: 'asc' } }, { name: 'asc' }],
     });
+
+    // PR-INTAKE-1 (Slice 2) — server-authoritative eligible intakes: only the
+    // 5–12 month window is offered, so the client can never surface a sub-5-month
+    // intake. Each carries a `conditional` flag (later calendar year → offer
+    // conditional on the institution's acceptance).
+    const cfg = await this.prisma.countryExecutionConfig.findUnique({
+      where: { countryCode: 'NZ' },
+      select: { intakeMinLeadMonths: true, intakeMaxWindowMonths: true },
+    });
+    const minLead = cfg?.intakeMinLeadMonths ?? 5;
+    const maxWindow = cfg?.intakeMaxWindowMonths ?? 12;
+    const now = new Date();
+
     return rows.map(r => ({
       id: r.id, name: r.name,
       providerName: r.provider.name,
-      intakeMonths: r.intakeMonths,
+      intakeMonths: r.intakeMonths, // kept for backward-compat
+      eligibleIntakes: eligibleIntakes(r.intakeMonths, now, minLead, maxWindow)
+        .map(i => ({ month: i.month, year: i.year, conditional: isConditionalOffer(i, now) })),
     }));
   }
 

@@ -16,6 +16,12 @@ import { encryptPiiFields, decryptPiiFields } from './admission-encryption.util'
 import {
   buildProgrammeChoiceAuditData, programmeLabel, type ProgrammeChoiceAction,
 } from './programme-choice-notice';
+import { decideReassignment } from '../../matching/intake-window';
+import {
+  intakeReassignedNotice, intakeManualReviewNotice, reassignTaskTitle,
+  manualReviewTaskTitle, intakeTermLabel,
+} from './intake-reassignment-notice';
+import { notifyAdmissionTicket } from './admission-ticket.util';
 import { isValidCountryCode } from '../../common/country-codes';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
@@ -1301,6 +1307,11 @@ export class AdmissionService {
       console.log(`TODO: in-app notification to consultant ${caseRecord.ownerId}`);
     }
 
+    // PR-INTAKE-1 (Slice 3) — the 4-month LIA-deadline check, point-in-time at
+    // submit. Runs post-commit (never blocks a valid submission) but is
+    // consequential, so it fails SAFE to manual review, never silently.
+    await this.handleIntakeReassignmentAtSubmit(application.id, caseRecord, contact, userId);
+
     return {
       application: {
         id: submitted.id,
@@ -1309,5 +1320,73 @@ export class AdmissionService {
       },
       message: 'Application submitted successfully',
     };
+  }
+
+  // ── PR-INTAKE-1 (Slice 3) — submit-time 4-month check + auto-reassignment ─────
+  private async handleIntakeReassignmentAtSubmit(
+    applicationId: string,
+    caseRecord: { id: string; consultantId?: string | null },
+    contact: { fullName?: string | null } | null,
+    userId: string,
+  ) {
+    try {
+      // Priority-1 choice only drives the check (the top choice is pursued first).
+      const top = await this.prisma.admissionProgrammeChoice.findFirst({
+        where: { admissionApplicationId: applicationId },
+        orderBy: { priority: 'asc' },
+        include: { programme: { select: { name: true, intakeMonths: true, provider: { select: { name: true } } } } },
+      });
+      if (!top) return;
+
+      const cfg = await this.prisma.countryExecutionConfig.findUnique({
+        where: { countryCode: 'NZ' },
+        select: { liaLeadMonths: true, intakeMinLeadMonths: true, intakeMaxWindowMonths: true },
+      });
+      const c = {
+        liaLeadMonths: cfg?.liaLeadMonths ?? 4,
+        intakeMinLeadMonths: cfg?.intakeMinLeadMonths ?? 5,
+        intakeMaxWindowMonths: cfg?.intakeMaxWindowMonths ?? 12,
+      };
+      const now = new Date();
+      const decision = decideReassignment(
+        { month: top.intakeMonth, year: top.intakeYear }, top.programme.intakeMonths, now, c,
+      );
+      if (decision.action === 'NONE') return;
+
+      const label = programmeLabel(top.programme.provider?.name, top.programme.name);
+      const assignee = caseRecord.consultantId ?? null;
+      const fromTerm = intakeTermLabel({ month: top.intakeMonth, year: top.intakeYear });
+
+      if (decision.action === 'REASSIGN' && decision.nextIntake) {
+        const next = decision.nextIntake;
+        await this.prisma.$transaction([
+          this.prisma.admissionProgrammeChoice.update({ where: { id: top.id }, data: { intakeMonth: next.month, intakeYear: next.year } }),
+          this.prisma.admissionTask.create({ data: { caseId: caseRecord.id, assignedToId: assignee, type: 'INTAKE_REASSIGNED', urgent: false, title: reassignTaskTitle(contact?.fullName ?? null, next, label), referenceId: top.id } }),
+          this.prisma.auditLog.create({ data: {
+            userId, action: 'UPDATE', eventType: 'INTAKE_AUTO_REASSIGNED', entityType: 'CASE', entityId: caseRecord.id,
+            newValue: { fromTerm, toTerm: intakeTermLabel(next), programmeLabel: label } as Prisma.InputJsonValue,
+          } }),
+        ]);
+        await notifyAdmissionTicket(this.prisma, this.crypto, { caseId: caseRecord.id, message: intakeReassignedNotice(next, c.liaLeadMonths), authorId: userId });
+      } else {
+        // MANUAL_REVIEW — no valid next term. Fail safe: flag + urgent task + calm notice.
+        await this.prisma.$transaction([
+          this.prisma.admissionApplication.update({ where: { id: applicationId }, data: { intakeReviewNeeded: true } }),
+          this.prisma.admissionTask.create({ data: { caseId: caseRecord.id, assignedToId: assignee, type: 'INTAKE_REASSIGN_FAILED', urgent: true, title: manualReviewTaskTitle(contact?.fullName ?? null, label), referenceId: top.id } }),
+          this.prisma.auditLog.create({ data: {
+            userId, action: 'UPDATE', eventType: 'INTAKE_REASSIGN_MANUAL_REVIEW', entityType: 'CASE', entityId: caseRecord.id,
+            newValue: { fromTerm, programmeLabel: label } as Prisma.InputJsonValue,
+          } }),
+        ]);
+        await notifyAdmissionTicket(this.prisma, this.crypto, { caseId: caseRecord.id, message: intakeManualReviewNotice(), authorId: userId });
+      }
+    } catch (err) {
+      // Never silent: if the reassignment logic errors, flag manual review.
+      console.warn('Intake reassignment errored — flagging manual review:', err);
+      try {
+        await this.prisma.admissionApplication.update({ where: { id: applicationId }, data: { intakeReviewNeeded: true } });
+        await this.prisma.admissionTask.create({ data: { caseId: caseRecord.id, assignedToId: caseRecord.consultantId ?? null, type: 'INTAKE_REASSIGN_FAILED', urgent: true, title: 'Intake reassignment check errored — manual review needed.', referenceId: applicationId } });
+      } catch { /* give up quietly — submit already succeeded */ }
+    }
   }
 }

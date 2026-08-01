@@ -519,6 +519,20 @@ export function summarizeAuditEntry(entry: AuditEntryLike): string {
       if (event === 'PROGRAMME_CHOICE_REMOVED')   return `${who} removed ${label} from the programme list`;
       return `${who} reordered the programme priority list`;
     }
+    case 'INTAKE_AUTO_REASSIGNED': {
+      // PR-INTAKE-1: newValue { fromTerm, toTerm, programmeLabel }.
+      const from = pickString(newV, 'fromTerm');
+      const to = pickString(newV, 'toTerm');
+      if (from && to) return `Intake auto-reassigned: ${from} → ${to} (missed the LIA lead time)`;
+      return 'Intake auto-reassigned to the next available term';
+    }
+    case 'INTAKE_REASSIGN_MANUAL_REVIEW': {
+      // PR-INTAKE-1: newValue { fromTerm, programmeLabel }.
+      const from = pickString(newV, 'fromTerm');
+      return from
+        ? `Intake reassignment needs manual review — no valid next term (was ${from})`
+        : 'Intake reassignment needs manual review — no valid next term';
+    }
     case 'COUNTRY_EXECUTION_CONFIG_UPDATED': {
       // PR-OWNER-1: newValue { countryCode, changedFields }.
       const code = pickString(newV, 'countryCode');
