@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award, Upload,
+  GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award, Upload, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -25,6 +25,7 @@ const levelLabel = (l: string) => l.replace(/_/g, ' ').toLowerCase().replace(/\b
 interface Programme { id: string; name: string; level: string }
 interface Provider {
   id: string; name: string; providerType: string; country: string; city: string | null; websiteUrl: string | null;
+  catalogueUrl: string | null;
   status: string; agreementUrl: string | null; agreementStartDate: string | null; agreementEndDate: string | null; agreementRenewalDate: string | null;
   commissionY1Type: string; commissionY1Value: number; commissionY2Type: string; commissionY2Value: number;
   volumeTarget: number | null; bonusType: string | null; bonusValue: number | null; notes: string | null;
@@ -111,7 +112,7 @@ function ProviderList({ onEdit }: { onEdit: (id: string) => void }) {
 
 // ── Create / Edit form ──────────────────────────────────────────────────────
 const emptyForm = {
-  name: '', providerType: 'UNIVERSITY', country: 'NZ', city: '', websiteUrl: '', status: 'PENDING',
+  name: '', providerType: 'UNIVERSITY', country: 'NZ', city: '', websiteUrl: '', catalogueUrl: '', status: 'PENDING',
   commissionY1Type: 'PERCENTAGE', commissionY1Value: 0, commissionY2Type: 'PERCENTAGE', commissionY2Value: 0,
   volumeTarget: '', bonusType: '', bonusValue: '', notes: '',
   agreementStartDate: '', agreementEndDate: '', agreementRenewalDate: '', agreementUrl: '',
@@ -131,7 +132,7 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
     api.get<Provider>(`/providers/${providerId}`).then((p) => {
       const iso = (d: string | null) => (d ? d.slice(0, 10) : '');
       setForm({
-        name: p.name, providerType: p.providerType, country: p.country, city: p.city ?? '', websiteUrl: p.websiteUrl ?? '', status: p.status,
+        name: p.name, providerType: p.providerType, country: p.country, city: p.city ?? '', websiteUrl: p.websiteUrl ?? '', catalogueUrl: p.catalogueUrl ?? '', status: p.status,
         commissionY1Type: p.commissionY1Type, commissionY1Value: p.commissionY1Value, commissionY2Type: p.commissionY2Type, commissionY2Value: p.commissionY2Value,
         volumeTarget: p.volumeTarget?.toString() ?? '', bonusType: p.bonusType ?? '', bonusValue: p.bonusValue?.toString() ?? '', notes: p.notes ?? '',
         agreementStartDate: iso(p.agreementStartDate), agreementEndDate: iso(p.agreementEndDate), agreementRenewalDate: iso(p.agreementRenewalDate), agreementUrl: p.agreementUrl ?? '',
@@ -147,6 +148,7 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
       const core: any = {
         name: form.name.trim(), providerType: form.providerType, country: form.country,
         city: form.city.trim() || undefined, websiteUrl: form.websiteUrl.trim() || undefined,
+        catalogueUrl: form.catalogueUrl.trim() || undefined,
         commissionY1Type: form.commissionY1Type, commissionY1Value: Number(form.commissionY1Value),
         commissionY2Type: form.commissionY2Type, commissionY2Value: Number(form.commissionY2Value),
         volumeTarget: form.volumeTarget === '' ? undefined : Number(form.volumeTarget),
@@ -188,6 +190,8 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
           <div><label className={labelCls}>City</label><input className={inputCls} value={form.city} onChange={(e) => set('city', e.target.value)} /></div>
           <div><label className={labelCls}>Website</label><input className={inputCls} value={form.websiteUrl} onChange={(e) => set('websiteUrl', e.target.value)} placeholder="https://" /></div>
           {isEdit && <div><label className={labelCls}>Status</label><select className={inputCls} value={form.status} onChange={(e) => set('status', e.target.value)}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>}
+          {/* PR-CATALOG-2 — programme-listing page the monthly web check crawls to find new programmes. */}
+          <div className="sm:col-span-2"><label className={labelCls}>Programme catalogue URL</label><input className={inputCls} value={form.catalogueUrl} onChange={(e) => set('catalogueUrl', e.target.value)} placeholder="https://…/study/programmes — the list page the monthly web check scans" /></div>
         </div>
 
         <div className="border-t border-gray-100 pt-4">
@@ -252,6 +256,7 @@ function RateField({ label, type, value, onType, onValue }: { label: string; typ
 function ImportProgrammesSection({ providerId }: { providerId: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const doImport = async () => {
     if (!file) return;
     setBusy(true);
@@ -267,6 +272,24 @@ function ImportProgrammesSection({ providerId }: { providerId: string }) {
       setBusy(false);
     }
   };
+  // PR-CATALOG-2 — run the monthly web check for just this institution, on demand.
+  const syncNow = async () => {
+    setSyncing(true);
+    try {
+      const r = await api.post<{ changeProposals: number; candidatesCreated: number; discoverySkipped: { reason: string }[] }>(`/providers/${providerId}/sync-now`, {});
+      const found = r.changeProposals + r.candidatesCreated;
+      if (found > 0) {
+        toast.success(`Web check: ${r.changeProposals} change(s), ${r.candidatesCreated} new programme(s) found — review in Programme approvals.`);
+      } else {
+        const skip = r.discoverySkipped?.[0]?.reason;
+        toast.success(skip ? `Web check ran — nothing new. (Discovery skipped: ${skip}.)` : 'Web check ran — no changes or new programmes found.');
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Web check failed.');
+    } finally {
+      setSyncing(false);
+    }
+  };
   return (
     <Card><CardContent className="p-5 space-y-3">
       <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">Import programmes (Excel)</h3>
@@ -276,6 +299,13 @@ function ImportProgrammesSection({ providerId }: { providerId: string }) {
         <button onClick={doImport} disabled={!file || busy}
           className="inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
           {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} Import
+        </button>
+      </div>
+      <div className="border-t border-gray-100 pt-3">
+        <p className="text-xs text-gray-500">Excel is the reliable default. The <strong>monthly web check</strong> also scans the catalogue URL above for fee/detail changes and new programmes — everything it finds still lands <strong>pending</strong> for your review. Run it now:</p>
+        <button onClick={syncNow} disabled={syncing}
+          className="mt-2 inline-flex items-center gap-2 rounded-xl border border-[#1e3a5f]/25 px-4 py-2 text-sm font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">
+          {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} {syncing ? 'Checking…' : 'Run web check now'}
         </button>
       </div>
     </CardContent></Card>
