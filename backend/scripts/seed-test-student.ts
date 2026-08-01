@@ -3,11 +3,10 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 import { PrismaClient, type InstitutionType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { assignPrioritySlots, type SlotRule } from '../src/matching/matching.logic';
 
 // QA seed — one test STUDENT already PAST the account-opening payment gate, with a
-// populated recommendation list + auto-suggested priority slots, so the
-// Apply/Study surface (PR-RECS-1/2) can be demoed in a realistic state.
+// populated recommendation list, so the Apply/Study surface (PR-RECS-1) can be
+// demoed in a realistic state.
 //
 // Idempotent: keyed by the test email; re-running updates rather than duplicates.
 // Institutions are FICTIONAL ("(demo)") — no real-provider impersonation.
@@ -27,7 +26,7 @@ const PROVIDERS: Array<{ name: string; type: InstitutionType; providerType: any;
   { name: 'Harbour College (demo)',                type: 'PTE',        providerType: 'COLLEGE',     city: 'Wellington', programmes: ['Diploma in Business Administration', 'Certificate in Hospitality Management'] },
 ];
 
-// Rank order → drives assignPrioritySlots to a valid slate (1,2=Uni · 3=PTE · 4=ITP · 5=PTE).
+// Rank order for the recommendation list (1,2=Uni · 3=PTE · 4=ITP · 5=PTE).
 const RANKING: Array<{ provider: string; programme: string; fitScore: number; type: InstitutionType }> = [
   { provider: 'Aotearoa University (demo)',           programme: 'Bachelor of Information Technology', fitScore: 0.82, type: 'UNIVERSITY' },
   { provider: 'Aotearoa University (demo)',           programme: 'Bachelor of Business',               fitScore: 0.74, type: 'UNIVERSITY' },
@@ -94,7 +93,7 @@ async function main() {
   }
 
   // 6. Recommendation list (VIEWED = reviewed) + ranked items. Reset any prior one.
-  await prisma.recommendationList.deleteMany({ where: { caseId: kase.id } }); // clears items + slots via cascade
+  await prisma.recommendationList.deleteMany({ where: { caseId: kase.id } }); // clears items via cascade
   const list = await prisma.recommendationList.create({
     data: { caseId: kase.id, status: 'VIEWED', criteriaSource: 'SCORECARD', criteriaJson: { note: 'demo — reverse-mapped from scorecard', qualificationFieldId: null } },
   });
@@ -105,21 +104,13 @@ async function main() {
     });
   }
 
-  // 7. Pre-seed the auto-suggested priority slots (what the picker shows on open).
-  const cfg = await prisma.countryExecutionConfig.findUnique({ where: { countryCode: 'NZ' } });
-  if (cfg) {
-    const items = await prisma.recommendationItem.findMany({ where: { recommendationListId: list.id }, orderBy: { rank: 'asc' }, select: { programmeId: true, institutionType: true } });
-    const assigned = assignPrioritySlots(items.map((i) => ({ programmeId: i.programmeId, institutionType: i.institutionType })), cfg.slotRules as unknown as SlotRule[], cfg.slotCount);
-    await prisma.prioritySlot.createMany({ data: assigned.map((s) => ({ recommendationListId: list.id, position: s.position, programmeId: s.programmeId })) });
-  }
-
   console.log('\n=== TEST STUDENT READY ===');
   console.log('  Environment : LOCAL DEV (your machine)');
   console.log('  Portal URL  : http://localhost:3000/login  → then /student');
   console.log('  Email       :', EMAIL);
   console.log('  Password    :', PASSWORD);
   console.log('  Case id     :', kase.id, '(engagement fee PAID → portal unlocked)');
-  console.log('  Recommends  :', RANKING.length, 'programmes ·', cfg ? '5 priority slots pre-filled' : '(no NZ config — slots seed on first open)');
+  console.log('  Recommends  :', RANKING.length, 'programmes');
   console.log('  Run servers : backend `npm run start:dev` (:3001) + frontend `npm run dev` (:3000)\n');
   await prisma.$disconnect();
 }

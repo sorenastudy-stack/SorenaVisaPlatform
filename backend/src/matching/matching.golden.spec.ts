@@ -11,8 +11,8 @@
 // only engages when a CountryExecutionConfig weighting is supplied. New fixtures
 // with institution types + weighting are added alongside (not replacing) these.
 import {
-  softScore, rankRecommendations, institutionFactor, assignPrioritySlots,
-  type MatchCriteria, type ProgrammeForMatch, type FieldNode, type RelationEdge, type SlotRule,
+  softScore, rankRecommendations, institutionFactor,
+  type MatchCriteria, type ProgrammeForMatch, type FieldNode, type RelationEdge,
 } from './matching.logic';
 
 const FIELDS: FieldNode[] = [
@@ -113,38 +113,6 @@ describe('GOLDEN — softScore with institution weighting (6-factor)', () => {
       ['pte-a', 0.658], // PTE weighting lifts it above the higher-ranked University
       ['uni-a', 0.653],
       ['itp-a', 0.648],
-    ]);
-  });
-});
-
-describe('GOLDEN — assignPrioritySlots (distinct 2nd step, NZ slotRules)', () => {
-  const SLOT_RULES: SlotRule[] = [
-    { position: 1, allowedTypes: ['UNIVERSITY'], mandatory: false },
-    { position: 2, allowedTypes: ['UNIVERSITY'], mandatory: false },
-    { position: 3, allowedTypes: ['UNIVERSITY', 'ITP', 'PTE'], mandatory: false, preferred: 'PTE' },
-    { position: 4, allowedTypes: ['ITP'], mandatory: true },
-    { position: 5, allowedTypes: ['PTE'], mandatory: true },
-  ];
-  const ranked = [
-    { programmeId: 'uni-a', institutionType: 'UNIVERSITY' as const },
-    { programmeId: 'uni-b', institutionType: 'UNIVERSITY' as const },
-    { programmeId: 'itp-a', institutionType: 'ITP' as const },
-    { programmeId: 'pte-a', institutionType: 'PTE' as const },
-    { programmeId: 'pte-b', institutionType: 'PTE' as const },
-  ];
-  it('fills each position respecting allowedTypes + preferred, one programme per slot', () => {
-    const slots = assignPrioritySlots(ranked, SLOT_RULES, 5);
-    expect(slots.map((s) => [s.position, s.programmeId, s.unmetMandatory])).toEqual([
-      [1, 'uni-a', false], [2, 'uni-b', false], [3, 'pte-a', false], [4, 'itp-a', false], [5, 'pte-b', false],
-    ]);
-  });
-  it('flags unmetMandatory when a mandatory type has no eligible programme', () => {
-    const noPte = ranked.filter((r) => r.institutionType !== 'PTE');
-    const slots = assignPrioritySlots(noPte, SLOT_RULES, 5);
-    expect(slots.map((s) => [s.position, s.programmeId, s.unmetMandatory])).toEqual([
-      [1, 'uni-a', false], [2, 'uni-b', false], [3, 'itp-a', false],
-      [4, null, true],  // mandatory ITP — itp-a already used at slot 3
-      [5, null, true],  // mandatory PTE — none available
     ]);
   });
 });
