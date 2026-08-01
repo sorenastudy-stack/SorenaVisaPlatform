@@ -8,8 +8,11 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -84,6 +87,26 @@ export class ProvidersController {
     return this.providersService.addProgramme(providerId, dto);
   }
 
+  // PR-CATALOG-1 — Owner-panel Excel import for ONE institution (multipart upload).
+  @Post(':id/import-programmes')
+  @Roles(...PROVIDER_ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  importProgrammes(
+    @Param('id') providerId: string,
+    @UploadedFile() file: { buffer?: Buffer; originalname?: string },
+    @Query('dry') dry?: string,
+  ) {
+    return this.providersService.importProgrammes(providerId, file, dry === 'true');
+  }
+
+  // PR-CATALOG-1 — cross-institution pending-programme review queue. Declared
+  // before the `:id` route so "programmes" is never captured as a provider id.
+  @Get('programmes/pending')
+  @Roles(...CATALOG_ADMIN)
+  pendingProgrammes() {
+    return this.providersService.pendingProgrammes();
+  }
+
   @Get(':id')
   @Roles(...CATALOG_READ)
   findOne(@Param('id') providerId: string) {
@@ -145,7 +168,7 @@ export class ProvidersController {
   }
 
   @Patch('programmes/:programmeId/approve')
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles(...CATALOG_ADMIN)
   approveProgramme(
     @Param('programmeId') programmeId: string,
     @Req() req: any,
@@ -157,7 +180,7 @@ export class ProvidersController {
   }
 
   @Patch('programmes/:programmeId/reject')
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles(...CATALOG_ADMIN)
   rejectProgramme(
     @Param('programmeId') programmeId: string,
     @Req() req: any,

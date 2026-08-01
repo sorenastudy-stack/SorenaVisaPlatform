@@ -231,7 +231,10 @@ export class PublicService {
 
   async listProgrammes() {
     const rows = await this.prisma.educationProgramme.findMany({
-      where: { isActive: true, reviewStatus: ReviewStatus.APPROVED },
+      // PR-CATALOG-1 — identical visibility rule to the matcher: provider ACTIVE
+      // AND programme APPROVED AND isActive. No silent inconsistency between the
+      // two student-facing surfaces.
+      where: { isActive: true, reviewStatus: ReviewStatus.APPROVED, provider: { status: 'ACTIVE' } },
       select: {
         id: true, name: true, intakeMonths: true,
         provider: { select: { name: true } },

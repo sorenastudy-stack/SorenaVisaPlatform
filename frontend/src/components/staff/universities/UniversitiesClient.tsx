@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award,
+  GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -228,6 +228,7 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
         </div>
       </CardContent></Card>
 
+      {isEdit && providerId && <ImportProgrammesSection providerId={providerId} />}
       {isEdit && providerId && <ScholarshipsSection providerId={providerId} programmes={programmes} />}
     </div>
   );
@@ -246,6 +247,41 @@ function RateField({ label, type, value, onType, onValue }: { label: string; typ
 }
 
 // ── Scholarships subsection ─────────────────────────────────────────────────
+// PR-CATALOG-1 — per-institution Excel import. Every row lands PENDING; the Owner
+// reviews + approves each in "Programme approvals" before students see it.
+function ImportProgrammesSection({ providerId }: { providerId: string }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const doImport = async () => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await api.upload<{ created: number; updated: number; skipped: number; unmapped: string[] }>(`/providers/${providerId}/import-programmes`, fd);
+      toast.success(`Imported ${r.created} new, ${r.updated} updated${r.unmapped.length ? ` · ${r.unmapped.length} need a StudyField check` : ''}. Review them in Programme approvals.`);
+      setFile(null);
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Import failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card><CardContent className="p-5 space-y-3">
+      <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">Import programmes (Excel)</h3>
+      <p className="text-xs text-gray-500">Upload this institution&apos;s programme spreadsheet. Every row lands as <strong>pending</strong> — review and approve each one in <strong>Programme approvals</strong> before students can see it.</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <input type="file" accept=".xlsx,.xls" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm text-gray-600" />
+        <button onClick={doImport} disabled={!file || busy}
+          className="inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+          {busy ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />} Import
+        </button>
+      </div>
+    </CardContent></Card>
+  );
+}
+
 const emptySch = { nationality: 'IR', programmeId: '', level: '', name: '', amountType: 'FIXED', amountValue: '', currency: 'NZD', eligibilityNotes: '', isActive: true };
 
 function ScholarshipsSection({ providerId, programmes }: { providerId: string; programmes: Programme[] }) {

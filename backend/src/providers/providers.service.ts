@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService, EventSource } from '../events/events.service';
+import { ProgrammeImportService } from './import/programme-import.service';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateAgreementDto } from './dto/update-agreement.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
@@ -29,7 +30,48 @@ export class ProvidersService {
   constructor(
     private prisma: PrismaService,
     private eventsService: EventsService,
+    private programmeImport: ProgrammeImportService,
   ) {}
+
+  // PR-CATALOG-1 — Owner-panel Excel import for ONE institution. Runs the shared
+  // importer with a fixed providerId → all programmes land PENDING, source
+  // MANUAL_EXCEL, invisible to students until per-programme approval.
+  async importProgrammes(providerId: string, file: { buffer?: Buffer; originalname?: string } | undefined, dryRun: boolean) {
+    if (!file?.buffer) throw new BadRequestException('No file uploaded.');
+    const provider = await this.prisma.educationProvider.findUnique({ where: { id: providerId }, select: { id: true, institutionType: true } });
+    if (!provider) throw new NotFoundException('Institution not found.');
+    try {
+      return await this.programmeImport.importFromXlsx(file.buffer, {
+        institutionType: provider.institutionType ?? 'ITP',
+        providerId,
+        sourceRef: `upload-${provider.id}-${(file.originalname ?? 'file').replace(/[^\w.-]/g, '_')}`,
+        dryRun,
+      });
+    } catch (e) {
+      throw new BadRequestException(`Could not read the spreadsheet: ${(e as Error).message}`);
+    }
+  }
+
+  // PR-CATALOG-1 — cross-institution pending-programme review queue.
+  async pendingProgrammes() {
+    const rows = await this.prisma.educationProgramme.findMany({
+      where: { reviewStatus: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        provider: { select: { id: true, name: true, status: true, institutionType: true } },
+        studyFields: { take: 1, include: { studyField: { select: { key: true, nameEn: true } } } },
+        _count: { select: { intakes: true } },
+      },
+    });
+    return rows.map((p) => ({
+      id: p.id, name: p.name, level: p.level, nzqfLevel: p.nzqfLevel,
+      campusCity: p.campusCity, tuitionFeeNZD: p.tuitionFeeNZD, currency: p.currency,
+      source: p.source, sourceRef: p.sourceRef, createdAt: p.createdAt,
+      provider: { id: p.provider.id, name: p.provider.name, status: p.provider.status, institutionType: p.provider.institutionType },
+      studyField: p.studyFields[0]?.studyField ?? null,
+      intakeCount: p._count.intakes,
+    }));
+  }
 
   async createProvider(dto: CreateProviderDto, actorId: string | null) {
     const provider = await this.prisma.educationProvider.create({

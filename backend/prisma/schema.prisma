@@ -2264,6 +2264,11 @@ model EducationProgramme {
   aiLastRunAt           DateTime?
   reviewStatus          ReviewStatus        @default(PENDING)
   isActive              Boolean             @default(false)
+  // PR-CATALOG-1 — provenance. Excel import → MANUAL_EXCEL; hand-added via API →
+  // MANUAL_ENTRY; a future automated web check → AUTOMATED_WEB_CHECK. sourceRef =
+  // the import batch id or the source URL.
+  source                ProgrammeSource     @default(MANUAL_ENTRY)
+  sourceRef             String?
   // PR-PHASE32 — recommendation enrichment (AI-seeded → staff-approved).
   descriptionEn         String?
   descriptionFa         String?
@@ -2302,6 +2307,8 @@ model EducationProgramme {
   recommendationItems RecommendationItem[]
   // PR-RECS-2 — priority-slot assignments referencing this programme.
   prioritySlots       PrioritySlot[]
+  // PR-CATALOG-1 — proposed changes awaiting Owner review (Piece 2 producer).
+  changeProposals     ProgrammeChangeProposal[]
 
   @@index([providerId])
   @@index([level])
@@ -4965,4 +4972,43 @@ model AdmissionTask {
   @@index([assignedToId, status])
   @@index([caseId])
   @@map("admission_tasks")
+}
+
+// ─── PROGRAMME CATALOG PROVENANCE + CHANGE REVIEW (PR-CATALOG-1) ───────────────
+// Every programme change — new or updated, manual or automated — enters one review
+// queue as PENDING, tagged by source; nothing is auto-approved. Piece 1 uses the
+// `source`/`sourceRef` fields on EducationProgramme (new programmes). The
+// ProgrammeChangeProposal model is created NOW but its producer (the monthly web
+// check) is Piece 2 — designing the shape now means Piece 2 needs no migration.
+enum ProgrammeSource {
+  MANUAL_EXCEL
+  MANUAL_ENTRY
+  AUTOMATED_WEB_CHECK
+}
+
+enum ChangeProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A proposed change to an already-APPROVED programme (e.g. a fee/intake update
+// detected by the Piece-2 web check). Held for per-programme Owner review — never
+// overwrites the live programme before approval. Empty until Piece 2.
+model ProgrammeChangeProposal {
+  id            String               @id @default(cuid())
+  programmeId   String
+  source        ProgrammeSource
+  changedFields Json // { tuitionFeeNZD: {from, to}, intakeMonths: {from, to}, … }
+  sourceUrl     String?
+  detectedAt    DateTime             @default(now())
+  status        ChangeProposalStatus @default(PENDING)
+  reviewedById  String?
+  reviewedAt    DateTime?
+
+  programme EducationProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([programmeId])
+  @@map("programme_change_proposals")
 }

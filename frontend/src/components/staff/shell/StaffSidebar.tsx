@@ -62,6 +62,8 @@ const SLA_REPORT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 const SLA_SETTINGS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // PR-UNIVERSITIES — Owner-only institution catalog (commissions + scholarships).
 const UNIVERSITIES_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
+// PR-CATALOG-1 — cross-institution pending-programme approval queue.
+const PROGRAMME_APPROVALS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // PR-OWNER-1 — per-country institution distribution + AI agent config. OWNER edits;
 // SUPER_ADMIN may view (edit controls gate in-page; backend enforces OWNER on write).
 const COUNTRY_CONFIG_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
@@ -126,6 +128,8 @@ const NAV: NavItem[] = [
   // earns from providers). OWNER + FINANCE.
   { label: 'Commissions',                  href: '/staff/commissions',        icon: <DollarSign size={18} />,  roleGate: COMMISSIONS_ROLES },
   { label: 'Universities',                 href: '/staff/universities',       icon: <GraduationCap size={18} />, roleGate: UNIVERSITIES_ROLES },
+  // PR-CATALOG-1: cross-institution pending-programme approval queue.
+  { label: 'Programme approvals',          href: '/staff/programme-approvals', icon: <CheckCircle2 size={18} />, roleGate: PROGRAMME_APPROVALS_ROLES },
   // PR-OWNER-1: per-country institution distribution + AI agent config.
   { label: 'Country Config',               href: '/staff/country-config',     icon: <Globe2 size={18} />,      roleGate: COUNTRY_CONFIG_ROLES },
   // PR-DOCUSIGN-1 step 3 (Screen B): LIA credential verification queue.
