@@ -2202,6 +2202,9 @@ model EducationProvider {
   country              String           @default("NZ")
   city                 String?
   websiteUrl           String?
+  // PR-CATALOG-2 — programme-listing/index entry point for the monthly discovery
+  // crawl (Pass B). Owner-supplied; discovery skips the institution when unset.
+  catalogueUrl         String?
   status               ProviderStatus   @default(PENDING)
   agreementUrl         String?
   agreementStartDate   DateTime?
@@ -2232,6 +2235,7 @@ model EducationProvider {
   applications Application[]
   commissions  Commission[]
   scholarships ProviderScholarship[]
+  candidates   ProgrammeCandidate[] // PR-CATALOG-2 — new-programme discovery candidates
 
   @@map("education_providers")
 }
@@ -5011,4 +5015,35 @@ model ProgrammeChangeProposal {
   @@index([status])
   @@index([programmeId])
   @@map("programme_change_proposals")
+}
+
+// PR-CATALOG-2 — a NEW-programme candidate discovered by the monthly catalogue crawl
+// (Pass B). Unlike ProgrammeChangeProposal (a diff to an EXISTING programme), a
+// candidate has no programme yet — it belongs to a provider and carries a full
+// extracted record in proposedData. Held for per-programme Owner review in the same
+// queue; on approval it materialises a real EducationProgramme via the shared importer
+// path. Never auto-published, regardless of confidence. Empty until the crawl runs.
+model ProgrammeCandidate {
+  id             String               @id @default(cuid())
+  providerId     String
+  source         ProgrammeSource // AUTOMATED_WEB_CHECK (reuses the Piece-1 enum)
+  sourceUrl      String // the programme page it was extracted from
+  proposedData   Json // full extracted record, shaped for rowToProgrammeData → upsert
+  confidence     Float? // extractor self-assessed 0..1 (drives the review bucket, never publish)
+  detectedFields String[] // which required fields were actually found on the page
+  // Dedupe natural key — also blocks a REJECTED candidate from resurfacing next sweep.
+  nameNormalized String
+  nzqfLevel      String?
+  campusCity     String?
+  status         ChangeProposalStatus @default(PENDING) // reuses the Piece-1 enum
+  reviewedById   String?
+  reviewedAt     DateTime?
+  detectedAt     DateTime             @default(now())
+
+  provider EducationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([providerId])
+  @@index([providerId, nameNormalized, nzqfLevel, campusCity])
+  @@map("programme_candidates")
 }
