@@ -17,5 +17,6 @@ import { LeadQualificationAgent } from './agents/lead-qualification.agent';
     LeadQualificationAgent,
     EventsService,
   ],
+  exports: [ClaudeService], // PR-CATALOG-2 — reused by the web-sync extraction service
 })
 export class AiModule {}

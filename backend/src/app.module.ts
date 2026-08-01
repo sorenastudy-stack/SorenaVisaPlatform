@@ -55,6 +55,7 @@ import { AuditModule } from './audit/audit.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { HandoffsModule } from './handoffs/handoffs.module';
 import { NurtureModule } from './nurture/nurture.module';
+import { WebSyncModule } from './providers/websync/websync.module';
 import { DiaryModule } from './diary/diary.module';
 import { KanbanModule } from './kanban/kanban.module';
 import { SlaModule } from './sla/sla.module';
@@ -167,6 +168,10 @@ import { SlaModule } from './sla/sla.module';
     // PR-NURTURE: post-FREE_15 nurture sequence (4 emails + 3 call tasks / 21
     // days) → indefinite monthly newsletter, with unsubscribe. Daily cron.
     NurtureModule,
+    // PR-CATALOG-2: monthly web re-sync — change monitoring on approved programmes +
+    // new-programme discovery from each institution's catalogueUrl. Every finding lands
+    // PENDING in the shared approval queue (nothing auto-published). Monthly cron.
+    WebSyncModule,
     // PR-DIARY: Client Officer daily agenda (today + missed) over nurture call
     // tasks + consultation meetings. Read-only.
     DiaryModule,

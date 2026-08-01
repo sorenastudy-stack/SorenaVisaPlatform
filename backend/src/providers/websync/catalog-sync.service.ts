@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PageFetchService, type PageFetcher } from './page-fetch.service';
-import { ProgrammeExtractionService, type ProgrammeExtractor } from './programme-extraction.service';
+import { PageFetchService } from './page-fetch.service';
+import { ProgrammeExtractionService } from './programme-extraction.service';
 import { extractLinks } from './page-fetch.logic';
 import {
   diffMonitoredFields,
@@ -51,9 +51,11 @@ export class CatalogSyncService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly fetcher: PageFetcher & PageFetchService,
-    private readonly extractor: ProgrammeExtractor & ProgrammeExtractionService,
-    deps: SweepDeps = {},
+    private readonly fetcher: PageFetchService,
+    private readonly extractor: ProgrammeExtractionService,
+    // Test-only knobs; DI leaves this undefined (→ defaults). Concrete class types above
+    // so Nest can inject them — an intersection type erases to Object and can't be resolved.
+    @Optional() deps: SweepDeps = {},
   ) {
     this.now = deps.now ?? (() => new Date());
     this.sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
