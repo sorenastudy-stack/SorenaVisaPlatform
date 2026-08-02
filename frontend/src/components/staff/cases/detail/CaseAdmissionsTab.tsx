@@ -82,6 +82,33 @@ const SOP_SECTIONS: Array<{ key: keyof SopNarrative; label: string; gate?: SopGa
   { key: 'conclusion', label: 'Conclusion', rows: 2 },
 ];
 
+// ── Submission Log (PR-ADMISSION-SUBMIT, step 4) ────────────────────────────
+interface SubmissionAttempt {
+  id: string; choiceId: string; submittedAt: string; method: string; portalName: string | null;
+  referenceNo: string | null; outcome: string; responseReceivedAt: string | null; responseNotes: string | null; createdAt: string;
+}
+interface SubmissionChoice {
+  choiceId: string; priority: number; programme: string; provider: string | null;
+  intake: { month: number | null; year: number | null }; currentOutcome: string | null; attemptCount: number; attempts: SubmissionAttempt[];
+}
+interface SubmissionListResp { applicationStatus: string | null; choices: SubmissionChoice[] }
+
+const SUB_METHODS = ['PORTAL', 'EMAIL', 'AGENT_PORTAL', 'OTHER'] as const;
+const SUB_METHOD_LABEL: Record<string, string> = { PORTAL: 'Institution portal', EMAIL: 'Email', AGENT_PORTAL: 'Agent portal', OTHER: 'Other' };
+const SUB_OUTCOMES = ['PENDING', 'ACKNOWLEDGED', 'OFFER', 'DECLINED', 'WITHDRAWN'] as const;
+const SUB_OUTCOME_LABEL: Record<string, string> = { PENDING: 'Pending', ACKNOWLEDGED: 'Acknowledged', OFFER: 'Offer received', DECLINED: 'Declined', WITHDRAWN: 'Withdrawn' };
+const SUB_OUTCOME_STYLE: Record<string, string> = {
+  PENDING: 'bg-amber-100 text-amber-700',
+  ACKNOWLEDGED: 'bg-sky-100 text-sky-700',
+  OFFER: 'bg-[#15a86b]/12 text-[#15803d]',
+  DECLINED: 'bg-red-100 text-red-700',
+  WITHDRAWN: 'bg-gray-100 text-gray-600',
+};
+const OutcomeBadge = ({ outcome }: { outcome: string }) => (
+  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${SUB_OUTCOME_STYLE[outcome] ?? 'bg-gray-100 text-gray-600'}`}>{SUB_OUTCOME_LABEL[outcome] ?? outcome}</span>
+);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
 const TYPE_LABEL: Record<string, string> = { UNIVERSITY: 'University', ITP: 'Polytechnic', PTE: 'College' };
 const typeLabel = (t: string | null) => (t ? TYPE_LABEL[t] ?? t : 'Unknown type');
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -577,6 +604,168 @@ function SopSection({ caseId }: { caseId: string }) {
   );
 }
 
+// One programme choice + its append-only submission attempts (newest first). Owns its own add /
+// respond form state so several choices can be open at once.
+function SubmissionCard({ caseId, item, reload }: { caseId: string; item: SubmissionChoice; reload: () => Promise<void> }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ submittedAt: todayStr(), method: 'PORTAL', portalName: '', referenceNo: '' });
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [resp, setResp] = useState({ outcome: 'ACKNOWLEDGED', responseReceivedAt: todayStr(), responseNotes: '' });
+
+  const intake = item.intake.month && item.intake.year ? intakeLabel(item.intake.month, item.intake.year) : null;
+
+  const add = async () => {
+    setBusy('add');
+    try {
+      await api.post(`/api/staff/cases/${caseId}/submissions`, { choiceId: item.choiceId, ...form });
+      toast.success('Submission logged.');
+      setAdding(false); setForm({ submittedAt: todayStr(), method: 'PORTAL', portalName: '', referenceNo: '' });
+      await reload();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not log the submission.'); }
+    finally { setBusy(null); }
+  };
+  const openResp = (a: SubmissionAttempt) => {
+    setRespondingId(a.id);
+    setResp({ outcome: a.outcome === 'PENDING' ? 'ACKNOWLEDGED' : a.outcome, responseReceivedAt: a.responseReceivedAt ?? todayStr(), responseNotes: a.responseNotes ?? '' });
+  };
+  const saveResp = async (id: string) => {
+    setBusy(id);
+    try {
+      await api.patch(`/api/staff/cases/${caseId}/submissions/${id}/response`, resp);
+      toast.success('Response recorded.');
+      setRespondingId(null);
+      await reload();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not record the response.'); }
+    finally { setBusy(null); }
+  };
+  const remove = async (id: string) => {
+    if (!confirm('Delete this submission attempt? This is for correcting a mis-entry — the trail is otherwise kept.')) return;
+    setBusy(id);
+    try { await api.delete(`/api/staff/cases/${caseId}/submissions/${id}`); toast.success('Attempt removed.'); await reload(); }
+    catch (e: any) { toast.error(e?.message ?? 'Could not delete.'); }
+    finally { setBusy(null); }
+  };
+
+  const field = 'rounded-lg border border-sorena-navy/20 px-2 py-1.5 text-sm';
+  return (
+    <div className="rounded-xl border border-sorena-navy/10 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-md bg-[#1e3a5f]/8 px-1.5 py-0.5 text-[11px] font-bold text-[#1e3a5f]">#{item.priority}</span>
+        <span className="text-sm font-semibold text-[#1e3a5f]">{item.programme}</span>
+        <span className="text-xs text-gray-500">{[item.provider, intake].filter(Boolean).join(' · ')}</span>
+        {item.currentOutcome ? <OutcomeBadge outcome={item.currentOutcome} /> : <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">Not submitted</span>}
+        <button onClick={() => setAdding((v) => !v)} disabled={!!busy} className="ms-auto inline-flex items-center gap-1 rounded-lg border border-[#1e3a5f]/30 px-2.5 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">
+          <Plus size={12} /> Log submission
+        </button>
+      </div>
+
+      {/* add-attempt form */}
+      {adding && (
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-sorena-navy/10 bg-[#f8fafc] p-3 sm:grid-cols-4">
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Date
+            <input type="date" max={todayStr()} value={form.submittedAt} onChange={(e) => setForm({ ...form, submittedAt: e.target.value })} className={field} />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Method
+            <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className={field}>
+              {SUB_METHODS.map((m) => <option key={m} value={m}>{SUB_METHOD_LABEL[m]}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Portal / system
+            <input value={form.portalName} onChange={(e) => setForm({ ...form, portalName: e.target.value })} placeholder="e.g. their online apply" className={field} />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Reference #
+            <input value={form.referenceNo} onChange={(e) => setForm({ ...form, referenceNo: e.target.value })} placeholder="Institution ref" className={field} />
+          </label>
+          <div className="col-span-2 flex justify-end gap-2 sm:col-span-4">
+            <button onClick={() => setAdding(false)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button onClick={add} disabled={busy === 'add'} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1e3a5f] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+              {busy === 'add' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save submission
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* attempt history (newest first) */}
+      {item.attempts.length === 0 ? (
+        <p className="mt-3 text-xs text-gray-400">No submissions logged for this choice yet.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {item.attempts.map((a) => (
+            <li key={a.id} className="rounded-lg border border-sorena-navy/10 p-2.5">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium text-[#1e3a5f]">{a.submittedAt}</span>
+                <span className="text-gray-500">· {SUB_METHOD_LABEL[a.method] ?? a.method}</span>
+                {a.portalName && <span className="text-gray-500">· {a.portalName}</span>}
+                {a.referenceNo && <span className="text-gray-400">· ref {a.referenceNo}</span>}
+                <OutcomeBadge outcome={a.outcome} />
+                <div className="ms-auto flex gap-1">
+                  <button onClick={() => (respondingId === a.id ? setRespondingId(null) : openResp(a))} disabled={!!busy} className="rounded border border-gray-300 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-50">Record response</button>
+                  <button onClick={() => remove(a.id)} disabled={!!busy} title="Delete mis-entry" className="rounded border border-red-200 px-1.5 py-1 text-red-500 hover:bg-red-50 disabled:opacity-50"><Trash2 size={12} /></button>
+                </div>
+              </div>
+              {(a.responseReceivedAt || a.responseNotes) && respondingId !== a.id && (
+                <p className="mt-1 text-xs text-gray-500">{[a.responseReceivedAt && `Response ${a.responseReceivedAt}`, a.responseNotes].filter(Boolean).join(' · ')}</p>
+              )}
+              {respondingId === a.id && (
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Outcome
+                    <select value={resp.outcome} onChange={(e) => setResp({ ...resp, outcome: e.target.value })} className={field}>
+                      {SUB_OUTCOMES.map((o) => <option key={o} value={o}>{SUB_OUTCOME_LABEL[o]}</option>)}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Response date
+                    <input type="date" max={todayStr()} min={a.submittedAt} value={resp.responseReceivedAt} onChange={(e) => setResp({ ...resp, responseReceivedAt: e.target.value })} className={field} />
+                  </label>
+                  <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Notes
+                    <input value={resp.responseNotes} onChange={(e) => setResp({ ...resp, responseNotes: e.target.value })} placeholder="Optional" className={field} />
+                  </label>
+                  <div className="col-span-2 flex justify-end gap-2 sm:col-span-3">
+                    <button onClick={() => setRespondingId(null)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
+                    <button onClick={() => saveResp(a.id)} disabled={busy === a.id} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1e3a5f] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+                      {busy === a.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save response
+                    </button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-[11px] text-gray-400">Each submission is a logged attempt — a resubmission is a new entry (the trail is kept). Recording a response updates that attempt&apos;s outcome; the coarse outcome here feeds the Offer record later.</p>
+    </div>
+  );
+}
+
+function SubmissionSection({ caseId }: { caseId: string }) {
+  const [data, setData] = useState<SubmissionListResp | null>(null);
+  const load = async () => {
+    await api.get<SubmissionListResp>(`/api/staff/cases/${caseId}/submissions`).then(setData).catch(() => setData({ applicationStatus: null, choices: [] }));
+  };
+  useEffect(() => { load(); }, [caseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submitted = data?.applicationStatus === 'SUBMITTED' || data?.applicationStatus === 'LOCKED';
+  const choices = data?.choices ?? [];
+
+  return (
+    <Section icon={Send} title="Submission log">
+      {data === null ? (
+        <EmptyCard>Loading…</EmptyCard>
+      ) : !submitted ? (
+        <EmptyCard>Per-institution submission tracking. Available once the client has <strong>submitted their programme choices</strong>.</EmptyCard>
+      ) : choices.length === 0 ? (
+        <EmptyCard>No programme choices on this application yet.</EmptyCard>
+      ) : (
+        <div className="space-y-3">
+          {[...choices].sort((a, b) => a.priority - b.priority).map((c) => (
+            <SubmissionCard key={c.choiceId} caseId={caseId} item={c} reload={load} />
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: string }) {
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [noApplication, setNoApplication] = useState(false);
@@ -693,7 +882,8 @@ export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: 
 
       {/* ── Placeholders for later steps (honest empty states) ──────────── */}
       <Placeholder icon={Award} title="Offer record" note="Offer-of-place logging (institution, conditional/unconditional, expiry, letter) lands in a later step." />
-      <Placeholder icon={Send} title="Submission history" note="Per-institution submission logging (date, method, portal, response, outcome) lands in a later step." />
+      {/* ── Submission log (real — PR-ADMISSION-SUBMIT) ──────────────────── */}
+      <SubmissionSection caseId={caseId} />
     </div>
   );
 }

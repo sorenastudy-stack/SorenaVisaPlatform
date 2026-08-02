@@ -1502,6 +1502,7 @@ model Case {
   applications          Application[]
   cvDocuments           CvDocument[]
   sopDocuments          SopDocument[]
+  submissionRecords     SubmissionRecord[]
   contract              Contract?
   tickets               Ticket[]
   invoices              Invoice[]
@@ -2976,6 +2977,7 @@ model AdmissionProgrammeChoice {
   admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
   programme            EducationProgramme   @relation(fields: [programmeId], references: [id])
   sopDocuments         SopDocument[]
+  submissionRecords    SubmissionRecord[]
 
   @@index([admissionApplicationId])
   @@map("admission_programme_choices")
@@ -3029,6 +3031,54 @@ model SopDocument {
   @@index([caseId, status])
   @@index([admissionProgrammeChoiceId, status])
   @@map("sop_documents")
+}
+
+// PR-ADMISSION-SUBMIT (step 4) — the per-institution Submission Log. One row per submission ATTEMPT
+// to an institution (the client's chosen programme). APPEND-ONLY (Owner decision 2026-08-03): a
+// resubmission is a NEW row, never an overwrite, so the full trail of attempts is preserved. The
+// submission facts (submittedAt/method/portalName/referenceNo) freeze at creation; only the
+// institution's RESPONSE to that specific attempt (responseReceivedAt/responseNotes/outcome) is
+// completed later. A choice's current status = its latest attempt row.
+//
+// Outcome is COARSE here — the formal offer (conditions/expiry/letter) is the Step-6 Offer record.
+enum SubmissionMethod {
+  PORTAL // the institution's own online application portal
+  EMAIL // emailed to an admissions inbox
+  AGENT_PORTAL // a third-party agent/aggregator portal
+  OTHER
+}
+
+enum SubmissionOutcome {
+  PENDING // submitted, awaiting a response
+  ACKNOWLEDGED // institution confirmed receipt / under assessment
+  OFFER // offer of place received (detail lives in the Step-6 Offer record)
+  DECLINED // application declined
+  WITHDRAWN // application withdrawn by us / the client
+}
+
+model SubmissionRecord {
+  id                         String            @id @default(cuid())
+  caseId                     String
+  admissionProgrammeChoiceId String
+  // Submission facts — frozen after creation.
+  submittedAt                DateTime          @db.Date
+  method                     SubmissionMethod
+  portalName                 String? // the specific portal/system used (free text)
+  referenceNo                String? // the institution's application reference (free text)
+  // Response to THIS attempt — completed as it arrives.
+  outcome                    SubmissionOutcome @default(PENDING)
+  responseReceivedAt         DateTime?         @db.Date
+  responseNotes              String?
+  submittedById              String?
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+
+  case            Case                     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  programmeChoice AdmissionProgrammeChoice @relation(fields: [admissionProgrammeChoiceId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([admissionProgrammeChoiceId])
+  @@map("submission_records")
 }
 
 model AdmissionDocument {
