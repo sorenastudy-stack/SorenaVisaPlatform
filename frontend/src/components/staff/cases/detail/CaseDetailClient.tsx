@@ -9,6 +9,7 @@ import { SendContractPanel } from './SendContractPanel';
 import { CaseTabs, type CaseTab } from './CaseTabs';
 import { CaseOverviewTab } from './CaseOverviewTab';
 import { CaseActivityTab } from './CaseActivityTab';
+import { CaseAdmissionsTab } from './CaseAdmissionsTab';
 import { CaseDocumentsPanel } from '@/components/cases/CaseDocumentsPanel';
 import { ConsultantDocumentsPanel } from '@/components/cases/ConsultantDocumentsPanel';
 import { CasePaymentsPanel } from '@/components/cases/CasePaymentsPanel';
@@ -41,6 +42,10 @@ export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?
   // UI gate by primary role; the backend re-enforces the LIA/OWNER/SUPER_ADMIN
   // allowlist on every request, so this only tidies the strip.
   const canSeeNotes = !!me?.role && ['LIA', 'OWNER', 'SUPER_ADMIN'].includes(me.role);
+  // PR-ADMISSION-CASEFILE — the Admissions tab is the Admission Specialist substance. Gated
+  // to the roles the choices/scorecard endpoints allow (backend re-enforces); tidies the strip
+  // for LIA/SUPPORT/FINANCE who can't read those.
+  const canSeeAdmissions = !!me?.role && ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT'].includes(me.role);
   const [data, setData] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<CaseTab>('overview');
@@ -87,10 +92,14 @@ export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?
         <CaseTabs
           active={tab}
           onChange={setTab}
-          hiddenTabs={canSeeNotes ? undefined : ['notes']}
+          hiddenTabs={[
+            ...(canSeeNotes ? [] : ['notes' as const]),
+            ...(canSeeAdmissions ? [] : ['admissions' as const]),
+          ]}
         />
         <div className="pt-5">
           {tab === 'overview'  && <CaseOverviewTab data={data} canEdit={canEdit} onSaved={refresh} />}
+          {tab === 'admissions' && canSeeAdmissions && <CaseAdmissionsTab data={data} caseId={data.id} />}
           {tab === 'activity'  && <CaseActivityTab caseId={data.id} />}
           {tab === 'notes'     && canSeeNotes && <ConversationNotesPanel caseId={data.id} />}
           {/* Phase 5e — CONSULTANT gets the read-only System B P1 view; every

@@ -34,6 +34,17 @@ export interface CaseDetail {
     phone:     string | null;
   };
   assignments: Record<RoleSlot, SlotAssignee | null>;
+  // PR-ADMISSION-CASEFILE (step 1) — latest real scorecard summary for the Admissions tab
+  // (null when the client hasn't submitted one).
+  scorecard: {
+    submissionId: string;
+    totalScore: number;
+    band: string;
+    categoryScores: number[];
+    executionEligible: boolean;
+    nextAction: string;
+    submittedAt: string;
+  } | null;
 }
 
 export interface ActivityEntry {

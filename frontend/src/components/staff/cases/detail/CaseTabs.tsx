@@ -8,13 +8,16 @@ import { useTranslations } from 'next-intl';
 // tab state. The Documents / Meetings / Tickets tabs render a
 // placeholder until later PRs build them out.
 
-export type CaseTab = 'overview' | 'documents' | 'payments' | 'meetings' | 'tickets' | 'activity' | 'notes';
+export type CaseTab = 'overview' | 'admissions' | 'documents' | 'payments' | 'meetings' | 'tickets' | 'activity' | 'notes';
 
 // Each tab is labelled by a bilingual t() key EXCEPT `notes`, which carries an
 // English literal — the conversation-notes feature is English-only and Persian is
 // frozen, so no fa key is added for it.
 const TABS: { id: CaseTab; labelKey?: string; label?: string }[] = [
   { id: 'overview',  labelKey: 'staff.cases.detail.tabs.overview' },
+  // PR-ADMISSION-CASEFILE — the Admission Specialist substance (score, choices, and the
+  // CV/SOP/offer/submission surfaces built in later steps). English literal (Persian frozen).
+  { id: 'admissions', label: 'Admissions' },
   { id: 'documents', labelKey: 'staff.cases.detail.tabs.documents' },
   { id: 'payments',  labelKey: 'staff.cases.detail.tabs.payments' },
   { id: 'meetings',  labelKey: 'staff.cases.detail.tabs.meetings' },

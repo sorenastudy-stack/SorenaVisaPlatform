@@ -22,7 +22,7 @@ interface Actor { id: string | null; name?: string | null; role?: string | null 
 const CHOICE_INCLUDE = {
   programmeChoices: {
     orderBy: { priority: 'asc' as const },
-    include: { programme: { select: { name: true, provider: { select: { name: true } } } } },
+    include: { programme: { select: { name: true, provider: { select: { name: true, institutionType: true } } } } },
   },
 };
 
@@ -49,6 +49,9 @@ export class StaffAdmissionChoicesService {
     return {
       id: c.id, programmeId: c.programmeId, programmeName: c.programme?.name ?? null,
       providerName: c.programme?.provider?.name ?? null,
+      // PR-ADMISSION-CASEFILE — institution type drives the Case File type badges +
+      // mandatory-position status display (read-only; same source as the student surface).
+      institutionType: c.programme?.provider?.institutionType ?? null,
       intakeMonth: c.intakeMonth, intakeYear: c.intakeYear, priority: c.priority,
     };
   }

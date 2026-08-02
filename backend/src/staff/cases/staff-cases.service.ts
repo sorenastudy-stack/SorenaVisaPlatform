@@ -217,6 +217,22 @@ export class StaffCasesService {
     const firstName = parts.shift() ?? '';
     const lastName  = parts.join(' ');
 
+    // PR-ADMISSION-CASEFILE (step 1) — the client's latest real scorecard, joined by the
+    // resolved contact userId, so the Case File can surface score/band without a second
+    // round-trip. Null when the client never submitted a scorecard.
+    const scUserId = row.lead.contact.userId;
+    const sc = scUserId
+      ? await this.prisma.scorecardSubmission.findFirst({
+          where: { userId: scUserId, isDraft: false },
+          orderBy: { submittedAt: 'desc' },
+          select: {
+            id: true, totalScore: true, band: true,
+            category1Score: true, category2Score: true, category3Score: true, category4Score: true,
+            executionEligible: true, nextAction: true, submittedAt: true,
+          },
+        })
+      : null;
+
     return {
       id:        row.id,
       status:    row.stage, // display stage in the status field — Case.status is vestigial
@@ -243,6 +259,18 @@ export class StaffCasesService {
         // PR-CLIENT-CONSULTANT-SLOT — the CLIENT_CONSULTANT (Case.consultantId) slot.
         CLIENT_CONSULTANT: row.consultant ? { id: row.consultant.id, name: row.consultant.name, role: row.consultant.role, photoUrl: consultantPhoto } : null,
       },
+      // PR-ADMISSION-CASEFILE (step 1) — score summary for the Case File Admissions tab.
+      scorecard: sc
+        ? {
+            submissionId: sc.id,
+            totalScore: sc.totalScore,
+            band: sc.band,
+            categoryScores: [sc.category1Score, sc.category2Score, sc.category3Score, sc.category4Score],
+            executionEligible: sc.executionEligible,
+            nextAction: sc.nextAction,
+            submittedAt: sc.submittedAt,
+          }
+        : null,
     };
   }
 
