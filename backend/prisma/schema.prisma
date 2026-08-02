@@ -1501,6 +1501,7 @@ model Case {
   consultant            User?                  @relation("CaseConsultant", fields: [consultantId], references: [id], onDelete: SetNull)
   applications          Application[]
   cvDocuments           CvDocument[]
+  sopDocuments          SopDocument[]
   contract              Contract?
   tickets               Ticket[]
   invoices              Invoice[]
@@ -2858,14 +2859,14 @@ model AdmissionApplication {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  case             Case                       @relation(fields: [caseId], references: [id])
-  contact          Contact                    @relation(fields: [contactId], references: [id])
-  agent            User?                      @relation("ApplicationAgent", fields: [agentId], references: [id])
-  programmeChoices AdmissionProgrammeChoice[]
-  educationEntries AdmissionEducationEntry[]
+  case              Case                       @relation(fields: [caseId], references: [id])
+  contact           Contact                    @relation(fields: [contactId], references: [id])
+  agent             User?                      @relation("ApplicationAgent", fields: [agentId], references: [id])
+  programmeChoices  AdmissionProgrammeChoice[]
+  educationEntries  AdmissionEducationEntry[]
   employmentEntries AdmissionEmploymentEntry[]
-  documents        AdmissionDocument[]
-  visaApplication  VisaApplication?
+  documents         AdmissionDocument[]
+  visaApplication   VisaApplication?
 
   @@index([caseId])
   @@index([contactId])
@@ -2974,9 +2975,60 @@ model AdmissionProgrammeChoice {
 
   admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
   programme            EducationProgramme   @relation(fields: [programmeId], references: [id])
+  sopDocuments         SopDocument[]
 
   @@index([admissionApplicationId])
   @@map("admission_programme_choices")
+}
+
+// PR-ADMISSION-SOP (step 3) — an AI-generated Statement of Purpose, reviewed/edited/approved by
+// the Admission Specialist. ONE SOP per (case, programme choice): each is localized to the
+// specific institution/programme/intake the client submitted, so the reasoning is genuinely
+// institution-specific. Versioned exactly like CvDocument (supersede-DRAFT-on-regenerate;
+// approve LOCKS that version; a later regenerate mints v+1). Generation is GATED to submitted
+// applications (shared finality point with Step 4), like the CV.
+//
+// Truthfulness: the SOP is a prose document, so it can't be assembled deterministically like the
+// CV — but the FACTUAL FRAME (applicant name + the target institution/programme/intake + a
+// verified profile line) is assembled from real rows and the AI narrative can never alter it; the
+// target institution SHAPES the narrative body only. contentJson = the editable factual frame +
+// labeled narrative sections; sourceSnapshotJson = what fed generation (audit).
+//
+// Quality gates (Owner decision 2026-08-03): three gates — career-plan specificity, NZ-specific
+// reasoning, home ties — are AI-scored with an adversarial rubric and RE-EVALUATED against the
+// current (possibly hand-edited) content at approve time. When the case's country
+// CountryAIConfig.sopGateEnforcement is true, a failing gate HARD-BLOCKS approval; when false the
+// gates are advisory (evaluated + shown, never block). gateResultsJson holds the last evaluation.
+enum SopStatus {
+  DRAFT
+  APPROVED
+  SUPERSEDED
+}
+
+model SopDocument {
+  id                         String    @id @default(cuid())
+  caseId                     String
+  admissionProgrammeChoiceId String
+  version                    Int
+  status                     SopStatus @default(DRAFT)
+  contentJson                Json
+  sourceSnapshotJson         Json
+  // The three gates' last evaluation ({ careerPlan, nzReasoning, homeTies } → pass/reason),
+  // plus whether enforcement was on. Refreshed on generate and on every approve attempt.
+  gateResultsJson            Json?
+  model                      String? // Claude model used for the narrative + gate evaluation
+  generatedById              String?
+  generatedAt                DateTime  @default(now())
+  editedAt                   DateTime?
+  approvedById               String?
+  approvedAt                 DateTime?
+
+  case            Case                     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  programmeChoice AdmissionProgrammeChoice @relation(fields: [admissionProgrammeChoiceId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, status])
+  @@index([admissionProgrammeChoiceId, status])
+  @@map("sop_documents")
 }
 
 model AdmissionDocument {
