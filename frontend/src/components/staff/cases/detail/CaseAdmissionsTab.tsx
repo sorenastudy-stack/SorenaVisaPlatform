@@ -218,7 +218,7 @@ function CvSection({ caseId }: { caseId: string }) {
         <EmptyCard>Loading…</EmptyCard>
       ) : !cur ? (
         <div className="rounded-xl border border-dashed border-sorena-navy/20 bg-white px-4 py-6 text-center">
-          <p className="text-sm text-gray-500">No CV yet. Generate one from the client’s verified education + employment + questionnaire data.</p>
+          <p className="text-sm text-gray-500">No CV yet. Generate one once the client has <strong>submitted their programme choices</strong> — it’s tailored to the chosen field/university from their verified education + employment data.</p>
           <button onClick={generate} disabled={busy === 'gen'} className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
             {busy === 'gen' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Generate CV
           </button>

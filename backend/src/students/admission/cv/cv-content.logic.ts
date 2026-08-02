@@ -19,6 +19,10 @@ export interface CvSource {
     employerName: string; roleTitle: string; organisationField?: string | null; countryOfWork?: string | null;
     startYear?: number | null; endYear?: number | null; isCurrent: boolean; dutiesText?: string | null;
   }>;
+  // PR-ADMISSION-CV (localization) — the programmes the client actually CHOSE and submitted.
+  // Drives a CV tailored to the target field/university (not a generic document). Present only
+  // after the application is submitted (the generation gate).
+  targetProgrammes: Array<{ programmeName: string; providerName: string | null; field: string | null; level: string | null }>;
 }
 
 export interface CvContent {
@@ -113,20 +117,5 @@ export function assembleCv(source: CvSource, aiParts: AiCvParts): CvContent {
   return { ...buildFactualSections(source), summary: aiParts.summary, skills: aiParts.skills };
 }
 
-// Pure prompt builder — the AI is asked for narrative ONLY, grounded in the real data, and
-// explicitly told never to invent facts (they're supplied deterministically anyway).
-export function buildCvPrompt(source: CvSource): { system: string; user: string } {
-  const system = [
-    'You write the narrative parts of a CV for a New Zealand student-visa applicant.',
-    'Return ONLY JSON: {"summary": string, "skills": string[]}.',
-    '- summary: a concise, professional 2–4 sentence profile grounded in the applicant\'s real education and work history below.',
-    '- skills: 4–10 short skill phrases inferred from their field of study and roles.',
-    'NEVER invent employers, job titles, qualifications, institutions, dates, or certifications — you are given the factual sections and must not add facts not present. Do not include contact details. No prose outside the JSON.',
-  ].join('\n');
-  const user = `Applicant data (facts are authoritative — write only the summary + skills):\n${JSON.stringify(
-    { education: source.education, employment: source.employment, application: source.application },
-    null,
-    2,
-  )}`;
-  return { system, user };
-}
+// NOTE: the CV prompt lives in the CvGenerationAgent (ai/agents/cv-generation.agent.ts) — the
+// agent owns its dedicated prompt + Claude call. This file stays pure: factual assembly + parsing.

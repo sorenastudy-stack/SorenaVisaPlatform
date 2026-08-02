@@ -6,6 +6,7 @@ import { ClaudeService } from './claude.service';
 import { ComplianceGuardService } from './compliance-guard.service';
 import { KnowledgeService } from './knowledge.service';
 import { LeadQualificationAgent } from './agents/lead-qualification.agent';
+import { CvGenerationAgent } from './agents/cv-generation.agent';
 
 @Module({
   imports: [PrismaModule],
@@ -15,8 +16,11 @@ import { LeadQualificationAgent } from './agents/lead-qualification.agent';
     ComplianceGuardService,
     KnowledgeService,
     LeadQualificationAgent,
+    CvGenerationAgent,
     EventsService,
   ],
-  exports: [ClaudeService], // PR-CATALOG-2 — reused by the web-sync extraction service
+  // PR-CATALOG-2 — ClaudeService reused by web-sync. PR-ADMISSION-CV — CvGenerationAgent
+  // reused by CvService (the CV-document lifecycle orchestrator).
+  exports: [ClaudeService, CvGenerationAgent],
 })
 export class AiModule {}

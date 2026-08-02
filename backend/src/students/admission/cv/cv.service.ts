@@ -1,22 +1,22 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { ClaudeService } from '../../../ai/claude.service';
-import {
-  buildCvPrompt, parseAiCvParts, assembleCv, type CvSource, type AiCvParts,
-} from './cv-content.logic';
+import { CvGenerationAgent } from '../../../ai/agents/cv-generation.agent';
+import { assembleCv, type CvSource } from './cv-content.logic';
 
-// PR-ADMISSION-CV (step 2b) — AI CV generation + Admission Specialist review/edit/approve.
-// Versioned per case: regenerate supersedes the prior DRAFT and mints v+1; approve LOCKS a
-// version. The factual sections are assembled deterministically (cv-content.logic) — the AI
-// only writes summary/skills — so nothing factual can be fabricated. If the AI is unavailable
-// (no key / error), the CV STILL generates with real facts + an empty narrative the specialist
-// writes themselves (never blocks on the AI).
+// PR-ADMISSION-CV — the CV-document LIFECYCLE orchestrator (generate/review/edit/approve/version/
+// lock). Generation itself lives in the CvGenerationAgent (ai/agents) — this service gathers the
+// verified data, delegates the narrative to the agent, assembles it onto the deterministic
+// factual sections, and persists a versioned CvDocument. The truthfulness guarantee lives in
+// cv-content.logic (AI only writes summary/skills). Generation is GATED to submitted applications
+// so the CV is localized to the programmes the client actually chose (shared finality point with
+// Step 4 Sequential Submission). If the agent's AI is unavailable, the CV still generates from
+// verified facts with an empty narrative the specialist writes themselves.
 @Injectable()
 export class CvService {
   private readonly logger = new Logger(CvService.name);
-  constructor(private readonly prisma: PrismaService, private readonly claude: ClaudeService) {}
+  constructor(private readonly prisma: PrismaService, private readonly cvAgent: CvGenerationAgent) {}
 
-  private async gather(caseId: string): Promise<CvSource> {
+  private async gather(caseId: string): Promise<{ source: CvSource; applicationStatus: string | null }> {
     const kase = await this.prisma.case.findUnique({
       where: { id: caseId },
       include: { lead: { include: { contact: { select: { fullName: true, email: true, phone: true, countryOfResidence: true } } } } },
@@ -27,10 +27,23 @@ export class CvService {
       include: {
         educationEntries: { orderBy: { sortOrder: 'asc' } },
         employmentEntries: { orderBy: { sortOrder: 'asc' } },
+        // The chosen programmes (localization) — the university/field the CV is tailored toward.
+        programmeChoices: {
+          orderBy: { priority: 'asc' },
+          include: {
+            programme: {
+              select: {
+                name: true, level: true,
+                provider: { select: { name: true } },
+                studyFields: { take: 1, include: { studyField: { select: { nameEn: true } } } },
+              },
+            },
+          },
+        },
       },
     });
     const c = kase.lead?.contact;
-    return {
+    const source: CvSource = {
       contact: { fullName: c?.fullName ?? 'Applicant', email: c?.email ?? null, phone: c?.phone ?? null, country: c?.countryOfResidence ?? null },
       application: {
         dateOfBirth: app?.dateOfBirth ? app.dateOfBirth.toISOString().slice(0, 10) : null,
@@ -47,7 +60,14 @@ export class CvService {
         employerName: e.employerName, roleTitle: e.roleTitle, organisationField: e.organisationField,
         countryOfWork: e.countryOfWork, startYear: e.startYear, endYear: e.endYear, isCurrent: e.isCurrent, dutiesText: e.dutiesText,
       })),
+      targetProgrammes: (app?.programmeChoices ?? []).map((pc) => ({
+        programmeName: pc.programme.name,
+        providerName: pc.programme.provider?.name ?? null,
+        field: pc.programme.studyFields[0]?.studyField?.nameEn ?? null,
+        level: pc.programme.level ?? null,
+      })),
     };
+    return { source, applicationStatus: app?.status ?? null };
   }
 
   private shape(cv: {
@@ -61,19 +81,17 @@ export class CvService {
   }
 
   async generate(caseId: string, actorId: string | null) {
-    const source = await this.gather(caseId);
-    const { system, user } = buildCvPrompt(source);
-
-    let aiParts: AiCvParts = { summary: '', skills: [] };
-    let aiUnavailable = false;
-    try {
-      const raw = await this.claude.extractJson(system, user, { maxTokens: 1500 });
-      aiParts = parseAiCvParts(raw);
-    } catch (e: any) {
-      aiUnavailable = true; // factual CV still generates; specialist writes the narrative
-      this.logger.warn(`CV narrative unavailable for case ${caseId}: ${e?.message ?? e}`);
+    const { source, applicationStatus } = await this.gather(caseId);
+    // Gate: a CV must be localized to the CHOSEN programmes, so it only generates once the
+    // client has submitted their choices (the shared finality point Step 4 also keys off).
+    if (applicationStatus !== 'SUBMITTED' && applicationStatus !== 'LOCKED') {
+      throw new BadRequestException('Generate the CV after the client submits their programme choices — it is tailored to the chosen field/university.');
     }
-    const content = assembleCv(source, aiParts);
+
+    // Narrative is the agent's job (owns the prompt + Claude call); it never throws.
+    const { parts, available } = await this.cvAgent.generateNarrative(source);
+    const aiUnavailable = !available;
+    const content = assembleCv(source, parts);
 
     const cv = await this.prisma.$transaction(async (tx) => {
       await tx.cvDocument.updateMany({ where: { caseId, status: 'DRAFT' }, data: { status: 'SUPERSEDED' } });

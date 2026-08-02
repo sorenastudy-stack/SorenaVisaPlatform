@@ -1,7 +1,7 @@
 // PR-ADMISSION-CV (step 2b) — golden battery for CV assembly. Frozen before wiring.
 // The load-bearing guarantee: factual sections come from the verified rows (never the AI), and
 // the AI-parts parser is tolerant (never throws, always safe fallbacks).
-import { buildFactualSections, parseAiCvParts, assembleCv, buildCvPrompt, type CvSource } from './cv-content.logic';
+import { buildFactualSections, parseAiCvParts, assembleCv, type CvSource } from './cv-content.logic';
 
 const SOURCE: CvSource = {
   contact: { fullName: 'Ada Applicant', email: 'ada@x.test', phone: '+64 21 000', country: 'IR' },
@@ -11,6 +11,9 @@ const SOURCE: CvSource = {
   ],
   employment: [
     { employerName: 'Acme Software', roleTitle: 'Software Engineer', organisationField: 'Software', countryOfWork: 'IR', startYear: 2020, endYear: null, isCurrent: true, dutiesText: 'Built web services.' },
+  ],
+  targetProgrammes: [
+    { programmeName: 'Master of Information Technology', providerName: 'Aotearoa University', field: 'IT & Computer Science', level: 'MASTER' },
   ],
 };
 
@@ -64,14 +67,9 @@ describe('assembleCv — AI supplies ONLY summary + skills; facts unchanged', ()
     const cv = assembleCv(SOURCE, JSON.parse('{"summary":"x","skills":[],"experience":[{"employer":"FAKE"}]}'));
     expect(cv.experience[0].employer).toBe('Acme Software'); // FAKE never reaches the CV
   });
-});
-
-describe('buildCvPrompt', () => {
-  it('asks for JSON summary+skills only and forbids inventing facts', () => {
-    const { system, user } = buildCvPrompt(SOURCE);
-    expect(system).toMatch(/summary/);
-    expect(system).toMatch(/skills/);
-    expect(system).toMatch(/NEVER invent/i);
-    expect(user).toMatch(/Acme Software/); // real data is in the prompt as authoritative context
+  it('the target programmes never leak into the factual sections (localization is narrative-only)', () => {
+    const cv = assembleCv(SOURCE, { summary: 's', skills: [] });
+    expect(JSON.stringify(cv.education)).not.toMatch(/Aotearoa University/);
+    expect(cv.experience[0].employer).toBe('Acme Software');
   });
 });
