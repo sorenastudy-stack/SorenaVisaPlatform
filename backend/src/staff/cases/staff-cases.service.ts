@@ -4,6 +4,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { StaffPhotoService } from '../photos/staff-photo.service';
 import { summarizeAuditEntry } from '../../common/audit/audit.helper';
 import type { StaffAccessRole } from '../roles/staff-roles.decorator';
+// PR-ADMISSION-CASEFILE — canonical scorecard category names + maxima (single source).
+import { CATEGORY_NAMES, CATEGORY_MAX } from '../../scorecard/scoring/scores';
 
 // PR-CONSULT-2 — Staff cases service.
 //
@@ -265,7 +267,14 @@ export class StaffCasesService {
             submissionId: sc.id,
             totalScore: sc.totalScore,
             band: sc.band,
-            categoryScores: [sc.category1Score, sc.category2Score, sc.category3Score, sc.category4Score],
+            // Real engine category names + maxima (single source of truth) so the Case File
+            // shows "Profile & Migration Stability: 18/20", not "Category 1".
+            categories: [
+              { name: CATEGORY_NAMES[1], score: sc.category1Score, max: CATEGORY_MAX[1] },
+              { name: CATEGORY_NAMES[2], score: sc.category2Score, max: CATEGORY_MAX[2] },
+              { name: CATEGORY_NAMES[3], score: sc.category3Score, max: CATEGORY_MAX[3] },
+              { name: CATEGORY_NAMES[4], score: sc.category4Score, max: CATEGORY_MAX[4] },
+            ],
             executionEligible: sc.executionEligible,
             nextAction: sc.nextAction,
             submittedAt: sc.submittedAt,

@@ -6,6 +6,8 @@ import {
   drawSectionTitle, drawProgressBar, drawBullet,
   drawCoverBand, formatDateOnly, renderFooterOnAllPages,
 } from './helpers';
+// Single source of truth — the canonical engine names + maxima (drift fix).
+import { CATEGORY_NAMES, CATEGORY_MAX } from '../scoring/scores';
 
 // PR-SCORECARD-3 — Client-facing scorecard PDF.
 //
@@ -19,14 +21,6 @@ import {
 // The cover headline / body / next-action bullets are derived from
 // the structured `nextActionContent` written at submit time, with
 // a per-band fallback for legacy rows.
-
-const CATEGORY_NAMES: Record<number, string> = {
-  1: 'Personal & Background',
-  2: 'Education & English',
-  3: 'Financial Readiness',
-  4: 'Documentation & History',
-};
-const CATEGORY_MAX: Record<number, number> = { 1: 25, 2: 35, 3: 25, 4: 15 };
 
 export interface ClientReportData {
   applicant: {

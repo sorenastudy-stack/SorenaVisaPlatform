@@ -8,6 +8,9 @@ import {
   drawAnswerRow, drawKvRow, drawDivider, drawCoverBand,
   formatDateTime, formatDateOnly, renderFooterOnAllPages, truncate,
 } from './helpers';
+// Single source of truth — the canonical engine names, maxima, and field→category map
+// (drift fix; the local FIELD_CATEGORIES had q39/q40/q41 in Cat 4 vs the engine's Cat 3).
+import { CATEGORY_NAMES, CATEGORY_MAX, FIELD_CATEGORIES } from '../scoring/scores';
 
 // PR-SCORECARD-3 — Internal staff-facing scorecard PDF.
 //
@@ -19,15 +22,6 @@ import {
 // Confidentiality footer on every page; the page footer is laid
 // down after content via `bufferPages` so "Page X of Y" reflects
 // the real total.
-
-// Categories (mirrors the scoring engine).
-const CATEGORY_NAMES: Record<number, string> = {
-  1: 'Motivation, Demographics & Stability',
-  2: 'Academic & English Profile',
-  3: 'Financial Capacity & Settlement',
-  4: 'Documentation & Compliance',
-};
-const CATEGORY_MAX: Record<number, number> = { 1: 25, 2: 35, 3: 25, 4: 15 };
 
 // Question labels (ported verbatim from score_pdf.py question_labels dict).
 const QUESTION_LABELS: Record<string, string> = {
@@ -77,26 +71,6 @@ const QUESTION_LABELS: Record<string, string> = {
   q50_other_identity: 'Q50. Other identity',
   q51_self_submitted: 'Q51. Self-submitted before',
   q52_other_agent: 'Q52. Worked with other agent',
-};
-
-// Category membership — copied from the engine's FIELD_CATEGORIES so
-// we don't have to import the private map.
-const FIELD_CATEGORIES: Record<string, number> = {
-  q01_motivation: 1, q02_migrate_before_family: 1, q03_age: 1, q05_military: 1,
-  q06_marital: 1, q07_marriage_years: 1, q08_children: 1, q09_partner_age: 1,
-  q10_partner_edu: 1, q11_partner_english: 1, q12_other_citizenship: 1,
-  q13_travel_history: 1, q14_visa_countries_type: 1,
-  q15_highest_qual: 2, q16_field_main: 2, q17_gpa: 2, q18_years_since: 2,
-  q19_docs_translated: 2, q20_publications: 2, q21_english_cert: 2,
-  q22_english_score: 2, q24_studied_english: 2, q26_field_change: 2,
-  q27_study_goal: 2, q28_work_after_grad: 2, q29_years_work: 2,
-  q30_work_relevance: 2, q31_occupation: 2,
-  q33_funds: 3, q34_funds_source: 3, q35_overseas_bank: 3, q36_financial_docs: 3,
-  q37_overseas_contacts: 3, q38_settlement_support: 3,
-  q39_passport: 4, q40_docs_ready: 4, q41_apply_timeline: 4, q44_refusal: 4,
-  q45_refusal_count: 4, q46_refusal_recency: 4, q47_medical: 4,
-  q48_police_clearance: 4, q49_breach: 4, q50_other_identity: 4,
-  q51_self_submitted: 4, q52_other_agent: 4,
 };
 
 export interface InternalReportData {

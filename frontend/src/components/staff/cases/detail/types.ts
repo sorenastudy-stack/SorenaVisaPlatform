@@ -40,7 +40,7 @@ export interface CaseDetail {
     submissionId: string;
     totalScore: number;
     band: string;
-    categoryScores: number[];
+    categories: { name: string; score: number; max: number }[];
     executionEligible: boolean;
     nextAction: string;
     submittedAt: string;

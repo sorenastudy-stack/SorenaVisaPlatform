@@ -101,9 +101,9 @@ export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: 
               </Link>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {sc.categoryScores.map((v, i) => (
+              {sc.categories.map((c, i) => (
                 <span key={i} className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">
-                  Category {i + 1}: <strong className="text-[#1e3a5f]">{v}</strong>
+                  {c.name}: <strong className="text-[#1e3a5f]">{c.score}</strong><span className="text-gray-400">/{c.max}</span>
                 </span>
               ))}
             </div>
