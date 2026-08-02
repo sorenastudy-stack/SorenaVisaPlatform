@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   GraduationCap, ListOrdered, FileText, ScrollText, Award, Send,
-  ExternalLink, Check, Briefcase, Trash2, Plus, type LucideIcon,
+  ExternalLink, Check, Briefcase, Trash2, Plus, Lock, RefreshCw, Sparkles, Loader2, type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -28,6 +28,16 @@ interface Employment {
   id: string; employerName: string; roleTitle: string; startYear: number | null; endYear: number | null;
   isCurrent: boolean; countryOfWork: string | null; organisationField: string | null; dutiesText: string | null; sortOrder: number;
 }
+interface CvContent {
+  header: { fullName: string; email: string | null; phone: string | null; country: string | null; dateOfBirth: string | null; nationality: string | null };
+  summary: string;
+  education: Array<{ institution: string; qualification: string; field: string | null; country: string | null; startYear: number | null; endYear: number | null; completed: boolean }>;
+  experience: Array<{ employer: string; role: string; field: string | null; country: string | null; startYear: number | null; endYear: number | null; isCurrent: boolean; duties: string | null }>;
+  english: { test: string; note: string | null } | null;
+  skills: string[];
+}
+interface CvDoc { id: string; version: number; status: string; content: CvContent; generatedAt: string; editedAt: string | null; approvedAt: string | null; aiUnavailable?: boolean }
+interface CvResp { current: CvDoc | null; versions: Array<{ id: string; version: number; status: string; generatedAt: string; approvedAt: string | null }> }
 
 const TYPE_LABEL: Record<string, string> = { UNIVERSITY: 'University', ITP: 'Polytechnic', PTE: 'College' };
 const typeLabel = (t: string | null) => (t ? TYPE_LABEL[t] ?? t : 'Unknown type');
@@ -150,6 +160,152 @@ function EmploymentSection({ caseId }: { caseId: string }) {
   );
 }
 
+// AI-generated CV — generate → review/edit (summary + skills) → approve (locks the version).
+// Factual sections (education/experience) come from verified rows and are shown read-only here;
+// to change them, edit the Employment/Education data and regenerate.
+function yrspan(s: number | null, e: number | null, cur: boolean): string {
+  const end = cur ? 'present' : (e ?? '');
+  return s || end ? `${s ?? ''}${s || end ? '–' : ''}${end}` : '';
+}
+function CvSection({ caseId }: { caseId: string }) {
+  const [data, setData] = useState<CvResp | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // 'gen' | 'save' | 'approve'
+  const [summary, setSummary] = useState('');
+  const [skills, setSkills] = useState('');
+
+  const load = () => api.get<CvResp>(`/api/staff/cases/${caseId}/cv`).then((r) => {
+    setData(r);
+    if (r.current) { setSummary(r.current.content.summary ?? ''); setSkills((r.current.content.skills ?? []).join(', ')); }
+  }).catch(() => setData({ current: null, versions: [] }));
+  useEffect(() => { load(); }, [caseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cur = data?.current ?? null;
+  const isDraft = cur?.status === 'DRAFT';
+
+  const generate = async () => {
+    setBusy('gen');
+    try {
+      const r = await api.post<CvDoc & { aiUnavailable?: boolean }>(`/api/staff/cases/${caseId}/cv/generate`, {});
+      toast[r.aiUnavailable ? 'message' : 'success'](r.aiUnavailable
+        ? 'CV drafted from verified data. AI narrative unavailable — write the summary/skills manually.'
+        : `CV v${r.version} generated. Review and approve.`);
+      await load();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not generate the CV.'); }
+    finally { setBusy(null); }
+  };
+  const save = async () => {
+    if (!cur) return;
+    setBusy('save');
+    try {
+      const content = { ...cur.content, summary: summary.trim(), skills: skills.split(',').map((s) => s.trim()).filter(Boolean) };
+      await api.patch(`/api/staff/cases/${caseId}/cv/${cur.id}`, { content });
+      toast.success('CV saved.');
+      await load();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not save.'); }
+    finally { setBusy(null); }
+  };
+  const approve = async () => {
+    if (!cur) return;
+    setBusy('approve');
+    try { await api.post(`/api/staff/cases/${caseId}/cv/${cur.id}/approve`, {}); toast.success(`CV v${cur.version} approved and locked.`); await load(); }
+    catch (e: any) { toast.error(e?.message ?? 'Could not approve.'); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <Section icon={FileText} title="AI-generated CV">
+      {data === null ? (
+        <EmptyCard>Loading…</EmptyCard>
+      ) : !cur ? (
+        <div className="rounded-xl border border-dashed border-sorena-navy/20 bg-white px-4 py-6 text-center">
+          <p className="text-sm text-gray-500">No CV yet. Generate one from the client’s verified education + employment + questionnaire data.</p>
+          <button onClick={generate} disabled={busy === 'gen'} className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+            {busy === 'gen' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Generate CV
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-sorena-navy/10 bg-white p-4">
+          {/* header + status + actions */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-[#1e3a5f]">Version {cur.version}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${cur.status === 'APPROVED' ? 'bg-[#15a86b]/12 text-[#15803d]' : 'bg-amber-100 text-amber-700'}`}>
+              {cur.status === 'APPROVED' ? <span className="inline-flex items-center gap-1"><Lock size={10} /> Approved (locked)</span> : 'Draft'}
+            </span>
+            <div className="ms-auto flex gap-2">
+              <button onClick={generate} disabled={!!busy} title="Regenerate a new version" className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                {busy === 'gen' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Regenerate
+              </button>
+              {isDraft && (
+                <button onClick={approve} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg bg-[#1e3a5f] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+                  {busy === 'approve' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Approve
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* header block */}
+          <p className="text-base font-bold text-[#1e3a5f]">{cur.content.header.fullName}</p>
+          <p className="text-xs text-gray-500">{[cur.content.header.email, cur.content.header.phone, cur.content.header.country, cur.content.header.nationality && `Nationality: ${cur.content.header.nationality}`].filter(Boolean).join(' · ')}</p>
+
+          {/* summary (editable when draft) */}
+          <div className="mt-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Professional summary</p>
+            {isDraft ? (
+              <textarea className="mt-1 w-full rounded-lg border border-sorena-navy/20 px-2 py-1.5 text-sm" rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="AI-written or write your own…" />
+            ) : (
+              <p className="mt-1 text-sm text-gray-700">{cur.content.summary || <span className="text-gray-400">—</span>}</p>
+            )}
+          </div>
+
+          {/* experience (read-only — from verified rows) */}
+          <div className="mt-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Experience</p>
+            {cur.content.experience.length === 0 ? <p className="mt-1 text-xs text-gray-400">No employment on file.</p> : (
+              <ul className="mt-1 space-y-1">
+                {cur.content.experience.map((x, i) => (
+                  <li key={i} className="text-sm text-gray-700"><span className="font-medium text-[#1e3a5f]">{x.role}</span> · {x.employer} <span className="text-gray-400">{[yrspan(x.startYear, x.endYear, x.isCurrent), x.country].filter(Boolean).join(' · ')}</span></li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* education (read-only) */}
+          <div className="mt-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Education</p>
+            {cur.content.education.length === 0 ? <p className="mt-1 text-xs text-gray-400">No education on file.</p> : (
+              <ul className="mt-1 space-y-1">
+                {cur.content.education.map((x, i) => (
+                  <li key={i} className="text-sm text-gray-700"><span className="font-medium text-[#1e3a5f]">{x.qualification}</span>{x.field ? `, ${x.field}` : ''} · {x.institution} <span className="text-gray-400">{yrspan(x.startYear, x.endYear, false)}</span></li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* english + skills */}
+          {cur.content.english && <p className="mt-3 text-sm text-gray-700"><span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">English</span> · {cur.content.english.test}</p>}
+          <div className="mt-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Skills</p>
+            {isDraft ? (
+              <input className="mt-1 w-full rounded-lg border border-sorena-navy/20 px-2 py-1.5 text-sm" value={skills} onChange={(e) => setSkills(e.target.value)} placeholder="Comma-separated" />
+            ) : (
+              <div className="mt-1 flex flex-wrap gap-1">{cur.content.skills.length ? cur.content.skills.map((s, i) => <span key={i} className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{s}</span>) : <span className="text-xs text-gray-400">—</span>}</div>
+            )}
+          </div>
+
+          {isDraft && (
+            <div className="mt-4 flex justify-end">
+              <button onClick={save} disabled={!!busy} className="inline-flex items-center gap-1.5 rounded-lg border border-[#1e3a5f]/30 px-3 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">
+                {busy === 'save' ? <Loader2 size={12} className="animate-spin" /> : null} Save edits
+              </button>
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-gray-400">Experience &amp; education come from the client’s verified data — edit those in the Employment/Education sections and regenerate. Approving locks this version.</p>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: string }) {
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [noApplication, setNoApplication] = useState(false);
@@ -258,8 +414,10 @@ export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: 
       {/* ── Employment history (real, staff view/edit — PR-ADMISSION-CVDATA) ── */}
       <EmploymentSection caseId={caseId} />
 
+      {/* ── AI-generated CV (real — PR-ADMISSION-CV) ─────────────────────── */}
+      <CvSection caseId={caseId} />
+
       {/* ── Placeholders for later steps (honest empty states) ──────────── */}
-      <Placeholder icon={FileText} title="AI-generated CV" note="The CV generation + Admission Specialist review/approve flow lands in a later step." />
       <Placeholder icon={ScrollText} title="AI-generated SOP(s)" note="Per-institution SOP generation + the three quality gates land in a later step." />
       <Placeholder icon={Award} title="Offer record" note="Offer-of-place logging (institution, conditional/unconditional, expiry, letter) lands in a later step." />
       <Placeholder icon={Send} title="Submission history" note="Per-institution submission logging (date, method, portal, response, outcome) lands in a later step." />

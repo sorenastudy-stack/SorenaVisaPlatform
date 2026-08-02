@@ -1500,6 +1500,7 @@ model Case {
   // Phase 1 (auto-assignment): the real client Consultant slot.
   consultant            User?                  @relation("CaseConsultant", fields: [consultantId], references: [id], onDelete: SetNull)
   applications          Application[]
+  cvDocuments           CvDocument[]
   contract              Contract?
   tickets               Ticket[]
   invoices              Invoice[]
@@ -2926,6 +2927,40 @@ model AdmissionEmploymentEntry {
 
   @@index([admissionApplicationId])
   @@map("admission_employment_entries")
+}
+
+// PR-ADMISSION-CV (step 2b) — an AI-generated CV, reviewed/edited/approved by the Admission
+// Specialist. Versioned per case (mirrors RecommendationList's supersede-on-regenerate +
+// AdmissionApplication's status-guard lock): regenerate supersedes the prior DRAFT and mints a
+// new version; approve LOCKS that version (no further edits); a later regenerate makes v+1.
+// contentJson holds the editable CV sections; the FACTUAL sections (header/education/experience)
+// are assembled deterministically from verified rows — the AI only writes summary/skills — so a
+// document sent to universities can never contain a fabricated employer or date.
+// sourceSnapshotJson records what fed generation (audit/reproducibility).
+enum CvStatus {
+  DRAFT
+  APPROVED
+  SUPERSEDED
+}
+
+model CvDocument {
+  id                 String    @id @default(cuid())
+  caseId             String
+  version            Int
+  status             CvStatus  @default(DRAFT)
+  contentJson        Json
+  sourceSnapshotJson Json
+  model              String? // Claude model used for the narrative parts
+  generatedById      String?
+  generatedAt        DateTime  @default(now())
+  editedAt           DateTime?
+  approvedById       String?
+  approvedAt         DateTime?
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, status])
+  @@map("cv_documents")
 }
 
 model AdmissionProgrammeChoice {
