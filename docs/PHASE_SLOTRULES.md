@@ -91,8 +91,18 @@ student's 1-choice draft).
 
 ## Open items / honest notes
 
-- **Single-destination:** the rule reads a hardcoded `NZ` config (matches the matcher). Multi-
-  destination would read the student's destination country — plumbing exists, only NZ exercised.
+- **⚠️ TRACKED OPEN ITEM — hardcoded single-destination (`NZ`).** The rule reads a hardcoded
+  `countryCode: 'NZ'` config in three places (`ProgrammeChoiceRulesService.DESTINATION`,
+  `PublicService.programmeChoiceRules`, and the matcher's own `MatchingService` precedent it
+  mirrors). **This is not a new risk** — it matches the existing matcher's single-destination
+  assumption. **Decision: leave as-is for now** — correctly scoped, and multi-country is
+  plumbing-only away (thread the student's destination country into `loadConfig()` /
+  `programmeChoiceRules()` instead of the literal `'NZ'`; the config table is already keyed by
+  `countryCode`, and the whole rule is per-country by construction).
+  **Trigger to revisit: when a second destination country is actually onboarded.** Flagged
+  deliberately because this entire feature exists *because* mandatory-slot policy varies by
+  country, and multi-country is an active direction — so this must not be silently forgotten
+  when that day comes. No work requested now.
 - **Enforcement-point choice** (submit=full, reorder=hole-guard, add/remove=permissive) is a
   deliberate UX call — easy to tighten to hard-block add/remove if the Owner wants.
 - The two-directional battery was **adapted** (not byte-verbatim) from the deleted PrioritySlot
