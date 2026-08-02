@@ -26,6 +26,12 @@ Generation + gate scoring live in a proper AI agent; the service is a thin lifec
 - **Endpoints** (`/staff/cases/:caseId/sop`, curator roles): `GET` (each choice + its current SOP),
   `POST /generate-all`, `POST /choices/:choiceId/generate`, `POST /:sopId/evaluate` (preview gate
   status), `PATCH /:sopId` (DRAFT only), `POST /:sopId/approve`.
+- **UI** — a real **AI-generated SOP(s)** section in the Case File Admissions tab (mirrors the CV
+  section): a per-choice card list, each showing the deterministic factual frame (read-only) + the
+  three gates' pass/fail + reason (`GatePanel`, enforced-vs-advisory framing + a block banner) +
+  the editable narrative sections while DRAFT. Generate (per choice or "Generate all"), Regenerate,
+  Save (re-checks gates), Approve (locks). A failed approve surfaces the hard-block message and
+  reloads the fresh verdicts into the panel.
 
 ## The truthfulness guarantee (adapted to a prose document)
 
@@ -72,9 +78,6 @@ all locked as recommended:
 
 ## Honest notes / follow-ups
 
-- **Case File SOP UI is the next slice (not in this backend slice).** The endpoints + gate verdicts
-  are ready; the Admissions-tab surface (per-choice list, per-section editing, gate-status display,
-  the hard-block message on approve) follows on your go-ahead, mirroring how the CV section shipped.
 - **Gate re-evaluation cost:** `update` and `approve` each run one gate-eval Claude call, so the
   stored verdict never goes stale vs. the text. These are deliberate staff actions, not
   high-frequency — acceptable. A debounce/cache is a later optimisation if needed.

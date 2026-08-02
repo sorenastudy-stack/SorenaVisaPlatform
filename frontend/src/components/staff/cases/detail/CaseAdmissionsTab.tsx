@@ -4,7 +4,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   GraduationCap, ListOrdered, FileText, ScrollText, Award, Send,
-  ExternalLink, Check, Briefcase, Trash2, Plus, Lock, RefreshCw, Sparkles, Loader2, type LucideIcon,
+  ExternalLink, Check, X, Briefcase, Trash2, Plus, Lock, RefreshCw, Sparkles, Loader2,
+  ShieldCheck, ShieldAlert, type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -38,6 +39,48 @@ interface CvContent {
 }
 interface CvDoc { id: string; version: number; status: string; content: CvContent; generatedAt: string; editedAt: string | null; approvedAt: string | null; aiUnavailable?: boolean }
 interface CvResp { current: CvDoc | null; versions: Array<{ id: string; version: number; status: string; generatedAt: string; approvedAt: string | null }> }
+
+// ── SOP (PR-ADMISSION-SOP, step 3) ──────────────────────────────────────────
+type SopGateKey = 'careerPlan' | 'nzReasoning' | 'homeTies';
+interface SopGateVerdict { pass: boolean; reason: string }
+interface SopGateEvaluation {
+  results: Record<SopGateKey, SopGateVerdict>;
+  enforced: boolean; allPass: boolean; failing: SopGateKey[]; blocksApproval: boolean;
+}
+interface SopNarrative { intro: string; careerPlan: string; whyNewZealand: string; whyThisInstitution: string; homeTies: string; conclusion: string }
+interface SopContent {
+  frame: {
+    applicantName: string; homeCountry: string | null; highestQualification: string | null;
+    currentRole: string | null; englishTest: string | null;
+    target: { programme: string; provider: string | null; field: string | null; level: string | null; intake: string | null };
+  };
+  narrative: SopNarrative;
+}
+interface SopDoc {
+  id: string; choiceId: string; version: number; status: string; content: SopContent;
+  gates: SopGateEvaluation | null; generatedAt: string; editedAt: string | null; approvedAt: string | null; aiUnavailable?: boolean;
+}
+interface SopChoice {
+  choiceId: string; priority: number; programme: string; provider: string | null;
+  intake: { month: number | null; year: number | null }; sop: SopDoc | null;
+}
+interface SopListResp { applicationStatus: string | null; choices: SopChoice[] }
+
+const SOP_GATE_ORDER: SopGateKey[] = ['careerPlan', 'nzReasoning', 'homeTies'];
+const SOP_GATE_LABEL: Record<SopGateKey, string> = {
+  careerPlan: 'Career-plan specificity',
+  nzReasoning: 'New Zealand–specific reasoning',
+  homeTies: 'Home-country ties',
+};
+// The editable narrative sections, in reading order, with which gate each feeds.
+const SOP_SECTIONS: Array<{ key: keyof SopNarrative; label: string; gate?: SopGateKey; rows: number }> = [
+  { key: 'intro', label: 'Introduction', rows: 3 },
+  { key: 'careerPlan', label: 'Career plan', gate: 'careerPlan', rows: 3 },
+  { key: 'whyNewZealand', label: 'Why New Zealand', gate: 'nzReasoning', rows: 3 },
+  { key: 'whyThisInstitution', label: 'Why this institution', gate: 'nzReasoning', rows: 3 },
+  { key: 'homeTies', label: 'Home-country ties', gate: 'homeTies', rows: 3 },
+  { key: 'conclusion', label: 'Conclusion', rows: 2 },
+];
 
 const TYPE_LABEL: Record<string, string> = { UNIVERSITY: 'University', ITP: 'Polytechnic', PTE: 'College' };
 const typeLabel = (t: string | null) => (t ? TYPE_LABEL[t] ?? t : 'Unknown type');
@@ -306,6 +349,234 @@ function CvSection({ caseId }: { caseId: string }) {
   );
 }
 
+// The three quality gates' status for one SOP: pass/fail + the officer's reason per gate, plus the
+// enforced-vs-advisory framing and a clear block banner when approval is being held.
+function GatePanel({ gates }: { gates: SopGateEvaluation | null }) {
+  if (!gates) return <p className="mt-2 text-xs text-gray-400">Gates not evaluated yet.</p>;
+  return (
+    <div className="mt-3 rounded-lg border border-sorena-navy/10 bg-[#f8fafc] p-3">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+        {gates.allPass ? <ShieldCheck size={13} className="text-[#15803d]" /> : <ShieldAlert size={13} className="text-amber-600" />}
+        Quality gates {gates.enforced ? <span className="text-gray-400">· enforced</span> : <span className="text-gray-400">· advisory (not enforced for this country)</span>}
+      </div>
+      {gates.blocksApproval && (
+        <p className="mt-2 rounded-md bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700">
+          Approval is blocked until all three gates pass. Edit the flagged sections and save.
+        </p>
+      )}
+      <ul className="mt-2 space-y-1.5">
+        {SOP_GATE_ORDER.map((k) => {
+          const v = gates.results[k];
+          const pass = !!v?.pass;
+          return (
+            <li key={k} className="flex items-start gap-2 text-sm">
+              {pass
+                ? <Check size={14} className="mt-0.5 shrink-0 text-[#15803d]" />
+                : <X size={14} className="mt-0.5 shrink-0 text-red-600" />}
+              <span>
+                <span className={`font-medium ${pass ? 'text-gray-700' : 'text-red-700'}`}>{SOP_GATE_LABEL[k]}</span>
+                {v?.reason && <span className="text-gray-500"> — {v.reason}</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// One programme choice + its (versioned) SOP. Owns its own edit/busy state so several SOPs can be
+// open at once. Mirrors CvSection's generate → review/edit → approve(lock) flow, with the gate panel.
+function SopCard({ caseId, item, reload }: { caseId: string; item: SopChoice; reload: () => Promise<void> }) {
+  const sop = item.sop;
+  const isDraft = sop?.status === 'DRAFT';
+  const [busy, setBusy] = useState<string | null>(null);
+  const [narr, setNarr] = useState<SopNarrative | null>(sop?.content.narrative ?? null);
+
+  // Re-sync local edits whenever a new version/content arrives (generate, regenerate, save, reload).
+  useEffect(() => {
+    setNarr(sop?.content.narrative ?? null);
+  }, [sop?.id, sop?.version, sop?.editedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const intake = item.intake.month && item.intake.year ? intakeLabel(item.intake.month, item.intake.year) : null;
+
+  const generate = async () => {
+    setBusy('gen');
+    try {
+      const r = await api.post<SopDoc & { aiUnavailable?: boolean }>(`/api/staff/cases/${caseId}/sop/choices/${item.choiceId}/generate`, {});
+      toast[r.aiUnavailable ? 'message' : 'success'](r.aiUnavailable
+        ? 'SOP drafted from verified data. AI narrative unavailable — write the sections manually.'
+        : `SOP v${r.version} generated for ${item.programme}.`);
+      await reload();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not generate the SOP.'); }
+    finally { setBusy(null); }
+  };
+  const save = async () => {
+    if (!sop || !narr) return;
+    setBusy('save');
+    try {
+      const content = { frame: sop.content.frame, narrative: narr };
+      await api.patch(`/api/staff/cases/${caseId}/sop/${sop.id}`, { content });
+      toast.success('SOP saved — gates re-checked.');
+      await reload();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not save.'); }
+    finally { setBusy(null); }
+  };
+  const approve = async () => {
+    if (!sop) return;
+    setBusy('approve');
+    try {
+      await api.post(`/api/staff/cases/${caseId}/sop/${sop.id}/approve`, {});
+      toast.success(`SOP v${sop.version} approved and locked.`);
+      await reload();
+    } catch (e: any) {
+      // Hard-block: the backend persists the fresh verdicts before throwing, so reload to surface them.
+      toast.error(e?.message ?? 'Could not approve this SOP.');
+      await reload();
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <div className="rounded-xl border border-sorena-navy/10 bg-white p-4">
+      {/* choice header */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-md bg-[#1e3a5f]/8 px-1.5 py-0.5 text-[11px] font-bold text-[#1e3a5f]">#{item.priority}</span>
+        <span className="text-sm font-semibold text-[#1e3a5f]">{item.programme}</span>
+        <span className="text-xs text-gray-500">{[item.provider, intake].filter(Boolean).join(' · ')}</span>
+        {sop && (
+          <>
+            <span className="ms-2 text-xs font-bold text-[#1e3a5f]">v{sop.version}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${sop.status === 'APPROVED' ? 'bg-[#15a86b]/12 text-[#15803d]' : 'bg-amber-100 text-amber-700'}`}>
+              {sop.status === 'APPROVED' ? <span className="inline-flex items-center gap-1"><Lock size={10} /> Approved (locked)</span> : 'Draft'}
+            </span>
+          </>
+        )}
+        {sop && (
+          <div className="ms-auto flex gap-2">
+            <button onClick={generate} disabled={!!busy} title="Regenerate a new version" className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+              {busy === 'gen' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Regenerate
+            </button>
+            {isDraft && (
+              <button onClick={approve} disabled={!!busy} className="inline-flex items-center gap-1 rounded-lg bg-[#1e3a5f] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+                {busy === 'approve' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Approve
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!sop ? (
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-gray-500">No SOP for this choice yet — it’s tailored to this institution.</p>
+          <button onClick={generate} disabled={busy === 'gen'} className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+            {busy === 'gen' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Generate SOP
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* deterministic factual frame (read-only) */}
+          <p className="mt-3 text-sm font-semibold text-[#1e3a5f]">{sop.content.frame.applicantName}</p>
+          <p className="text-xs text-gray-500">
+            {[sop.content.frame.currentRole, sop.content.frame.highestQualification, sop.content.frame.homeCountry && `Home: ${sop.content.frame.homeCountry}`, sop.content.frame.englishTest].filter(Boolean).join(' · ')}
+          </p>
+          <p className="text-xs text-gray-500">
+            Target: <span className="font-medium text-gray-600">{sop.content.frame.target.programme}</span>
+            {sop.content.frame.target.provider ? ` at ${sop.content.frame.target.provider}` : ''}{sop.content.frame.target.intake ? ` · ${sop.content.frame.target.intake}` : ''}
+          </p>
+
+          {/* the three quality gates */}
+          <GatePanel gates={sop.gates} />
+
+          {/* narrative sections — editable while draft */}
+          <div className="mt-3 space-y-3">
+            {SOP_SECTIONS.map(({ key, label, gate, rows }) => (
+              <div key={key}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                  {label}{gate && <span className="ms-1 font-normal normal-case text-gray-300">· {SOP_GATE_LABEL[gate]}</span>}
+                </p>
+                {isDraft && narr ? (
+                  <textarea
+                    className="mt-1 w-full rounded-lg border border-sorena-navy/20 px-2 py-1.5 text-sm"
+                    rows={rows}
+                    value={narr[key]}
+                    onChange={(e) => setNarr({ ...narr, [key]: e.target.value })}
+                    placeholder="AI-written or write your own…"
+                  />
+                ) : (
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{sop.content.narrative[key] || <span className="text-gray-400">—</span>}</p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {isDraft && (
+            <div className="mt-4 flex justify-end">
+              <button onClick={save} disabled={!!busy} className="inline-flex items-center gap-1.5 rounded-lg border border-[#1e3a5f]/30 px-3 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">
+                {busy === 'save' ? <Loader2 size={12} className="animate-spin" /> : null} Save edits
+              </button>
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-gray-400">The applicant/target line is verified data (unchangeable here). Saving re-checks the gates; approving locks this version.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SopSection({ caseId }: { caseId: string }) {
+  const [data, setData] = useState<SopListResp | null>(null);
+  const [genAll, setGenAll] = useState(false);
+
+  const load = async () => {
+    await api.get<SopListResp>(`/api/staff/cases/${caseId}/sop`)
+      .then(setData)
+      .catch(() => setData({ applicationStatus: null, choices: [] }));
+  };
+  useEffect(() => { load(); }, [caseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submitted = data?.applicationStatus === 'SUBMITTED' || data?.applicationStatus === 'LOCKED';
+  const choices = data?.choices ?? [];
+  const missing = choices.filter((c) => !c.sop).length;
+
+  const generateAll = async () => {
+    setGenAll(true);
+    try {
+      const r = await api.post<{ generated: number }>(`/api/staff/cases/${caseId}/sop/generate-all`, {});
+      toast.success(`Generated ${r.generated} SOP${r.generated === 1 ? '' : 's'}.`);
+      await load();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not generate SOPs.'); }
+    finally { setGenAll(false); }
+  };
+
+  return (
+    <Section icon={ScrollText} title="AI-generated SOP(s)">
+      {data === null ? (
+        <EmptyCard>Loading…</EmptyCard>
+      ) : !submitted ? (
+        <EmptyCard>
+          One SOP per programme choice, each tailored to that institution. Available once the client has{' '}
+          <strong>submitted their programme choices</strong>.
+        </EmptyCard>
+      ) : choices.length === 0 ? (
+        <EmptyCard>No programme choices on this application yet.</EmptyCard>
+      ) : (
+        <div className="space-y-3">
+          {missing > 1 && (
+            <div className="flex justify-end">
+              <button onClick={generateAll} disabled={genAll} className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+                {genAll ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Generate all ({missing})
+              </button>
+            </div>
+          )}
+          {[...choices].sort((a, b) => a.priority - b.priority).map((c) => (
+            <SopCard key={c.choiceId} caseId={caseId} item={c} reload={load} />
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: string }) {
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [noApplication, setNoApplication] = useState(false);
@@ -417,8 +688,10 @@ export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: 
       {/* ── AI-generated CV (real — PR-ADMISSION-CV) ─────────────────────── */}
       <CvSection caseId={caseId} />
 
+      {/* ── AI-generated SOP(s) (real — PR-ADMISSION-SOP) ────────────────── */}
+      <SopSection caseId={caseId} />
+
       {/* ── Placeholders for later steps (honest empty states) ──────────── */}
-      <Placeholder icon={ScrollText} title="AI-generated SOP(s)" note="Per-institution SOP generation + the three quality gates land in a later step." />
       <Placeholder icon={Award} title="Offer record" note="Offer-of-place logging (institution, conditional/unconditional, expiry, letter) lands in a later step." />
       <Placeholder icon={Send} title="Submission history" note="Per-institution submission logging (date, method, portal, response, outcome) lands in a later step." />
     </div>
