@@ -26,6 +26,7 @@ interface Programme { id: string; name: string; level: string }
 interface Provider {
   id: string; name: string; providerType: string; country: string; city: string | null; websiteUrl: string | null;
   catalogueUrl: string | null;
+  isFeatured: boolean;
   status: string; agreementUrl: string | null; agreementStartDate: string | null; agreementEndDate: string | null; agreementRenewalDate: string | null;
   commissionY1Type: string; commissionY1Value: number; commissionY2Type: string; commissionY2Value: number;
   volumeTarget: number | null; bonusType: string | null; bonusValue: number | null; notes: string | null;
@@ -112,7 +113,7 @@ function ProviderList({ onEdit }: { onEdit: (id: string) => void }) {
 
 // ── Create / Edit form ──────────────────────────────────────────────────────
 const emptyForm = {
-  name: '', providerType: 'UNIVERSITY', country: 'NZ', city: '', websiteUrl: '', catalogueUrl: '', status: 'PENDING',
+  name: '', providerType: 'UNIVERSITY', country: 'NZ', city: '', websiteUrl: '', catalogueUrl: '', isFeatured: false, status: 'PENDING',
   commissionY1Type: 'PERCENTAGE', commissionY1Value: 0, commissionY2Type: 'PERCENTAGE', commissionY2Value: 0,
   volumeTarget: '', bonusType: '', bonusValue: '', notes: '',
   agreementStartDate: '', agreementEndDate: '', agreementRenewalDate: '', agreementUrl: '',
@@ -132,7 +133,7 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
     api.get<Provider>(`/providers/${providerId}`).then((p) => {
       const iso = (d: string | null) => (d ? d.slice(0, 10) : '');
       setForm({
-        name: p.name, providerType: p.providerType, country: p.country, city: p.city ?? '', websiteUrl: p.websiteUrl ?? '', catalogueUrl: p.catalogueUrl ?? '', status: p.status,
+        name: p.name, providerType: p.providerType, country: p.country, city: p.city ?? '', websiteUrl: p.websiteUrl ?? '', catalogueUrl: p.catalogueUrl ?? '', isFeatured: p.isFeatured, status: p.status,
         commissionY1Type: p.commissionY1Type, commissionY1Value: p.commissionY1Value, commissionY2Type: p.commissionY2Type, commissionY2Value: p.commissionY2Value,
         volumeTarget: p.volumeTarget?.toString() ?? '', bonusType: p.bonusType ?? '', bonusValue: p.bonusValue?.toString() ?? '', notes: p.notes ?? '',
         agreementStartDate: iso(p.agreementStartDate), agreementEndDate: iso(p.agreementEndDate), agreementRenewalDate: iso(p.agreementRenewalDate), agreementUrl: p.agreementUrl ?? '',
@@ -148,7 +149,7 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
       const core: any = {
         name: form.name.trim(), providerType: form.providerType, country: form.country,
         city: form.city.trim() || undefined, websiteUrl: form.websiteUrl.trim() || undefined,
-        catalogueUrl: form.catalogueUrl.trim() || undefined,
+        catalogueUrl: form.catalogueUrl.trim() || undefined, isFeatured: form.isFeatured,
         commissionY1Type: form.commissionY1Type, commissionY1Value: Number(form.commissionY1Value),
         commissionY2Type: form.commissionY2Type, commissionY2Value: Number(form.commissionY2Value),
         volumeTarget: form.volumeTarget === '' ? undefined : Number(form.volumeTarget),
@@ -192,6 +193,12 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
           {isEdit && <div><label className={labelCls}>Status</label><select className={inputCls} value={form.status} onChange={(e) => set('status', e.target.value)}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>}
           {/* PR-CATALOG-2 — programme-listing page the monthly web check crawls to find new programmes. */}
           <div className="sm:col-span-2"><label className={labelCls}>Programme catalogue URL</label><input className={inputCls} value={form.catalogueUrl} onChange={(e) => set('catalogueUrl', e.target.value)} placeholder="https://…/study/programmes — the list page the monthly web check scans" /></div>
+          {/* PR-SLOTRULES (Decision 2) — Featured pin (display-only). */}
+          <label className="sm:col-span-2 flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm((f) => ({ ...f, isFeatured: e.target.checked }))} />
+            <span className="font-medium">Featured institution</span>
+            <span className="text-xs text-gray-500">— surfaced in a “Featured” section in Apply/Study. Display only; doesn’t change ranking or the mandatory-slot rule.</span>
+          </label>
         </div>
 
         <div className="border-t border-gray-100 pt-4">

@@ -135,4 +135,10 @@ export class PublicController {
   listProgrammes() {
     return this.publicService.listProgrammes();
   }
+
+  // PR-SLOTRULES — mandatory institution-type positions for the Apply/Study list (display).
+  @Get('programme-choice-rules')
+  programmeChoiceRules() {
+    return this.publicService.programmeChoiceRules();
+  }
 }

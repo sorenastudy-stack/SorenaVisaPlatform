@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsUrl } from 'class-validator';
 import { CommissionType, ProviderStatus, ProviderType } from '@prisma/client';
 
 export class UpdateProviderDto {
@@ -26,6 +26,11 @@ export class UpdateProviderDto {
   @IsUrl()
   @IsOptional()
   catalogueUrl?: string;
+
+  // PR-SLOTRULES (Decision 2) — Owner "Featured" pin (additive Step-1 display only).
+  @IsBoolean()
+  @IsOptional()
+  isFeatured?: boolean;
 
   @IsEnum(CommissionType)
   @IsOptional()

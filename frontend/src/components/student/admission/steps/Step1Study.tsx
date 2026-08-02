@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronUp, ChevronDown, Trash2, AlertTriangle } from 'lucide-react';
+import { ChevronUp, ChevronDown, Trash2, AlertTriangle, Star, Check } from 'lucide-react';
 import { useAdmission } from '../AdmissionFormContext';
 import { api, ApiError } from '@/lib/api';
 import { useLocaleStore } from '@/lib/stores/localeStore';
@@ -12,6 +12,10 @@ interface Programme {
   id: string;
   name: string;
   providerName: string;
+  // PR-SLOTRULES — provider institution type (drives the required-position UX) + the Owner
+  // "Featured" pin (additive display only).
+  institutionType: 'UNIVERSITY' | 'ITP' | 'PTE' | null;
+  isFeatured: boolean;
   intakeMonths: number[];
   // PR-INTAKE-1 (Slice 2) — server-authoritative: only intakes inside the 5–12
   // month offer window, each flagged `conditional` when in a later calendar year.
@@ -34,6 +38,13 @@ function intakeLabel(month: number, year: number, locale: Loc): string {
     month: 'long', year: 'numeric',
   }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
+
+// PR-SLOTRULES — institution-type display labels (student-facing vocabulary).
+const TYPE_LABEL: Record<string, string> = { UNIVERSITY: 'University', ITP: 'Polytechnic', PTE: 'College' };
+const typeLabel = (t: string | null | undefined) => (t ? TYPE_LABEL[t] ?? t : 'Unknown type');
+
+interface MandatorySlot { position: number; institutionType: string }
+interface ChoiceRules { enabled: boolean; mandatorySlots: MandatorySlot[] }
 
 // PR-INTAKE-1 (Slice 2) — intake options come from the SERVER's eligible list
 // (already 5–12 month window-filtered), mapped to localised labels here.
@@ -119,6 +130,8 @@ export function Step1Study() {
   const [selectedIntakeYear, setSelectedIntakeYear]   = useState<number | null>(null);
   const [adding, setAdding]                           = useState(false);
   const [reordering, setReordering]                   = useState(false);
+  // PR-SLOTRULES — the live mandatory institution-type rule (Owner-configurable per country).
+  const [choiceRules, setChoiceRules]                 = useState<ChoiceRules>({ enabled: false, mandatorySlots: [] });
 
   useEffect(() => {
     api.get<Programme[]>('/public/programmes')
@@ -127,9 +140,17 @@ export function Step1Study() {
       .finally(() => setLoadingProgs(false));
   }, [t]);
 
+  useEffect(() => {
+    api.get<ChoiceRules>('/public/programme-choice-rules').then(setChoiceRules).catch(() => {});
+  }, []);
+
   // correction 1: exclude already-chosen programmes from picker
   const chosenProgIds      = new Set(programmeChoices.map(c => c.programmeId));
   const availableProgrammes = programmes.filter(p => !chosenProgIds.has(p.id));
+  const featuredProgrammes  = availableProgrammes.filter(p => p.isFeatured);
+  // Institution type for a chosen programme (join to the loaded catalogue).
+  const progType = (programmeId: string) => programmes.find(x => x.id === programmeId)?.institutionType ?? null;
+  const rulesActive = choiceRules.enabled && choiceRules.mandatorySlots.length > 0;
 
   const selectedProg  = programmes.find(p => p.id === selectedProgId);
   const intakeOptions = selectedProg ? toIntakeOptions(selectedProg.eligibleIntakes, locale) : [];
@@ -226,6 +247,29 @@ export function Step1Study() {
       {/* Helper */}
       <p className="text-sm text-sorena-navy/60">{t('admissionStep1Helper')}</p>
 
+      {/* PR-SLOTRULES — Featured institutions. Additive: shown ALONGSIDE the normal picker,
+          never replacing a ranked/matched position. */}
+      {featuredProgrammes.length > 0 && (
+        <div className="rounded-xl border border-[#c9a961]/40 bg-[#c9a961]/5 p-4">
+          <div className="mb-1 flex items-center gap-1.5 text-sm font-bold text-[#8a6d10]">
+            <Star size={15} /> Featured institutions
+          </div>
+          <p className="mb-2.5 text-xs text-sorena-navy/60">Highlighted by Sorena. Tap one to select it below, then choose an intake.</p>
+          <div className="flex flex-wrap gap-2">
+            {featuredProgrammes.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => { setSelectedProgId(p.id); setSelectedIntakeMonth(null); setSelectedIntakeYear(null); }}
+                className="rounded-full border border-[#c9a961]/50 bg-white px-3 py-1 text-xs text-sorena-navy transition-colors hover:bg-[#c9a961]/10"
+              >
+                {p.providerName} — {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Picker card */}
       <div className="flex flex-col gap-4 rounded-xl border border-sorena-navy/10 bg-white p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -301,6 +345,31 @@ export function Step1Study() {
         </button>
       </div>
 
+      {/* PR-SLOTRULES — required mandatory institution-type positions (live config). Shows the
+          student what they must place where, and whether each is satisfied, before submit. */}
+      {rulesActive && (
+        <div className="rounded-xl border border-sorena-navy/10 bg-white p-4">
+          <p className="mb-1 text-sm font-bold text-sorena-navy">Required positions</p>
+          <p className="mb-2.5 text-xs text-sorena-navy/60">Your list must place these institution types at these priorities before you can submit. Every other position can be anything.</p>
+          <ul className="space-y-1">
+            {[...choiceRules.mandatorySlots].sort((a, b) => a.position - b.position).map((m) => {
+              const at = sorted[m.position - 1];
+              const met = !!at && progType(at.programmeId) === m.institutionType;
+              return (
+                <li key={m.position} className="flex items-center gap-2 text-sm">
+                  {met
+                    ? <Check size={15} className="shrink-0 text-[#15a86b]" />
+                    : <span className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border border-amber-400" />}
+                  <span className={met ? 'text-sorena-navy/70' : 'text-amber-800'}>
+                    Priority {m.position} must be a <strong>{typeLabel(m.institutionType)}</strong>{met ? '' : ' — not set yet'}.
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       {/* Choices list */}
       {sorted.length === 0 ? (
         <p className="rounded-xl border border-dashed border-sorena-navy/20 py-8 text-center text-sm text-sorena-navy/50">
@@ -319,10 +388,21 @@ export function Step1Study() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-sorena-navy">
                   {getProgLabel(choice.programmeId)}
+                  {progType(choice.programmeId) && (
+                    <span className="ms-2 rounded bg-sorena-navy/5 px-1.5 py-0.5 text-[11px] font-normal text-sorena-navy/60">
+                      {typeLabel(progType(choice.programmeId))}
+                    </span>
+                  )}
                 </p>
                 <p className="text-sm text-sorena-navy/50">
                   {intakeLabel(choice.intakeMonth, choice.intakeYear, locale)}
                 </p>
+                {(() => {
+                  const m = choiceRules.mandatorySlots.find((x) => x.position === idx + 1);
+                  return rulesActive && m && progType(choice.programmeId) !== m.institutionType
+                    ? <p className="mt-0.5 text-[11px] text-amber-700">Priority {idx + 1} must be a {typeLabel(m.institutionType)}.</p>
+                    : null;
+                })()}
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <button

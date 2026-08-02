@@ -237,7 +237,9 @@ export class PublicService {
       where: { isActive: true, reviewStatus: ReviewStatus.APPROVED, provider: { status: 'ACTIVE' } },
       select: {
         id: true, name: true, intakeMonths: true,
-        provider: { select: { name: true } },
+        // PR-SLOTRULES — institutionType drives the Step-1 mandatory-position UX; isFeatured
+        // is the Owner "Featured" pin (additive display only).
+        provider: { select: { name: true, institutionType: true, isFeatured: true } },
       },
       orderBy: [{ provider: { name: 'asc' } }, { name: 'asc' }],
     });
@@ -257,10 +259,29 @@ export class PublicService {
     return rows.map(r => ({
       id: r.id, name: r.name,
       providerName: r.provider.name,
+      institutionType: r.provider.institutionType ?? null,
+      isFeatured: r.provider.isFeatured,
       intakeMonths: r.intakeMonths, // kept for backward-compat
       eligibleIntakes: eligibleIntakes(r.intakeMonths, now, minLead, maxWindow)
         .map(i => ({ month: i.month, year: i.year, conditional: isConditionalOffer(i, now) })),
     }));
+  }
+
+  // PR-SLOTRULES — the Owner-configured mandatory institution-type rule for the Apply/Study
+  // programme list, so Step 1 can show required positions live. Non-sensitive config; public
+  // like the programme catalogue. Normalised to { enabled, mandatorySlots }.
+  async programmeChoiceRules() {
+    const row = await this.prisma.countryExecutionConfig.findUnique({
+      where: { countryCode: 'NZ' },
+      select: { slotRules: true },
+    });
+    const sr = row?.slotRules as unknown;
+    if (!sr || typeof sr !== 'object' || Array.isArray(sr)) return { enabled: false, mandatorySlots: [] as Array<{ position: number; institutionType: string }> };
+    const o = sr as Record<string, unknown>;
+    return {
+      enabled: o.enabled === true,
+      mandatorySlots: Array.isArray(o.mandatorySlots) ? (o.mandatorySlots as Array<{ position: number; institutionType: string }>) : [],
+    };
   }
 
   private determineRecommendedRoute(

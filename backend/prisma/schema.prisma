@@ -2205,6 +2205,10 @@ model EducationProvider {
   // PR-CATALOG-2 — programme-listing/index entry point for the monthly discovery
   // crawl (Pass B). Owner-supplied; discovery skips the institution when unset.
   catalogueUrl         String?
+  // PR-SLOTRULES (Decision 2) — Owner-pinned "Featured" institution. ADDITIVE display
+  // signal ONLY: surfaced alongside the normal ranked options in Apply/Study Step 1. NEVER
+  // read by matching, slot-rule validation, or any ranking/assignment logic.
+  isFeatured           Boolean          @default(false)
   status               ProviderStatus   @default(PENDING)
   agreementUrl         String?
   agreementStartDate   DateTime?
