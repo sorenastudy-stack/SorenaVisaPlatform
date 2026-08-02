@@ -3,6 +3,7 @@ import { StudentsService } from './students.service';
 import { StudentsController } from './students.controller';
 import { AdmissionController } from './admission/admission.controller';
 import { AdmissionService } from './admission/admission.service';
+import { ProgrammeChoiceRulesService } from './admission/programme-choice-rules.service';
 import { VisaController } from './visa/visa.controller';
 import { VisaService } from './visa/visa.service';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -24,7 +25,7 @@ import { CryptoModule } from '../common/crypto/crypto.module';
     ChatbotModule,
   ],
   controllers: [StudentsController, AdmissionController, VisaController],
-  providers: [StudentsService, AdmissionService, VisaService],
+  providers: [StudentsService, AdmissionService, VisaService, ProgrammeChoiceRulesService],
   exports: [StudentsService],
 })
 export class StudentsModule {}

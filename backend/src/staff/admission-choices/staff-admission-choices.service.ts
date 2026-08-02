@@ -8,6 +8,7 @@ import {
   type ProgrammeChoiceAction,
 } from '../../students/admission/programme-choice-notice';
 import { notifyAdmissionTicket } from '../../students/admission/admission-ticket.util';
+import { ProgrammeChoiceRulesService } from '../../students/admission/programme-choice-rules.service';
 
 // PR-ADMISSION-SHARED — Admission Officer (CONSULTANT) CRUD over the SAME
 // AdmissionProgrammeChoice list the student edits in Apply/Study Step 1. One
@@ -32,6 +33,7 @@ export class StaffAdmissionChoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly choiceRules: ProgrammeChoiceRulesService,
   ) {}
 
   private async loadApplication(caseId: string) {
@@ -110,6 +112,11 @@ export class StaffAdmissionChoicesService {
     if (current.size !== incoming.size || ![...current].every((id) => incoming.has(id))) {
       throw new BadRequestException('orderedIds must contain exactly the current programme choices.');
     }
+    // PR-SLOTRULES — same reorder-hole guard as the student path (no-op when the rule is off).
+    const choiceById = new Map(app.programmeChoices.map((c) => [c.id, c]));
+    await this.choiceRules.assertNoWrongTypeInMandatory(
+      orderedIds.map((id, i) => ({ programmeId: choiceById.get(id)!.programmeId, priority: i + 1 })),
+    );
     await Promise.all(orderedIds.map((id, i) =>
       this.prisma.admissionProgrammeChoice.update({ where: { id }, data: { priority: i + 1 } })));
 

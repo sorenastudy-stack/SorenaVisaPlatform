@@ -23,6 +23,7 @@ import {
 } from './intake-reassignment-notice';
 import { notifyAdmissionTicket } from './admission-ticket.util';
 import { isValidCountryCode } from '../../common/country-codes';
+import { ProgrammeChoiceRulesService } from './programme-choice-rules.service';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 
@@ -369,6 +370,7 @@ export class AdmissionService {
     private prisma: PrismaService,
     private mail: MailService,
     private crypto: CryptoService,
+    private choiceRules: ProgrammeChoiceRulesService,
   ) {}
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -893,6 +895,14 @@ export class AdmissionService {
       );
     }
 
+    // PR-SLOTRULES — close the reorder-hole: reject a reorder that lands the wrong
+    // institution type in a reserved (mandatory) position, BEFORE writing. Validated on the
+    // prospective priorities (index+1). No-op when the rule is off.
+    const choiceById = new Map(application.programmeChoices.map((c) => [c.id, c]));
+    await this.choiceRules.assertNoWrongTypeInMandatory(
+      orderedIds.map((id, i) => ({ programmeId: choiceById.get(id)!.programmeId, priority: i + 1 })),
+    );
+
     await Promise.all(
       orderedIds.map((id, i) =>
         this.prisma.admissionProgrammeChoice.update({
@@ -1176,6 +1186,11 @@ export class AdmissionService {
     if (application.programmeChoices.length === 0) {
       throw new BadRequestException('At least one programme choice is required');
     }
+
+    // PR-SLOTRULES — mandatory institution-type positions (Owner-configurable per country).
+    // Full gate: every configured mandatory position must be filled with the right type.
+    // No-op when the rule is disabled/empty for this country.
+    await this.choiceRules.assertValidForSubmit(application.programmeChoices);
 
     // Decrypt PII columns before required-field validation so the existing
     // textChecks logic (which reads plaintext field names like passportNumber)
