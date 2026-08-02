@@ -24,6 +24,7 @@ import {
 import { notifyAdmissionTicket } from './admission-ticket.util';
 import { isValidCountryCode } from '../../common/country-codes';
 import { ProgrammeChoiceRulesService } from './programme-choice-rules.service';
+import { validateEmploymentYears } from './employment-history.logic';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 
@@ -446,12 +447,15 @@ export class AdmissionService {
         educationEntries: {
           orderBy: { sortOrder: 'asc' },
         },
+        employmentEntries: {
+          orderBy: { sortOrder: 'asc' },
+        },
       },
     });
 
     if (!application) return { exists: false as const };
 
-    const { documents, programmeChoices, educationEntries, ...appData } = application;
+    const { documents, programmeChoices, educationEntries, employmentEntries, ...appData } = application;
     const decryptedAppData = decryptPiiFields(this.crypto, appData as Record<string, unknown>);
 
     return {
@@ -477,6 +481,7 @@ export class AdmissionService {
         certificateNotReceived: e.certificateNotReceived,
         sortOrder: e.sortOrder,
       })),
+      employmentEntries: employmentEntries.map((e) => this.employmentShape(e)),
       documents: documents.map((doc) => ({
         id: doc.id,
         documentType: doc.documentType,
@@ -1128,6 +1133,125 @@ export class AdmissionService {
         }),
       ),
     );
+  }
+
+  // ── Employment history (PR-ADMISSION-CVDATA step 2a) — mirrors the education-entry CRUD.
+  // Real structured work history captured at admission stage; feeds the AI CV's Experience.
+  private employmentShape(e: {
+    id: string; employerName: string; roleTitle: string; startYear: number | null; endYear: number | null;
+    isCurrent: boolean; countryOfWork: string | null; organisationField: string | null; dutiesText: string | null; sortOrder: number;
+  }) {
+    return {
+      id: e.id, employerName: e.employerName, roleTitle: e.roleTitle,
+      startYear: e.startYear, endYear: e.endYear, isCurrent: e.isCurrent,
+      countryOfWork: e.countryOfWork, organisationField: e.organisationField,
+      dutiesText: e.dutiesText, sortOrder: e.sortOrder,
+    };
+  }
+
+  private async assertEmploymentEntryOwnership(entryId: string, applicationId: string) {
+    const entry = await this.prisma.admissionEmploymentEntry.findUnique({ where: { id: entryId } });
+    if (!entry) throw new NotFoundException('Employment entry not found');
+    if (entry.admissionApplicationId !== applicationId) {
+      throw new ForbiddenException('Employment entry does not belong to this application');
+    }
+    return entry;
+  }
+
+  async addEmploymentEntry(
+    userId: string,
+    body: {
+      employerName: string; roleTitle: string; startYear?: number | null; endYear?: number | null;
+      isCurrent?: boolean; countryOfWork?: string | null; organisationField?: string | null; dutiesText?: string | null;
+    },
+  ) {
+    const { contact, caseRecord } = await this.resolveContactAndCase(userId);
+
+    if (!body?.employerName?.trim()) throw new BadRequestException('employerName is required');
+    if (!body?.roleTitle?.trim()) throw new BadRequestException('roleTitle is required');
+    if (body.countryOfWork) assertCountryCodeOrEmpty(body.countryOfWork, 'countryOfWork');
+    const isCurrent = body.isCurrent ?? false;
+    const err = validateEmploymentYears(body.startYear ?? null, body.endYear ?? null, isCurrent);
+    if (err) throw new BadRequestException(err);
+
+    const application = await this.findOrCreateApplication(caseRecord.id, contact.id);
+    const last = await this.prisma.admissionEmploymentEntry.findFirst({
+      where: { admissionApplicationId: application.id },
+      orderBy: { sortOrder: 'desc' },
+    });
+    const sortOrder = (last?.sortOrder ?? -1) + 1;
+
+    const entry = await this.prisma.admissionEmploymentEntry.create({
+      data: {
+        admissionApplicationId: application.id,
+        employerName: body.employerName.trim(),
+        roleTitle: body.roleTitle.trim(),
+        startYear: body.startYear ?? null,
+        endYear: isCurrent ? null : (body.endYear ?? null),
+        isCurrent,
+        countryOfWork: body.countryOfWork?.trim() || null,
+        organisationField: body.organisationField?.trim() || null,
+        dutiesText: body.dutiesText?.trim() || null,
+        sortOrder,
+      },
+    });
+    return this.employmentShape(entry);
+  }
+
+  async updateEmploymentEntry(userId: string, entryId: string, body: Record<string, unknown>) {
+    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const application = await this.prisma.admissionApplication.findFirst({ where: { caseId: caseRecord.id } });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.status !== 'DRAFT') throw new ConflictException('Cannot modify a submitted application');
+
+    const existing = await this.assertEmploymentEntryOwnership(entryId, application.id);
+
+    const data: Record<string, unknown> = {};
+    if (body.employerName !== undefined) {
+      const val = String(body.employerName).trim();
+      if (!val) throw new BadRequestException('employerName cannot be empty');
+      data.employerName = val;
+    }
+    if (body.roleTitle !== undefined) {
+      const val = String(body.roleTitle).trim();
+      if (!val) throw new BadRequestException('roleTitle cannot be empty');
+      data.roleTitle = val;
+    }
+    if (body.countryOfWork !== undefined) {
+      const val = body.countryOfWork == null ? null : String(body.countryOfWork).trim() || null;
+      if (val) assertCountryCodeOrEmpty(val, 'countryOfWork');
+      data.countryOfWork = val;
+    }
+    if (body.organisationField !== undefined) data.organisationField = body.organisationField == null ? null : String(body.organisationField).trim() || null;
+    if (body.dutiesText !== undefined) data.dutiesText = body.dutiesText == null ? null : String(body.dutiesText).trim() || null;
+    if (body.isCurrent !== undefined) data.isCurrent = !!body.isCurrent;
+    if (body.startYear !== undefined) data.startYear = body.startYear == null ? null : Number(body.startYear);
+    if (body.endYear !== undefined) data.endYear = body.endYear == null ? null : Number(body.endYear);
+
+    // Re-validate years against the effective (patched) values.
+    const eff = { ...existing, ...data } as { startYear: number | null; endYear: number | null; isCurrent: boolean };
+    if (eff.isCurrent) eff.endYear = null; // a current role has no end year — clear BEFORE validating
+    const err = validateEmploymentYears(eff.startYear, eff.endYear, eff.isCurrent);
+    if (err) throw new BadRequestException(err);
+    if (eff.isCurrent) data.endYear = null; // persist the cleared end year
+
+    const entry = await this.prisma.admissionEmploymentEntry.update({ where: { id: entryId }, data });
+    return this.employmentShape(entry);
+  }
+
+  async deleteEmploymentEntry(userId: string, entryId: string) {
+    const { caseRecord } = await this.resolveContactAndCase(userId);
+    const application = await this.prisma.admissionApplication.findFirst({ where: { caseId: caseRecord.id } });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.status !== 'DRAFT') throw new ConflictException('Cannot modify a submitted application');
+
+    await this.assertEmploymentEntryOwnership(entryId, application.id);
+    await this.prisma.admissionEmploymentEntry.delete({ where: { id: entryId } });
+
+    const remaining = await this.prisma.admissionEmploymentEntry.findMany({
+      where: { admissionApplicationId: application.id }, orderBy: { sortOrder: 'asc' },
+    });
+    await Promise.all(remaining.map((e, i) => this.prisma.admissionEmploymentEntry.update({ where: { id: e.id }, data: { sortOrder: i } })));
   }
 
   async reorderEducationEntries(userId: string, orderedIds: string[]) {

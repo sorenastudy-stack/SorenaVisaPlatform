@@ -5,8 +5,13 @@
 // Fail-safe: when DOB is unknown, all steps are shown. Never hide steps based
 // on missing data — under-disclosure is worse than over-disclosure here.
 
-export const STUDENT_STEPS = [1, 2, 3, 4, 5, 6, 8];
-export const AGENT_STEPS   = [1, 2, 3, 4, 5, 6, 7, 8];
+// PR-ADMISSION-CVDATA (step 2a) — Employment history is internal step id 9, placed right
+// after Education (3) in DISPLAY order. Internal ids need not be contiguous: the displayed
+// number is the position in this array (StepNav/StepFooter use the index). Keeping 9
+// out-of-sequence leaves the DOB-skip logic (steps 5 & 6) and the content-tied step i18n
+// keys (admissionStep4-8Title) untouched.
+export const STUDENT_STEPS = [1, 2, 3, 9, 4, 5, 6, 8];
+export const AGENT_STEPS   = [1, 2, 3, 9, 4, 5, 6, 7, 8];
 
 /**
  * Returns whole-years age as of today for a 'YYYY-MM-DD' (or ISO) input.

@@ -4,8 +4,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   GraduationCap, ListOrdered, FileText, ScrollText, Award, Send,
-  ExternalLink, Check, type LucideIcon,
+  ExternalLink, Check, Briefcase, Trash2, Plus, type LucideIcon,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import type { CaseDetail } from './types';
 
@@ -23,6 +24,10 @@ interface Choice {
 interface ChoicesResp { applicationStatus: string; choices: Choice[] }
 interface MandatorySlot { position: number; institutionType: string }
 interface Rules { enabled: boolean; mandatorySlots: MandatorySlot[] }
+interface Employment {
+  id: string; employerName: string; roleTitle: string; startYear: number | null; endYear: number | null;
+  isCurrent: boolean; countryOfWork: string | null; organisationField: string | null; dutiesText: string | null; sortOrder: number;
+}
 
 const TYPE_LABEL: Record<string, string> = { UNIVERSITY: 'University', ITP: 'Polytechnic', PTE: 'College' };
 const typeLabel = (t: string | null) => (t ? TYPE_LABEL[t] ?? t : 'Unknown type');
@@ -57,6 +62,90 @@ function Placeholder({ icon: Icon, title, note }: { icon: LucideIcon; title: str
       <div className="rounded-xl border border-dashed border-[#c9a961]/40 bg-[#faf8f3] px-4 py-6 text-sm text-[#8a6d10]/80">
         <span className="font-semibold text-[#8a6d10]">Not built yet.</span> {note}
       </div>
+    </Section>
+  );
+}
+
+// Real employment history with staff view/edit (add/remove). The client is the primary
+// editor in their application; this lets the Admission Specialist review + correct.
+function EmploymentSection({ caseId }: { caseId: string }) {
+  const [rows, setRows] = useState<Employment[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const blank = { employerName: '', roleTitle: '', organisationField: '', countryOfWork: '', startYear: '', endYear: '', isCurrent: false, dutiesText: '' };
+  const [form, setForm] = useState(blank);
+
+  const load = () => api.get<{ entries: Employment[] }>(`/api/staff/cases/${caseId}/employment-entries`).then((r) => setRows(r.entries)).catch(() => setRows([]));
+  useEffect(() => { load(); }, [caseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const yrs = (e: Employment) => {
+    const s = e.startYear ?? '';
+    const end = e.isCurrent ? 'present' : (e.endYear ?? '');
+    return s || end ? `${s}${s || end ? '–' : ''}${end}` : '';
+  };
+  const submit = async () => {
+    if (!form.employerName.trim() || !form.roleTitle.trim()) { toast.error('Employer and job title are required.'); return; }
+    setSaving(true);
+    try {
+      await api.post(`/api/staff/cases/${caseId}/employment-entries`, {
+        employerName: form.employerName.trim(), roleTitle: form.roleTitle.trim(),
+        organisationField: form.organisationField.trim() || null, countryOfWork: form.countryOfWork.trim() || null,
+        startYear: form.startYear ? Number(form.startYear) : null, endYear: form.isCurrent ? null : (form.endYear ? Number(form.endYear) : null),
+        isCurrent: form.isCurrent, dutiesText: form.dutiesText.trim() || null,
+      });
+      setForm(blank); setAdding(false); await load();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not add role.'); }
+    finally { setSaving(false); }
+  };
+  const del = async (id: string) => {
+    if (!window.confirm('Remove this role?')) return;
+    try { await api.delete(`/api/staff/cases/${caseId}/employment-entries/${id}`); await load(); }
+    catch (e: any) { toast.error(e?.message ?? 'Could not remove role.'); }
+  };
+  const inp = 'rounded-lg border border-sorena-navy/20 px-2 py-1.5 text-sm';
+
+  return (
+    <Section icon={Briefcase} title="Employment history">
+      {rows === null ? (
+        <EmptyCard>Loading…</EmptyCard>
+      ) : rows.length === 0 && !adding ? (
+        <EmptyCard>No employment history captured yet.</EmptyCard>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((e) => (
+            <li key={e.id} className="flex items-start justify-between gap-3 rounded-xl border border-sorena-navy/10 bg-white p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-[#1e3a5f]">{e.roleTitle} <span className="text-gray-400">·</span> {e.employerName}</p>
+                <p className="text-xs text-gray-500">{[yrs(e), e.organisationField, e.countryOfWork].filter(Boolean).join(' · ')}</p>
+                {e.dutiesText && <p className="mt-0.5 text-xs text-gray-500">{e.dutiesText}</p>}
+              </div>
+              <button onClick={() => del(e.id)} title="Remove" className="shrink-0 rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"><Trash2 size={15} /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding ? (
+        <div className="mt-2 space-y-2 rounded-xl border border-dashed border-sorena-navy/20 bg-white p-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input className={inp} placeholder="Employer *" value={form.employerName} onChange={(e) => setForm((f) => ({ ...f, employerName: e.target.value }))} />
+            <input className={inp} placeholder="Job title *" value={form.roleTitle} onChange={(e) => setForm((f) => ({ ...f, roleTitle: e.target.value }))} />
+            <input className={inp} placeholder="Industry / field" value={form.organisationField} onChange={(e) => setForm((f) => ({ ...f, organisationField: e.target.value }))} />
+            <input className={inp} placeholder="Country of work (ISO code)" value={form.countryOfWork} onChange={(e) => setForm((f) => ({ ...f, countryOfWork: e.target.value }))} />
+            <input className={inp} type="number" placeholder="Start year" value={form.startYear} onChange={(e) => setForm((f) => ({ ...f, startYear: e.target.value }))} />
+            <input className={inp} type="number" placeholder="End year" disabled={form.isCurrent} value={form.endYear} onChange={(e) => setForm((f) => ({ ...f, endYear: e.target.value }))} />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={form.isCurrent} onChange={(e) => setForm((f) => ({ ...f, isCurrent: e.target.checked }))} /> Current role</label>
+          <textarea className={`${inp} w-full`} rows={2} placeholder="What they did (optional)" value={form.dutiesText} onChange={(e) => setForm((f) => ({ ...f, dutiesText: e.target.value }))} />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => { setAdding(false); setForm(blank); }} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button onClick={submit} disabled={saving} className="rounded-lg bg-[#1e3a5f] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">{saving ? 'Saving…' : 'Add role'}</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} className="mt-2 inline-flex items-center gap-1 text-sm text-[#1e3a5f] hover:underline"><Plus size={15} /> Add a role</button>
+      )}
+      <p className="mt-1 text-[11px] text-gray-400">The client also edits this in their application. Feeds the AI CV’s experience (next step).</p>
     </Section>
   );
 }
@@ -165,6 +254,9 @@ export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: 
         )}
         <p className="mt-2 text-[11px] text-gray-400">Read-only view. Adjusting a client&apos;s choices from the case file (the staff swap panel) is a later step.</p>
       </Section>
+
+      {/* ── Employment history (real, staff view/edit — PR-ADMISSION-CVDATA) ── */}
+      <EmploymentSection caseId={caseId} />
 
       {/* ── Placeholders for later steps (honest empty states) ──────────── */}
       <Placeholder icon={FileText} title="AI-generated CV" note="The CV generation + Admission Specialist review/approve flow lands in a later step." />

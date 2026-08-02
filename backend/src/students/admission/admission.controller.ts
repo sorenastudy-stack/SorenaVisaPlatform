@@ -197,6 +197,33 @@ export class AdmissionController {
     return this.admissionService.deleteEducationEntry(req.user.userId, entryId);
   }
 
+  // PR-ADMISSION-CVDATA (step 2a) — employment-history entries (client-editable).
+  @Post('application/employment-entries')
+  addEmploymentEntry(
+    @Req() req: any,
+    @Body() body: {
+      employerName: string; roleTitle: string; startYear?: number | null; endYear?: number | null;
+      isCurrent?: boolean; countryOfWork?: string | null; organisationField?: string | null; dutiesText?: string | null;
+    },
+  ) {
+    return this.admissionService.addEmploymentEntry(req.user.userId, body);
+  }
+
+  @Patch('application/employment-entries/:entryId')
+  updateEmploymentEntry(
+    @Req() req: any,
+    @Param('entryId') entryId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.admissionService.updateEmploymentEntry(req.user.userId, entryId, body);
+  }
+
+  @Delete('application/employment-entries/:entryId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteEmploymentEntry(@Req() req: any, @Param('entryId') entryId: string) {
+    return this.admissionService.deleteEmploymentEntry(req.user.userId, entryId);
+  }
+
   @Post('application/submit')
   submitApplication(@Req() req: any) {
     return this.admissionService.submitApplication(req.user.userId, req.user.role);

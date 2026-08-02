@@ -125,11 +125,36 @@ export interface EducationEntryInput {
   certificateNotReceived?: boolean;
 }
 
+// PR-ADMISSION-CVDATA (step 2a) — real structured employment history.
+export interface EmploymentEntry {
+  id: string;
+  employerName: string;
+  roleTitle: string;
+  startYear?: number | null;
+  endYear?: number | null;
+  isCurrent: boolean;
+  countryOfWork?: string | null;
+  organisationField?: string | null;
+  dutiesText?: string | null;
+  sortOrder: number;
+}
+export interface EmploymentEntryInput {
+  employerName: string;
+  roleTitle: string;
+  startYear?: number | null;
+  endYear?: number | null;
+  isCurrent?: boolean;
+  countryOfWork?: string | null;
+  organisationField?: string | null;
+  dutiesText?: string | null;
+}
+
 interface ApplicationResponse {
   exists: boolean;
   application: Application;
   programmeChoices: ProgrammeChoice[];
   educationEntries: EducationEntry[];
+  employmentEntries: EmploymentEntry[];
   documents: AdmissionDocument[];
 }
 
@@ -158,6 +183,10 @@ interface ContextValue {
   updateEducationEntry: (entryId: string, data: Partial<EducationEntryInput>) => Promise<EducationEntry>;
   deleteEducationEntry: (entryId: string) => Promise<void>;
   reorderEducationEntries: (orderedIds: string[]) => Promise<void>;
+  employmentEntries: EmploymentEntry[];
+  addEmploymentEntry: (data: EmploymentEntryInput) => Promise<EmploymentEntry>;
+  updateEmploymentEntry: (entryId: string, data: Partial<EmploymentEntryInput>) => Promise<EmploymentEntry>;
+  deleteEmploymentEntry: (entryId: string) => Promise<void>;
   uploadDocument: (documentType: string, file: File, educationEntryId?: string) => Promise<void>;
   deleteDocument: (documentId: string) => Promise<void>;
   step2Fields: Step2Fields;
@@ -183,17 +212,20 @@ export function AdmissionProvider({
   initialApplication,
   initialProgrammeChoices,
   initialEducationEntries,
+  initialEmploymentEntries,
   initialDocuments,
 }: {
   children: ReactNode;
   initialApplication: Application | null;
   initialProgrammeChoices: ProgrammeChoice[];
   initialEducationEntries: EducationEntry[];
+  initialEmploymentEntries: EmploymentEntry[];
   initialDocuments: AdmissionDocument[];
 }) {
   const [application, setApplication] = useState<Application | null>(initialApplication);
   const [programmeChoices, setProgrammeChoicesRaw] = useState<ProgrammeChoice[]>(initialProgrammeChoices ?? []);
   const [educationEntries, setEducationEntriesRaw] = useState<EducationEntry[]>(initialEducationEntries ?? []);
+  const [employmentEntries, setEmploymentEntriesRaw] = useState<EmploymentEntry[]>(initialEmploymentEntries ?? []);
   const [documents, setDocumentsRaw] = useState<AdmissionDocument[]>(initialDocuments ?? []);
   const [currentStep, setCurrentStepRaw] = useState(initialApplication?.currentStep ?? 1);
 
@@ -420,6 +452,26 @@ export function AdmissionProvider({
     safeSetEducationEntries(res.educationEntries);
   }, [safeSetEducationEntries]);
 
+  // PR-ADMISSION-CVDATA (step 2a) — employment history, mirroring the education entry CRUD.
+  const addEmploymentEntry = useCallback(async (data: EmploymentEntryInput) => {
+    const entry = await api.post<EmploymentEntry>('/students/me/admission/application/employment-entries', data);
+    setEmploymentEntriesRaw(prev => [...prev, entry].sort((a, b) => a.sortOrder - b.sortOrder));
+    return entry;
+  }, []);
+
+  const updateEmploymentEntry = useCallback(async (entryId: string, data: Partial<EmploymentEntryInput>) => {
+    const entry = await api.patch<EmploymentEntry>(`/students/me/admission/application/employment-entries/${entryId}`, data);
+    setEmploymentEntriesRaw(prev => prev.map(e => e.id === entryId ? entry : e));
+    return entry;
+  }, []);
+
+  const deleteEmploymentEntry = useCallback(async (entryId: string) => {
+    await api.delete<void>(`/students/me/admission/application/employment-entries/${entryId}`);
+    setEmploymentEntriesRaw(prev =>
+      prev.filter(e => e.id !== entryId).sort((a, b) => a.sortOrder - b.sortOrder).map((e, i) => ({ ...e, sortOrder: i })),
+    );
+  }, []);
+
   const deleteDocument = useCallback(async (documentId: string) => {
     await api.delete<void>(`/students/me/admission/documents/${documentId}`);
     setDocumentsRaw(prev => prev.filter(d => d.id !== documentId));
@@ -452,6 +504,10 @@ export function AdmissionProvider({
       updateEducationEntry,
       deleteEducationEntry,
       reorderEducationEntries,
+      employmentEntries,
+      addEmploymentEntry,
+      updateEmploymentEntry,
+      deleteEmploymentEntry,
       uploadDocument,
       deleteDocument,
       step2Fields: step2FieldsRaw,

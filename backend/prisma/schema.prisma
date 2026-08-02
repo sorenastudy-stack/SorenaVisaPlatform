@@ -2862,6 +2862,7 @@ model AdmissionApplication {
   agent            User?                      @relation("ApplicationAgent", fields: [agentId], references: [id])
   programmeChoices AdmissionProgrammeChoice[]
   educationEntries AdmissionEducationEntry[]
+  employmentEntries AdmissionEmploymentEntry[]
   documents        AdmissionDocument[]
   visaApplication  VisaApplication?
 
@@ -2896,6 +2897,35 @@ model AdmissionEducationEntry {
 
   @@index([admissionApplicationId])
   @@map("admission_education_entries")
+}
+
+// PR-ADMISSION-CVDATA (Step 2a) — real, structured employment history captured at the
+// ADMISSION stage (client-editable), so the AI CV's Experience section uses verified data
+// (employer/title/dates) instead of coded scorecard buckets. Admission-primary, mirroring
+// AdmissionEducationEntry: it holds year-level data the client provides; a future visa-stage
+// supplement/pre-fill (like VisaEducationSupplement over education) REUSES these rows so
+// nothing is asked twice. Field names mirror VisaEmploymentEntry for frictionless reuse.
+// NOTE (fast-follow, NOT this slice): wire visa Step-7 employment to pre-fill from these rows.
+model AdmissionEmploymentEntry {
+  id                     String   @id @default(cuid())
+  admissionApplicationId String
+  employerName           String
+  roleTitle              String
+  // Year-level like education (the client may not know exact months yet; refine over time).
+  startYear              Int?
+  endYear                Int? // null when isCurrent
+  isCurrent              Boolean  @default(false)
+  countryOfWork          String?
+  organisationField      String? // industry / sector
+  dutiesText             String? // short client-provided description (optional)
+  sortOrder              Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([admissionApplicationId])
+  @@map("admission_employment_entries")
 }
 
 model AdmissionProgrammeChoice {

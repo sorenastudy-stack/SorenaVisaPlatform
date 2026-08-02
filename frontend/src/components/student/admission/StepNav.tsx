@@ -15,6 +15,11 @@ const STEP_LABELS: Record<number, string> = {
   7: 'admissionStep7Title',
   8: 'admissionStep8Title',
 };
+// PR-ADMISSION-CVDATA (step 2a) — internal step 9 uses an inline English label (Persian
+// i18n frozen), so it doesn't need a new bilingual t() key.
+const STEP_LABELS_LITERAL: Record<number, string> = {
+  9: 'Employment history',
+};
 
 // Step 7 is hidden for non-agent users; Steps 5 & 6 are hidden for 18+ users
 // (see stepVisibility.ts).
@@ -56,7 +61,7 @@ export function StepNav({ isAgent }: { isAgent: boolean }) {
             ].join(' ')}>
               {isDone && !isActive ? <Check size={12} /> : displayNum}
             </span>
-            <span className="truncate">{t(STEP_LABELS[n])}</span>
+            <span className="truncate">{STEP_LABELS[n] ? t(STEP_LABELS[n]) : (STEP_LABELS_LITERAL[n] ?? '')}</span>
           </button>
         );
       })}

@@ -2,21 +2,26 @@
 
 import { useTranslations } from 'next-intl';
 
-const STAGES = [
-  { key: 'admissionStage1', minStep: 1, maxStep: 2 },
-  { key: 'admissionStage2', minStep: 3, maxStep: 4 },
-  { key: 'admissionStage3', minStep: 5, maxStep: 6 },
-  { key: 'admissionStage4', minStep: 7, maxStep: 8 },
+// PR-ADMISSION-CVDATA (step 2a) — step→stage membership (explicit sets, not min/max ranges)
+// so the out-of-sequence Employment step (internal id 9) maps cleanly into Stage 2 alongside
+// Education (3) and Documents (4).
+const STAGES: { key: string; steps: number[] }[] = [
+  { key: 'admissionStage1', steps: [1, 2] },
+  { key: 'admissionStage2', steps: [3, 9, 4] },
+  { key: 'admissionStage3', steps: [5, 6] },
+  { key: 'admissionStage4', steps: [7, 8] },
 ];
 
 export function StageProgressBar({ currentStep }: { currentStep: number }) {
   const t = useTranslations();
+  // 0-based index of the stage the current step belongs to (fallback 0).
+  const currentStageIdx = Math.max(0, STAGES.findIndex((s) => s.steps.includes(currentStep)));
 
   return (
     <div className="flex gap-3">
-      {STAGES.map((stage) => {
-        const isActive = currentStep >= stage.minStep && currentStep <= stage.maxStep;
-        const isDone   = currentStep > stage.maxStep;
+      {STAGES.map((stage, i) => {
+        const isActive = i === currentStageIdx;
+        const isDone   = i < currentStageIdx;
 
         return (
           <div key={stage.key} className="flex-1">

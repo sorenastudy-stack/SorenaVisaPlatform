@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import {
   AdmissionProvider, useAdmission,
-  type Application, type ProgrammeChoice, type EducationEntry, type AdmissionDocument,
+  type Application, type ProgrammeChoice, type EducationEntry, type EmploymentEntry, type AdmissionDocument,
 } from './AdmissionFormContext';
 import { StepNav }          from './StepNav';
 import { StageProgressBar } from './StageProgressBar';
@@ -21,6 +21,7 @@ import { Step5GuardianInfo }      from './steps/Step5GuardianInfo';
 import { Step6Accommodation }     from './steps/Step6Accommodation';
 import { Step7AgentDetails }      from './steps/Step7AgentDetails';
 import { Step8Acceptance }        from './steps/Step8Acceptance';
+import { StepEmployment }         from './steps/StepEmployment';
 import { StudentHeader }    from '@/components/student/StudentHeader';
 import type { Session }     from '@/lib/auth';
 import { getVisibleSteps }  from './stepVisibility';
@@ -30,6 +31,7 @@ interface InitialData {
   application: Application;
   programmeChoices: ProgrammeChoice[];
   educationEntries: EducationEntry[];
+  employmentEntries: EmploymentEntry[];
   documents: AdmissionDocument[];
 }
 
@@ -47,7 +49,7 @@ export function AdmissionFormShell({ session, initialData }: Props) {
     if (initialData) return;
     api.post<{ application: Application }>('/students/me/admission/application', {})
       .then((res) =>
-        setData({ exists: true, application: res.application, programmeChoices: [], educationEntries: [], documents: [] })
+        setData({ exists: true, application: res.application, programmeChoices: [], educationEntries: [], employmentEntries: [], documents: [] })
       )
       .catch(() => toast.error(t('admissionStartError')))
       .finally(() => setLoading(false));
@@ -68,6 +70,7 @@ export function AdmissionFormShell({ session, initialData }: Props) {
       initialApplication={data.application}
       initialProgrammeChoices={data.programmeChoices}
       initialEducationEntries={data.educationEntries}
+      initialEmploymentEntries={data.employmentEntries}
       initialDocuments={data.documents}
     >
       <ShellInner session={session} />
@@ -136,6 +139,8 @@ function ShellInner({ session }: { session: Session }) {
             ? <Step7AgentDetails />
             : safeStep === 8
             ? <Step8Acceptance />
+            : safeStep === 9
+            ? <StepEmployment />
             : <StepPlaceholder step={safeStep} displayStep={displayStep} />
           }
         </main>

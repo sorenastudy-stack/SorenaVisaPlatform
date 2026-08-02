@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth';
 import { apiServer } from '@/lib/apiServer';
 import { AdmissionFormShell } from '@/components/student/admission/AdmissionFormShell';
 import { PaymentGatePanel } from '@/components/portal/PaymentGatePanel';
-import type { Application, ProgrammeChoice, EducationEntry, AdmissionDocument } from '@/components/student/admission/AdmissionFormContext';
+import type { Application, ProgrammeChoice, EducationEntry, EmploymentEntry, AdmissionDocument } from '@/components/student/admission/AdmissionFormContext';
 
 interface AccessState { paid: boolean; processing: boolean; payInvoiceId: string | null }
 
@@ -34,6 +34,7 @@ export default async function AdmissionPage() {
     application: Application;
     programmeChoices: ProgrammeChoice[];
     educationEntries: EducationEntry[];
+    employmentEntries: EmploymentEntry[];
     documents: AdmissionDocument[];
   } | null = null;
 
@@ -43,6 +44,7 @@ export default async function AdmissionPage() {
       application: Application;
       programmeChoices: ProgrammeChoice[];
       educationEntries: EducationEntry[];
+      employmentEntries: EmploymentEntry[];
       documents: AdmissionDocument[];
     }>('/students/me/admission/application');
     if (res.exists) initialData = res;
