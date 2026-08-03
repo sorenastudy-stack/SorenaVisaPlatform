@@ -25,6 +25,7 @@ import { notifyAdmissionTicket } from './admission-ticket.util';
 import { isValidCountryCode } from '../../common/country-codes';
 import { ProgrammeChoiceRulesService } from './programme-choice-rules.service';
 import { validateEmploymentYears } from './employment-history.logic';
+import { EventsService, EventSource } from '../../events/events.service';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 
@@ -372,6 +373,7 @@ export class AdmissionService {
     private mail: MailService,
     private crypto: CryptoService,
     private choiceRules: ProgrammeChoiceRulesService,
+    private events: EventsService,
   ) {}
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -1391,25 +1393,53 @@ export class AdmissionService {
       throw new BadRequestException(docGateMissing.join('; '));
     }
 
-    // Atomic: application status + case status + audit log
-    const [submitted] = await this.prisma.$transaction([
-      this.prisma.admissionApplication.update({
+    // Atomic: application status + case status + audit log + the finality SIGNAL. Interactive
+    // transaction so the CrmEvent is emitted with the same tx client — the signal fires iff the
+    // SUBMITTED flip commits (it can never be lost, nor fire without the lock).
+    const submitted = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.admissionApplication.update({
         where: { id: application.id },
         data: { status: 'SUBMITTED', submittedAt: new Date() },
-      }),
-      this.prisma.case.update({
+      });
+      await tx.case.update({
         where: { id: caseRecord.id },
         data: { status: 'APPLICATION_SUBMITTED' },
-      }),
-      this.prisma.auditLog.create({
+      });
+      await tx.auditLog.create({
         data: {
           userId,
           action: 'ADMISSION_APPLICATION_SUBMITTED',
           entityType: 'AdmissionApplication',
           entityId: application.id,
         },
-      }),
-    ]);
+      });
+      // PR-ADMISSION-FINALITY (step 7) — the real "choices are final" signal other systems can
+      // listen for (CV/SOP localisation, submission-log start, sequential gate all key off this
+      // moment). Emit-only for now (no outbox processor yet) — the emission IS the deliverable.
+      await this.events.emit(
+        'ADMISSION_CHOICES_FINALIZED',
+        'AdmissionApplication',
+        application.id,
+        caseRecord.leadId,
+        EventSource.SYSTEM,
+        userId,
+        {
+          caseId: caseRecord.id,
+          applicationId: application.id,
+          submittedAt: updated.submittedAt,
+          choiceCount: application.programmeChoices.length,
+          choices: application.programmeChoices.map((c) => ({
+            choiceId: c.id,
+            programmeId: c.programmeId,
+            priority: c.priority,
+            intakeMonth: c.intakeMonth,
+            intakeYear: c.intakeYear,
+          })),
+        },
+        tx,
+      );
+      return updated;
+    });
 
     // Post-commit side effects — failures are non-fatal
     try {

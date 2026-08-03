@@ -13,6 +13,7 @@ import { ChatbotModule } from './chatbot/chatbot.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
+import { EventsService } from '../events/events.service';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { CryptoModule } from '../common/crypto/crypto.module';
     ChatbotModule,
   ],
   controllers: [StudentsController, AdmissionController, VisaController],
-  providers: [StudentsService, AdmissionService, VisaService, ProgrammeChoiceRulesService],
+  providers: [StudentsService, AdmissionService, VisaService, ProgrammeChoiceRulesService, EventsService],
   exports: [StudentsService],
 })
 export class StudentsModule {}
