@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { FollowUpService } from '../follow-up/follow-up.service';
+import { isFollowUpDue } from '../follow-up/follow-up.logic';
 import {
   validateSubmissionInput,
   summariseChoiceSubmissions,
@@ -15,7 +17,7 @@ import {
 // Logging is gated to submitted applications (the shared finality signal Steps 2b/3 also use).
 @Injectable()
 export class SubmissionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly followUp: FollowUpService) {}
 
   private today(): string {
     return new Date().toISOString().slice(0, 10);
@@ -71,9 +73,14 @@ export class SubmissionService {
       arr.push(r);
       byChoice.set(r.admissionProgrammeChoiceId, arr);
     }
+    const now = new Date();
     const out = choices.map((ch: any) => {
       const rows = byChoice.get(ch.id) ?? [];
       const summary = summariseChoiceSubmissions(rows.map((r) => ({ id: r.id, submittedAt: r.submittedAt.toISOString().slice(0, 10), createdAt: r.createdAt.toISOString(), outcome: r.outcome as SubmissionOutcome })));
+      const latestRow = summary.latestId ? rows.find((r) => r.id === summary.latestId)! : null;
+      // The latest attempt is still awaiting a response past its Day-5 (working-day) mark — mirrors
+      // what the daily sweep would flag, so the Case File shows it without re-doing the date math.
+      const followUpDue = summary.latestOutcome === 'PENDING' && !!latestRow && isFollowUpDue(latestRow.submittedAt.toISOString().slice(0, 10), now);
       return {
         choiceId: ch.id,
         priority: ch.priority,
@@ -82,6 +89,7 @@ export class SubmissionService {
         intake: { month: ch.intakeMonth ?? null, year: ch.intakeYear ?? null },
         currentOutcome: summary.latestOutcome,
         attemptCount: summary.attemptCount,
+        followUpDue,
         attempts: rows.map((r) => this.shape(r)),
       };
     });
@@ -149,6 +157,9 @@ export class SubmissionService {
         responseNotes: body.responseNotes === undefined ? rec.responseNotes : (body.responseNotes?.trim() || null),
       },
     });
+    // A response is in hand — clear any open follow-up task for this attempt immediately (the daily
+    // sweep is only the backstop). Only PENDING attempts warrant a chase.
+    if (updated.outcome !== 'PENDING') await this.followUp.resolveForRecord(id);
     return this.shape(updated);
   }
 
@@ -156,6 +167,7 @@ export class SubmissionService {
   async remove(caseId: string, id: string) {
     const rec = await this.prisma.submissionRecord.findUnique({ where: { id } });
     if (!rec || rec.caseId !== caseId) throw new NotFoundException('Submission record not found on this case.');
+    await this.followUp.resolveForRecord(id); // close any open follow-up before the record disappears
     await this.prisma.submissionRecord.delete({ where: { id } });
     return { deleted: true };
   }

@@ -5090,6 +5090,9 @@ model RecommendationItem {
 enum AdmissionTaskType {
   INTAKE_REASSIGNED
   INTAKE_REASSIGN_FAILED
+  // PR-ADMISSION-FOLLOWUP (step 5) — raised by the daily sweep when a submission is still PENDING
+  // 5 working days after submittedAt; referenceId = the SubmissionRecord id.
+  SUBMISSION_FOLLOW_UP
 }
 
 enum AdmissionTaskStatus {

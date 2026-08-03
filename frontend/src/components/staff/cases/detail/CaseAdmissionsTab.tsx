@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   GraduationCap, ListOrdered, FileText, ScrollText, Award, Send,
   ExternalLink, Check, X, Briefcase, Trash2, Plus, Lock, RefreshCw, Sparkles, Loader2,
-  ShieldCheck, ShieldAlert, type LucideIcon,
+  ShieldCheck, ShieldAlert, Clock, type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -89,7 +89,8 @@ interface SubmissionAttempt {
 }
 interface SubmissionChoice {
   choiceId: string; priority: number; programme: string; provider: string | null;
-  intake: { month: number | null; year: number | null }; currentOutcome: string | null; attemptCount: number; attempts: SubmissionAttempt[];
+  intake: { month: number | null; year: number | null }; currentOutcome: string | null; attemptCount: number;
+  followUpDue: boolean; attempts: SubmissionAttempt[];
 }
 interface SubmissionListResp { applicationStatus: string | null; choices: SubmissionChoice[] }
 
@@ -655,6 +656,11 @@ function SubmissionCard({ caseId, item, reload }: { caseId: string; item: Submis
         <span className="text-sm font-semibold text-[#1e3a5f]">{item.programme}</span>
         <span className="text-xs text-gray-500">{[item.provider, intake].filter(Boolean).join(' · ')}</span>
         {item.currentOutcome ? <OutcomeBadge outcome={item.currentOutcome} /> : <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">Not submitted</span>}
+        {item.followUpDue && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700" title="Still awaiting a response 5 working days after submission — a follow-up task has been raised.">
+            <Clock size={10} /> Follow-up due
+          </span>
+        )}
         <button onClick={() => setAdding((v) => !v)} disabled={!!busy} className="ms-auto inline-flex items-center gap-1 rounded-lg border border-[#1e3a5f]/30 px-2.5 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">
           <Plus size={12} /> Log submission
         </button>

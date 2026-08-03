@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "AdmissionTaskType" ADD VALUE 'SUBMISSION_FOLLOW_UP';
+

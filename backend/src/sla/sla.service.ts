@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CaseStage, ProviderType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { addWorkingDays } from '../common/working-days/nz-working-days';
 
 // PR-SLA — Owner-manageable, institution-type-varying stage deadlines.
 //
@@ -25,30 +26,6 @@ const CODE_FALLBACK: Record<string, { slaDays: number; isWorkingDays: boolean }>
   INZ_SUBMITTED: { slaDays: 2,  isWorkingDays: false },
 };
 const TERMINAL: ReadonlySet<string> = new Set(['COMPLETED', 'WITHDRAWN']);
-
-// NZ NATIONAL public holidays (observed/Mondayised dates, ISO yyyy-mm-dd, UTC).
-// ADMISSION counts WORKING days and skips these in addition to weekends. National
-// only — provincial anniversary days (e.g. Auckland/Wellington) are deliberately
-// NOT included, since a case isn't tied to a single region. Static list, low
-// upkeep: extend it every few years. Moving feasts (Easter, Matariki) and
-// Mondayised weekend holidays are pre-resolved to their observed weekday date.
-const NZ_PUBLIC_HOLIDAYS: ReadonlySet<string> = new Set([
-  // 2026
-  '2026-01-01', '2026-01-02', '2026-02-06', '2026-04-03', '2026-04-06',
-  '2026-04-27', '2026-06-01', '2026-07-10', '2026-10-26', '2026-12-25', '2026-12-28',
-  // 2027
-  '2027-01-01', '2027-01-04', '2027-02-08', '2027-03-26', '2027-03-29',
-  '2027-04-26', '2027-06-07', '2027-06-25', '2027-10-25', '2027-12-27', '2027-12-28',
-  // 2028
-  '2028-01-03', '2028-01-04', '2028-02-07', '2028-04-14', '2028-04-17',
-  '2028-04-25', '2028-06-05', '2028-07-14', '2028-10-23', '2028-12-25', '2028-12-26',
-  // 2029
-  '2029-01-01', '2029-01-02', '2029-02-06', '2029-03-30', '2029-04-02',
-  '2029-04-25', '2029-06-04', '2029-07-06', '2029-10-22', '2029-12-25', '2029-12-26',
-  // 2030
-  '2030-01-01', '2030-01-02', '2030-02-06', '2030-04-19', '2030-04-22',
-  '2030-04-25', '2030-06-03', '2030-06-21', '2030-10-28', '2030-12-25', '2030-12-26',
-]);
 
 export interface SlaDeadline {
   deadline: Date | null;     // null for terminal stages / no config
@@ -143,7 +120,7 @@ export class SlaService {
       } else {
         const base = c.stageEnteredAt ?? c.createdAt;
         deadline = cfg
-          ? (cfg.isWorkingDays ? this.addWorkingDays(base, cfg.slaDays) : this.addDays(base, cfg.slaDays))
+          ? (cfg.isWorkingDays ? addWorkingDays(base, cfg.slaDays) : this.addDays(base, cfg.slaDays))
           : base;
       }
       const overdue = now.getTime() > deadline.getTime();
@@ -196,18 +173,5 @@ export class SlaService {
 
   private addDays(d: Date, n: number): Date {
     return new Date(d.getTime() + n * 86_400_000);
-  }
-  // Add N working days, skipping Saturdays/Sundays AND NZ national public holidays.
-  private addWorkingDays(start: Date, n: number): Date {
-    const d = new Date(start.getTime());
-    let added = 0;
-    while (added < n) {
-      d.setUTCDate(d.getUTCDate() + 1);
-      const dow = d.getUTCDay();
-      const isWeekend = dow === 0 || dow === 6;
-      const isHoliday = NZ_PUBLIC_HOLIDAYS.has(d.toISOString().slice(0, 10));
-      if (!isWeekend && !isHoliday) added++;
-    }
-    return d;
   }
 }
