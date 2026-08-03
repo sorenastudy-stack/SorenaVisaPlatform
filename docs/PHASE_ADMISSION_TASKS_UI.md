@@ -35,9 +35,34 @@ route exists at the no-`api` path (e.g. `/staff/cases/:id/cv` → 401 auth, `/ap
 
 ## Verification
 
-- Frontend `tsc --noEmit` clean; `next build` OK (`/staff/admission-tasks` route compiled).
-- Route existence confirmed by curl against the running backend (401 = exists+auth vs 404 = no
-  route) for both the task endpoint and every corrected case-sub-resource path.
+- **Authenticated end-to-end HTTP round-trip (13/13)** through the live Nest stack (guards →
+  controller → service → DB) with a genuine `/auth/login` token, exercising every Admissions-tab
+  endpoint + the task-queue endpoint and asserting **real payloads**, not just status codes:
+  programme-choices list, employment create+read, CV generate (facts from rows), SOP generate
+  (frame localized to the chosen provider + all 3 gates present), submission create → record
+  response (→ OFFER) → list, and `GET /staff/admission-tasks`. (CV/SOP ran the AI-unavailable path —
+  no `ANTHROPIC_API_KEY` in the env — so facts assembled and gates failed closed, as designed.)
+- New route registered + auth-gated: `/staff/admission-tasks` → 307 `/login?next=…` (curl).
+- Frontend `tsc --noEmit` clean; `next build` OK (route compiled).
+- **NOT confirmed:** a GUI/visual browser render pass. This is a headless CLI session and Chrome
+  could not be installed for Playwright (needs admin). So the React DOM *painting* the returned data
+  was not visually verified — only that the data it consumes and the routes it calls are correct.
+  A human visual pass (or a browser-automation run in an env with Chrome) is the remaining step.
+
+## Process learning (not a one-off — applies to Step 6 onward)
+
+The Admissions-tab prefix bug survived four "verified" checkpoints (Steps 2b–5) because the
+verification was **`tsc` + `next build` + backend-service smokes** — none of which exercise the
+frontend→backend HTTP path. **"tsc clean + build OK" is NOT evidence that a feature with API calls
+works.** Going forward, any step that adds or changes frontend API calls must include, as part of
+the *verified* claim, at least one of:
+
+1. a **real click-through** in a browser (or headless browser automation) that shows the data
+   rendering and the network calls returning 2xx, **or**
+2. an **HTTP-level check** — an authenticated request to each new/changed route asserting a real
+   response (like the 13/13 round-trip above, or the curl 401-vs-404 route probes).
+
+A build that compiles only proves the code type-checks, not that a single request resolves.
 
 ## Honest notes / follow-ups
 
