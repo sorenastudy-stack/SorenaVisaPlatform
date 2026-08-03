@@ -156,7 +156,7 @@ function EmploymentSection({ caseId }: { caseId: string }) {
   const blank = { employerName: '', roleTitle: '', organisationField: '', countryOfWork: '', startYear: '', endYear: '', isCurrent: false, dutiesText: '' };
   const [form, setForm] = useState(blank);
 
-  const load = () => api.get<{ entries: Employment[] }>(`/api/staff/cases/${caseId}/employment-entries`).then((r) => setRows(r.entries)).catch(() => setRows([]));
+  const load = () => api.get<{ entries: Employment[] }>(`/staff/cases/${caseId}/employment-entries`).then((r) => setRows(r.entries)).catch(() => setRows([]));
   useEffect(() => { load(); }, [caseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const yrs = (e: Employment) => {
@@ -168,7 +168,7 @@ function EmploymentSection({ caseId }: { caseId: string }) {
     if (!form.employerName.trim() || !form.roleTitle.trim()) { toast.error('Employer and job title are required.'); return; }
     setSaving(true);
     try {
-      await api.post(`/api/staff/cases/${caseId}/employment-entries`, {
+      await api.post(`/staff/cases/${caseId}/employment-entries`, {
         employerName: form.employerName.trim(), roleTitle: form.roleTitle.trim(),
         organisationField: form.organisationField.trim() || null, countryOfWork: form.countryOfWork.trim() || null,
         startYear: form.startYear ? Number(form.startYear) : null, endYear: form.isCurrent ? null : (form.endYear ? Number(form.endYear) : null),
@@ -180,7 +180,7 @@ function EmploymentSection({ caseId }: { caseId: string }) {
   };
   const del = async (id: string) => {
     if (!window.confirm('Remove this role?')) return;
-    try { await api.delete(`/api/staff/cases/${caseId}/employment-entries/${id}`); await load(); }
+    try { await api.delete(`/staff/cases/${caseId}/employment-entries/${id}`); await load(); }
     catch (e: any) { toast.error(e?.message ?? 'Could not remove role.'); }
   };
   const inp = 'rounded-lg border border-sorena-navy/20 px-2 py-1.5 text-sm';
@@ -244,7 +244,7 @@ function CvSection({ caseId }: { caseId: string }) {
   const [summary, setSummary] = useState('');
   const [skills, setSkills] = useState('');
 
-  const load = () => api.get<CvResp>(`/api/staff/cases/${caseId}/cv`).then((r) => {
+  const load = () => api.get<CvResp>(`/staff/cases/${caseId}/cv`).then((r) => {
     setData(r);
     if (r.current) { setSummary(r.current.content.summary ?? ''); setSkills((r.current.content.skills ?? []).join(', ')); }
   }).catch(() => setData({ current: null, versions: [] }));
@@ -256,7 +256,7 @@ function CvSection({ caseId }: { caseId: string }) {
   const generate = async () => {
     setBusy('gen');
     try {
-      const r = await api.post<CvDoc & { aiUnavailable?: boolean }>(`/api/staff/cases/${caseId}/cv/generate`, {});
+      const r = await api.post<CvDoc & { aiUnavailable?: boolean }>(`/staff/cases/${caseId}/cv/generate`, {});
       toast[r.aiUnavailable ? 'message' : 'success'](r.aiUnavailable
         ? 'CV drafted from verified data. AI narrative unavailable — write the summary/skills manually.'
         : `CV v${r.version} generated. Review and approve.`);
@@ -269,7 +269,7 @@ function CvSection({ caseId }: { caseId: string }) {
     setBusy('save');
     try {
       const content = { ...cur.content, summary: summary.trim(), skills: skills.split(',').map((s) => s.trim()).filter(Boolean) };
-      await api.patch(`/api/staff/cases/${caseId}/cv/${cur.id}`, { content });
+      await api.patch(`/staff/cases/${caseId}/cv/${cur.id}`, { content });
       toast.success('CV saved.');
       await load();
     } catch (e: any) { toast.error(e?.message ?? 'Could not save.'); }
@@ -278,7 +278,7 @@ function CvSection({ caseId }: { caseId: string }) {
   const approve = async () => {
     if (!cur) return;
     setBusy('approve');
-    try { await api.post(`/api/staff/cases/${caseId}/cv/${cur.id}/approve`, {}); toast.success(`CV v${cur.version} approved and locked.`); await load(); }
+    try { await api.post(`/staff/cases/${caseId}/cv/${cur.id}/approve`, {}); toast.success(`CV v${cur.version} approved and locked.`); await load(); }
     catch (e: any) { toast.error(e?.message ?? 'Could not approve.'); }
     finally { setBusy(null); }
   };
@@ -431,7 +431,7 @@ function SopCard({ caseId, item, reload }: { caseId: string; item: SopChoice; re
   const generate = async () => {
     setBusy('gen');
     try {
-      const r = await api.post<SopDoc & { aiUnavailable?: boolean }>(`/api/staff/cases/${caseId}/sop/choices/${item.choiceId}/generate`, {});
+      const r = await api.post<SopDoc & { aiUnavailable?: boolean }>(`/staff/cases/${caseId}/sop/choices/${item.choiceId}/generate`, {});
       toast[r.aiUnavailable ? 'message' : 'success'](r.aiUnavailable
         ? 'SOP drafted from verified data. AI narrative unavailable — write the sections manually.'
         : `SOP v${r.version} generated for ${item.programme}.`);
@@ -444,7 +444,7 @@ function SopCard({ caseId, item, reload }: { caseId: string; item: SopChoice; re
     setBusy('save');
     try {
       const content = { frame: sop.content.frame, narrative: narr };
-      await api.patch(`/api/staff/cases/${caseId}/sop/${sop.id}`, { content });
+      await api.patch(`/staff/cases/${caseId}/sop/${sop.id}`, { content });
       toast.success('SOP saved — gates re-checked.');
       await reload();
     } catch (e: any) { toast.error(e?.message ?? 'Could not save.'); }
@@ -454,7 +454,7 @@ function SopCard({ caseId, item, reload }: { caseId: string; item: SopChoice; re
     if (!sop) return;
     setBusy('approve');
     try {
-      await api.post(`/api/staff/cases/${caseId}/sop/${sop.id}/approve`, {});
+      await api.post(`/staff/cases/${caseId}/sop/${sop.id}/approve`, {});
       toast.success(`SOP v${sop.version} approved and locked.`);
       await reload();
     } catch (e: any) {
@@ -556,7 +556,7 @@ function SopSection({ caseId }: { caseId: string }) {
   const [genAll, setGenAll] = useState(false);
 
   const load = async () => {
-    await api.get<SopListResp>(`/api/staff/cases/${caseId}/sop`)
+    await api.get<SopListResp>(`/staff/cases/${caseId}/sop`)
       .then(setData)
       .catch(() => setData({ applicationStatus: null, choices: [] }));
   };
@@ -569,7 +569,7 @@ function SopSection({ caseId }: { caseId: string }) {
   const generateAll = async () => {
     setGenAll(true);
     try {
-      const r = await api.post<{ generated: number }>(`/api/staff/cases/${caseId}/sop/generate-all`, {});
+      const r = await api.post<{ generated: number }>(`/staff/cases/${caseId}/sop/generate-all`, {});
       toast.success(`Generated ${r.generated} SOP${r.generated === 1 ? '' : 's'}.`);
       await load();
     } catch (e: any) { toast.error(e?.message ?? 'Could not generate SOPs.'); }
@@ -619,7 +619,7 @@ function SubmissionCard({ caseId, item, reload }: { caseId: string; item: Submis
   const add = async () => {
     setBusy('add');
     try {
-      await api.post(`/api/staff/cases/${caseId}/submissions`, { choiceId: item.choiceId, ...form });
+      await api.post(`/staff/cases/${caseId}/submissions`, { choiceId: item.choiceId, ...form });
       toast.success('Submission logged.');
       setAdding(false); setForm({ submittedAt: todayStr(), method: 'PORTAL', portalName: '', referenceNo: '' });
       await reload();
@@ -633,7 +633,7 @@ function SubmissionCard({ caseId, item, reload }: { caseId: string; item: Submis
   const saveResp = async (id: string) => {
     setBusy(id);
     try {
-      await api.patch(`/api/staff/cases/${caseId}/submissions/${id}/response`, resp);
+      await api.patch(`/staff/cases/${caseId}/submissions/${id}/response`, resp);
       toast.success('Response recorded.');
       setRespondingId(null);
       await reload();
@@ -643,7 +643,7 @@ function SubmissionCard({ caseId, item, reload }: { caseId: string; item: Submis
   const remove = async (id: string) => {
     if (!confirm('Delete this submission attempt? This is for correcting a mis-entry — the trail is otherwise kept.')) return;
     setBusy(id);
-    try { await api.delete(`/api/staff/cases/${caseId}/submissions/${id}`); toast.success('Attempt removed.'); await reload(); }
+    try { await api.delete(`/staff/cases/${caseId}/submissions/${id}`); toast.success('Attempt removed.'); await reload(); }
     catch (e: any) { toast.error(e?.message ?? 'Could not delete.'); }
     finally { setBusy(null); }
   };
@@ -746,7 +746,7 @@ function SubmissionCard({ caseId, item, reload }: { caseId: string; item: Submis
 function SubmissionSection({ caseId }: { caseId: string }) {
   const [data, setData] = useState<SubmissionListResp | null>(null);
   const load = async () => {
-    await api.get<SubmissionListResp>(`/api/staff/cases/${caseId}/submissions`).then(setData).catch(() => setData({ applicationStatus: null, choices: [] }));
+    await api.get<SubmissionListResp>(`/staff/cases/${caseId}/submissions`).then(setData).catch(() => setData({ applicationStatus: null, choices: [] }));
   };
   useEffect(() => { load(); }, [caseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -778,7 +778,7 @@ export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: 
   const [rules, setRules] = useState<Rules>({ enabled: false, mandatorySlots: [] });
 
   useEffect(() => {
-    api.get<ChoicesResp>(`/api/staff/cases/${caseId}/programme-choices`)
+    api.get<ChoicesResp>(`/staff/cases/${caseId}/programme-choices`)
       .then((r) => { setChoices(r.choices); setNoApplication(false); })
       .catch(() => { setChoices([]); setNoApplication(true); }); // 404 = no admission application yet
     api.get<Rules>('/public/programme-choice-rules').then(setRules).catch(() => {});
