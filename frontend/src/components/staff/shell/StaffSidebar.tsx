@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
   Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
   Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall, CalendarDays, DollarSign, LayoutGrid,
-  Timer, AlertTriangle, GraduationCap, Globe2,
+  Timer, AlertTriangle, GraduationCap, Globe2, ClipboardList,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 import { portalBrand } from '@/lib/portal-branding';
@@ -50,6 +50,9 @@ const HANDOFFS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
 // PR-NURTURE — "My follow-ups": nurture call tasks. Client Officers (assignees)
 // + admin tier (see all). Matches the nurture controller's @Roles.
 const FOLLOWUPS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
+// PR-ADMISSION-TASKS-UI — "My admission tasks": the admission task queue (follow-ups + intake
+// re-applications). Matches the admission-tasks controller's @Roles.
+const ADMISSION_TASKS_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 // PR-DIARY — "My day": daily agenda (call tasks + meetings). Assignee roles + admin.
 const DIARY_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT'] as const;
 // PR-CO-KANBAN — the CO journey board. CO + admin tier (see all).
@@ -114,6 +117,8 @@ const NAV: NavItem[] = [
   { label: 'My clients',                   href: '/staff/kanban',             icon: <LayoutGrid size={18} />,      roleGate: KANBAN_ROLES },
   // PR-NURTURE: nurture call tasks for the assigned Client Officer.
   { label: 'Follow-ups',                   href: '/staff/follow-ups',         icon: <PhoneCall size={18} />,   roleGate: FOLLOWUPS_ROLES },
+  // PR-ADMISSION-TASKS-UI: cross-case admission task queue (follow-ups + intake re-applications).
+  { label: 'Admission tasks',              href: '/staff/admission-tasks',    icon: <ClipboardList size={18} />, roleGate: ADMISSION_TASKS_ROLES },
   { label: 'staff.nav.tickets',           href: '/staff/tickets',            icon: <Inbox size={18} />,       roleGate: TICKETS_ROLES },
   { label: 'staff.nav.staff',             href: '/staff/users',              icon: <Users size={18} />,       gate: 'canManageStaff' },
   { label: 'staff.nav.approvals',         href: '/staff/approvals',          icon: <ShieldCheck size={18} />, gate: 'canViewApprovals' },
