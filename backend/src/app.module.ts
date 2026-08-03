@@ -53,6 +53,7 @@ import { CvModule } from './students/admission/cv/cv.module';
 import { SopModule } from './students/admission/sop/sop.module';
 import { SubmissionModule } from './students/admission/submission/submission.module';
 import { FollowUpModule } from './students/admission/follow-up/follow-up.module';
+import { OfferModule } from './students/admission/offer/offer.module';
 import { StaffAdmissionTasksModule } from './staff/admission-tasks/staff-admission-tasks.module';
 import { BookingModule } from './booking/booking.module';
 import { WalletModule } from './wallet/wallet.module';
@@ -160,6 +161,7 @@ import { SlaModule } from './sla/sla.module';
     SopModule,
     SubmissionModule,
     FollowUpModule,
+    OfferModule,
     StaffAdmissionTasksModule,
     // PR-BOOKING-3: native in-portal booking. Stage 3 = FREE_15 flow
     // (GET /booking/slots, POST /booking/confirm, GET /booking/mine),

@@ -87,11 +87,23 @@ interface SubmissionAttempt {
   id: string; choiceId: string; submittedAt: string; method: string; portalName: string | null;
   referenceNo: string | null; outcome: string; responseReceivedAt: string | null; responseNotes: string | null; createdAt: string;
 }
+interface SlotInfo { state: string; isActiveSlot: boolean; canSubmit: boolean; timedOut: boolean; blockedReason: string | null }
 interface SubmissionChoice {
   choiceId: string; priority: number; programme: string; provider: string | null;
   intake: { month: number | null; year: number | null }; currentOutcome: string | null; attemptCount: number;
-  followUpDue: boolean; attempts: SubmissionAttempt[];
+  followUpDue: boolean; slot: SlotInfo; attempts: SubmissionAttempt[];
 }
+const SLOT_STATE_LABEL: Record<string, string> = { UNSTARTED: 'Not started', ACTIVE: 'In progress', TIMED_OUT: 'Timed out', OFFERED: 'Offer', DECLINED: 'Declined', WITHDRAWN: 'Withdrawn' };
+const SLOT_STATE_STYLE: Record<string, string> = {
+  ACTIVE: 'bg-[#1e3a5f]/10 text-[#1e3a5f]', TIMED_OUT: 'bg-amber-100 text-amber-700', OFFERED: 'bg-[#15a86b]/12 text-[#15803d]',
+  DECLINED: 'bg-red-100 text-red-700', WITHDRAWN: 'bg-gray-100 text-gray-500', UNSTARTED: 'bg-gray-100 text-gray-500',
+};
+
+// ── Offer records (PR-ADMISSION-OFFER, step 6) ──────────────────────────────
+interface OfferRecordT { id: string; choiceId: string; offerType: string; conditions: string | null; offeredAt: string | null; expiresAt: string | null; letterFileName: string | null; notes: string | null; decision: string; createdAt: string }
+interface OfferChoice { choiceId: string; priority: number; programme: string; provider: string | null; offer: OfferRecordT | null }
+interface OfferListResp { applicationStatus: string | null; choices: OfferChoice[] }
+const OFFER_DECISION_STYLE: Record<string, string> = { PENDING: 'bg-amber-100 text-amber-700', ACCEPTED: 'bg-[#15a86b]/12 text-[#15803d]', DECLINED: 'bg-red-100 text-red-700' };
 interface SubmissionListResp { applicationStatus: string | null; choices: SubmissionChoice[] }
 
 const SUB_METHODS = ['PORTAL', 'EMAIL', 'AGENT_PORTAL', 'OTHER'] as const;
@@ -656,15 +668,26 @@ function SubmissionCard({ caseId, item, reload }: { caseId: string; item: Submis
         <span className="text-sm font-semibold text-[#1e3a5f]">{item.programme}</span>
         <span className="text-xs text-gray-500">{[item.provider, intake].filter(Boolean).join(' · ')}</span>
         {item.currentOutcome ? <OutcomeBadge outcome={item.currentOutcome} /> : <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">Not submitted</span>}
+        {item.slot.isActiveSlot && <span className="rounded-full bg-[#1e3a5f]/10 px-2 py-0.5 text-[11px] font-semibold text-[#1e3a5f]">Active slot</span>}
         {item.followUpDue && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700" title="Still awaiting a response 5 working days after submission — a follow-up task has been raised.">
             <Clock size={10} /> Follow-up due
           </span>
         )}
-        <button onClick={() => setAdding((v) => !v)} disabled={!!busy} className="ms-auto inline-flex items-center gap-1 rounded-lg border border-[#1e3a5f]/30 px-2.5 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">
+        <button onClick={() => setAdding((v) => !v)} disabled={!!busy || !item.slot.canSubmit} title={item.slot.canSubmit ? '' : (item.slot.blockedReason ?? '')} className="ms-auto inline-flex items-center gap-1 rounded-lg border border-[#1e3a5f]/30 px-2.5 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">
           <Plus size={12} /> Log submission
         </button>
       </div>
+
+      {/* sequential gate: why this slot is locked, and the timed-out advance prompt */}
+      {!item.slot.canSubmit && item.slot.blockedReason && (
+        <p className="mt-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-500">{item.slot.blockedReason}</p>
+      )}
+      {item.slot.timedOut && (
+        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700">
+          Pending 21 working days with no response. To move to the next slot, record a response of <strong>Withdrawn</strong> on the latest attempt (sequential — no parallel submissions).
+        </p>
+      )}
 
       {/* add-attempt form */}
       {adding && (
@@ -765,6 +788,135 @@ function SubmissionSection({ caseId }: { caseId: string }) {
         <div className="space-y-3">
           {[...choices].sort((a, b) => a.priority - b.priority).map((c) => (
             <SubmissionCard key={c.choiceId} caseId={caseId} item={c} reload={load} />
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// One programme choice's offer-of-place record: create/edit the formal offer detail + the client's
+// accept/decline decision. Owns its own form state.
+function OfferCard({ caseId, item, reload }: { caseId: string; item: OfferChoice; reload: () => Promise<void> }) {
+  const o = item.offer;
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const blankForm = { offerType: o?.offerType ?? 'UNCONDITIONAL', conditions: o?.conditions ?? '', offeredAt: o?.offeredAt ?? todayStr(), expiresAt: o?.expiresAt ?? '', notes: o?.notes ?? '' };
+  const [form, setForm] = useState(blankForm);
+
+  useEffect(() => { setForm({ offerType: o?.offerType ?? 'UNCONDITIONAL', conditions: o?.conditions ?? '', offeredAt: o?.offeredAt ?? todayStr(), expiresAt: o?.expiresAt ?? '', notes: o?.notes ?? '' }); }, [o?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = async () => {
+    setBusy('save');
+    try {
+      const body = { ...form, conditions: form.offerType === 'CONDITIONAL' ? form.conditions : null, expiresAt: form.expiresAt || null };
+      if (o) await api.patch(`/staff/cases/${caseId}/offers/${o.id}`, body);
+      else await api.post(`/staff/cases/${caseId}/offers`, { choiceId: item.choiceId, ...body });
+      toast.success('Offer saved.'); setEditing(false); await reload();
+    } catch (e: any) { toast.error(e?.message ?? 'Could not save the offer.'); }
+    finally { setBusy(null); }
+  };
+  const decide = async (decision: string) => {
+    if (!o) return;
+    setBusy(decision);
+    try { await api.patch(`/staff/cases/${caseId}/offers/${o.id}`, { decision }); toast.success(`Offer ${decision.toLowerCase()}.`); await reload(); }
+    catch (e: any) { toast.error(e?.message ?? 'Could not update.'); }
+    finally { setBusy(null); }
+  };
+  const remove = async () => {
+    if (!o || !confirm('Delete this offer record?')) return;
+    setBusy('del');
+    try { await api.delete(`/staff/cases/${caseId}/offers/${o.id}`); toast.success('Offer removed.'); await reload(); }
+    catch (e: any) { toast.error(e?.message ?? 'Could not delete.'); }
+    finally { setBusy(null); }
+  };
+
+  const field = 'rounded-lg border border-sorena-navy/20 px-2 py-1.5 text-sm';
+  return (
+    <div className="rounded-xl border border-sorena-navy/10 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-md bg-[#1e3a5f]/8 px-1.5 py-0.5 text-[11px] font-bold text-[#1e3a5f]">#{item.priority}</span>
+        <span className="text-sm font-semibold text-[#1e3a5f]">{item.programme}</span>
+        <span className="text-xs text-gray-500">{item.provider}</span>
+        {o && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${o.offerType === 'CONDITIONAL' ? 'bg-amber-100 text-amber-700' : 'bg-[#15a86b]/12 text-[#15803d]'}`}>{o.offerType === 'CONDITIONAL' ? 'Conditional' : 'Unconditional'}</span>}
+        {o && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${OFFER_DECISION_STYLE[o.decision] ?? 'bg-gray-100 text-gray-500'}`}>{o.decision === 'PENDING' ? 'Decision pending' : o.decision === 'ACCEPTED' ? 'Accepted' : 'Declined'}</span>}
+        {!editing && (
+          <div className="ms-auto flex gap-2">
+            {o && o.decision === 'PENDING' && (
+              <>
+                <button onClick={() => decide('ACCEPTED')} disabled={!!busy} className="rounded-lg bg-[#15803d]/90 px-2.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">Accept</button>
+                <button onClick={() => decide('DECLINED')} disabled={!!busy} className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Decline offer</button>
+              </>
+            )}
+            <button onClick={() => setEditing(true)} disabled={!!busy} className="rounded-lg border border-[#1e3a5f]/30 px-2.5 py-1.5 text-xs font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">{o ? 'Edit' : 'Record offer'}</button>
+            {o && <button onClick={remove} disabled={!!busy} title="Delete offer" className="rounded-lg border border-red-200 px-1.5 py-1.5 text-red-500 hover:bg-red-50 disabled:opacity-50"><Trash2 size={12} /></button>}
+          </div>
+        )}
+      </div>
+
+      {!editing && o && (
+        <p className="mt-2 text-xs text-gray-500">
+          {[o.offeredAt && `Offered ${o.offeredAt}`, o.expiresAt && `expires ${o.expiresAt}`, o.conditions && `Conditions: ${o.conditions}`, o.notes].filter(Boolean).join(' · ') || <span className="text-gray-400">No detail recorded.</span>}
+        </p>
+      )}
+      {!editing && !o && <p className="mt-2 text-xs text-gray-400">No offer recorded for this choice.</p>}
+
+      {editing && (
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-sorena-navy/10 bg-[#f8fafc] p-3 sm:grid-cols-4">
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Type
+            <select value={form.offerType} onChange={(e) => setForm({ ...form, offerType: e.target.value })} className={field}>
+              <option value="UNCONDITIONAL">Unconditional</option>
+              <option value="CONDITIONAL">Conditional</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Offered
+            <input type="date" max={todayStr()} value={form.offeredAt} onChange={(e) => setForm({ ...form, offeredAt: e.target.value })} className={field} />
+          </label>
+          <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Expires
+            <input type="date" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} className={field} />
+          </label>
+          {form.offerType === 'CONDITIONAL' && (
+            <label className="col-span-2 flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 sm:col-span-4">Conditions
+              <input value={form.conditions} onChange={(e) => setForm({ ...form, conditions: e.target.value })} placeholder="e.g. IELTS 6.5, deposit" className={field} />
+            </label>
+          )}
+          <label className="col-span-2 flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 sm:col-span-4">Notes
+            <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional" className={field} />
+          </label>
+          <div className="col-span-2 flex justify-end gap-2 sm:col-span-4">
+            <button onClick={() => { setEditing(false); setForm(blankForm); }} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button onClick={save} disabled={busy === 'save'} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1e3a5f] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+              {busy === 'save' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save offer
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OfferSection({ caseId }: { caseId: string }) {
+  const [data, setData] = useState<OfferListResp | null>(null);
+  const load = async () => {
+    await api.get<OfferListResp>(`/staff/cases/${caseId}/offers`).then(setData).catch(() => setData({ applicationStatus: null, choices: [] }));
+  };
+  useEffect(() => { load(); }, [caseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submitted = data?.applicationStatus === 'SUBMITTED' || data?.applicationStatus === 'LOCKED';
+  const choices = data?.choices ?? [];
+
+  return (
+    <Section icon={Award} title="Offer record">
+      {data === null ? (
+        <EmptyCard>Loading…</EmptyCard>
+      ) : !submitted ? (
+        <EmptyCard>Offer-of-place records. Available once the client has <strong>submitted their programme choices</strong>.</EmptyCard>
+      ) : choices.length === 0 ? (
+        <EmptyCard>No programme choices on this application yet.</EmptyCard>
+      ) : (
+        <div className="space-y-3">
+          {[...choices].sort((a, b) => a.priority - b.priority).map((c) => (
+            <OfferCard key={c.choiceId} caseId={caseId} item={c} reload={load} />
           ))}
         </div>
       )}
@@ -887,7 +1039,8 @@ export function CaseAdmissionsTab({ data, caseId }: { data: CaseDetail; caseId: 
       <SopSection caseId={caseId} />
 
       {/* ── Placeholders for later steps (honest empty states) ──────────── */}
-      <Placeholder icon={Award} title="Offer record" note="Offer-of-place logging (institution, conditional/unconditional, expiry, letter) lands in a later step." />
+      {/* ── Offer record (real — PR-ADMISSION-OFFER) ─────────────────────── */}
+      <OfferSection caseId={caseId} />
       {/* ── Submission log (real — PR-ADMISSION-SUBMIT) ──────────────────── */}
       <SubmissionSection caseId={caseId} />
     </div>

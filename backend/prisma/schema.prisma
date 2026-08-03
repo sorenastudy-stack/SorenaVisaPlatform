@@ -1503,6 +1503,7 @@ model Case {
   cvDocuments           CvDocument[]
   sopDocuments          SopDocument[]
   submissionRecords     SubmissionRecord[]
+  offerRecords          OfferRecord[]
   contract              Contract?
   tickets               Ticket[]
   invoices              Invoice[]
@@ -2978,6 +2979,7 @@ model AdmissionProgrammeChoice {
   programme            EducationProgramme   @relation(fields: [programmeId], references: [id])
   sopDocuments         SopDocument[]
   submissionRecords    SubmissionRecord[]
+  offerRecords         OfferRecord[]
 
   @@index([admissionApplicationId])
   @@map("admission_programme_choices")
@@ -3079,6 +3081,48 @@ model SubmissionRecord {
   @@index([caseId])
   @@index([admissionProgrammeChoiceId])
   @@map("submission_records")
+}
+
+// PR-ADMISSION-OFFER (step 6) — the formal offer-of-place for one programme choice (institution).
+// The Submission Log's coarse OFFER outcome (step 4) points here for the rich detail: conditional
+// vs unconditional, conditions text, offered/expiry dates, the offer-letter file, and the client's
+// decision (accept/decline). One current offer per choice (regenerating/re-offering supersedes via
+// the latest row). A DECLINE of the APPLICATION stays a SubmissionRecord.outcome=DECLINED (+ reason
+// in responseNotes) — this model is only for offers received.
+enum OfferType {
+  CONDITIONAL
+  UNCONDITIONAL
+}
+
+enum OfferDecision {
+  PENDING // offer received, client hasn't decided
+  ACCEPTED
+  DECLINED // client declined a received offer (distinct from the institution declining the application)
+}
+
+model OfferRecord {
+  id                         String        @id @default(cuid())
+  caseId                     String
+  admissionProgrammeChoiceId String
+  submissionRecordId         String? // the submission attempt that yielded the offer (audit link)
+  offerType                  OfferType
+  conditions                 String? // required conditions when CONDITIONAL (free text)
+  offeredAt                  DateTime?     @db.Date
+  expiresAt                  DateTime?     @db.Date
+  letterFileName             String? // offer-letter file metadata (upload wiring is a later slice)
+  letterFileUrl              String?
+  notes                      String?
+  decision                   OfferDecision @default(PENDING)
+  createdById                String?
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+
+  case            Case                     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  programmeChoice AdmissionProgrammeChoice @relation(fields: [admissionProgrammeChoiceId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([admissionProgrammeChoiceId])
+  @@map("offer_records")
 }
 
 model AdmissionDocument {

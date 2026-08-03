@@ -9,6 +9,7 @@ import {
   type SubmissionMethod,
   type SubmissionOutcome,
 } from './submission.logic';
+import { computeSlotStatuses, canSubmitToChoice, type SlotInput } from '../sequential/sequential.logic';
 
 // PR-ADMISSION-SUBMIT (step 4) — the per-institution Submission Log. APPEND-ONLY: `create` logs a
 // new attempt (submission facts frozen), `recordResponse` completes the institution's response to a
@@ -74,6 +75,12 @@ export class SubmissionService {
       byChoice.set(r.admissionProgrammeChoiceId, arr);
     }
     const now = new Date();
+    // Sequential-submission status (PRD_10) — derived per choice from the ordered slots + latest
+    // outcomes + the 21-working-day timeout. Same logic the create-gate enforces, so the UI can lock
+    // non-active slots and explain why without re-deriving anything.
+    const slotStatuses = computeSlotStatuses(this.slotInputs(choices, byChoice), now);
+    const statusById = new Map(slotStatuses.map((s) => [s.choiceId, s]));
+
     const out = choices.map((ch: any) => {
       const rows = byChoice.get(ch.id) ?? [];
       const summary = summariseChoiceSubmissions(rows.map((r) => ({ id: r.id, submittedAt: r.submittedAt.toISOString().slice(0, 10), createdAt: r.createdAt.toISOString(), outcome: r.outcome as SubmissionOutcome })));
@@ -81,6 +88,7 @@ export class SubmissionService {
       // The latest attempt is still awaiting a response past its Day-5 (working-day) mark — mirrors
       // what the daily sweep would flag, so the Case File shows it without re-doing the date math.
       const followUpDue = summary.latestOutcome === 'PENDING' && !!latestRow && isFollowUpDue(latestRow.submittedAt.toISOString().slice(0, 10), now);
+      const st = statusById.get(ch.id)!;
       return {
         choiceId: ch.id,
         priority: ch.priority,
@@ -90,20 +98,46 @@ export class SubmissionService {
         currentOutcome: summary.latestOutcome,
         attemptCount: summary.attemptCount,
         followUpDue,
+        slot: { state: st.state, isActiveSlot: st.isActiveSlot, canSubmit: st.canSubmit, timedOut: st.timedOut, blockedReason: st.blockedReason },
         attempts: rows.map((r) => this.shape(r)),
       };
     });
     return { applicationStatus: app?.status ?? null, choices: out };
   }
 
+  // Build the ordered per-choice input the sequential logic reasons over (latest outcome per choice).
+  private slotInputs(choices: any[], byChoice: Map<string, any[]>): SlotInput[] {
+    return choices.map((ch: any) => {
+      const rows = byChoice.get(ch.id) ?? [];
+      const summary = summariseChoiceSubmissions(rows.map((r) => ({ id: r.id, submittedAt: r.submittedAt.toISOString().slice(0, 10), createdAt: r.createdAt.toISOString(), outcome: r.outcome as SubmissionOutcome })));
+      const latestRow = summary.latestId ? rows.find((r) => r.id === summary.latestId)! : null;
+      return {
+        choiceId: ch.id,
+        priority: ch.priority,
+        latest: latestRow ? { submittedAt: latestRow.submittedAt.toISOString().slice(0, 10), outcome: summary.latestOutcome as SubmissionOutcome } : null,
+      };
+    });
+  }
+
   async create(caseId: string, input: SubmissionInput, actorId: string | null) {
     const app = await this.loadApp(caseId);
     this.assertSubmitted(app?.status ?? null);
-    const choice = (app?.programmeChoices ?? []).find((c: any) => c.id === (input as any).choiceId);
+    const choices = app?.programmeChoices ?? [];
+    const choice = choices.find((c: any) => c.id === (input as any).choiceId);
     if (!choice) throw new NotFoundException('Programme choice not found on this case.');
 
     const errors = validateSubmissionInput(input, this.today());
     if (errors.length) throw new BadRequestException(errors.join(' '));
+
+    // Sequential gate (PRD_10): no parallel submission — you may only log to the active slot.
+    const records = await this.prisma.submissionRecord.findMany({
+      where: { admissionProgrammeChoiceId: { in: choices.map((c: any) => c.id) } },
+      orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    const byChoice = new Map<string, any[]>();
+    for (const r of records) { const a = byChoice.get(r.admissionProgrammeChoiceId) ?? []; a.push(r); byChoice.set(r.admissionProgrammeChoiceId, a); }
+    const gate = canSubmitToChoice(this.slotInputs(choices, byChoice), choice.id, new Date());
+    if (!gate.allowed) throw new BadRequestException(gate.reason ?? 'This slot cannot be submitted yet.');
 
     const created = await this.prisma.submissionRecord.create({
       data: {
