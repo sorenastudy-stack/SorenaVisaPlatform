@@ -1,4 +1,9 @@
-import * as XLSX from 'xlsx';
+// `xlsx` (SheetJS) is loaded LAZILY: recent versions live only on SheetJS's own CDN, so a clean
+// `npm ci --only=production` in Docker can end up without it — and a top-level import would then
+// crash app boot for everyone, even though only the (optional) spreadsheet-import feature needs it.
+// The Proxy defers `require('xlsx')` until the module is actually used, so boot never depends on it.
+let _xlsx: any;
+const XLSX: any = new Proxy({}, { get: (_t, prop) => { _xlsx ??= require('xlsx'); return _xlsx[prop]; } });
 import type { InstitutionType, ProviderType, NZQFLevel, QualificationLevel, VerificationStatus, IntakeBasis } from '@prisma/client';
 
 // PR-CATALOG-1 — pure parse/map logic for the NZ programme spreadsheet, extracted
@@ -109,5 +114,5 @@ export function rowToProgrammeData(row: Record<string, unknown>, providerId: str
 export function parseSheet(buffer: Buffer): Record<string, unknown>[] {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   const sheet = wb.Sheets['Programme Database'] ?? wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
+  return XLSX.utils.sheet_to_json(sheet, { defval: null }) as Record<string, unknown>[];
 }
