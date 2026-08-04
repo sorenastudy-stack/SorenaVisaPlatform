@@ -54,7 +54,7 @@ except ImportError:
 
 # ============ CONFIGURATION ============
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-MODEL = "gemini-3.1-pro-preview"
+MODEL = "gemini-3.6-flash"
 
 # Icon styles with SVG-specific instructions
 ICON_STYLES = {
@@ -237,7 +237,11 @@ def generate_icon(prompt, style=None, category=None, name=None,
             contents=full_prompt,
             config=types.GenerateContentConfig(
                 temperature=0.7,
-                max_output_tokens=4096,
+                # Gemini 3.x spends thinking tokens from this same budget (~4k
+                # for a single icon) and thinking cannot be disabled on flash.
+                # 4096 left ~150 tokens for the SVG itself -> MAX_TOKENS
+                # truncation mid-path. Matches generate_batch's budget.
+                max_output_tokens=16384,
             )
         )
 
@@ -449,7 +453,7 @@ def main():
     # Multi-size mode
     if args.sizes:
         sizes = [int(s.strip()) for s in args.sizes.split(",")]
-        generate_sizes(
+        result = generate_sizes(
             prompt=prompt,
             sizes=sizes,
             style=args.style,
@@ -460,7 +464,7 @@ def main():
     # Batch mode
     elif args.batch:
         output_dir = args.output_dir or "./icons"
-        generate_batch(
+        result = generate_batch(
             prompt=prompt,
             count=args.batch,
             output_dir=output_dir,
@@ -471,7 +475,7 @@ def main():
         )
     # Single icon
     else:
-        generate_icon(
+        result = generate_icon(
             prompt=prompt,
             style=args.style,
             category=args.category,
@@ -482,6 +486,14 @@ def main():
             viewbox=args.viewbox
         )
 
+    # Generation helpers return a falsy value (None / []) on failure. Propagate
+    # that as a non-zero exit status so callers -- batch loops, CI, task
+    # runners -- can actually detect a failed run instead of reading exit 0.
+    if not result:
+        print("Icon generation failed.", file=sys.stderr)
+        return 1
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
