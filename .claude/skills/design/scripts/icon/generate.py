@@ -177,11 +177,16 @@ def apply_color(svg_code, color):
 def apply_viewbox_size(svg_code, size):
     """Adjust SVG viewBox to target size"""
     if size:
-        # Update width/height attributes if present
-        svg_code = re.sub(r'width="[^"]*"', f'width="{size}"', svg_code)
-        svg_code = re.sub(r'height="[^"]*"', f'height="{size}"', svg_code)
+        # Update width/height attributes if present.
+        # The lookbehind keeps these anchored to the standalone attributes: a
+        # bare width="[^"]*" also matches the tail of stroke-width="2" and
+        # rewrites it to stroke-width="<size>", which renders every icon as a
+        # solid blob. Same guard on the containment check below, which would
+        # otherwise see stroke-width= and wrongly conclude width= is present.
+        svg_code = re.sub(r'(?<![-\w])width="[^"]*"', f'width="{size}"', svg_code)
+        svg_code = re.sub(r'(?<![-\w])height="[^"]*"', f'height="{size}"', svg_code)
         # Add width/height if not present
-        if 'width=' not in svg_code:
+        if not re.search(r'(?<![-\w])width=', svg_code):
             svg_code = svg_code.replace('<svg', f'<svg width="{size}" height="{size}"', 1)
     return svg_code
 
