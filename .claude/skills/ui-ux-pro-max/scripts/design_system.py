@@ -672,7 +672,7 @@ def generate_design_system(query: str, project_name: str = None, output_format: 
         query: Search query (e.g., "SaaS dashboard", "e-commerce luxury")
         project_name: Optional project name for output header
         output_format: "ascii" (default) or "markdown"
-        persist: If True, save design system to design-system/ folder
+        persist: If True, save design system to ux-recommendations/ folder
         page: Optional page name for page-specific override file
         output_dir: Optional output directory (defaults to current working directory)
         variance: Optional 1-10 DESIGN_VARIANCE dial (1=centered/minimal, 10=bold/asymmetric)
@@ -697,7 +697,12 @@ def generate_design_system(query: str, project_name: str = None, output_format: 
 # ============ PERSISTENCE FUNCTIONS ============
 def persist_design_system(design_system: dict, page: str = None, output_dir: str = None, page_query: str = None) -> dict:
     """
-    Persist design system to design-system/<project>/ folder using Master + Overrides pattern.
+    Persist design system to ux-recommendations/<project>/ folder using Master + Overrides pattern.
+
+    Directory is deliberately NOT named design-system/: that name belongs to the
+    separate design-system skill, which owns the real token architecture. Output
+    here is style/layout/UX guidance and is subordinate to brand tokens for any
+    colour or typography value.
     
     Args:
         design_system: The generated design system dictionary
@@ -715,7 +720,7 @@ def persist_design_system(design_system: dict, page: str = None, output_dir: str
     project_name = design_system.get("project_name") or "default"
     project_slug = project_name.lower().replace(' ', '-')
     
-    design_system_dir = base_dir / "design-system" / project_slug
+    design_system_dir = base_dir / "ux-recommendations" / project_slug
     pages_dir = design_system_dir / "pages"
     
     created_files = []
@@ -767,7 +772,7 @@ def format_master_md(design_system: dict) -> str:
     # Logic header
     lines.append("# Design System Master File")
     lines.append("")
-    lines.append("> **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.")
+    lines.append("> **LOGIC:** When building a specific page, first check `ux-recommendations/pages/[page-name].md`.")
     lines.append("> If that file exists, its rules **override** this Master file.")
     lines.append("> If not, strictly follow the rules below.")
     lines.append("")
@@ -1081,7 +1086,7 @@ def format_page_override_md(design_system: dict, page_name: str, page_query: str
     lines.append(f"> **Generated:** {timestamp}")
     lines.append(f"> **Page Type:** {page_overrides.get('page_type', 'General')}")
     lines.append("")
-    lines.append("> ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`design-system/MASTER.md`).")
+    lines.append("> ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`ux-recommendations/MASTER.md`).")
     lines.append("> Only deviations from the Master are documented here. For all other rules, refer to the Master.")
     lines.append("")
     lines.append("---")

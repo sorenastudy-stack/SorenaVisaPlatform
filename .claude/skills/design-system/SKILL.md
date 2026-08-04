@@ -191,14 +191,20 @@ System calculates pattern breaks at 1/3 and 2/3 positions.
 
 <canvas id="revenueChart"></canvas>
 <script>
+// Chart.js is JS, so it cannot consume var(--token) the way CSS does.
+// Read the token off the document instead -- never hardcode hex here
+// either. Same rule as Token Compliance below.
+const tokens = getComputedStyle(document.documentElement);
+const primary = tokens.getPropertyValue('--color-primary').trim();
+
 new Chart(document.getElementById('revenueChart'), {
     type: 'line',
     data: {
         labels: ['Sep', 'Oct', 'Nov', 'Dec'],
         datasets: [{
             data: [5, 12, 28, 45],
-            borderColor: '#FF6B6B',  // Use brand coral
-            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+            borderColor: primary,
+            backgroundColor: `color-mix(in srgb, ${primary} 10%, transparent)`,
             fill: true,
             tension: 0.4
         }]

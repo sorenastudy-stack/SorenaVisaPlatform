@@ -219,9 +219,27 @@ python scripts/shadcn_add.py button card dialog
 ```
 
 ### tailwind_config_gen.py
-Generate tailwind.config.js with custom theme:
+Generate tailwind.config.js with custom theme.
+
+**Default: wire the theme to existing tokens, do not invent a palette.** If
+`assets/design-tokens.css` exists, map Tailwind keys onto its CSS variables so
+brand remains the single source of colour and type:
+
+```js
+// tailwind.config.js -- values resolve from design-tokens.css at runtime
+theme: { extend: {
+  colors: { primary: 'var(--color-primary)', surface: 'var(--color-surface)' },
+  fontFamily: { display: 'var(--typography-font-heading)' },
+}}
+```
+
+Only pass literal values when bootstrapping a project that has **no** tokens
+yet, and take them from `assets/design-tokens.json` rather than choosing them
+here:
+
 ```bash
-python scripts/tailwind_config_gen.py --colors brand:blue --fonts display:Inter
+# bootstrap only -- values read from design-tokens.json, not invented
+python scripts/tailwind_config_gen.py --colors primary:#2563EB --fonts display:Inter
 ```
 
 ## Best Practices
@@ -230,12 +248,39 @@ python scripts/tailwind_config_gen.py --colors brand:blue --fonts display:Inter
 2. **Utility-First Styling**: Use Tailwind classes directly; extract components only for true repetition
 3. **Mobile-First Responsive**: Start with mobile styles, layer responsive variants
 4. **Accessibility-First**: Leverage Radix UI primitives, add focus states, use semantic HTML
-5. **Design Tokens**: Use consistent spacing scale, color palettes, typography system
+5. **Design Tokens**: Consume the tokens from `design-system`; never invent a palette here (see Integration)
 6. **Dark Mode Consistency**: Apply dark variants to all themed elements
 7. **Performance**: Leverage automatic CSS purging, avoid dynamic class names
 8. **TypeScript**: Use full type safety for better DX
 9. **Visual Hierarchy**: Let composition guide attention, use spacing and color intentionally
 10. **Expert Craftsmanship**: Every detail matters - treat UI as a craft
+
+## Integration
+
+This skill **implements**; it does not decide colour or typography values.
+
+```
+brand              → owns the actual values (docs/brand-guidelines.md)
+  ↓ sync-brand-to-tokens.cjs
+design-system      → structures them (primitive → semantic → component)
+  ↓ assets/design-tokens.css / design-tokens.json
+ui-styling (here)  → consumes them in Tailwind + shadcn/ui
+```
+
+**Rules:**
+
+1. Read `assets/design-tokens.css` / `assets/design-tokens.json` before styling.
+   They are generated from brand and are the source of truth for every colour,
+   font, and spacing value.
+2. Map Tailwind theme keys onto those CSS variables rather than literal hex —
+   see *tailwind_config_gen.py* above.
+3. Never introduce a new colour or font here. If a needed token is missing, it
+   is added in `brand` and re-synced, not invented in `tailwind.config.js`.
+4. `ui-ux-pro-max` advises on *style, layout, and UX patterns*. Where its
+   palette suggestions conflict with existing brand tokens, the tokens win.
+5. Verify with `design-system`'s checker: `node scripts/validate-tokens.cjs --dir src/`
+
+**Skill dependencies:** `design-system` (tokens), `brand` (upstream values)
 
 ## Reference Navigation
 
