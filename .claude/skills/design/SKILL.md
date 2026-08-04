@@ -32,7 +32,7 @@ Unified design skill: brand, tokens, UI, logo, CIP, slides, banners, social phot
 | shadcn/ui, Tailwind, code | `ui-styling` | External skill |
 | Logo creation, AI generation | Logo (built-in) | `references/logo-design.md` |
 | CIP mockups, deliverables | CIP (built-in) | `references/cip-design.md` |
-| Presentations, pitch decks | Slides (built-in) | `references/slides.md` |
+| Presentations, pitch decks | `slides` | External skill (uses `design-system` engine) |
 | Banners, covers, headers | Banner (built-in) | `references/banner-sizes-and-styles.md` |
 | Social media images/photos | Social Photos (built-in) | `references/social-photos-design.md` |
 | SVG icons, icon sets | Icon (built-in) | `references/icon-design.md` |
@@ -113,21 +113,21 @@ python3 ~/.claude/skills/design/scripts/cip/render-html.py --brand "TopGroup" --
 
 **Tip:** If no logo exists, use Logo Design section above first.
 
-## Slides (Built-in)
+## Slides (Routed — not built-in)
 
-Strategic HTML presentations with Chart.js, design tokens, copywriting formulas.
+For slide/deck generation, use the standalone **`slides`** skill. It owns the
+knowledge base (layout patterns, HTML template, copywriting formulas, deck
+strategies) and drives the **`design-system`** engine:
 
-Load `references/slides-create.md` for the creation workflow.
+| Component | Location |
+|-----------|----------|
+| Knowledge base | `slides` skill → `references/` |
+| Generator | `design-system/scripts/generate-slide.py` |
+| BM25 + contextual search | `design-system/scripts/search-slides.py` |
+| Token compliance check | `design-system/scripts/slide-token-validator.py` |
+| Decision data (layouts, charts, copy, strategies) | `design-system/data/slide-*.csv` |
 
-### Slides: Knowledge Base
-
-| Topic | File |
-|-------|------|
-| Creation Guide | `references/slides-create.md` |
-| Layout Patterns | `references/slides-layout-patterns.md` |
-| HTML Template | `references/slides-html-template.md` |
-| Copywriting | `references/slides-copywriting-formulas.md` |
-| Strategies | `references/slides-strategies.md` |
+Deliberately not duplicated here — `slides/references/` is the single source of truth.
 
 ## Banner Design (Built-in)
 
@@ -342,7 +342,7 @@ Load `references/social-photos-design.md` for sizes, templates, best practices.
 
 1. **Logo** → `scripts/logo/generate.py` → Generate logo variants
 2. **CIP** → `scripts/cip/generate.py --logo ...` → Create deliverable mockups
-3. **Presentation** → Load `references/slides-create.md` → Build pitch deck
+3. **Presentation** → Use the `slides` skill → Build pitch deck
 
 ### New Design System
 
@@ -363,11 +363,6 @@ Load `references/social-photos-design.md` for sizes, templates, best practices.
 | CIP Deliverables | `references/cip-deliverable-guide.md` |
 | CIP Styles | `references/cip-style-guide.md` |
 | CIP Prompts | `references/cip-prompt-engineering.md` |
-| Slides Create | `references/slides-create.md` |
-| Slides Layouts | `references/slides-layout-patterns.md` |
-| Slides Template | `references/slides-html-template.md` |
-| Slides Copy | `references/slides-copywriting-formulas.md` |
-| Slides Strategy | `references/slides-strategies.md` |
 | Banner Sizes & Styles | `references/banner-sizes-and-styles.md` |
 | Social Photos Guide | `references/social-photos-design.md` |
 | Icon Design Guide | `references/icon-design.md` |
