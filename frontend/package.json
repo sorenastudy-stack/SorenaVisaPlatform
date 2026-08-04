@@ -7,7 +7,8 @@
   },
   "scripts": {
     "predev": "node ../backend/scripts/kill-port.js 3000",
-    "dev": "next dev",
+    "dev": "next dev --turbo",
+    "dev:webpack": "next dev",
     "build": "next build",
     "start": "next start",
     "kill-frontend": "node ../backend/scripts/kill-port.js 3000"
