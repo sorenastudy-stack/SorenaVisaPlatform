@@ -45,8 +45,20 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude memory (local only)
-.claude/
+# Claude Code. Deny-by-default inside .claude/ so machine-local state
+# (permission grants, MCP auth, local overrides, ad-hoc backups) never
+# lands in git — but DO track .claude/skills/, which is project tooling
+# worth versioning and worth being able to undo.
+.claude/*
+!.claude/skills/
+# Listed explicitly for intent, already covered by .claude/* above:
+.claude/settings.local.json
+.claude/*.zip
+# Guard rails: keep local build/venv junk out of the tracked skills tree.
+.claude/skills/**/.venv/
+.claude/skills/**/__pycache__/
+.claude/skills/**/node_modules/
+.claude/skills/**/*.pyc
 
 # User uploads (binary files — tracked via DB, not git). Ignore EVERYTHING
 # under backend/uploads/ (admission docs, visa files, LIA licences, staff HR
