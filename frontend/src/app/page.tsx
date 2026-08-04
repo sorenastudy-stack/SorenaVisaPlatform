@@ -4,6 +4,13 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { SplashGate } from '@/components/loader/SplashGate';
 
+// Demo-only override: when NEXT_PUBLIC_ASSESSMENT_LIVE=true (set ONLY on the demo
+// Railway env), the funnel entry points at the v2 (31-question) assessment. Prod
+// never sets this flag, so it keeps routing to /start → the live /scorecard form.
+// This does NOT change the production go-live gate (Phase 33 — Yashua's call).
+const ASSESSMENT_LIVE = process.env.NEXT_PUBLIC_ASSESSMENT_LIVE === 'true';
+const ASSESSMENT_ENTRY = ASSESSMENT_LIVE ? '/assessment' : '/start';
+
 const containerVariants = {
   hidden: { opacity: 0 },
   show: {
@@ -54,7 +61,7 @@ export default function Home() {
 
           <motion.div variants={itemVariants} className="mt-12 w-full sm:w-auto">
             <Link
-              href="/start"
+              href={ASSESSMENT_ENTRY}
               className="group flex min-h-[3rem] w-full items-center justify-center rounded-xl bg-sorena-gold px-10 py-3.5 text-sorena-navy shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:bg-sorena-gold/90 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-sorena-navy focus-visible:ring-offset-2 focus-visible:ring-offset-sorena-cream sm:w-auto sm:min-w-[20rem]"
             >
               <span className="text-base font-semibold sm:text-lg">

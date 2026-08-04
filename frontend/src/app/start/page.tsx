@@ -9,15 +9,21 @@ import { motion } from 'framer-motion';
 // never captured before — purely which page you saw — so we record it to
 // sessionStorage here (mirrors the sv_scorecard_attribution pattern) as
 // `sv_target_country` so the selection isn't lost when both routes converge.
+//
+// Demo-only override: when NEXT_PUBLIC_ASSESSMENT_LIVE=true (demo Railway env
+// only) the picker converges on the v2 assessment instead of the live scorecard.
+// Prod never sets the flag, so it keeps the existing /scorecard/landing route.
+const FUNNEL_TARGET =
+  process.env.NEXT_PUBLIC_ASSESSMENT_LIVE === 'true' ? '/assessment' : '/scorecard/landing';
 const countries = [
   {
-    href: '/scorecard/landing',
+    href: FUNNEL_TARGET,
     flag: '🇳🇿',
     name: 'New Zealand',
     country: 'NEW_ZEALAND',
   },
   {
-    href: '/scorecard/landing',
+    href: FUNNEL_TARGET,
     flag: '🇲🇾',
     name: 'Malaysia',
     country: 'MALAYSIA',

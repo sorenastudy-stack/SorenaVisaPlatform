@@ -14,6 +14,12 @@ import { ASSESSMENT_V2, type V2FieldDef } from '@/lib/scorecard/v2/assessment-v2
 import { buildScoringAnswers } from '@/lib/scorecard/v2/scoring-answers';
 import { buildMatchCriteria } from '@/lib/scorecard/v2/match-criteria';
 
+// Demo-only override: when NEXT_PUBLIC_ASSESSMENT_LIVE=true (set ONLY on the demo
+// Railway env), this assessment IS the live funnel for the presentation, so the
+// "preview build — not yet live" notices are suppressed. Prod never sets the flag,
+// so the banners remain and the production go-live gate (Phase 33) is unchanged.
+const ASSESSMENT_LIVE = process.env.NEXT_PUBLIC_ASSESSMENT_LIVE === 'true';
+
 interface StudyFieldOpt {
   id: string; key: string; nameEn: string; nameFa: string;
   category: { key: string; nameEn: string; alwaysSelectable: boolean };
@@ -102,9 +108,11 @@ export default function AssessmentV2Page() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <div className="mb-6 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-        Preview build — this redesigned assessment is not yet live. The current assessment is unchanged.
-      </div>
+      {!ASSESSMENT_LIVE && (
+        <div className="mb-6 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+          Preview build — this redesigned assessment is not yet live. The current assessment is unchanged.
+        </div>
+      )}
       <h1 className="text-2xl font-bold text-[#1e3a5f]">Readiness assessment</h1>
       <p className="mt-1 text-sm text-gray-500">A short assessment that scores your profile and recommends specific study options.</p>
 
@@ -220,7 +228,9 @@ function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q
 function ResultView({ preview, recs, onRestart }: { preview: Preview; recs: Rec[]; onRestart: () => void }) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <div className="mb-6 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">Preview build — not live.</div>
+      {!ASSESSMENT_LIVE && (
+        <div className="mb-6 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">Preview build — not live.</div>
+      )}
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <p className="text-xs uppercase tracking-wide text-gray-500">Your readiness</p>
         <p className="mt-1 text-3xl font-extrabold text-[#1e3a5f]">{preview.totalScore} <span className="text-lg text-gray-400">/ 100</span></p>
