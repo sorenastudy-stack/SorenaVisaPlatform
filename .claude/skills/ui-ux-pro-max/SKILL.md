@@ -16,7 +16,7 @@ Comprehensive design guide for web, mobile, and desktop applications. Contains 6
 
 - 设计新的页面（Landing Page、Dashboard、Admin、SaaS、Mobile App）
 - 创建或重构 UI 组件（按钮、弹窗、表单、表格、图表等）
-- 选择配色方案、字体系统、间距规范或布局体系
+- 选择视觉风格、间距规范或布局体系（配色与字体的**具体数值**以 brand tokens 为准，见 Step 2）
 - 审查 UI 代码的用户体验、可访问性或视觉一致性
 - 实现导航结构、动效或响应式行为
 - 做产品层级的设计决策（风格、信息层级、品牌表达）
