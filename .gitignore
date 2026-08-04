@@ -83,3 +83,6 @@ frontend/tsconfig.tsbuildinfo
 # Throwaway test harnesses (smoke scripts + their compiled .js/.d.ts/.map
 # artifacts). Named _<name>_smoke.ts and run via ts-node; never commit.
 _*_smoke.*
+
+# Nightly mirror run logs (scripts/mirror-local-run.sh writes here).
+scripts/logs/

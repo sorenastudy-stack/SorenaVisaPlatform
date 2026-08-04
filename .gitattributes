@@ -22,3 +22,6 @@
 *.jpg  binary
 *.jpeg binary
 *.ttf  binary
+
+# Shell scripts must stay LF (run on Linux runners).
+*.sh text eol=lf

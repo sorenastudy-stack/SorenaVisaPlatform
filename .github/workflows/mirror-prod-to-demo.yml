@@ -1,0 +1,44 @@
+name: mirror-prod-to-demo
+
+# Nightly PRODUCTION -> DEMO data mirror (durable, off-machine scheduler).
+# Runs scripts/mirror-prod-to-demo.sh, which is one-directional + fail-safe.
+#
+# ONE-TIME SETUP (repo owner): add two repository secrets so this can connect —
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+#     PROD_DATABASE_URL = production (reseau) public Postgres URL   [READ-only source]
+#     DEMO_DATABASE_URL = demo (caboose) public Postgres URL        [write target]
+#   or via gh:  gh secret set PROD_DATABASE_URL   /   gh secret set DEMO_DATABASE_URL
+# Until both secrets exist, scheduled runs SKIP gracefully (no failure noise).
+# On any real failure, GitHub emails the workflow actors + the run shows red.
+
+on:
+  schedule:
+    # 14:00 UTC = 02:00 NZST (UTC+12, winter) / 03:00 NZDT (UTC+13, summer).
+    # GitHub cron is UTC only (no DST). Low-traffic hour either way.
+    - cron: '0 14 * * *'
+  workflow_dispatch: {}   # allow manual "Run workflow" from the Actions tab
+
+concurrency:
+  group: mirror-prod-to-demo
+  cancel-in-progress: false   # never interrupt an in-flight mirror
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client (psql)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Run production -> demo mirror
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DEMO_DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+        run: |
+          if [ -z "${PROD_DATABASE_URL}" ] || [ -z "${DEMO_DATABASE_URL}" ]; then
+            echo "::warning title=Mirror skipped::PROD_DATABASE_URL / DEMO_DATABASE_URL secrets are not set yet. Add them in repo Settings to activate the nightly mirror."
+            exit 0
+          fi
+          bash scripts/mirror-prod-to-demo.sh
