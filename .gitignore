@@ -70,6 +70,9 @@ backend/uploads/*
 backup_*.sql
 backend/backup_*.sql
 backend/backups/
+# Pre-deploy production snapshots (CSV exports of live data — PII: users, leads,
+# cases, payments). Taken before production migrations per the standing backup rule.
+backups/
 
 # Local helper / debug scripts (NEVER commit)
 backend/check-*.js
