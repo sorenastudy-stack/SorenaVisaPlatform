@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award, Upload, RefreshCw, ListChecks,
+  GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award, Upload, RefreshCw, ListChecks, Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -50,7 +51,23 @@ const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm foc
 const labelCls = 'block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1';
 
 export function UniversitiesClient() {
-  const [mode, setMode] = useState<{ view: 'list' } | { view: 'create' } | { view: 'edit'; id: string }>({ view: 'list' });
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Which institution is open lives in the URL (?edit=<id>), not only in React
+  // state. Before this, opening an institution and then following through to its
+  // Programmes screen lost the context entirely: coming back landed on the
+  // top-level list every time, so reviewing several programmes for one
+  // institution meant re-finding it in a 95-row list on each return trip.
+  // Putting it in the query string makes the institution addressable, so the
+  // Programmes screen can link straight back to it — and browser Back works too.
+  const editId = searchParams.get('edit');
+  const mode: { view: 'list' } | { view: 'create' } | { view: 'edit'; id: string } =
+    searchParams.get('new') === '1' ? { view: 'create' }
+      : editId ? { view: 'edit', id: editId }
+        : { view: 'list' };
+
+  const open = (next: string) => router.replace(`/staff/universities${next}`, { scroll: false });
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-10 space-y-6">
@@ -60,7 +77,7 @@ export function UniversitiesClient() {
           <h1 className="text-2xl font-bold text-[#1e3a5f]">Universities</h1>
         </div>
         {mode.view === 'list' && (
-          <button type="button" onClick={() => setMode({ view: 'create' })}
+          <button type="button" onClick={() => open('?new=1')}
             className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#162d4a] min-h-[44px]">
             <Plus size={16} /> New university
           </button>
@@ -70,9 +87,9 @@ export function UniversitiesClient() {
         The institutions Sorena works with — their commission terms, bonuses, and per-country scholarships. This is the source of truth for the commissions ledger and offer generation, so keep it accurate.
       </p>
 
-      {mode.view === 'list' && <ProviderList onEdit={(id) => setMode({ view: 'edit', id })} />}
-      {mode.view === 'create' && <ProviderForm onDone={() => setMode({ view: 'list' })} />}
-      {mode.view === 'edit' && <ProviderForm providerId={mode.id} onDone={() => setMode({ view: 'list' })} />}
+      {mode.view === 'list' && <ProviderList onEdit={(id) => open(`?edit=${id}`)} />}
+      {mode.view === 'create' && <ProviderForm onDone={() => open('')} />}
+      {mode.view === 'edit' && <ProviderForm providerId={mode.id} onDone={() => open('')} />}
     </div>
   );
 }
@@ -81,18 +98,65 @@ export function UniversitiesClient() {
 function ProviderList({ onEdit }: { onEdit: (id: string) => void }) {
   const [rows, setRows] = useState<Provider[] | null>(null);
   const [error, setError] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     api.get<Provider[]>('/providers').then(setRows).catch(() => setError(true));
   }, []);
 
+  // Filtered in the browser, not on the server: the whole list is already
+  // fetched in one call and is ~95 rows, so a search endpoint would add a
+  // round trip per keystroke to filter data the page is holding anyway.
+  // Revisit if this list ever reaches the thousands.
+  const visible = useMemo(() => {
+    if (!rows) return null;
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+
+    // Ranked, not just filtered. Searching "ara" plainly returned Ara Institute
+    // of Canterbury FOURTH, behind institutions that merely contain those
+    // letters mid-word (Ta*ra*naki, Ma*ra*ekakaho, Ō*tara*). You type a name
+    // expecting that institution, so: name matches before city matches, and
+    // within each, the earlier the match sits in the string the higher it ranks
+    // — which floats "starts with what I typed" to the top.
+    const rank = (p: Provider) => {
+      const i = p.name.toLowerCase().indexOf(q);
+      if (i >= 0) return i;                                   // name match: 0 = starts with
+      const c = (p.city ?? '').toLowerCase().indexOf(q);
+      return c >= 0 ? 1000 + c : -1;                          // city match always sorts below
+    };
+    return rows
+      .map((p) => ({ p, r: rank(p) }))
+      .filter((x) => x.r >= 0)
+      .sort((a, b) => a.r - b.r || a.p.name.localeCompare(b.p.name))
+      .map((x) => x.p);
+  }, [rows, search]);
+
   if (error) return <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">Couldn’t load universities. Please refresh.</div>;
-  if (!rows) return <Card><CardContent><div className="flex items-center gap-2 py-8 text-sm text-gray-400"><Loader2 size={16} className="animate-spin" /> Loading…</div></CardContent></Card>;
+  if (!rows || !visible) return <Card><CardContent><div className="flex items-center gap-2 py-8 text-sm text-gray-400"><Loader2 size={16} className="animate-spin" /> Loading…</div></CardContent></Card>;
   if (rows.length === 0) return <Card><CardContent><p className="py-8 text-center text-sm text-gray-500">No universities yet. Add the first one to start managing commissions and scholarships.</p></CardContent></Card>;
 
   return (
+    <>
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          className={`${inputCls} pl-9`}
+          placeholder={`Search ${rows.length} institutions by name or city…`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      {search.trim() && (
+        <p className="text-xs text-gray-500">
+          {visible.length === 0
+            ? 'No institutions match that search.'
+            : `${visible.length} of ${rows.length} institutions`}
+        </p>
+      )}
+
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {rows.map((p) => (
+      {visible.map((p) => (
         <button key={p.id} type="button" onClick={() => onEdit(p.id)}
           className="text-left rounded-2xl border border-gray-200 bg-white p-4 hover:border-[#1e3a5f]/40 hover:shadow-sm transition-all">
           <div className="flex items-start justify-between gap-2">
@@ -110,6 +174,7 @@ function ProviderList({ onEdit }: { onEdit: (id: string) => void }) {
         </button>
       ))}
     </div>
+    </>
   );
 }
 

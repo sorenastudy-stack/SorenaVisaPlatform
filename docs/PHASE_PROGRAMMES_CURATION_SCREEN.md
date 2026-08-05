@@ -231,6 +231,54 @@ halves: the flat default survives, and 5xx passes nothing through.
 
 ---
 
+## Addendum — three UX fixes (2026-08-06)
+
+From the Owner's first real session on the live screen. Core functionality (toggle, edit, save)
+was confirmed working on Ara Institute of Canterbury. "Future Skills" showing 0 programmes was
+confirmed **correct, not a bug** — that institution was never in the 91 imported from the
+workbooks, so it has nothing to list.
+
+UI and navigation only. No schema change, no new backend logic, and nothing about what gets
+written or audited changed.
+
+**1. Back returns to the institution you were on.**
+The institution edit view was pure React state, so it had no address. Following through to a
+programmes screen and coming back always reset to the top-level list, meaning a 95-row hunt for
+the same institution on every return trip. The open institution now lives in the URL
+(`/staff/universities?edit=<id>`), so the Programmes screen links straight back to it — and the
+browser Back button works for free. The back link now reads "Back to Ara Institute of Canterbury"
+rather than "Back to institutions".
+
+**2. A Submit button that saves and returns.**
+`Save changes` kept you inside the expanded row, so finishing a programme meant save, then
+collapse, as two actions. There are now two buttons, because the two jobs genuinely differ:
+
+* **Save changes** (secondary) — writes and keeps the row open, for correcting several fields on
+  one programme without losing your place.
+* **Submit** (primary) — writes and drops back to the list, for "this programme is done, next".
+
+Both call the same audited endpoint; Submit performs no extra write. It collapses **only on a
+successful save** — closing the row after a failure would discard what was typed with nothing
+persisted.
+
+**3. Search on the institutions list — ranked, not just filtered.**
+95 institutions with no search meant scrolling. Filtering happens in the browser: the list is
+already fetched in one call, so a search endpoint would add a round trip per keystroke to filter
+data the page is holding anyway. Revisit above a few thousand rows.
+
+Plain substring filtering was tried first and was visibly wrong: searching "ara" returned **Ara
+Institute of Canterbury fourth**, behind institutions merely containing those letters mid-word
+(Ta*ra*naki, Ma*ra*ekakaho, Ō*tara*). Results are now ranked — name matches before city matches,
+and within each the earlier the match sits in the string the higher it ranks, so "starts with what
+I typed" floats to the top. Verified: "ara" → Ara Institute first, "auck" → Auckland Institute of
+Studies first, "waikato" → Waikato Institute of Technology first.
+
+Verified by browser click-through: search 125 → 4 with a "4 of 125 institutions" counter, URL
+carrying `?edit=<id>`, back link landing on the institution's own edit form with its name
+populated, and Submit closing the row with "Saved — 1 field updated." No console errors.
+
+---
+
 ## Still open: the provider-status audit gap
 
 **Not fixed by this phase.** Changing an institution's `status` (e.g. PENDING → ACTIVE, the

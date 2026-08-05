@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, ChevronDown, ChevronRight, ImageIcon, Loader2, Save, Search, AlertTriangle, Info,
+  ArrowLeft, Check, ChevronDown, ChevronRight, ImageIcon, Loader2, Save, Search, AlertTriangle, Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
@@ -110,9 +110,12 @@ export function ProgrammesCurationClient({ providerId }: { providerId: string })
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-6">
-      <button type="button" onClick={() => router.push('/staff/universities')}
+      {/* Returns to THIS institution's edit screen, not the top-level list.
+          Reviewing 76 programmes previously meant re-finding the institution
+          among 95 every time you came back. */}
+      <button type="button" onClick={() => router.push(`/staff/universities?edit=${providerId}`)}
         className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#1e3a5f]">
-        <ArrowLeft size={15} /> Back to institutions
+        <ArrowLeft size={15} /> Back to {data.provider.name}
       </button>
 
       <div>
@@ -265,7 +268,7 @@ function ProgrammeRow({ programme, open, onToggleOpen, onChanged }: {
           </div>
         )}
 
-        {open && <ProgrammeEditor programme={programme} onChanged={onChanged} />}
+        {open && <ProgrammeEditor programme={programme} onChanged={onChanged} onClose={onToggleOpen} />}
       </CardContent>
     </Card>
   );
@@ -315,7 +318,11 @@ const TEXT_FIELDS: Array<[keyof Programme, string, 'text' | 'area']> = [
   ['notes', 'Internal notes', 'area'],
 ];
 
-function ProgrammeEditor({ programme, onChanged }: { programme: Programme; onChanged: (p: Partial<Programme>) => void }) {
+function ProgrammeEditor({ programme, onChanged, onClose }: {
+  programme: Programme;
+  onChanged: (p: Partial<Programme>) => void;
+  onClose: () => void;
+}) {
   const [form, setForm] = useState<Record<string, any>>(() => ({ ...programme }));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -326,7 +333,7 @@ function ProgrammeEditor({ programme, onChanged }: { programme: Programme; onCha
 
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
-  const save = async () => {
+  const save = async (thenClose = false) => {
     setSaving(true);
     try {
       const payload: Record<string, any> = {};
@@ -342,6 +349,9 @@ function ProgrammeEditor({ programme, onChanged }: { programme: Programme; onCha
       );
       onChanged(r);
       toast.success(r.changed.length ? `Saved — ${r.changed.length} field${r.changed.length === 1 ? '' : 's'} updated.` : 'No changes to save.');
+      // Only collapse on a SUCCESSFUL save. Closing the row after a failure
+      // would throw away what was typed with nothing written.
+      if (thenClose) onClose();
     } catch (e: any) {
       toast.error(e?.message ?? 'Could not save those changes.');
     } finally {
@@ -420,10 +430,21 @@ function ProgrammeEditor({ programme, onChanged }: { programme: Programme; onCha
           <span className="text-[11px] text-gray-400">JPG, PNG or WebP · up to 2 MB</span>
         </div>
 
-        <button type="button" onClick={save} disabled={saving}
-          className="flex items-center gap-2 rounded-md bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#16304f] disabled:opacity-50">
-          {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save changes
-        </button>
+        {/* Two buttons because the two jobs are genuinely different:
+            "Save changes" is for correcting several fields on one programme
+            without losing your place, "Submit" is the end of that programme —
+            save and drop back to the list to pick the next one. Both write
+            through the same audited endpoint; Submit adds no extra write. */}
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => save(false)} disabled={saving}
+            className="flex items-center gap-2 rounded-md border border-[#1e3a5f] px-4 py-2 text-sm font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save changes
+          </button>
+          <button type="button" onClick={() => save(true)} disabled={saving}
+            className="flex items-center gap-2 rounded-md bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#16304f] disabled:opacity-50">
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Submit
+          </button>
+        </div>
       </div>
     </div>
   );
