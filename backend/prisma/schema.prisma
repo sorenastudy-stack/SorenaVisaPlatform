@@ -2243,6 +2243,7 @@ model EducationProvider {
   applications Application[]
   commissions  Commission[]
   scholarships ProviderScholarship[]
+  tuitions     ProviderTuition[] // PR-EXPLORE — nationality-scoped tuition rates
   candidates   ProgrammeCandidate[] // PR-CATALOG-2 — new-programme discovery candidates
 
   @@map("education_providers")
@@ -2297,6 +2298,15 @@ model EducationProgramme {
   feeYear               Int? // the year the fee applies to (tracked separately from intake year)
   fee2027Status         String? // confirmed / projected
   scholarshipNote       String? // free-text (NOT the nationality-scoped ProviderScholarship)
+  // PR-EXPLORE — Owner-uploaded cover image shown on the Explore map result cards
+  // and the programme detail page. Stores the object key/URL produced by the normal
+  // signed-upload path (image mime-types only, size-capped); never a raw client URL.
+  coverImageUrl         String?
+  // PR-EXPLORE — Staff/Owner manual override for the "Related videos" block. When
+  // NON-EMPTY these replace the ContentMatchingAgent's picks entirely (never merged),
+  // so a corrected match cannot have the agent's choices reappear beside it. Stores
+  // bare YouTube video ids; staff may paste full URLs and the API normalises them.
+  manualVideoIds        String[]            @default([])
   programmeUrl          String? // official programme page — RAG monitoring source #1
   verificationSourceUrl String? // secondary verification source — RAG monitoring source #2
   verifiedAt            DateTime?
@@ -2312,6 +2322,7 @@ model EducationProgramme {
   commissions         Commission[]
   admissionChoices    AdmissionProgrammeChoice[]
   scholarships        ProviderScholarship[]
+  tuitions            ProviderTuition[] // PR-EXPLORE — nationality-scoped tuition rates
   studyFields         ProgrammeStudyField[]
   intakes             ProgrammeIntake[]
   // PR-RECS-1 — persisted recommendation-list snapshots referencing this
@@ -2435,6 +2446,45 @@ model ProviderScholarship {
   @@index([providerId])
   @@index([nationality])
   @@map("provider_scholarships")
+}
+
+// PR-EXPLORE (Round 3) — nationality-scoped tuition. Deliberately shaped like
+// ProviderScholarship so the two Excel uploads, the two parsers and the two
+// resolvers stay structurally identical.
+//
+// EducationProgramme.tuitionFeeNZD is NOT replaced — it remains the explicit
+// DEFAULT/fallback used when no row here matches the student's nationality.
+// resolveStudentTuition() reports which of the two it used, so a fallback is
+// never silent.
+//
+// Unlike scholarships, tuition is a single applicable figure, not a sum: when
+// several rows match, the most SPECIFIC one wins (programme+level > programme >
+// level > provider-wide), and ties break on the most recent feeYear.
+model ProviderTuition {
+  id          String              @id @default(cuid())
+  providerId  String
+  programmeId String? // null = applies to any programme of the provider
+  level       QualificationLevel? // null = applies to any level
+  nationality String // ISO 3166-1 alpha-2 of the applicant nationality
+  amountValue Float
+  currency    String              @default("NZD")
+  // Same per-year/term granularity as the scholarship sheets — Yashua uploads
+  // both for an institution in one sitting.
+  feeYear     Int?
+  term        String?
+  notes       String?
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  updatedById String?
+
+  provider  EducationProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  programme EducationProgramme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+
+  @@index([providerId])
+  @@index([nationality])
+  @@index([programmeId])
+  @@map("provider_tuitions")
 }
 
 model ProgrammeRequirement {
