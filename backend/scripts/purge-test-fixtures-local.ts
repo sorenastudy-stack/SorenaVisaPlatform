@@ -25,8 +25,17 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 
-/** Provider names created by test fixtures, e.g. "Provider cm1785929198316_5". */
-const FIXTURE_PROVIDER = /^(Provider|P|Uni|Prog|Programme)\s+(cm|sla|uni|rc|pb|pc|hf)[0-9]/;
+/**
+ * Provider names created by test fixtures, e.g. "Provider cm1785929198316_5",
+ * "Uni cur1785929198316_2".
+ *
+ * The suffix is matched generically (a short letter prefix followed by a
+ * millisecond timestamp) rather than as a fixed list of prefixes: each new spec
+ * invents its own — cm, sla, uni, rc, pb, pc, hf, cur — and a fixed list
+ * silently stops purging the moment someone adds another one. No real
+ * institution is named "Uni ab1785929198316".
+ */
+const FIXTURE_PROVIDER = /^(Provider|P|Uni|Prog|Programme)\s+[a-z]{1,5}\d{10,}/;
 /** Email domains used exclusively by .spec.ts fixtures. No seed script uses these. */
 const FIXTURE_USER_DOMAINS = ['@t.local', '@test.local'];
 

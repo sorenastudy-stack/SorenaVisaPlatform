@@ -30,6 +30,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'An unexpected error occurred. Please try again.';
+    // Extra fields a 4xx may carry to the client — see the opt-in below.
+    let extra: Record<string, unknown> | null = null;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -44,6 +46,30 @@ export class HttpExceptionFilter implements ExceptionFilter {
       ) {
         const msg = (exceptionResponse as any).message;
         message = Array.isArray(msg) ? msg[0] : String(msg);
+
+        // OPT-IN structured 4xx. The uniform {statusCode, message, timestamp}
+        // shape is the default precisely so internals cannot leak out of an
+        // error path, and every existing endpoint keeps it unchanged.
+        //
+        // Some refusals are only actionable WITH detail: the programme
+        // deactivation guard answers 409 with the students already holding
+        // that programme, so the Owner can be shown exactly who is affected
+        // and confirm. Flattening that to a sentence makes the UI unable to
+        // offer the confirmation at all.
+        //
+        // The opt-in is a `details` object, and ONLY that object is copied.
+        // It is deliberately not `error`: Nest sets `error: 'Bad Request'` on
+        // its own built-in exceptions, so keying on that would silently widen
+        // the response of almost every endpoint in the API.
+        const body = exceptionResponse as Record<string, unknown>;
+        if (
+          status < 500 &&
+          typeof body.details === 'object' &&
+          body.details !== null &&
+          !Array.isArray(body.details)
+        ) {
+          extra = { details: body.details };
+        }
       }
       // Log 5xx HttpExceptions too — a controller can throw a
       // generic InternalServerErrorException and silence the real
@@ -66,6 +92,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       statusCode: status,
       message,
       timestamp: new Date().toISOString(),
+      ...(extra ?? {}),
     });
   }
 }

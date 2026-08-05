@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award, Upload, RefreshCw,
+  GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award, Upload, RefreshCw, ListChecks,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -233,7 +233,17 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
 
         <div><label className={labelCls}>Notes</label><textarea className={`${inputCls} min-h-[70px]`} value={form.notes} onChange={(e) => set('notes', e.target.value)} /></div>
 
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          {/* PR-CURATION — the review screen for this institution's imported
+              programmes: Active/Inactive per programme, full field editing,
+              thumbnails. Only offered once the institution exists. */}
+          {isEdit && providerId && (
+            <a href={`/staff/universities/${providerId}/programmes`}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#1e3a5f] px-5 py-2.5 text-sm font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 min-h-[44px]">
+              <ListChecks size={16} />
+              Programmes{programmes.length ? ` (${programmes.length})` : ''}
+            </a>
+          )}
           <button type="button" onClick={save} disabled={saving}
             className="inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50 min-h-[44px]">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} {isEdit ? 'Save changes' : 'Create university'}

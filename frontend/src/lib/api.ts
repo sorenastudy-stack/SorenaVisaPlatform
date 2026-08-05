@@ -4,7 +4,11 @@ const API_URL =
   'http://localhost:3001';
 
 export class ApiError extends Error {
-  constructor(public statusCode: number, message: string) {
+  // `body` carries the parsed response payload. Some endpoints answer a refusal
+  // with structured detail the UI needs — the programme deactivation guard
+  // returns 409 with the students already holding that programme so the Owner
+  // can be shown exactly who is affected before confirming.
+  constructor(public statusCode: number, message: string, public body?: any) {
     super(message);
     this.name = 'ApiError';
   }
@@ -46,7 +50,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const data = await res.json().catch(() => ({ message: 'Request failed.' }));
 
   if (!res.ok) {
-    throw new ApiError(res.status, data?.message || 'Something went wrong. Please try again.');
+    throw new ApiError(res.status, data?.message || 'Something went wrong. Please try again.', data);
   }
 
   return data as T;
@@ -73,7 +77,7 @@ export const api = {
       })
     ).then(async (res) => {
       const data = await res.json().catch(() => ({ message: 'Request failed.' }));
-      if (!res.ok) throw new ApiError(res.status, data?.message ?? 'Something went wrong.');
+      if (!res.ok) throw new ApiError(res.status, data?.message ?? 'Something went wrong.', data);
       return data as T;
     }),
 };

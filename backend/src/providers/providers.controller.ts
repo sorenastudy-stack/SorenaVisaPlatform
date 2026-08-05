@@ -28,6 +28,8 @@ import { ProviderListQueryDto } from './dto/provider-list-filter.dto';
 import { CreateRequirementDto } from './dto/create-requirement.dto';
 import { CreateScholarshipDto } from './dto/create-scholarship.dto';
 import { UpdateScholarshipDto } from './dto/update-scholarship.dto';
+import { UpdateProgrammeDto, SetProgrammeActivationDto } from './dto/update-programme.dto';
+import { ProgrammeCurationService } from './programme-curation.service';
 
 // Provider/programme catalog — institutional reference data (not user PII), but
 // the reads were allow-all and several writes (faculties/programmes/agreement
@@ -47,6 +49,7 @@ export class ProvidersController {
   constructor(
     private readonly providersService: ProvidersService,
     private readonly pricingImport: PricingImportService,
+    private readonly programmeCuration: ProgrammeCurationService,
   ) {}
 
   @Post()
@@ -292,5 +295,49 @@ export class ProvidersController {
   @Roles(...CATALOG_READ)
   findRequirement(@Param('programmeId') programmeId: string) {
     return this.providersService.findRequirement(programmeId);
+  }
+
+  // ── PR-CURATION — the Owner's programme review screen ──────────────────────
+  // PROVIDER_ADMIN (OWNER/SUPER_ADMIN) throughout, matching the institution edit
+  // screen these actions hang off: deciding what students can see is an Owner
+  // decision, not general catalogue admin.
+
+  @Get(':id/curation')
+  @Roles(...PROVIDER_ADMIN)
+  curationList(@Param('id') providerId: string) {
+    return this.programmeCuration.listForProvider(providerId);
+  }
+
+  @Patch('programmes/:programmeId/curation')
+  @Roles(...PROVIDER_ADMIN)
+  editProgramme(
+    @Param('programmeId') programmeId: string,
+    @Body() dto: UpdateProgrammeDto,
+    @Req() req: any,
+  ) {
+    return this.programmeCuration.updateProgramme(programmeId, dto, req.user?.userId ?? null);
+  }
+
+  // 409 CONFIRMATION_REQUIRED when students already hold the programme; the
+  // client re-sends with confirm: true.
+  @Patch('programmes/:programmeId/activation')
+  @Roles(...PROVIDER_ADMIN)
+  setProgrammeActivation(
+    @Param('programmeId') programmeId: string,
+    @Body() dto: SetProgrammeActivationDto,
+    @Req() req: any,
+  ) {
+    return this.programmeCuration.setActivation(programmeId, dto, req.user?.userId ?? null);
+  }
+
+  @Post(':id/curation/activation-bulk')
+  @Roles(...PROVIDER_ADMIN)
+  setProgrammeActivationBulk(
+    @Body() body: { programmeIds: string[]; active: boolean; confirm?: boolean },
+    @Req() req: any,
+  ) {
+    return this.programmeCuration.setActivationBulk(
+      body.programmeIds ?? [], body.active, body.confirm === true, req.user?.userId ?? null,
+    );
   }
 }
