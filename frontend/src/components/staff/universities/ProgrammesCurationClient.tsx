@@ -164,6 +164,10 @@ export function ProgrammesCurationClient({ providerId }: { providerId: string })
             open={openId === p.id}
             onToggleOpen={() => setOpenId(openId === p.id ? null : p.id)}
             onChanged={(patch) => patchLocal(p.id, patch)}
+            // Submit finishes the whole visit, not just the row: back out to
+            // the institutions list. Owner's call — the review flow ends at
+            // the top level, not on this institution's programme list.
+            onSubmitted={() => router.push('/staff/universities')}
           />
         ))}
       </div>
@@ -172,11 +176,12 @@ export function ProgrammesCurationClient({ providerId }: { providerId: string })
 }
 
 // ── one programme: summary row + expandable full editor ─────────────────────
-function ProgrammeRow({ programme, open, onToggleOpen, onChanged }: {
+function ProgrammeRow({ programme, open, onToggleOpen, onChanged, onSubmitted }: {
   programme: Programme;
   open: boolean;
   onToggleOpen: () => void;
   onChanged: (patch: Partial<Programme>) => void;
+  onSubmitted: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [confirmState, setConfirmState] = useState<null | { message: string; affected: Array<{ studentName: string | null; caseReference: string | null }> }>(null);
@@ -268,7 +273,7 @@ function ProgrammeRow({ programme, open, onToggleOpen, onChanged }: {
           </div>
         )}
 
-        {open && <ProgrammeEditor programme={programme} onChanged={onChanged} onClose={onToggleOpen} />}
+        {open && <ProgrammeEditor programme={programme} onChanged={onChanged} onSubmitted={onSubmitted} />}
       </CardContent>
     </Card>
   );
@@ -318,10 +323,10 @@ const TEXT_FIELDS: Array<[keyof Programme, string, 'text' | 'area']> = [
   ['notes', 'Internal notes', 'area'],
 ];
 
-function ProgrammeEditor({ programme, onChanged, onClose }: {
+function ProgrammeEditor({ programme, onChanged, onSubmitted }: {
   programme: Programme;
   onChanged: (p: Partial<Programme>) => void;
-  onClose: () => void;
+  onSubmitted: () => void;
 }) {
   const [form, setForm] = useState<Record<string, any>>(() => ({ ...programme }));
   const [saving, setSaving] = useState(false);
@@ -349,9 +354,9 @@ function ProgrammeEditor({ programme, onChanged, onClose }: {
       );
       onChanged(r);
       toast.success(r.changed.length ? `Saved — ${r.changed.length} field${r.changed.length === 1 ? '' : 's'} updated.` : 'No changes to save.');
-      // Only collapse on a SUCCESSFUL save. Closing the row after a failure
-      // would throw away what was typed with nothing written.
-      if (thenClose) onClose();
+      // Only leave on a SUCCESSFUL save. Navigating away after a failure would
+      // discard what was typed with nothing written.
+      if (thenClose) onSubmitted();
     } catch (e: any) {
       toast.error(e?.message ?? 'Could not save those changes.');
     } finally {
@@ -432,9 +437,9 @@ function ProgrammeEditor({ programme, onChanged, onClose }: {
 
         {/* Two buttons because the two jobs are genuinely different:
             "Save changes" is for correcting several fields on one programme
-            without losing your place, "Submit" is the end of that programme —
-            save and drop back to the list to pick the next one. Both write
-            through the same audited endpoint; Submit adds no extra write. */}
+            without losing your place; "Submit" ends the visit — save and go back
+            out to the institutions list. Both write through the same audited
+            endpoint, and Submit adds no extra write. */}
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => save(false)} disabled={saving}
             className="flex items-center gap-2 rounded-md border border-[#1e3a5f] px-4 py-2 text-sm font-semibold text-[#1e3a5f] hover:bg-[#1e3a5f]/5 disabled:opacity-50">

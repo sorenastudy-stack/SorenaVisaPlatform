@@ -249,17 +249,23 @@ the same institution on every return trip. The open institution now lives in the
 browser Back button works for free. The back link now reads "Back to Ara Institute of Canterbury"
 rather than "Back to institutions".
 
-**2. A Submit button that saves and returns.**
+**2. A Submit button that saves and leaves.**
 `Save changes` kept you inside the expanded row, so finishing a programme meant save, then
 collapse, as two actions. There are now two buttons, because the two jobs genuinely differ:
 
 * **Save changes** (secondary) — writes and keeps the row open, for correcting several fields on
   one programme without losing your place.
-* **Submit** (primary) — writes and drops back to the list, for "this programme is done, next".
+* **Submit** (primary) — writes, then navigates out to `/staff/universities`, the top-level
+  institutions list.
 
-Both call the same audited endpoint; Submit performs no extra write. It collapses **only on a
-successful save** — closing the row after a failure would discard what was typed with nothing
-persisted.
+Both call the same audited endpoint; Submit performs no extra write. It navigates **only on a
+successful save** — leaving after a failure would discard what was typed with nothing persisted.
+
+Submit's destination was corrected after the first implementation. It originally collapsed the row
+and stayed on the institution's programme list, on the reasoning that this keeps the reviewer in
+flow through a long list. The Owner's actual workflow is the opposite: Submit ends the visit to
+that institution, so it returns all the way to the main list. Recording the correction because the
+in-flow argument is the obvious one to re-derive later and re-apply by mistake.
 
 **3. Search on the institutions list — ranked, not just filtered.**
 95 institutions with no search meant scrolling. Filtering happens in the browser: the list is
@@ -273,9 +279,11 @@ and within each the earlier the match sits in the string the higher it ranks, so
 I typed" floats to the top. Verified: "ara" → Ara Institute first, "auck" → Auckland Institute of
 Studies first, "waikato" → Waikato Institute of Technology first.
 
-Verified by browser click-through: search 125 → 4 with a "4 of 125 institutions" counter, URL
-carrying `?edit=<id>`, back link landing on the institution's own edit form with its name
-populated, and Submit closing the row with "Saved — 1 field updated." No console errors.
+Verified by browser click-through: search narrowing with a "N of M institutions" counter, URL
+carrying `?edit=<id>`, and the back link landing on the institution's own edit form with its name
+populated. Submit was verified end to end — edit a field on a real Ara programme, click Submit,
+land on `/staff/universities`, then navigate back in and confirm the field still holds the edited
+value. No console errors.
 
 ---
 
