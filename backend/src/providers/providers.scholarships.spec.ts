@@ -22,8 +22,9 @@ describe('ProviderScholarship CRUD + gating', () => {
   beforeAll(async () => {
     prisma = new PrismaClient();
     await prisma.$connect();
-    // scholarship methods use neither the importer nor the web-sync service → stub them.
-    svc = new ProvidersService(prisma as any, events, {} as any, {} as any);
+    // scholarship methods use neither the importer, the web-sync service, nor R2
+    // (PR-EXPLORE added R2 for programme cover images) → stub them all.
+    svc = new ProvidersService(prisma as any, events, {} as any, {} as any, {} as any);
   }, 60000);
 
   afterAll(async () => { await prisma.$disconnect(); });

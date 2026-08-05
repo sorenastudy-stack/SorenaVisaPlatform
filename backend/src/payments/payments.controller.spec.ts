@@ -24,6 +24,7 @@ import { PaymentsService } from './payments.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EventsService } from '../events/events.service';
 import { MailService } from '../mail/mail.service';
+import { BookingConfirmationService } from '../booking/booking-confirmation.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import {
   seedFixture,
@@ -75,6 +76,10 @@ describe('PaymentsController.handlePaymentSucceeded (PR-LIA-AUTO-ASSIGN Phase 7)
         { provide: PaymentsService,       useValue: {} /* unused on this path */ },
         { provide: SubscriptionsService,  useValue: subscriptionsStub },
         { provide: MailService,  useValue: notificationsStub },
+        // PR-BOOKING-5 (4347d5d) added BookingConfirmationService to the
+        // controller's constructor. The webhook path under test never reaches a
+        // booking confirmation, so an empty stub satisfies Nest DI.
+        { provide: BookingConfirmationService, useValue: {} },
       ],
     }).compile();
 

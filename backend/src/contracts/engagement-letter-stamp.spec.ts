@@ -80,14 +80,18 @@ describe('stampLiaIdentity (PR-DOCUSIGN-1 step 5g.3)', () => {
   it('stamps the LIA name on page 1 near Clause 2.1 Name: position', () => {
     const found = p1items.find((it) => it.str === LIA_NAME);
     expect(found).toBeDefined();
-    expect(Math.abs(found!.transform[4] - 97.66)).toBeLessThan(2);
+    // ea15ae0 widened the page-1 gap to ~7pt (clear space after the label), so
+    // the stamp sits further right than the pre-fix anchor. Tolerance stays ±2 —
+    // this test exists to catch drift, so it must remain tight.
+    expect(Math.abs(found!.transform[4] - 104.19)).toBeLessThan(2);
     expect(Math.abs(found!.transform[5] - 100.10)).toBeLessThan(2);
   });
 
   it('stamps the IAA number on page 1 near Clause 2.1 IAA Licence Number position', () => {
     const found = p1items.find((it) => it.str === IAA);
     expect(found).toBeDefined();
-    expect(Math.abs(found!.transform[4] - 166.70)).toBeLessThan(2);
+    // ea15ae0 — see the note on the LIA-name test above.
+    expect(Math.abs(found!.transform[4] - 176.48)).toBeLessThan(2);
     expect(Math.abs(found!.transform[5] - 68.30)).toBeLessThan(2);
   });
 

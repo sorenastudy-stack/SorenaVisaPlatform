@@ -50,10 +50,24 @@ function buildMocks(opts: {
   case?: CaseShape | null;
   document?: DocumentShape | null;
   documents?: Array<DocumentShape>;
+  engagementPaid?: boolean;
 }) {
   const prismaMock: any = {};
   prismaMock.case = {
     findUnique: jest.fn().mockResolvedValue(opts.case ?? null),
+  };
+  // Engagement payment gate (2204b75): a CLIENT (LEAD/STUDENT) may only reach
+  // case documents once the ENG- invoice is PAID, and the gate fails safe —
+  // any missing row or error resolves to LOCKED. Default the fixture to PAID so
+  // client-path tests exercise the document logic rather than the gate; pass
+  // `engagementPaid: false` to exercise the gate itself. Staff actors return
+  // 'allow' before the gate is consulted, so they are unaffected either way.
+  prismaMock.invoice = {
+    findFirst: jest.fn().mockResolvedValue(
+      opts.engagementPaid === false
+        ? null
+        : { id: 'inv-eng', status: 'PAID', receiptUploadedAt: null },
+    ),
   };
   prismaMock.document = {
     create: jest.fn(async ({ data }: any) => ({
@@ -398,10 +412,13 @@ describe('DocumentsService.getDownloadUrl', () => {
     const service = makeService(mocks);
     const res = await service.getDownloadUrl('case-1', 'doc-1', LIA_ACTOR);
 
-    expect(mocks.r2.getPresignedDownloadUrl).toHaveBeenCalledWith('cases/case-1/k', 300);
+    // DOWNLOAD urls are 60s (5bc5b64, least-access for PII: narrows the window an
+    // already-issued URL keeps working after a reassign-away). UPLOAD urls remain
+    // 300s — see the requestUpload assertions above.
+    expect(mocks.r2.getPresignedDownloadUrl).toHaveBeenCalledWith('cases/case-1/k', 60);
     expect(res).toEqual({
       url: 'https://r2.example/download?sig=xyz',
-      expiresInSeconds: 300,
+      expiresInSeconds: 60,
     });
     expect(mocks.prisma.auditLog.create).toHaveBeenCalledTimes(1);
     const audit = mocks.prisma.auditLog.create.mock.calls[0][0].data;

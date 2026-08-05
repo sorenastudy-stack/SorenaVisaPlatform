@@ -35,7 +35,7 @@ function makeService(opts: {
     consultation: { findFirst: consultationFindFirst },
   } as any;
 
-  const service = new PortalService(prisma, {} as any, {} as any);
+  const service = new PortalService(prisma, {} as any, {} as any, {} as any); // 4th = ContractsService (PR-CLIENT-CONTRACT); unused here
   return { service, consultationFindFirst };
 }
 
@@ -67,6 +67,14 @@ describe('PortalService LIA-review notice (Phase A)', () => {
     const { service, consultationFindFirst } = makeService({ liaEscalationRequired: false });
     const steps = await buildSteps(service);
     expect(steps.find((s) => s.kind === 'LIA_REVIEW')).toBeUndefined();
-    expect(consultationFindFirst).not.toHaveBeenCalled();
+    // The verdict query is still skipped for a non-flagged case. Assert on the
+    // VERDICT query specifically rather than the model method: a later feature
+    // (free-15 completion, for the self-service "Request contract" step) added a
+    // second consultation.findFirst that always runs, so a bare
+    // not.toHaveBeenCalled() now counts an unrelated query.
+    const verdictCalls = consultationFindFirst.mock.calls.filter(
+      ([arg]: any[]) => arg?.where?.type === 'LIA',
+    );
+    expect(verdictCalls).toHaveLength(0);
   });
 });

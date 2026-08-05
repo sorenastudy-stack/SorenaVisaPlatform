@@ -21,9 +21,38 @@ import { PortalService } from './portal.service';
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 function makeService(findFirst: jest.Mock): PortalService {
-  // Second arg is PaymentsService — unused by the getMyCase tests below,
-  // so an empty stub satisfies the constructor after the pay-link DI change.
-  return new PortalService({ case: { findFirst } } as any, {} as any, {} as any);
+  // getMyCase fans out across many models (payments summary, next-steps panel,
+  // contract/uploads/visa) that were added after this spec was written. Rather
+  // than stub each one and re-break whenever another is added, back the mock with
+  // a Proxy that returns an empty result for ANY model/method not explicitly
+  // provided: findMany -> [], findFirst/findUnique -> null, count -> 0.
+  // `case.findFirst` remains the caller-supplied mock — that is what these tests
+  // actually assert on (the whitelisted case shape).
+  const emptyFor = (method: string) =>
+    jest.fn().mockResolvedValue(method === 'findMany' ? [] : method === 'count' ? 0 : null);
+
+  const prisma: any = new Proxy(
+    { case: { findFirst } } as Record<string, any>,
+    {
+      get(target, model: string) {
+        if (!(model in target)) target[model] = {};
+        const m = target[model];
+        return new Proxy(m, {
+          get(mt, method: string) {
+            if (!(method in mt)) mt[method] = emptyFor(method);
+            return mt[method];
+          },
+        });
+      },
+    },
+  );
+
+  return new PortalService(
+    prisma,
+    {} as any, // PaymentsService — unused by these tests
+    {} as any, // PlatformSettingsService
+    {} as any, // ContractsService (PR-CLIENT-CONTRACT)
+  );
 }
 
 function makeCtx(role: string): any {
@@ -53,6 +82,15 @@ describe('PortalService.getMyCase', () => {
       finance:              null,
       inzApplicationNumber: 'VRC-2026-NZL-12345',
       inzSubmittedAt:       new Date('2026-06-09T00:00:00Z'),
+      // Added after this spec was written. Both are DERIVED from already-
+      // whitelisted fields (no new data source): nextSteps is the client
+      // to-do panel; timeline is labels+dates built from case.createdAt /
+      // inzSubmittedAt. Neither exposes an internal field.
+      nextSteps:            [],
+      timeline: [
+        { kind: 'INZ_SUBMITTED', label: 'Application submitted to Immigration NZ', date: new Date('2026-06-09T00:00:00Z') },
+        { kind: 'CASE_OPENED',   label: 'Case opened',                             date: new Date('2026-06-01T00:00:00Z') },
+      ],
       // Decoy forbidden fields the picker MUST drop:
       notes:                'INTERNAL NOTES — leak detector',
       riskLevel:            'HIGH',
@@ -85,6 +123,15 @@ describe('PortalService.getMyCase', () => {
       assignedFinance:      null,
       inzApplicationNumber: 'VRC-2026-NZL-12345',
       inzSubmittedAt:       new Date('2026-06-09T00:00:00Z'),
+      // Added after this spec was written. Both are DERIVED from already-
+      // whitelisted fields (no new data source): nextSteps is the client
+      // to-do panel; timeline is labels+dates built from case.createdAt /
+      // inzSubmittedAt. Neither exposes an internal field.
+      nextSteps:            [],
+      timeline: [
+        { kind: 'INZ_SUBMITTED', label: 'Application submitted to Immigration NZ', date: new Date('2026-06-09T00:00:00Z') },
+        { kind: 'CASE_OPENED',   label: 'Case opened',                             date: new Date('2026-06-01T00:00:00Z') },
+      ],
     });
 
     // WHERE clause derives the case from the JWT-supplied userId
@@ -145,10 +192,13 @@ describe('PortalService.getMyCase', () => {
     }
 
     // Whitelist is exhaustive — exactly these keys, nothing else.
+    // Exhaustive allow-list — this is the leak guard, so it must stay complete.
+    // 'nextSteps' and 'timeline' are derived client-facing panels added later;
+    // no internal field (notes/riskLevel/*Id/inzSubmissionNotes/...) may appear.
     expect(Object.keys(result).sort()).toEqual([
       'assignedConsultant', 'assignedFinance', 'assignedLia', 'assignedSupport',
       'createdAt', 'id', 'inzApplicationNumber', 'inzSubmittedAt',
-      'stage', 'status', 'updatedAt',
+      'nextSteps', 'stage', 'status', 'timeline', 'updatedAt',
     ]);
   });
 });

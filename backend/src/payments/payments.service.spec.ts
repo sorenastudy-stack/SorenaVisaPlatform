@@ -581,11 +581,14 @@ describe('PaymentsService.createCustomLinkForCase', () => {
 
     // Stripe was called with (leadId, caseId, amountCents, currency).
     expect(stripe.createCustomAmountPaymentLink).toHaveBeenCalledTimes(1);
+    // 5th arg = invoiceId (c62e164, portal invoice pay-link auto-reconciliation);
+    // undefined here because this call is not tied to an invoice.
     expect(stripe.createCustomAmountPaymentLink).toHaveBeenCalledWith(
       'lead-from-case',
       'case-99',
       7500,
       'nzd',
+      undefined,
     );
 
     // Returned shape includes the resolved URL + the amount/currency
@@ -622,6 +625,7 @@ describe('PaymentsService.createCustomLinkForCase', () => {
       'case-1',
       5000,
       'nzd',
+      undefined, // invoiceId — not an invoice-linked payment
     );
   });
 });
