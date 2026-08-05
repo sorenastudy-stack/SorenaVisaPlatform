@@ -56,43 +56,82 @@ async function fkGraph(prisma: PrismaClient): Promise<Fk[]> {
 }
 
 /**
- * Delete rows from `table` where `col` IN ids, first clearing any child rows
- * that would block it. CASCADE/SET NULL children are Postgres's problem.
+ * The ids of rows in `child` that point at `ids`.
  *
- * `seen` guards against FK cycles (a self-referencing table, or A->B->A) which
- * would otherwise recurse forever.
+ * Tables without an `id` column are skipped by the CALLER using `hasId`, not
+ * caught here: inside a transaction a failed statement aborts the whole block
+ * ("current transaction is aborted"), so a swallowed error would silently kill
+ * every delete that follows it.
  */
+async function childIdsOf(tx: any, child: string, childCol: string, ids: string[]): Promise<string[]> {
+  const rows: Array<{ id: string }> = await tx.$queryRawUnsafe(
+    `SELECT c.id FROM "${child}" c WHERE c."${childCol}" = ANY($1::text[])`, ids,
+  );
+  return rows.map((r) => r.id);
+}
+
+/** Tables that actually have an `id` column, so recursion can skip the rest. */
+async function tablesWithId(prisma: PrismaClient): Promise<Set<string>> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ table_name: string }>>(
+    `SELECT table_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND column_name = 'id'`,
+  );
+  return new Set(rows.map((r) => r.table_name));
+}
+
+/**
+ * Clear everything blocking a delete of `ids` from `table`, WITHOUT deleting
+ * `table`'s own rows.
+ *
+ * Two child kinds matter, and missing either one fails the delete:
+ *
+ *   RESTRICT / NO ACTION — Postgres refuses the parent delete while these
+ *     exist, so they are cleared depth-first (they have blockers of their own).
+ *
+ *   CASCADE — Postgres deletes these for us, but that cascade is itself blocked
+ *     by ITS restricted children. Deleting a fixture provider cascades to its
+ *     programmes, and a programme is RESTRICT-referenced by
+ *     admission_programme_choices, so the delete fails two levels below where
+ *     it was issued. These are recursed into to clear their blockers; the
+ *     cascade rows themselves are left to Postgres.
+ *
+ * `seen` guards against FK cycles (self-references, or A->B->A).
+ */
+async function clearBlockers(
+  tx: any, graph: Fk[], table: string, ids: string[],
+  seen: Set<string>, tally: Record<string, number>, hasId: Set<string>, depth = 0,
+): Promise<void> {
+  if (ids.length === 0 || depth > 8 || seen.has(table)) return;
+  seen.add(table);
+
+  for (const fk of graph.filter((f) => f.parent === table)) {
+    if (fk.child === table) continue; // self-reference
+    if (/RESTRICT|NO ACTION/.test(fk.rule)) {
+      if (hasId.has(fk.child)) {
+        const kids = await childIdsOf(tx, fk.child, fk.childCol, ids);
+        if (kids.length) await clearBlockers(tx, graph, fk.child, kids, seen, tally, hasId, depth + 1);
+      }
+      const n = await tx.$executeRawUnsafe(
+        `DELETE FROM "${fk.child}" WHERE "${fk.childCol}" = ANY($1::text[])`, ids,
+      );
+      if (n > 0) tally[fk.child] = (tally[fk.child] ?? 0) + n;
+    } else if (fk.rule === 'CASCADE' && hasId.has(fk.child)) {
+      const kids = await childIdsOf(tx, fk.child, fk.childCol, ids);
+      if (kids.length) await clearBlockers(tx, graph, fk.child, kids, seen, tally, hasId, depth + 1);
+    }
+  }
+  seen.delete(table);
+}
+
+/** Clear the blockers, then delete the rows themselves. */
 async function deleteBlocking(
   tx: any, graph: Fk[], table: string, col: string, ids: string[],
-  seen: Set<string>, tally: Record<string, number>, depth = 0,
+  seen: Set<string>, tally: Record<string, number>, hasId: Set<string>,
 ): Promise<void> {
-  if (ids.length === 0 || depth > 8) return;
-  const path = `${table}.${col}`;
-  if (seen.has(path)) return;
-  seen.add(path);
-
-  for (const fk of graph.filter((f) => f.parent === table && /RESTRICT|NO ACTION/.test(f.rule))) {
-    if (fk.child === table && fk.childCol === col) continue; // self-reference on the same column
-    // `tx` is the untyped transaction client, so the row type is asserted here
-    // rather than passed as a generic.
-    const childIds: Array<{ id: string }> = await tx.$queryRawUnsafe(
-      `SELECT c.id FROM "${fk.child}" c
-       WHERE c."${fk.childCol}" IN (SELECT p."${col === 'id' ? 'id' : col}" FROM "${table}" p WHERE p."${col}" = ANY($1::text[]))`,
-      ids,
-    ).catch(() => []); // child without an `id` column: handled by the blind delete below
-
-    if (childIds.length > 0) {
-      await deleteBlocking(tx, graph, fk.child, 'id', childIds.map((r) => r.id), seen, tally, depth + 1);
-    }
-    const n = await tx.$executeRawUnsafe(
-      `DELETE FROM "${fk.child}" WHERE "${fk.childCol}" = ANY($1::text[])`, ids,
-    );
-    if (n > 0) tally[fk.child] = (tally[fk.child] ?? 0) + n;
-  }
-
+  if (ids.length === 0) return;
+  await clearBlockers(tx, graph, table, ids, seen, tally, hasId);
   const n = await tx.$executeRawUnsafe(`DELETE FROM "${table}" WHERE "${col}" = ANY($1::text[])`, ids);
   if (n > 0) tally[table] = (tally[table] ?? 0) + n;
-  seen.delete(path);
 }
 
 (async () => {
@@ -122,7 +161,15 @@ async function deleteBlocking(
   });
 
   // RAIL 2 — an imported institution must never be in the delete set.
-  const contaminated = fixtureProviders.filter((p) => p.programmes.some((g) => g.sourceRef != null));
+  //
+  // Matched on the catalogue import's OWN sourceRef format ("ITP:row12",
+  // "PTE:row4", "University:row9") rather than "any non-null sourceRef": specs
+  // legitimately set a sourceRef to prove the edit path cannot rewrite it, and
+  // treating those as imported data made the script abort on its own debris.
+  const IMPORTED = /^(ITP|PTE|University):row\d+/;
+  const contaminated = fixtureProviders.filter((p) =>
+    p.programmes.some((g) => g.sourceRef != null && IMPORTED.test(g.sourceRef)),
+  );
   if (contaminated.length > 0) {
     console.error(`ABORT: ${contaminated.length} provider(s) match the fixture pattern but own imported programmes.`);
     contaminated.slice(0, 5).forEach((p) => console.error(`   ${p.name}`));
@@ -145,10 +192,11 @@ async function deleteBlocking(
   }
 
   const graph = await fkGraph(prisma);
+  const hasId = await tablesWithId(prisma);
   const tally: Record<string, number> = {};
   await prisma.$transaction(async (tx) => {
-    await deleteBlocking(tx, graph, 'education_providers', 'id', fixtureProviders.map((p) => p.id), new Set(), tally);
-    await deleteBlocking(tx, graph, 'users', 'id', fixtureUsers.map((u) => u.id), new Set(), tally);
+    await deleteBlocking(tx, graph, 'education_providers', 'id', fixtureProviders.map((p) => p.id), new Set(), tally, hasId);
+    await deleteBlocking(tx, graph, 'users', 'id', fixtureUsers.map((u) => u.id), new Set(), tally, hasId);
   }, { timeout: 600_000, maxWait: 60_000 });
 
   console.log('\n══════ ROWS DELETED ══════');

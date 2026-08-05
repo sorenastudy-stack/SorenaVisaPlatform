@@ -112,9 +112,12 @@ cross-suite data pollution (passes 4/4 alone on a purged database), unrelated to
 
 ## 7. Known limitations
 
-1. **Bulk activation is API-only.** `POST /providers/:id/curation/activation-bulk` exists and
-   applies the same per-programme guard, but no button surfaces it yet. An institution with 113
-   programmes still needs 113 clicks to go fully live.
+1. **TOP FOLLOW-UP — bulk activation is API-only.** `POST /providers/:id/curation/activation-bulk`
+   exists and applies the same per-programme guard, but no button surfaces it yet. An institution
+   with 113 programmes still needs 113 clicks to go fully live. This is the single biggest
+   usability gap in the phase and the first thing to build next. The endpoint returns per-
+   programme `skipped` entries with reasons (a programme held by a student refuses without
+   `confirm`), so the UI must surface those individually rather than reporting a flat success.
 2. **No optimistic-concurrency check on edit.** Two Owners editing the same programme at once:
    last write wins. Single-Owner today; would need a version column to fix properly.
 3. **`intakeMonths` is edited as a comma-separated string.** Anything outside 1–12 is silently
@@ -185,3 +188,59 @@ WHERE "sourceRef" IS NOT NULL;
 
 The exception-filter change is the one piece with reach beyond this screen. Reverting it is safe:
 no pre-existing endpoint sends `details`, so no other response shape depends on it.
+
+---
+
+## Follow-ups, ranked
+
+| # | Item | Why it matters |
+|---|---|---|
+| **1** | **Bulk-activate button** | API exists, no UI. 113 programmes = 113 clicks today. Must surface per-programme `skipped` reasons, not a flat success. |
+| 2 | Close the **provider-status audit gap** (below) | A contractual state change currently leaves no trace of who made it. |
+| 3 | Show the thumbnail on student-facing Explore cards | Uploads work and are stored; the display wiring belongs to the Explore phase. |
+| 4 | Optimistic-concurrency on edit | Two Owners editing one programme: last write wins. Needs a version column. |
+| 5 | Pagination | 113 rows render fine; thousands would not. |
+
+---
+
+## Defects found and fixed while building
+
+Both were caught by tests written for this phase, not by review.
+
+**1. The edit whitelist was not actually enforced by the service.**
+`UpdateProgrammeDto` listed the editable columns, but `changedFields()` iterated whatever the
+caller passed, so protection rested entirely on `ValidationPipe({ whitelist: true })` stripping
+unknown properties at the HTTP boundary. An integration test that posted
+`{ reviewStatus: 'APPROVED', sourceRef: 'HACKED' }` directly to the service saw both written.
+That mattered because `reviewStatus`/`isActive` are exactly the fields the activation endpoint
+guards with the student-hold check — reaching them through the edit path would have routed around
+that guard entirely, and `sourceRef` is the key the idempotent re-import depends on.
+Fixed by adding `EDITABLE_PROGRAMME_FIELDS` and filtering in the service, so the invariant holds
+independently of pipe configuration. Test: *"the edit path cannot reach the visibility or
+provenance fields"*.
+
+**2. The first version of the error-shape change would have altered nearly every endpoint.**
+The deactivation refusal needs to carry the affected students, but the global exception filter
+flattens every error to `{statusCode, message, timestamp}`. The first implementation opted in on a
+string `error` property — and a test asserting the flat default for a plain
+`BadRequestException('…')` failed, because **Nest populates `error: 'Bad Request'` on its own
+built-in exceptions**. The "opt-in" would therefore have fired for almost every throw in the API,
+silently widening error bodies platform-wide.
+Re-keyed on a `details` object, which Nest never sets, and restricted to 4xx. Tests pin both
+halves: the flat default survives, and 5xx passes nothing through.
+
+---
+
+## Still open: the provider-status audit gap
+
+**Not fixed by this phase.** Changing an institution's `status` (e.g. PENDING → ACTIVE, the
+contractual "we have an agreement" flag) writes **no `crm_event` and no `audit_log` row**. This
+surfaced during the production import on 2026-08-05, when "Future Skills" moved to ACTIVE during
+the import window and neither table recorded who did it or when — the only evidence was the row's
+own `updatedAt`.
+
+This is more consequential than it looks: `provider.status === 'ACTIVE'` is the third condition in
+the matching gate, so it is a control over what students can see, and it is the one with no trail.
+The programme-level actions built in this phase are audited precisely so they do not extend the
+gap, but closing it means adding an event emit to `ProvidersService.updateProvider` — deliberately
+out of scope here to keep this phase reviewable.
