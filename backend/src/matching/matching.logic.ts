@@ -67,6 +67,23 @@ export interface ProgrammeForMatch {
   level: QualLevel;
   institutionType?: InstitutionType | null; // provider.institutionType (Phase 34)
   tuitionFeeNZD?: number | null;
+  // PR-EXPLORE (Round 3, HYBRID scoping — Owner decision 2026-08-05).
+  //
+  // The student's tuition at THEIR nationality's rate, resolved server-side by
+  // resolveStudentTuition() from ProviderTuition (falling back to tuitionFeeNZD).
+  // Supplied by the caller; ABSENT/undefined means "not resolved" and the engine
+  // behaves exactly as before.
+  //
+  // DELIBERATE ASYMMETRY — read before "fixing" it:
+  //   • The HARD BUDGET FILTER uses this resolved figure, so a student is never
+  //     excluded from a programme they can genuinely afford at their own rate.
+  //   • The SOFT FIT SCORE and its whyThisFits text keep using the flat
+  //     tuitionFeeNZD, so scores stay comparable ACROSS students and the frozen
+  //     RecommendationItem.fitScore snapshots stay reproducible.
+  // The two therefore disagree on purpose. Making the fit score nationality-aware
+  // is option 2 and is a SEPARATE, deliberate change requiring its own
+  // freeze-then-change pass — do not fold it in silently.
+  resolvedTuitionNZD?: number | null;
   intakeMonths: number[];
   city?: string | null;
   req?: {
@@ -126,7 +143,13 @@ export function passesHardFilter(
   if (!levelMeets(c.currentHighestLevel, p.req?.minQualificationLevel)) return false;
   if (c.gpaBand != null && p.req?.minGpa != null && c.gpaBand < p.req.minGpa) return false;
   if (c.ieltsEquivalent != null && p.req?.englishOverallMin != null && c.ieltsEquivalent < p.req.englishOverallMin) return false;
-  if (c.tuitionBudgetNZD != null && p.tuitionFeeNZD != null && p.tuitionFeeNZD > c.tuitionBudgetNZD) return false;
+  // PR-EXPLORE (Round 3, HYBRID) — budget gate uses the student's OWN resolved
+  // tuition when the caller supplied one, else the flat fee. Absent → unchanged
+  // behaviour, so the golden matching snapshots stay byte-identical.
+  // The soft score below deliberately keeps using p.tuitionFeeNZD — see the
+  // resolvedTuitionNZD comment on ProgrammeForMatch.
+  const budgetFee = p.resolvedTuitionNZD ?? p.tuitionFeeNZD;
+  if (c.tuitionBudgetNZD != null && budgetFee != null && budgetFee > c.tuitionBudgetNZD) return false;
   return true;
 }
 
