@@ -101,3 +101,6 @@ _*_smoke.*
 
 # Nightly mirror run logs (scripts/mirror-local-run.sh writes here).
 scripts/logs/
+
+# PR-IMPORT — generated local review artifact (regenerate: scripts/catalogue-review-export.ts)
+backend/docs/catalogue-review.html

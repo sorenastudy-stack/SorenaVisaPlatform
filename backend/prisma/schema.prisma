@@ -2203,6 +2203,9 @@ model EducationProvider {
   // (the legal body) vs `name` = the recognisable brand.
   institutionType      InstitutionType?
   legalEntityName      String?
+  // PR-IMPORT — source "Brand": the short display name (e.g. "Ara" for "Ara
+  // Institute of Canterbury"). ITP/PTE files only; universities publish one name.
+  brand                String?
   country              String           @default("NZ")
   city                 String?
   websiteUrl           String?
@@ -2302,6 +2305,32 @@ model EducationProgramme {
   // and the programme detail page. Stores the object key/URL produced by the normal
   // signed-upload path (image mime-types only, size-capped); never a raw client URL.
   coverImageUrl         String?
+  // PR-IMPORT — verbatim source text. Kept ALONGSIDE the structured fields, never
+  // instead of them: the source states fees conditionally often enough
+  // ("$13,286 per 60 credits or $26,572 per 120 credits") that flattening to one
+  // number would quote a price the institution never published. tuitionFeeNZD is
+  // populated only when the source states one unambiguous, plausible figure;
+  // tuitionParseNote records why it was left null otherwise.
+  tuitionFeeRaw         String?
+  tuitionParseNote      String?
+  // Long free-text requirement columns. ProgrammeRequirement keeps the STRUCTURED
+  // matching values (minGpa, englishOverallMin); these hold what the institution
+  // actually published, which is richer than the matcher needs.
+  academicPrerequisites String?
+  englishRequirementRaw String?
+  otherRequirements     String?
+  // Intake columns as published. ProgrammeIntake holds the structured intakes.
+  remaining2026Intakes  String?
+  published2027Intakes  String?
+  // ITP file only — extra 2027 planning columns absent from PTE/University.
+  projected2027Intakes  String?
+  intakeBasis2027       String?
+  intakes2027Planning   String?
+  // PR-IMPORT — the institution's OWN Subject Area label, verbatim from its source
+  // workbook ("Subject Area" / "Subject Area (Faculty)"). Per-institution, NOT a
+  // shared taxonomy: the curation tabs are simply the distinct values a given
+  // institution's own rows contain. Blank in the source → grouped as "Unspecified".
+  subjectAreaRaw        String?
   // PR-EXPLORE — Staff/Owner manual override for the "Related videos" block. When
   // NON-EMPTY these replace the ContentMatchingAgent's picks entirely (never merged),
   // so a corrected match cannot have the agent's choices reappear beside it. Stores
@@ -2323,6 +2352,7 @@ model EducationProgramme {
   admissionChoices    AdmissionProgrammeChoice[]
   scholarships        ProviderScholarship[]
   tuitions            ProviderTuition[] // PR-EXPLORE — nationality-scoped tuition rates
+  articles            ProgrammeArticle[] // PR-CURATION — title+URL reading list
   studyFields         ProgrammeStudyField[]
   intakes             ProgrammeIntake[]
   // PR-RECS-1 — persisted recommendation-list snapshots referencing this
@@ -2485,6 +2515,24 @@ model ProviderTuition {
   @@index([nationality])
   @@index([programmeId])
   @@map("provider_tuitions")
+}
+
+// PR-CURATION — related reading for a programme, shown on the student detail page.
+// Owner decision: a simple ordered list of title + URL pairs. No rich text.
+model ProgrammeArticle {
+  id          String   @id @default(cuid())
+  programmeId String
+  title       String
+  url         String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+
+  programme EducationProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  @@index([programmeId])
+  @@map("programme_articles")
 }
 
 model ProgrammeRequirement {
