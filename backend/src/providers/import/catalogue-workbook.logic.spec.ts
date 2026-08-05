@@ -1,4 +1,4 @@
-import { parseTuition, parseNzqfLevel, parseYear, headerIndex, providerTypeFor, subjectAreasFor, UNSPECIFIED_SUBJECT_AREA, type ParsedProgrammeRow } from './catalogue-workbook.logic';
+import { parseTuition, parseNzqfLevel, parseYear, headerIndex, providerTypeFor, subjectAreasFor, aliasedProviderName, UNSPECIFIED_SUBJECT_AREA, type ParsedProgrammeRow } from './catalogue-workbook.logic';
 
 describe('parseTuition — three source formats, one parser', () => {
   it('parses the ITP "$" format', () => {
@@ -107,6 +107,34 @@ describe('subjectAreasFor — per-institution tabs, no shared taxonomy', () => {
   it('keeps blank-subject-area rows visible under "Unspecified"', () => {
     const rows = [row('AGI', UNSPECIFIED_SUBJECT_AREA), row('AGI', UNSPECIFIED_SUBJECT_AREA)];
     expect(subjectAreasFor(rows, 'AGI')).toEqual([{ label: 'Unspecified', count: 2 }]);
+  });
+});
+
+describe('aliasedProviderName — institutions already tracked under another name', () => {
+  it('maps a workbook name onto the platform\'s existing provider', () => {
+    expect(aliasedProviderName('Southern Institute of Technology')).toBe('Southern Institute of Technology (SIT)');
+    expect(aliasedProviderName('Waikato Institute of Technology')).toBe('Waikato Institute of Technology (Wintec)');
+    expect(aliasedProviderName('Whitireia and WelTec Polytechnic')).toBe('Whitireia and WelTec (Whitireia / WelTec)');
+  });
+
+  it('ignores punctuation and casing on both sides', () => {
+    expect(aliasedProviderName('ICL GRADUATE BUSINESS SCHOOL (ICL Education Limited)')).toBe('ICL');
+    expect(aliasedProviderName('  Nelson Marlborough  Institute of Technology  ')).toBe('Nelson Marlborough Institute of Technology (NMIT)');
+  });
+
+  // The two the Owner explicitly ruled out — regressions here would silently
+  // merge or split real institutions on production.
+  it('does NOT alias NZSE onto Future Skills (different institutions)', () => {
+    expect(aliasedProviderName('New Zealand Skills and Education College (NZSE)')).toBeNull();
+  });
+
+  it('does NOT alias the combined Manukau/Unitec row onto either existing provider', () => {
+    expect(aliasedProviderName('Manukau Institute of Technology and Unitec')).toBeNull();
+  });
+
+  it('returns null for a genuinely new institution', () => {
+    expect(aliasedProviderName('Ara Institute of Canterbury')).toBeNull();
+    expect(aliasedProviderName('Some Brand New College')).toBeNull();
   });
 });
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventsService, EventSource } from '../../events/events.service';
 import {
+  aliasedProviderName,
   parseCatalogueWorkbook,
   providerTypeFor,
   type ParsedProgrammeRow,
@@ -116,6 +117,18 @@ export class CatalogueImportService {
     const institutionNames = [...new Set(all.map((r) => r.institutionName))];
     for (const name of institutionNames) {
       if (providerByNorm.has(norm(name))) { report.providersMatched++; continue; }
+      // The platform may already track this institution under a different name
+      // (workbook "Southern Institute of Technology" vs existing "… (SIT)").
+      // Point the workbook name at the EXISTING row instead of creating a
+      // duplicate. Only an explicitly confirmed alias counts — see
+      // PROVIDER_NAME_ALIASES.
+      const alias = aliasedProviderName(name);
+      const aliasId = alias ? providerByNorm.get(norm(alias)) : undefined;
+      if (aliasId) {
+        providerByNorm.set(norm(name), aliasId);
+        report.providersMatched++;
+        continue;
+      }
       const sample = all.find((r) => r.institutionName === name)!;
       report.providersCreated++;
       if (dryRun) {

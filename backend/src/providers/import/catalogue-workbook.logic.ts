@@ -258,6 +258,56 @@ export function providerTypeFor(sourceFile: SourceFile): 'UNIVERSITY' | 'POLYTEC
   return sourceFile === 'University' ? 'UNIVERSITY' : sourceFile === 'ITP' ? 'POLYTECHNIC' : 'COLLEGE';
 }
 
+/**
+ * PR-IMPORT — institutions the platform ALREADY tracks under a different name.
+ *
+ * The importer matches an institution by exact normalised name. That is
+ * deliberately strict, but it means a trailing acronym is enough to miss: the
+ * workbook says "Southern Institute of Technology" while the platform has
+ * "Southern Institute of Technology (SIT)". Without this map the import would
+ * create a SECOND provider for an institution that already exists, leaving
+ * programmes on the new row while any existing agreements and applications stay
+ * on the old one.
+ *
+ * Keys are the workbook's name, values the platform's existing provider name,
+ * both verbatim; `aliasedProviderName` normalises each side so punctuation and
+ * casing cannot cause a miss. Every pair here was confirmed by hand against
+ * production — this is an allow-list, not fuzzy matching, precisely so a
+ * coincidental name overlap can never silently merge two real institutions.
+ *
+ * Deliberately NOT included:
+ *   * "New Zealand Skills and Education College (NZSE)" vs the platform's
+ *     "Future Skills" — superficially similar, different institutions.
+ *   * "Manukau Institute of Technology and Unitec" — the workbook treats these
+ *     as one combined institution, the platform tracks MIT and Unitec
+ *     separately. Owner decision: let it create a new third provider rather
+ *     than force its programmes onto either existing record.
+ */
+export const PROVIDER_NAME_ALIASES: Record<string, string> = {
+  'Nelson Marlborough Institute of Technology': 'Nelson Marlborough Institute of Technology (NMIT)',
+  'Southern Institute of Technology': 'Southern Institute of Technology (SIT)',
+  'Waikato Institute of Technology': 'Waikato Institute of Technology (Wintec)',
+  'Western Institute of Technology at Taranaki': 'Western Institute of Technology at Taranaki (WITT)',
+  'Whitireia and WelTec Polytechnic': 'Whitireia and WelTec (Whitireia / WelTec)',
+  'ICL Graduate Business School (ICL Education Limited)': 'ICL',
+};
+
+/** Shared with the import service so both sides normalise identically. */
+export const normaliseProviderName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * The existing provider name a workbook institution should attach to, or null
+ * if it is a genuinely new institution. Matching is on the normalised form, so
+ * "(ICL Education Limited)" and "ICL Education Limited" resolve alike.
+ */
+export function aliasedProviderName(workbookName: string): string | null {
+  const want = normaliseProviderName(workbookName);
+  for (const [from, to] of Object.entries(PROVIDER_NAME_ALIASES)) {
+    if (normaliseProviderName(from) === want) return to;
+  }
+  return null;
+}
+
 /** The distinct subject-area tabs an institution would show, largest first. */
 export function subjectAreasFor(rows: ParsedProgrammeRow[], institutionName: string): Array<{ label: string; count: number }> {
   const counts = new Map<string, number>();
