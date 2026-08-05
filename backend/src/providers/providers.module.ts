@@ -5,12 +5,14 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { ProgrammeImportService } from './import/programme-import.service';
+import { PricingImportService } from './import/pricing-import.service';
 import { WebSyncModule } from './websync/websync.module';
+import { R2Module } from '../common/r2/r2.module';
 
 @Module({
-  imports: [PrismaModule, WebSyncModule], // WebSyncModule exports CatalogSyncService (sync-now)
+  imports: [PrismaModule, WebSyncModule, R2Module], // WebSyncModule exports CatalogSyncService (sync-now)
   controllers: [ProvidersController],
-  providers: [ProvidersService, EventsService, RolesGuard, ProgrammeImportService],
+  providers: [ProvidersService, EventsService, RolesGuard, ProgrammeImportService, PricingImportService],
   exports: [ProvidersService],
 })
 export class ProvidersModule {}

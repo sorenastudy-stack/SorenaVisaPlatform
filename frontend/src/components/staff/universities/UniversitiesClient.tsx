@@ -9,6 +9,8 @@ import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
 import { CountryPicker } from '@/components/common/CountryPicker';
 import { getCountryName, countryCodeToFlagEmoji } from '@/lib/country-codes';
+import { PricingImportSection } from './PricingImportSection';
+import { ProgrammeCoversSection } from './ProgrammeCoversSection';
 
 // PR-UNIVERSITIES — Owner-managed institutional catalog: providers with their
 // commission terms + bonuses, and per-nationality scholarships (optionally scoped
@@ -22,7 +24,7 @@ const AMOUNT_TYPES = ['PERCENTAGE', 'FIXED'] as const;
 const LEVELS = ['DIPLOMA', 'GRADUATE_CERTIFICATE', 'GRADUATE_DIPLOMA', 'BACHELOR', 'POSTGRADUATE_CERTIFICATE', 'POSTGRADUATE_DIPLOMA', 'MASTER', 'PHD'] as const;
 const levelLabel = (l: string) => l.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
-interface Programme { id: string; name: string; level: string }
+interface Programme { id: string; name: string; level: string; coverImageUrl?: string | null }
 interface Provider {
   id: string; name: string; providerType: string; country: string; city: string | null; websiteUrl: string | null;
   catalogueUrl: string | null;
@@ -240,6 +242,8 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
       </CardContent></Card>
 
       {isEdit && providerId && <ImportProgrammesSection providerId={providerId} />}
+      {isEdit && providerId && <PricingImportSection providerId={providerId} />}
+      {isEdit && providerId && <ProgrammeCoversSection programmes={programmes} />}
       {isEdit && providerId && <ScholarshipsSection providerId={providerId} programmes={programmes} />}
     </div>
   );

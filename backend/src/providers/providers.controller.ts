@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ProvidersService } from './providers.service';
+import { PricingImportService } from './import/pricing-import.service';
 import { CreateProviderDto } from './dto/create-provider.dto';
 import { UpdateProviderDto } from './dto/update-provider.dto';
 import { UpdateAgreementDto } from './dto/update-agreement.dto';
@@ -43,12 +44,15 @@ const PROVIDER_ADMIN = ['OWNER', 'SUPER_ADMIN'] as const;
 @Controller('providers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProvidersController {
-  constructor(private readonly providersService: ProvidersService) {}
+  constructor(
+    private readonly providersService: ProvidersService,
+    private readonly pricingImport: PricingImportService,
+  ) {}
 
   @Post()
   @Roles(...PROVIDER_ADMIN)
   create(@Body() dto: CreateProviderDto, @Req() req: any) {
-    return this.providersService.createProvider(dto, req.user?.id ?? null);
+    return this.providersService.createProvider(dto, req.user?.userId ?? null);
   }
 
   @Get()
@@ -140,6 +144,49 @@ export class ProvidersController {
     return this.providersService.updateAgreement(providerId, dto);
   }
 
+  // ── Bulk pricing uploads (PR-EXPLORE Rounds 2+3) — Owner-only ──────────
+  // Two sheets per institution, uploaded together: scholarships and tuition,
+  // both grouped by country with the country names detected from the sheet.
+  // ?dry=true previews (detected countries + flagged rows) WITHOUT writing —
+  // the admin screen always previews before committing.
+  // The single-row forms below remain for one-off corrections.
+  @Post(':id/scholarships/import')
+  @Roles(...PROVIDER_ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  importScholarships(
+    @Param('id') providerId: string,
+    @UploadedFile() file: { buffer?: Buffer; originalname?: string; size?: number; mimetype?: string },
+    @Query('dry') dry: string | undefined,
+    @Req() req: any,
+  ) {
+    return this.pricingImport.importScholarships(providerId, file, dry === 'true', req.user?.userId ?? null);
+  }
+
+  @Post(':id/tuitions/import')
+  @Roles(...PROVIDER_ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  importTuitions(
+    @Param('id') providerId: string,
+    @UploadedFile() file: { buffer?: Buffer; originalname?: string; size?: number; mimetype?: string },
+    @Query('dry') dry: string | undefined,
+    @Req() req: any,
+  ) {
+    return this.pricingImport.importTuitions(providerId, file, dry === 'true', req.user?.userId ?? null);
+  }
+
+  // PR-EXPLORE (Round 2) — Owner-uploaded programme cover image (Explore cards +
+  // detail page). Image mime-types only, 2 MB cap, key derived server-side.
+  @Post('programmes/:programmeId/cover-image')
+  @Roles(...PROVIDER_ADMIN)
+  @UseInterceptors(FileInterceptor('file'))
+  setProgrammeCoverImage(
+    @Param('programmeId') programmeId: string,
+    @UploadedFile() file: { buffer?: Buffer; originalname?: string; mimetype?: string; size?: number },
+    @Req() req: any,
+  ) {
+    return this.providersService.setProgrammeCoverImage(programmeId, file, req.user?.userId ?? null);
+  }
+
   // ── Scholarships (PR-UNIVERSITIES) — Owner-only writes ─────────────────
   @Get(':id/scholarships')
   @Roles(...CATALOG_READ)
@@ -154,7 +201,7 @@ export class ProvidersController {
     @Body() dto: CreateScholarshipDto,
     @Req() req: any,
   ) {
-    return this.providersService.addScholarship(providerId, dto, req.user?.id ?? null);
+    return this.providersService.addScholarship(providerId, dto, req.user?.userId ?? null);
   }
 
   @Patch('scholarships/:scholarshipId')
@@ -164,7 +211,7 @@ export class ProvidersController {
     @Body() dto: UpdateScholarshipDto,
     @Req() req: any,
   ) {
-    return this.providersService.updateScholarship(scholarshipId, dto, req.user?.id ?? null);
+    return this.providersService.updateScholarship(scholarshipId, dto, req.user?.userId ?? null);
   }
 
   @Delete('scholarships/:scholarshipId')
@@ -173,7 +220,7 @@ export class ProvidersController {
     @Param('scholarshipId') scholarshipId: string,
     @Req() req: any,
   ) {
-    return this.providersService.deleteScholarship(scholarshipId, req.user?.id ?? null);
+    return this.providersService.deleteScholarship(scholarshipId, req.user?.userId ?? null);
   }
 
   @Patch('programmes/:programmeId/approve')
@@ -184,7 +231,7 @@ export class ProvidersController {
   ) {
     return this.providersService.approveProgramme(
       programmeId,
-      req.user?.id ?? null,
+      req.user?.userId ?? null,
     );
   }
 
@@ -196,7 +243,7 @@ export class ProvidersController {
   ) {
     return this.providersService.rejectProgramme(
       programmeId,
-      req.user?.id ?? null,
+      req.user?.userId ?? null,
     );
   }
 
@@ -211,25 +258,25 @@ export class ProvidersController {
   @Patch('change-proposals/:id/approve')
   @Roles(...CATALOG_ADMIN)
   approveChange(@Param('id') id: string, @Req() req: any) {
-    return this.providersService.approveChange(id, req.user?.id ?? null);
+    return this.providersService.approveChange(id, req.user?.userId ?? null);
   }
 
   @Patch('change-proposals/:id/reject')
   @Roles(...CATALOG_ADMIN)
   rejectChange(@Param('id') id: string, @Req() req: any) {
-    return this.providersService.rejectChange(id, req.user?.id ?? null);
+    return this.providersService.rejectChange(id, req.user?.userId ?? null);
   }
 
   @Patch('candidates/:id/approve')
   @Roles(...CATALOG_ADMIN)
   approveCandidate(@Param('id') id: string, @Req() req: any) {
-    return this.providersService.approveCandidate(id, req.user?.id ?? null);
+    return this.providersService.approveCandidate(id, req.user?.userId ?? null);
   }
 
   @Patch('candidates/:id/reject')
   @Roles(...CATALOG_ADMIN)
   rejectCandidate(@Param('id') id: string, @Req() req: any) {
-    return this.providersService.rejectCandidate(id, req.user?.id ?? null);
+    return this.providersService.rejectCandidate(id, req.user?.userId ?? null);
   }
 
   @Post('programmes/:programmeId/requirements')

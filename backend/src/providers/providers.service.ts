@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService, EventSource } from '../events/events.service';
 import { ProgrammeImportService } from './import/programme-import.service';
+import { R2Service } from '../common/r2/r2.service';
 import { CatalogSyncService } from './websync/catalog-sync.service';
 import { changeProposalToUpdate, type ChangedFields } from './websync/catalog-sync.logic';
 import { CreateProviderDto } from './dto/create-provider.dto';
@@ -34,7 +35,55 @@ export class ProvidersService {
     private eventsService: EventsService,
     private programmeImport: ProgrammeImportService,
     private catalogSync: CatalogSyncService,
+    private r2: R2Service,
   ) {}
+
+  // PR-EXPLORE (Round 2) — Owner-uploaded programme cover image, shown on the
+  // Explore map result cards and the programme detail page.
+  // Security mirrors the documents feature: image mime-types ONLY, size-capped,
+  // stored in R2 under a server-derived key (never a client-supplied path), and
+  // the DB holds the KEY — not a public client URL — so access stays brokered.
+  async setProgrammeCoverImage(
+    programmeId: string,
+    file: { buffer?: Buffer; originalname?: string; mimetype?: string; size?: number } | undefined,
+    actorId: string | null,
+  ) {
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
+    const MAX = 2 * 1024 * 1024; // 2 MB — a card image, not a document
+    if (!file?.buffer) throw new BadRequestException('No image uploaded.');
+    if (!file.mimetype || !ALLOWED.includes(file.mimetype)) {
+      throw new BadRequestException('Please upload a JPG, PNG or WebP image.');
+    }
+    if ((file.size ?? file.buffer.length) > MAX) {
+      throw new BadRequestException('That image is too large. Please keep it under 2 MB.');
+    }
+    const programme = await this.prisma.educationProgramme.findUnique({
+      where: { id: programmeId },
+      select: { id: true, name: true, providerId: true },
+    });
+    if (!programme) throw new NotFoundException('Programme not found.');
+
+    const ext = file.mimetype === 'image/png' ? 'png' : file.mimetype === 'image/webp' ? 'webp' : 'jpg';
+    const key = `programme-covers/${programme.providerId}/${programmeId}.${ext}`;
+    await this.r2.putObject(key, file.buffer, file.mimetype);
+
+    const updated = await this.prisma.educationProgramme.update({
+      where: { id: programmeId },
+      data: { coverImageUrl: key },
+      select: { id: true, coverImageUrl: true },
+    });
+
+    await this.eventsService.emit(
+      'PROGRAMME_COVER_IMAGE_SET',
+      'EDUCATION_PROGRAMME',
+      programmeId,
+      null,
+      EventSource.USER,
+      actorId,
+      { programmeName: programme.name, key, bytes: file.size ?? file.buffer.length },
+    );
+    return updated;
+  }
 
   // PR-CATALOG-1 — Owner-panel Excel import for ONE institution. Runs the shared
   // importer with a fixed providerId → all programmes land PENDING, source
