@@ -280,3 +280,62 @@ It writes **only** `latitude`, `longitude`, `geocodedAt` and `geocodeSource` on
 
 **It does not touch production and must never be run against it.** On production, activation is
 the Owner's decision, made on the curation screen, one programme at a time.
+
+---
+
+## Addendum — updated PTE workbook (2026-08-06)
+
+An updated `NZ_International_PTE_Programmes_2026_2027.xlsx` added two institutions the original
+had missed. The pre-overwrite original was recovered from commit `7ffd2e5` and kept alongside as
+`…_ORIGINAL.xlsx` so the two can be diffed rather than trusted.
+
+**Imported:** 4 Future Skills programmes + 2 Bridge International College programmes.
+Production went 95 → **96** providers and 1,123 → **1,129** programmes. All 6 landed PENDING and
+inactive; nothing became student-visible.
+
+**Future Skills** got a seventh alias (`Future Skills Academy Limited` → `Future Skills`) so the
+4 programmes filled the empty record the platform already had, instead of creating a duplicate.
+
+**Bridge is a NEW provider, deliberately not merged into ICL.** The workbook's own note says it is
+"part of ICL Education Group", but it holds its own NZQA Provider ID (737569001). Separate
+registration = separate legal entity, the same test the original 6 aliases were resolved by.
+
+### FOLLOW-UP: two Seafield programmes have corrected data waiting
+
+The updated workbook also **rewrote two existing Seafield School of English rows** — renaming them
+from "… (Academic) Level 5" to "… (Academic)" with the level moved into the strand, plus corrected
+2026/2027 intakes, a fee year, and a `Single-source → Verified` upgrade.
+
+They were **deliberately deferred**, not missed. The importer is create-if-absent and keys partly
+on programme name, so importing them would have produced four rows for two real courses with the
+corrections stranded on the new copies. The deferral lives in code as `DEFERRED_ROWS` in
+`catalogue-workbook.logic.ts`, and every parse run reports what it skipped — it cannot quietly
+disappear.
+
+**To close it:** teach the importer to update an existing row (match on provider + level + strand
+rather than name), then remove the two `DEFERRED_ROWS` entries. That is a real behaviour change to
+a service that has never updated anything, so it deserves its own tested pass. Small, and safe to
+do after launch.
+
+### FOLLOW-UP: 373 programmes are labelled more confidently than their source
+
+Found while checking the new rows' flags. The import mapped **any** non-empty "Verification
+Status" cell to `VERIFIED`:
+
+```ts
+verificationStatus: row.verificationStatus ? 'VERIFIED' : null   // ← the bug
+```
+
+The source does not use tidy labels — it writes a sentence whose first words carry the confidence
+("Single-source (fee/IELTS from IDP only…)"). Across the three workbooks: **471 Verified,
+379 Single-source, 278 Double-checked**. Every one of the 379 was stored as fully VERIFIED.
+
+Fixed going forward by `parseVerificationStatus()`, which maps Single-source → `NEEDS_RECHECK`,
+Verified/Double-checked → `VERIFIED`, and anything unrecognised → `NEEDS_RECHECK` (fail toward
+"look at this", never toward "trusted"). The 6 new rows were corrected on production —
+4 are now NEEDS_RECHECK.
+
+**The other ~373 pre-existing rows are still mislabelled.**
+`scripts/backfill-verification-status.ts` recomputes the column from the workbooks and is ready to
+run (dry-run by default, `--confirm-production` required, touches one column and nothing else).
+Held pending Owner sign-off because it rewrites a third of the catalogue's confidence metadata.

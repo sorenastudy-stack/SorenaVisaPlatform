@@ -104,3 +104,6 @@ scripts/logs/
 
 # PR-IMPORT — generated local review artifact (regenerate: scripts/catalogue-review-export.ts)
 backend/docs/catalogue-review.html
+
+# Excel lock files — created while a workbook is open, never ours to commit
+~$*.xlsx

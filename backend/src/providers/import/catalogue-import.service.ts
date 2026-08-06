@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { EventsService, EventSource } from '../../events/events.service';
 import {
   aliasedProviderName,
+  parseVerificationStatus,
   parseCatalogueWorkbook,
   providerTypeFor,
   type ParsedProgrammeRow,

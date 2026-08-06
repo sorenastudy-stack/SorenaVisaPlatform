@@ -1,4 +1,4 @@
-import { parseTuition, parseNzqfLevel, parseYear, headerIndex, providerTypeFor, subjectAreasFor, aliasedProviderName, UNSPECIFIED_SUBJECT_AREA, type ParsedProgrammeRow } from './catalogue-workbook.logic';
+import { parseVerificationStatus, parseTuition, parseNzqfLevel, parseYear, headerIndex, providerTypeFor, subjectAreasFor, aliasedProviderName, isDeferredRow, DEFERRED_ROWS, UNSPECIFIED_SUBJECT_AREA, type ParsedProgrammeRow } from './catalogue-workbook.logic';
 
 describe('parseTuition — three source formats, one parser', () => {
   it('parses the ITP "$" format', () => {
@@ -136,6 +136,46 @@ describe('aliasedProviderName — institutions already tracked under another nam
     expect(aliasedProviderName('Ara Institute of Canterbury')).toBeNull();
     expect(aliasedProviderName('Some Brand New College')).toBeNull();
   });
+
+  // Added Aug 2026. The platform tracked "Future Skills" long before the
+  // catalogue import; without this the workbook's legal name would create a
+  // SECOND institution beside the one already in use.
+  it('maps the workbook legal name onto the existing Future Skills record', () => {
+    expect(aliasedProviderName('Future Skills Academy Limited')).toBe('Future Skills');
+  });
+
+  it('does NOT alias Bridge onto ICL despite the shared parent group', () => {
+    // Separate NZQA Provider IDs (737569001 vs ICL's own) = separate legal
+    // entities. "Part of ICL Education Group" is a parent relationship, not the
+    // same institution under two names.
+    expect(aliasedProviderName('Bridge International College NZ Limited')).toBeNull();
+  });
+});
+
+describe('isDeferredRow — rows intentionally held back', () => {
+  it('defers both revised Seafield rows', () => {
+    expect(isDeferredRow('Seafield School of English Limited', 'New Zealand Certificate in English Language (Academic)', 'Level 4')).toBe(true);
+    expect(isDeferredRow('Seafield School of English Limited', 'New Zealand Certificate in English Language (Academic)', 'Level 5')).toBe(true);
+  });
+
+  it('accepts a bare level number as well as "Level N"', () => {
+    expect(isDeferredRow('Seafield School of English Limited', 'New Zealand Certificate in English Language (Academic)', '5')).toBe(true);
+    expect(isDeferredRow('Seafield School of English Limited', 'New Zealand Certificate in English Language (Academic)', 5)).toBe(true);
+  });
+
+  it('does NOT defer the OLD Seafield names already imported', () => {
+    // The originals carry the level inside the name; only the REWRITTEN rows
+    // are deferred, so nothing already in the catalogue is affected.
+    expect(isDeferredRow('Seafield School of English Limited', 'New Zealand Certificate in English Language (Academic) Level 5', 'Level 5')).toBe(false);
+  });
+
+  it('does not defer the same programme name at another institution', () => {
+    expect(isDeferredRow('Bridge International College NZ Limited', 'New Zealand Certificate in English Language (Academic)', 'Level 4')).toBe(false);
+  });
+
+  it('defers exactly two rows and no more', () => {
+    expect(DEFERRED_ROWS).toHaveLength(2);
+  });
 });
 
 describe('parseTuition — refinements found by running the real workbooks', () => {
@@ -158,5 +198,38 @@ describe('parseTuition — refinements found by running the real workbooks', () 
     for (const v of ['Not published', 'Not verified this session', 'Not disclosed as a fixed figure']) {
       expect(parseTuition(v)).toMatchObject({ amount: null, note: 'no numeric amount found' });
     }
+  });
+});
+
+describe('parseVerificationStatus — never claim more confidence than the source', () => {
+  it('maps "Single-source" to NEEDS_RECHECK, not VERIFIED', () => {
+    // 379 of 1,128 workbook rows lead with this. The import used to record them
+    // all as VERIFIED, over-stating the confidence of a third of the catalogue.
+    expect(parseVerificationStatus('Single-source (fee/IELTS from IDP only; official page did not render)')).toBe('NEEDS_RECHECK');
+    expect(parseVerificationStatus('Single source')).toBe('NEEDS_RECHECK');
+  });
+
+  it('maps the two genuine-confirmation phrasings to VERIFIED', () => {
+    expect(parseVerificationStatus('Verified (NZQF Level 9 confirmed on studyspy.ac.nz)')).toBe('VERIFIED');
+    expect(parseVerificationStatus('Double-checked: live programme page + official fee schedule')).toBe('VERIFIED');
+  });
+
+  it('maps an explicit Unverified', () => {
+    expect(parseVerificationStatus('Unverified — could not reach the site')).toBe('UNVERIFIED');
+  });
+
+  it('fails toward "look at this", never toward "trusted"', () => {
+    expect(parseVerificationStatus('some wording nobody anticipated')).toBe('NEEDS_RECHECK');
+  });
+
+  it('blank stays null rather than becoming a claim', () => {
+    expect(parseVerificationStatus(null)).toBeNull();
+    expect(parseVerificationStatus('')).toBeNull();
+    expect(parseVerificationStatus('n/a')).toBeNull();
+  });
+
+  it('is case-insensitive', () => {
+    expect(parseVerificationStatus('SINGLE-SOURCE (…)')).toBe('NEEDS_RECHECK');
+    expect(parseVerificationStatus('verified')).toBe('VERIFIED');
   });
 });
