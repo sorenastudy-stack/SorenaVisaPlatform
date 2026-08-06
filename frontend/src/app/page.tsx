@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { SplashGate } from '@/components/loader/SplashGate';
 
 // Demo-only override: when NEXT_PUBLIC_ASSESSMENT_LIVE=true (set ONLY on the demo
 // Railway env), the funnel entry points at the v2 (31-question) assessment. Prod
@@ -26,9 +25,6 @@ const itemVariants = {
 
 export default function Home() {
   return (
-    <>
-      {/* PR-GLOBE-LOADER — first-open splash that fades into the landing page. */}
-      <SplashGate />
     <main className="min-h-screen bg-sorena-cream font-sans text-sorena-text">
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-16">
         <motion.div
@@ -85,6 +81,5 @@ export default function Home() {
         </motion.div>
       </div>
     </main>
-    </>
   );
 }

@@ -4,7 +4,12 @@ import styles from './SorenaGlobeLoader.module.css';
 // from the original D3 world-map HUD into a lightweight pure-CSS/SVG component
 // (no D3 / TopoJSON / CDN fetch / web fonts). Presentational and hook-free, so it
 // renders as a server component — the portal's loading.tsx Suspense fallback ships
-// zero client JS for it. The landing page overlays it via <SplashGate/>.
+// zero client JS for it.
+//
+// USED ONLY as a between-pages loading fallback inside the signed-in portal. It was
+// also a first-paint splash on the public landing page via <SplashGate/>; that was
+// removed 2026-08-07 so visitors land straight on the landing page. Do not re-add a
+// splash here without asking — the delay before first content was the reason it went.
 
 // A handful of faint "network lights" scattered on the sphere (static positions,
 // blinking) — evokes the source's every-country network without any geometry.
