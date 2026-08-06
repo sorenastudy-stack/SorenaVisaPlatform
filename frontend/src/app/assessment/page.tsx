@@ -86,7 +86,10 @@ export default function AssessmentV2Page() {
     }
     setPhase('submitting');
     try {
-      const scoringAnswers = buildScoringAnswers(answers);
+      // `fields` is passed so the StudyField ids the picker emits can be
+      // resolved to the keys the scoring maps use. Without it every lookup
+      // missed and every applicant silently scored 'Other' for field.
+      const scoringAnswers = buildScoringAnswers(answers, fields);
       const criteria = buildMatchCriteria(answers);
       const [prevRes, recRes] = await Promise.all([
         fetch('/api/assessment/score-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: scoringAnswers }) }),

@@ -62,6 +62,31 @@ const BORDERLINE_V2 = {
   q41_apply_timeline: 'Within 3 months', q13_qualification_field: 'other',
 };
 const mk = (o) => ({ ...MARYAM_V2, ...o });
+
+// ── the REAL UI path ────────────────────────────────────────────────────────
+// Every profile above is written in StudyField KEYS, because keys are stable and
+// cuids are not. But the picker emits the StudyField **id** (that is what the
+// server's matching contract wants), so a key-only battery never exercises the
+// path a real applicant takes. That gap is exactly how the q16 id/key bug scored
+// 7/7 here while every real submission silently resolved to 'Other'.
+//
+// This list mirrors src/app/assessment/assessment-picker.test.tsx so the two
+// layers agree on what the server returns.
+const STUDY_FIELDS = [
+  { id: 'cmsf1a2b3c4d5e6f7g8h9i0j', key: 'it_computer_science' },
+  { id: 'cmsf2b3c4d5e6f7g8h9i0j1k', key: 'engineering' },
+  { id: 'cmsf3c4d5e6f7g8h9i0j1k2l', key: 'other' },
+];
+// The id profile is built on BORDERLINE, not Maryam, and that choice matters.
+// Maryam's category 2 is above its cap, so losing the 4-point field score is
+// absorbed and her total stays 100 either way — an id profile there passes even
+// with the bug present (verified: it did). Borderline sits below the cap, so the
+// field score is visible in the total: 'other' = 78, a real field = 82.
+const BORDERLINE_BY_ID = {
+  ...BORDERLINE_V2,
+  q13_qualification_field: 'cmsf1a2b3c4d5e6f7g8h9i0j', // it_computer_science
+  q32_preferred_fields: ['cmsf1a2b3c4d5e6f7g8h9i0j'],
+};
 const CASES = [
   { name: 'Maryam',          state: MARYAM_V2,     total: 100, band: 'BAND_6', elig: true,  hs: [] },
   { name: 'Borderline-gate', state: BORDERLINE_V2, total: 78,  band: 'BAND_5', elig: true,  hs: [] },
@@ -70,14 +95,31 @@ const CASES = [
   { name: 'HS4 legal',       state: mk({ q49_breach: 'Yes' }), total: 100, band: 'BAND_6', elig: false, hs: ['HS4'] },
   { name: 'HS5 timeline',    state: mk({ q41_apply_timeline: 'Immediately', q40_docs_ready: 'Not ready' }), total: 100, band: 'BAND_6', elig: false, hs: ['HS5'] },
   { name: 'HS6 medical',     state: mk({ q47_medical: 'Serious / unresolved' }), total: 99, band: 'BAND_6', elig: false, hs: ['HS6'] },
+  // Reached through the ids the picker actually emits. If id→key resolution
+  // breaks again, q16 falls back to 'Other' and this total drops 82 → 78, so
+  // the guard fails instead of quietly passing.
+  { name: 'Borderline (picker ids)', state: BORDERLINE_BY_ID, fields: STUDY_FIELDS, total: 82, band: 'BAND_5', elig: true, hs: [] },
 ];
 let ok = true;
 for (const c of CASES) {
-  const r = score(buildScoringAnswers(c.state));
+  const r = score(buildScoringAnswers(c.state, c.fields));
   const pass = r.total === c.total && r.band.enumValue === c.band && r.execution.eligible === c.elig
     && JSON.stringify(r.hardStops.map((h) => h.code)) === JSON.stringify(c.hs);
   if (!pass) ok = false;
   console.log(`${pass ? 'OK ' : 'XX '} ${c.name.padEnd(18)} total=${r.total} ${r.band.enumValue} elig=${r.execution.eligible} hs=[${r.hardStops.map((h) => h.code)}]`);
 }
+// ── regression guard for the bug itself ─────────────────────────────────────
+// Ids with no study-field list to resolve against is precisely the pre-fix
+// production call shape. It used to return 'Other' silently; it must now be loud.
+// Without this, someone could "fix" a future failure by restoring the fallback
+// and the battery would go green again while every applicant is mis-scored.
+try {
+  buildScoringAnswers({ q13_qualification_field: 'cmsf1a2b3c4d5e6f7g8h9i0j' });
+  console.log('XX  unresolvable id silently accepted — the id/key bug is back');
+  ok = false;
+} catch {
+  console.log('OK  unresolvable id rejected  (no silent fallback to Other)');
+}
+
 console.log('\nv2 form → real engine BYTE-IDENTICAL:', ok);
 process.exit(ok ? 0 : 1);
