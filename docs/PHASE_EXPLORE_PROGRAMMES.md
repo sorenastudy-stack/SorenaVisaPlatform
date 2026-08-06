@@ -317,7 +317,7 @@ rather than name), then remove the two `DEFERRED_ROWS` entries. That is a real b
 a service that has never updated anything, so it deserves its own tested pass. Small, and safe to
 do after launch.
 
-### FOLLOW-UP: 373 programmes are labelled more confidently than their source
+### RESOLVED 2026-08-06: 379 programmes were labelled more confidently than their source
 
 Found while checking the new rows' flags. The import mapped **any** non-empty "Verification
 Status" cell to `VERIFIED`:
@@ -335,7 +335,35 @@ Verified/Double-checked → `VERIFIED`, and anything unrecognised → `NEEDS_REC
 "look at this", never toward "trusted"). The 6 new rows were corrected on production —
 4 are now NEEDS_RECHECK.
 
-**The other ~373 pre-existing rows are still mislabelled.**
-`scripts/backfill-verification-status.ts` recomputes the column from the workbooks and is ready to
-run (dry-run by default, `--confirm-production` required, touches one column and nothing else).
-Held pending Owner sign-off because it rewrites a third of the catalogue's confidence metadata.
+**The remaining rows have since been corrected.** `scripts/backfill-verification-status.ts`
+recomputes the column from the workbooks (dry-run by default, `--confirm-production` required for a
+non-local target). Run against production on 2026-08-06:
+
+```
+dry run  → rows whose status is wrong : 375   (VERIFIED → NEEDS_RECHECK)
+commit   → updated 375 rows
+
+verificationStatus across imported programmes now:
+   VERIFIED         750
+   NEEDS_RECHECK    379
+```
+
+375 rather than 379 because the 4 newly imported rows had already been corrected during the import.
+The totals reconcile exactly against the source: 471 Verified + 278 Double-checked (+1 in-source
+duplicate row) = 750 VERIFIED, and 379 Single-source = NEEDS_RECHECK.
+
+**Verified that nothing else moved.** A hash of every column except `verificationStatus` differed
+after the run, so rather than assume the cause, it was proven two ways:
+
+1. **Scope of writes** — 381 rows carry a recent `updatedAt` (375 backfilled + 6 newly imported);
+   the other 748 were never written to.
+2. **Row-by-row comparison against the pre-import backup** (`prod-20260806T080613Z.dump`, restored
+   to a scratch database): every column except `verificationStatus` and `updatedAt` compared across
+   all 1,123 pre-existing programmes → **0 rows differ**. Fees, names, requirements, intakes,
+   review status and active flags are byte-identical.
+
+**Known side effect:** `updatedAt` on those 375 programmes now reads 2026-08-06 rather than their
+original import date. Prisma bumps `@updatedAt` on any write and it cannot be suppressed, so "when
+was this programme last genuinely revised" is slightly muddied for those rows. No other column,
+and nothing student-facing, was affected — only 24 programmes are student-visible, and none of the
+375 were among them, so no student ever saw a single-source fee presented as verified.
