@@ -2208,6 +2208,16 @@ model EducationProvider {
   brand                String?
   country              String           @default("NZ")
   city                 String?
+  // PR-EXPLORE — map coordinates for the student Explore map.
+  //
+  // Nullable on purpose and NEVER guessed: an institution that cannot be
+  // geocoded confidently keeps null and is listed without a pin, rather than
+  // being dropped from results or pinned at an invented location. geocodedAt
+  // records when the lookup ran so a later pass can re-try only the misses.
+  latitude             Float?
+  longitude            Float?
+  geocodedAt           DateTime?
+  geocodeSource        String? // e.g. "nominatim" — provenance for a re-check
   websiteUrl           String?
   // PR-CATALOG-2 — programme-listing/index entry point for the monthly discovery
   // crawl (Pass B). Owner-supplied; discovery skips the institution when unset.

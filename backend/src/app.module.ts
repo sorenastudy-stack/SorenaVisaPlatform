@@ -47,6 +47,7 @@ import { MarketingModule } from './marketing/marketing.module';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { CountryConfigModule } from './country-config/country-config.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { ExploreModule } from './explore/explore.module';
 import { StaffAdmissionChoicesModule } from './staff/admission-choices/staff-admission-choices.module';
 import { StaffAdmissionEmploymentModule } from './staff/admission-employment/staff-admission-employment.module';
 import { CvModule } from './students/admission/cv/cv.module';
@@ -155,6 +156,7 @@ import { SlaModule } from './sla/sla.module';
     PlatformSettingsModule,
     CountryConfigModule,
     RecommendationsModule,
+    ExploreModule,
     StaffAdmissionChoicesModule,
     StaffAdmissionEmploymentModule,
     CvModule,
