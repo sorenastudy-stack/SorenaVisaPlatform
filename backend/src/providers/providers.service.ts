@@ -1,9 +1,11 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  Prisma,
   CommissionType,
   NZQFLevel,
   QualificationLevel,
@@ -30,6 +32,8 @@ import { UpdateScholarshipDto } from './dto/update-scholarship.dto';
 
 @Injectable()
 export class ProvidersService {
+  private readonly logger = new Logger(ProvidersService.name);
+
   constructor(
     private prisma: PrismaService,
     private eventsService: EventsService,
@@ -329,13 +333,77 @@ export class ProvidersService {
     return provider;
   }
 
-  async updateProvider(id: string, dto: UpdateProviderDto) {
-    await this.ensureProviderExists(id);
+  async updateProvider(id: string, dto: UpdateProviderDto, actorId?: string | null) {
+    const before = await this.prisma.educationProvider.findUnique({
+      where: { id },
+      select: { id: true, name: true, status: true },
+    });
+    if (!before) throw new NotFoundException('Provider not found.');
 
-    return this.prisma.educationProvider.update({
+    const updated = await this.prisma.educationProvider.update({
       where: { id },
       data: dto,
     });
+
+    // PR-AUDIT — an institution's status is a CONTRACTUAL state, and it is the
+    // third condition in the matching gate (reviewStatus + isActive +
+    // provider.status === 'ACTIVE'), so flipping it decides what students can
+    // see. Until now it wrote no trace anywhere: during the catalogue import an
+    // institution moved PENDING → ACTIVE and neither audit_logs nor crm_events
+    // recorded who did it or when — the only evidence was the row's own
+    // updatedAt. This closes that.
+    //
+    // Only a genuine status TRANSITION is logged. Saving the form without
+    // touching status writes nothing, so the trail answers "who made this live"
+    // rather than "someone pressed Save".
+    if (updated.status !== before.status) {
+      await this.recordStatusChange(before, updated.status, actorId ?? null);
+    }
+
+    return updated;
+  }
+
+  /**
+   * Best-effort by design: an audit failure must never roll back or block a
+   * status change the Owner successfully made. Same stance as the auth service
+   * takes on PASSWORD_CHANGED.
+   */
+  private async recordStatusChange(
+    before: { id: string; name: string; status: string },
+    nextStatus: string,
+    actorId: string | null,
+  ) {
+    try {
+      const actor = actorId
+        ? await this.prisma.user.findUnique({
+            where: { id: actorId },
+            select: { name: true, role: true },
+          })
+        : null;
+
+      await this.prisma.auditLog.create({
+        data: {
+          userId: actorId,
+          action: 'UPDATE',
+          eventType: 'PROVIDER_STATUS_CHANGED',
+          entityType: 'EDUCATION_PROVIDER',
+          entityId: before.id,
+          oldValue: { status: before.status } as Prisma.InputJsonValue,
+          newValue: {
+            status: nextStatus,
+            providerName: before.name,
+          } as Prisma.InputJsonValue,
+          // Snapshotted so the trail still reads correctly if the actor is
+          // later renamed or their role changes.
+          actorNameSnapshot: actor?.name ?? null,
+          actorRoleSnapshot: actor?.role ?? null,
+        },
+      });
+    } catch (e) {
+      this.logger.warn(
+        `provider status audit failed for ${before.id}: ${(e as Error)?.message}`,
+      );
+    }
   }
 
   async updateAgreement(id: string, dto: UpdateAgreementDto) {

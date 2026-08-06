@@ -196,7 +196,7 @@ no pre-existing endpoint sends `details`, so no other response shape depends on 
 | # | Item | Why it matters |
 |---|---|---|
 | **1** | **Bulk-activate button** | API exists, no UI. 113 programmes = 113 clicks today. Must surface per-programme `skipped` reasons, not a flat success. |
-| 2 | Close the **provider-status audit gap** (below) | A contractual state change currently leaves no trace of who made it. |
+| ~~2~~ | ~~Close the **provider-status audit gap**~~ | **DONE 2026-08-06** — see below. |
 | 3 | Show the thumbnail on student-facing Explore cards | Uploads work and are stored; the display wiring belongs to the Explore phase. |
 | 4 | Optimistic-concurrency on edit | Two Owners editing one programme: last write wins. Needs a version column. |
 | 5 | Pagination | 113 rows render fine; thousands would not. |
@@ -287,9 +287,26 @@ value. No console errors.
 
 ---
 
-## Still open: the provider-status audit gap
+## Closed 2026-08-06: the provider-status audit gap
 
-**Not fixed by this phase.** Changing an institution's `status` (e.g. PENDING → ACTIVE, the
+**Fixed.** `ProvidersService.updateProvider` now writes an `audit_logs` row on every genuine
+status transition — `eventType: PROVIDER_STATUS_CHANGED`, with `userId`, `oldValue: {status}`,
+`newValue: {status, providerName}` and snapshotted actor name/role. The controller threads the
+authenticated actor through, so "who made this institution live" is answerable from now on.
+
+Only a real transition is logged: saving the form without touching status writes nothing, so the
+trail records decisions rather than form submissions. The write is best-effort in a try/catch —
+an audit failure logs a warning and never rolls back or blocks a status change the Owner
+successfully made, matching how the auth service treats `PASSWORD_CHANGED`. 7 DB-backed tests.
+
+It does NOT retrospectively explain the Future Skills activation of 2026-08-05 — nothing can,
+since no record was written at the time. The original description of the gap follows.
+
+---
+
+### Original description (for context)
+
+**Was not fixed by the curation phase.** Changing an institution's `status` (e.g. PENDING → ACTIVE, the
 contractual "we have an agreement" flag) writes **no `crm_event` and no `audit_log` row**. This
 surfaced during the production import on 2026-08-05, when "Future Skills" moved to ACTIVE during
 the import window and neither table recorded who did it or when — the only evidence was the row's

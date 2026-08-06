@@ -134,8 +134,10 @@ export class ProvidersController {
   update(
     @Param('id') providerId: string,
     @Body() dto: UpdateProviderDto,
+    @Req() req: any,
   ) {
-    return this.providersService.updateProvider(providerId, dto);
+    // actorId threaded through so a status change records WHO made it.
+    return this.providersService.updateProvider(providerId, dto, req.user?.userId ?? null);
   }
 
   @Patch(':id/agreement')
