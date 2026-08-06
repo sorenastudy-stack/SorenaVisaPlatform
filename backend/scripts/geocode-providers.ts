@@ -46,6 +46,50 @@ async function lookup(query: string): Promise<GeocodeCandidate | null> {
   const limitArg = process.argv.indexOf('--limit');
   const limit = limitArg > -1 ? parseInt(process.argv[limitArg + 1], 10) : undefined;
 
+  // ── PRODUCTION GUARD ──────────────────────────────────────────────────────
+  // Same rail as catalogue-import-local.ts, but this script is legitimately
+  // useful against production (that is how the live map got its pins), so it
+  // gates rather than refuses outright: a non-local DATABASE_URL demands
+  // --confirm-production. Without the flag it stops, so nobody reaches for a
+  // shell with a production URL already exported and geocodes the live
+  // catalogue by accident.
+  //
+  // "Local" is deliberately narrow — anything that is not localhost/127.0.0.1
+  // is treated as production, so a staging or demo URL is gated too. Better to
+  // ask an unnecessary question than to skip a necessary one.
+  const url = process.env.DATABASE_URL ?? '';
+  if (!url) {
+    console.error('REFUSING TO RUN: DATABASE_URL is not set.');
+    process.exit(1);
+  }
+  const isLocal = /localhost|127\.0\.0\.1/.test(url);
+  const confirmed = process.argv.includes('--confirm-production');
+
+  if (!isLocal && !confirmed) {
+    const host = (() => { try { return new URL(url).hostname; } catch { return '(unparseable host)'; } })();
+    console.error('REFUSING TO RUN: DATABASE_URL is not local.');
+    console.error(`  target host : ${host}`);
+    console.error('');
+    console.error('This writes latitude/longitude/geocodedAt/geocodeSource on education_providers');
+    console.error('for every institution owning an imported programme. Against production that is a');
+    console.error('real data change, so it needs to be deliberate:');
+    console.error('');
+    console.error('  npx ts-node --transpile-only scripts/geocode-providers.ts --confirm-production');
+    console.error('');
+    console.error('Take a backup first, per the standing rule.');
+    process.exit(1);
+  }
+  if (!isLocal && confirmed) {
+    const host = (() => { try { return new URL(url).hostname; } catch { return '(unparseable host)'; } })();
+    console.log(`⚠ RUNNING AGAINST A NON-LOCAL DATABASE — host ${host}`);
+    console.log('  writing: latitude, longitude, geocodedAt, geocodeSource (education_providers only)\n');
+  }
+  // A --confirm-production flag on a local database is harmless but almost
+  // always means the operator thought they were pointed somewhere else.
+  if (isLocal && confirmed) {
+    console.log('note: --confirm-production given but DATABASE_URL is local; running locally.\n');
+  }
+
   const prisma = new PrismaClient();
 
   // Only institutions that actually appear on the Explore map: those owning an

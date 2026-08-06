@@ -254,5 +254,29 @@ npx ts-node --transpile-only scripts/seed-explore-demo-local.ts          # activ
 npx ts-node --transpile-only scripts/seed-explore-demo-local.ts --undo   # revert
 ```
 
+---
+
+## Appendix C — running the geocoder against a non-local database
+
+`geocode-providers.ts` is genuinely useful against production — that is how the live map got its
+pins — so it does not refuse outright the way `catalogue-import-local.ts` does. Instead it
+**gates**: a non-local `DATABASE_URL` requires `--confirm-production`, and without the flag it
+stops with exit 1.
+
+```bash
+# local — no flag needed
+npx ts-node --transpile-only scripts/geocode-providers.ts
+
+# production — deliberate, and take a backup first
+DATABASE_URL=<prod> npx ts-node --transpile-only scripts/geocode-providers.ts --confirm-production
+```
+
+"Local" is deliberately narrow: anything that is not `localhost`/`127.0.0.1` is gated, so a
+staging or demo URL is caught too. The point is that nobody with a production URL already exported
+in their shell can geocode the live catalogue by accident.
+
+It writes **only** `latitude`, `longitude`, `geocodedAt` and `geocodeSource` on
+`education_providers`, and nothing else — two `update` calls, no other table or column.
+
 **It does not touch production and must never be run against it.** On production, activation is
 the Owner's decision, made on the curation screen, one programme at a time.
