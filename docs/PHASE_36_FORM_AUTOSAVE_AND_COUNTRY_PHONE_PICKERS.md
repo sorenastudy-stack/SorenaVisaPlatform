@@ -68,7 +68,7 @@ inventory, not by a report.
 | `frontend/src/components/staff/marketing/CreateAgentButton.tsx` | `phone` → `PhoneInput`. |
 | `frontend/src/components/LeadForm.tsx` | `phone` + `whatsapp` → `PhoneInput theme="dark"`, via `Controller`. **Since deleted — see below.** |
 
-**Deleted in the follow-up commit** (`0a9c…`, see the commit table): `LeadForm.tsx` and
+**Deleted in the follow-up commit** `0d32f0c`: `LeadForm.tsx` and
 `lib/schemas/lead.schema.ts`, its only dependant. Both were dead code — nothing imported the
 component and no route rendered it. `types/acquisition.ts` was kept: `VerifyEmailResponse` is
 used by the live `/verify-email` route, and `LeadResponse` / `CreateLeadPayload` still document
@@ -286,6 +286,8 @@ tab; after a revert the key is simply ignored.
 | Hash | Message |
 |---|---|
 | `a6d1317` | feat(forms): session-scoped autosave, and searchable country/phone pickers platform-wide |
+| `24b4350` | docs: Phase 36 handover |
+| `0d32f0c` | chore(frontend): delete LeadForm — dead code with no route and no live use |
 
 Previous session tip was `d5d7fa0` (the q16/q25 StudyField id/key fix).
 
