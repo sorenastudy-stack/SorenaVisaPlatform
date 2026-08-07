@@ -24,6 +24,20 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AssessmentV2Page from './page';
 import { buildScoringAnswers, StudyFieldResolutionError } from '@/lib/scorecard/v2/scoring-answers';
+import { ASSESSMENT_V2 } from '@/lib/scorecard/v2/assessment-v2';
+import { saveDraft } from '@/lib/scorecard/v2/assessment-draft';
+
+// Q13 lives in 'Education & English'. Since the form became multi-step it is no
+// longer on first render, so each test resumes a draft parked on that step —
+// derived from the schema, not hard-coded, so re-ordering sections cannot
+// silently turn these tests into "the picker was never rendered" passes.
+const Q13_STEP = ASSESSMENT_V2.findIndex((s) => s.title === 'Education & English');
+
+/** Render the page already on the step that holds the Q13 picker. */
+function renderAtPickerStep() {
+  saveDraft({ q03_age: '22 - 29' }, Q13_STEP);
+  return render(<AssessmentV2Page />);
+}
 
 // Real-shaped payload: cuid-style ids and the real keys, exactly as
 // GET /public/matching/study-fields returns them.
@@ -37,6 +51,7 @@ const STUDY_FIELDS = [
 let postedAnswers: Record<string, string> | null = null;
 
 beforeEach(() => {
+  window.sessionStorage.clear();
   postedAnswers = null;
   vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
@@ -65,7 +80,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('the real Q13 picker feeds the scoring map', () => {
   it('emits a StudyField ID, not a key — the mismatch that caused the bug', async () => {
-    render(<AssessmentV2Page />);
+    renderAtPickerStep();
     const select = await screen.findByRole('combobox', { name: /Field of your highest qualification/i });
 
     await userEvent.selectOptions(select, within(select).getByRole('option', { name: 'Information Technology & Computer Science' }));
@@ -76,7 +91,7 @@ describe('the real Q13 picker feeds the scoring map', () => {
   });
 
   it('scores that ID as the real field, not silently as Other', async () => {
-    render(<AssessmentV2Page />);
+    renderAtPickerStep();
     const select = await screen.findByRole('combobox', { name: /Field of your highest qualification/i });
     await userEvent.selectOptions(select, within(select).getByRole('option', { name: 'Engineering' }));
 
@@ -91,7 +106,7 @@ describe('the real Q13 picker feeds the scoring map', () => {
   });
 
   it('still scores a genuine "Other" selection as Other', async () => {
-    render(<AssessmentV2Page />);
+    renderAtPickerStep();
     const select = await screen.findByRole('combobox', { name: /Field of your highest qualification/i });
     await userEvent.selectOptions(select, within(select).getByRole('option', { name: 'Other' }));
 

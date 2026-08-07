@@ -14,8 +14,13 @@ import { ASSESSMENT_V2, type V2FieldDef } from '@/lib/scorecard/v2/assessment-v2
 import { buildScoringAnswers } from '@/lib/scorecard/v2/scoring-answers';
 import { buildMatchCriteria } from '@/lib/scorecard/v2/match-criteria';
 import { saveDraft, loadDraft, clearDraft, hasAnswers } from '@/lib/scorecard/v2/assessment-draft';
+import {
+  DECLARATION_STEP, TOTAL_STEPS, STEP_TITLES,
+  validateStep, validateAll, clampStep, type FieldErrors,
+} from '@/lib/scorecard/v2/assessment-steps';
 import { CountrySelect } from '@/components/common/CountrySelect';
 import { PhoneInput } from '@/components/common/PhoneInput';
+import { FormProgress } from '@/components/common/FormProgress';
 
 // Demo-only override: when NEXT_PUBLIC_ASSESSMENT_LIVE=true (set ONLY on the demo
 // Railway env), this assessment IS the live funnel for the presentation, so the
@@ -51,8 +56,25 @@ export default function AssessmentV2Page() {
   const [recs, setRecs] = useState<Rec[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // ── step state ────────────────────────────────────────────────────────────
+  const [step, setStep] = useState(0);
+  // The furthest step reached, which is what the progress dots may jump to.
+  // Tracked separately from `step` so going Back does not lock the way forward.
+  const [maxVisited, setMaxVisited] = useState(0);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [declarationChecked, setDeclarationChecked] = useState(false);
+
+  // The array check is not paranoia. `.catch()` only covers a network or parse
+  // failure; an endpoint that answers with an error OBJECT resolves happily,
+  // `fields` stops being an array, and the `fields.find(...)` in render throws —
+  // white-screening the whole public form with no message. Found by opening the
+  // page in a browser with the backend down; no test caught it, because every
+  // test mocks this endpoint into returning an array.
   useEffect(() => {
-    fetch('/api/assessment/study-fields').then((r) => r.json()).then(setFields).catch(() => {});
+    fetch('/api/assessment/study-fields')
+      .then((r) => r.json())
+      .then((data) => setFields(Array.isArray(data) ? data : []))
+      .catch(() => setFields([]));
   }, []);
 
   // ── session-scoped autosave ───────────────────────────────────────────────
@@ -66,15 +88,35 @@ export default function AssessmentV2Page() {
     if (restored.current) return;
     restored.current = true;
     const draft = loadDraft();
-    if (draft && hasAnswers(draft.answers)) setAnswers(draft.answers as Answers);
+    if (draft && hasAnswers(draft.answers)) {
+      setAnswers(draft.answers as Answers);
+      // Restoring the answers but dropping the applicant back at step 1 would
+      // be worse than not restoring at all — they would have to click through
+      // seven steps of answers they can already see.
+      const resumed = clampStep(draft.step);
+      setStep(resumed);
+      setMaxVisited(resumed);
+    }
   }, []);
 
   useEffect(() => {
     if (!restored.current) return;
     if (!hasAnswers(answers)) return;
-    const id = setTimeout(() => saveDraft(answers), 500);
+    const id = setTimeout(() => saveDraft(answers, step), 500);
     return () => clearTimeout(id);
-  }, [answers]);
+  }, [answers, step]);
+
+  // Changing step writes immediately, bypassing the 500 ms debounce above.
+  // Answer → Next → refresh is fast enough to beat the timer, and losing the
+  // answer that triggered the navigation is the worst possible thing to lose.
+  const goToStep = (next: number) => {
+    const target = clampStep(next);
+    setStep(target);
+    setMaxVisited((m) => Math.max(m, target));
+    setErrors({});
+    if (hasAnswers(answers)) saveDraft(answers, target);
+    window.scrollTo(0, 0);
+  };
 
   // Q32 restriction — refetch the server-authoritative allowed set when Q13 changes.
   const q13 = answers.q13_qualification_field as string | undefined;
@@ -82,7 +124,9 @@ export default function AssessmentV2Page() {
     if (!q13) { setAllowed(null); return; }
     fetch(`/api/assessment/allowed-fields?qualificationFieldId=${encodeURIComponent(q13)}`)
       .then((r) => r.json())
-      .then((ids: string[]) => setAllowed(new Set(ids)))
+      // Same hazard as study-fields above: `new Set(someObject)` throws
+      // "is not iterable" rather than producing an empty set.
+      .then((ids: unknown) => setAllowed(Array.isArray(ids) ? new Set(ids as string[]) : null))
       .catch(() => setAllowed(null));
   }, [q13]);
 
@@ -95,19 +139,54 @@ export default function AssessmentV2Page() {
 
   const visible = (f: V2FieldDef) => !f.visibleWhen || f.visibleWhen(answers as Record<string, unknown>);
 
+  const isDeclarationStep = step === DECLARATION_STEP;
+  const section = isDeclarationStep ? null : ASSESSMENT_V2[step];
+
+  // A tick on the progress bar means "this step has all its answers", not
+  // "you have been here". Recomputed from the answers so it stays honest when a
+  // later answer reveals a required field on a step already passed.
+  const completedSteps = useMemo(
+    () => [
+      ...ASSESSMENT_V2.map((_, i) => Object.keys(validateStep(i, answers)).length === 0),
+      declarationChecked,
+    ],
+    [answers, declarationChecked],
+  );
+
+  // Next is gated on THIS step only. Back never is — a wrong answer must never
+  // trap someone on a step they want to leave.
+  function onNext() {
+    setError(null);
+    const stepErrors = validateStep(step, answers);
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(stepErrors);
+      setError('Please complete the highlighted answers before continuing.');
+      return;
+    }
+    goToStep(step + 1);
+  }
+
+  function onBack() {
+    setError(null);
+    goToStep(step - 1);
+  }
+
   async function onSubmit() {
     setError(null);
-    // Validate required + visible.
-    for (const s of ASSESSMENT_V2) {
-      for (const q of s.questions) {
-        for (const f of q.fields) {
-          if (!f.required || !visible(f)) continue;
-          const v = answers[f.key];
-          const empty = v == null || v === '' || (Array.isArray(v) && v.length === 0);
-          if (empty) { setError(`Please answer: ${f.label}`); return; }
-        }
-      }
+
+    // Per-step gating is necessary but NOT sufficient. Visibility is computed
+    // from the whole answer set, so an answer given later can reveal a required
+    // field on a step already passed. Ten fields here are conditional.
+    const { errors: allErrors, firstBadStep } = validateAll(answers);
+    if (firstBadStep !== null) {
+      setErrors(allErrors);
+      setStep(firstBadStep);
+      setMaxVisited((m) => Math.max(m, firstBadStep));
+      setError('Some earlier answers are still missing — we have taken you back to them.');
+      window.scrollTo(0, 0);
+      return;
     }
+
     setPhase('submitting');
     try {
       // `fields` is passed so the StudyField ids the picker emits can be
@@ -135,7 +214,11 @@ export default function AssessmentV2Page() {
   if (phase === 'result' && preview) {
     // "Start over" clears the answers too — with the draft already gone, leaving
     // them in state would immediately re-save a draft of the form just submitted.
-    return <ResultView preview={preview} recs={recs} onRestart={() => { setAnswers({}); clearDraft(); setPhase('form'); setPreview(null); setRecs([]); }} />;
+    return <ResultView preview={preview} recs={recs} onRestart={() => {
+      setAnswers({}); clearDraft();
+      setStep(0); setMaxVisited(0); setErrors({}); setDeclarationChecked(false);
+      setPhase('form'); setPreview(null); setRecs([]);
+    }} />;
   }
 
   return (
@@ -148,43 +231,106 @@ export default function AssessmentV2Page() {
       <h1 className="text-2xl font-bold text-[#1e3a5f]">Readiness assessment</h1>
       <p className="mt-1 text-sm text-gray-500">A short assessment that scores your profile and recommends specific study options.</p>
 
-      {ASSESSMENT_V2.map((section) => (
-        <section key={section.id} className="mt-8">
+      <div className="mt-6">
+        <FormProgress
+          current={step}
+          total={TOTAL_STEPS}
+          maxVisited={maxVisited}
+          titles={STEP_TITLES}
+          completed={completedSteps}
+          onJump={goToStep}
+        />
+      </div>
+
+      {section ? (
+        <section>
           <h2 className="text-xs font-bold uppercase tracking-wide text-[#c9a961]">{section.title}</h2>
           <div className="mt-3 space-y-5">
-            {section.questions.map((q) => (
-              <div key={q.id} className="rounded-xl border border-gray-200 bg-white p-4">
-                <p className="text-sm font-semibold text-[#1e3a5f]">{q.heading}</p>
-                <div className="mt-3 space-y-3">
-                  {q.fields.filter(visible).map((f) => (
-                    <Field key={f.key} f={f} value={answers[f.key]} onChange={(v) => set(f.key, v)}
-                      studyFields={fields} allowedFields={allowedFields} allowedReady={allowed !== null} q13Label={fields.find((x) => x.id === q13)?.nameEn} />
-                  ))}
+            {section.questions
+              .filter((q) => !q.visibleWhen || q.visibleWhen(answers as Record<string, unknown>))
+              .map((q) => (
+                <div key={q.id} className="rounded-xl border border-gray-200 bg-white p-4">
+                  <p className="text-sm font-semibold text-[#1e3a5f]">{q.heading}</p>
+                  <div className="mt-3 space-y-3">
+                    {q.fields.filter(visible).map((f) => (
+                      <Field key={f.key} f={f} value={answers[f.key]} onChange={(v) => set(f.key, v)}
+                        error={errors[f.key]}
+                        hideLabel={q.fields.length === 1 && f.label === q.heading}
+                        studyFields={fields} allowedFields={allowedFields} allowedReady={allowed !== null} q13Label={fields.find((x) => x.id === q13)?.nameEn} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         </section>
-      ))}
+      ) : (
+        <DeclarationStep checked={declarationChecked} onChange={setDeclarationChecked} />
+      )}
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-      <button onClick={onSubmit} disabled={phase === 'submitting'}
-        className="mt-8 w-full rounded-xl bg-[#1e3a5f] px-6 py-3 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
-        {phase === 'submitting' ? 'Scoring…' : 'See my result & recommendations'}
-      </button>
+      {error && <p className="mt-4 text-sm text-red-600" role="alert">{error}</p>}
+
+      <div className="mt-8 flex items-center justify-between gap-3">
+        {step > 0 ? (
+          <button type="button" onClick={onBack} disabled={phase === 'submitting'}
+            className="rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-medium text-[#1e3a5f] hover:bg-gray-50 disabled:opacity-50">
+            Back
+          </button>
+        ) : <span />}
+
+        {isDeclarationStep ? (
+          <button type="button" onClick={onSubmit} disabled={!declarationChecked || phase === 'submitting'}
+            className="rounded-xl bg-[#1e3a5f] px-6 py-3 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:cursor-not-allowed disabled:opacity-50">
+            {phase === 'submitting' ? 'Scoring…' : 'See my result & recommendations'}
+          </button>
+        ) : (
+          <button type="button" onClick={onNext}
+            className="rounded-xl bg-[#1e3a5f] px-6 py-3 text-sm font-semibold text-white hover:bg-[#162d4a]">
+            Next
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q13Label }: {
+interface FieldProps {
   f: V2FieldDef; value: Answers[string]; onChange: (v: Answers[string]) => void;
   studyFields: StudyFieldOpt[]; allowedFields: StudyFieldOpt[]; allowedReady: boolean; q13Label?: string;
-}) {
+  /**
+   * Hide the field's own label, for a single-field question whose label is
+   * word-for-word the card heading above it ("Full name" / "Full name"). It is
+   * hidden, never dropped: the control still needs an accessible name.
+   */
+  hideLabel?: boolean;
+}
+
+/**
+ * Renders the control plus its own validation message.
+ *
+ * The error sits under the field it belongs to, not in a single line above the
+ * form. With 55 required fields the old single-message approach told the
+ * applicant one problem at a time and did not say where it was.
+ */
+function Field({ error, ...props }: FieldProps & { error?: string }) {
+  return (
+    <div>
+      <FieldControl {...props} />
+      {error && (
+        <p className="mt-1 text-xs text-red-600" role="alert" data-testid={`error-${props.f.key}`}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function FieldControl({ f, value, onChange, studyFields, allowedFields, allowedReady, q13Label, hideLabel }: FieldProps) {
   const base = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm';
+  const labelCls = hideLabel ? 'sr-only' : 'text-xs text-gray-600';
   if (f.type === 'select') {
     return (
       <label className="block">
-        <span className="text-xs text-gray-600">{f.label}</span>
+        <span className={labelCls}>{f.label}</span>
         <select className={base} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)}>
           <option value="">— Select —</option>
           {f.options?.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -196,7 +342,7 @@ function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q
   if (f.type === 'studyfield') {
     return (
       <label className="block">
-        <span className="text-xs text-gray-600">{f.label}</span>
+        <span className={labelCls}>{f.label}</span>
         <select className={base} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)}>
           <option value="">— Select —</option>
           {studyFields.map((sf) => <option key={sf.id} value={sf.id}>{sf.nameEn}</option>)}
@@ -210,7 +356,7 @@ function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q
     const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
     return (
       <div>
-        <span className="text-xs text-gray-600">{f.label}</span>
+        <span className={labelCls}>{f.label}</span>
         {!allowedReady ? (
           <p className="mt-1 text-[11px] text-gray-400">Answer &ldquo;Field of your highest qualification&rdquo; first to see your options.</p>
         ) : (
@@ -234,7 +380,7 @@ function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q
   if (f.type === 'boolean') {
     return (
       <div>
-        <span className="text-xs text-gray-600">{f.label}</span>
+        <span className={labelCls}>{f.label}</span>
         <div className="mt-1 flex gap-2">
           {[['Yes', true], ['No', false]].map(([lbl, val]) => (
             <button key={String(val)} type="button" onClick={() => onChange(val as boolean)}
@@ -247,10 +393,13 @@ function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q
   // PR-COUNTRY-PHONE — country and phone are never free text anywhere on the
   // platform. Both were plain inputs here; the country one asked the applicant
   // to know their own ISO 3166 code ("ISO code, e.g. IR").
+  // Both pickers render their own interactive element rather than an <input>,
+  // so the label is attached with htmlFor/id. Wrapping them in a bare <label>
+  // as the plain inputs below do would give the control no accessible name.
   if (f.type === 'country') {
     return (
       <div>
-        <span className="text-xs text-gray-600" id={`${f.key}-label`}>{f.label}</span>
+        <label htmlFor={f.key} className={labelCls}>{f.label}</label>
         <div className="mt-1">
           <CountrySelect
             id={f.key}
@@ -265,7 +414,7 @@ function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q
   if (f.type === 'phone') {
     return (
       <div>
-        <span className="text-xs text-gray-600">{f.label}</span>
+        <label htmlFor={f.key} className={labelCls}>{f.label}</label>
         <div className="mt-1">
           <PhoneInput id={f.key} value={(value as string) ?? ''} onChange={onChange} />
         </div>
@@ -277,12 +426,46 @@ function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q
   // text / email / number
   return (
     <label className="block">
-      <span className="text-xs text-gray-600">{f.label}</span>
+      <span className={labelCls}>{f.label}</span>
       <input className={base} type={f.type === 'number' ? 'number' : f.type === 'email' ? 'email' : 'text'}
         value={(value as string) ?? ''}
         onChange={(e) => onChange(f.type === 'number' ? Number(e.target.value) : e.target.value)} />
       {f.helper && <span className="mt-1 block text-[11px] text-gray-400">{f.helper}</span>}
     </label>
+  );
+}
+
+/**
+ * Final step — the applicant confirms their answers before they are scored.
+ *
+ * Mirrors the live /scorecard's declaration step. It is a consent gate, not a
+ * question: nothing here is stored or scored, and Submit stays disabled until
+ * the box is ticked.
+ */
+function DeclarationStep({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <section>
+      <h2 className="text-xs font-bold uppercase tracking-wide text-[#c9a961]">Declaration</h2>
+      <div className="mt-3 rounded-xl border border-gray-200 bg-white p-5">
+        <p className="text-sm font-semibold text-[#1e3a5f]">Before we score your profile</p>
+        <p className="mt-2 text-sm leading-relaxed text-gray-600">
+          Your result and the programmes we recommend are based entirely on the answers you have
+          given. Inaccurate answers produce an inaccurate assessment, and any application built on
+          them may later be refused.
+        </p>
+        <label className="mt-4 flex cursor-pointer items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => onChange(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[#1e3a5f]"
+          />
+          <span className="text-sm text-[#1e3a5f]">
+            I confirm the information I have given is true and complete to the best of my knowledge.
+          </span>
+        </label>
+      </div>
+    </section>
   );
 }
 

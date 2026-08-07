@@ -18,13 +18,19 @@ export const DRAFT_KEY = 'sv_assessment_v2_draft';
  * wrong (a key renamed, an answer's option list narrowed). A draft whose
  * version does not match is discarded rather than migrated — a stale draft is
  * worth far less than a form in a state no code expects.
+ *
+ * 1 → 2: the form became multi-step, which changed what `step` MEANS. A v1
+ * draft always carries 0, written by a single-page form to mean "not
+ * applicable"; read by the multi-step form that would say "resume at step 1".
+ * It happens to be harmless, but relying on a coincidence is how the next
+ * change breaks — so v1 drafts are dropped.
  */
-export const DRAFT_VERSION = 1;
+export const DRAFT_VERSION = 2;
 
 export interface AssessmentDraft {
   version: number;
   answers: Record<string, unknown>;
-  /** Reserved for the multi-step UX; single-page form always writes 0. */
+  /** 0-based step the applicant was on. Clamped on restore, see clampStep(). */
   step:    number;
 }
 

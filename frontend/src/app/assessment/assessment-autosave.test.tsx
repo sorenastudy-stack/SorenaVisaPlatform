@@ -21,8 +21,17 @@ import userEvent from '@testing-library/user-event';
 import AssessmentV2Page from './page';
 import { ASSESSMENT_V2, type V2FieldDef } from '@/lib/scorecard/v2/assessment-v2';
 import { DRAFT_KEY, DRAFT_VERSION, loadDraft, saveDraft, clearDraft } from '@/lib/scorecard/v2/assessment-draft';
+import { DECLARATION_STEP } from '@/lib/scorecard/v2/assessment-steps';
 
 const AGE_LABEL = 'What is your age range?';
+
+// Age lives in 'About You'. Since the form became multi-step it is no longer on
+// first render, so the tests that use it resume a draft parked on that step.
+// Derived from the schema so re-ordering sections cannot turn these into
+// vacuous passes.
+const AGE_STEP = ASSESSMENT_V2.findIndex((s) => s.title === 'About You');
+/** A pre-existing answer on the age step, so restore lands there. */
+const SEED = { q01_motivation: 'Very High' };
 
 const STUDY_FIELDS = [
   { id: 'cmsf1a2b3c4d5e6f7g8h9i0j', key: 'it_computer_science', nameEn: 'Information Technology & Computer Science', nameFa: '', category: { key: 'stem', nameEn: 'STEM', alwaysSelectable: false } },
@@ -93,6 +102,7 @@ async function selectAge(user: ReturnType<typeof userEvent.setup>, option = '22 
 describe('a refresh inside the session keeps the answers', () => {
   it('restores what was typed after the page is remounted', async () => {
     const user = userEvent.setup();
+    saveDraft(SEED, AGE_STEP);
     const first = render(<AssessmentV2Page />);
     await selectAge(user);
 
@@ -118,13 +128,13 @@ describe('a successful submit clears the draft', () => {
     const user = userEvent.setup();
     // Seed a complete draft, which the page restores — this is also a second
     // proof that restore works, through the real submit path.
-    saveDraft(completeAnswers());
+    // Parked on the declaration step, where Submit lives.
+    saveDraft(completeAnswers(), DECLARATION_STEP);
     expect(window.sessionStorage.getItem(DRAFT_KEY)).not.toBeNull();
 
     render(<AssessmentV2Page />);
-    await screen.findByRole('combobox', { name: AGE_LABEL });
-
-    await user.click(await screen.findByRole('button', { name: /See my result/i }));
+    await user.click(await screen.findByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: /See my result/i }));
 
     // Results screen reached…
     await screen.findByText(/Your readiness/i);
@@ -160,7 +170,8 @@ describe('a draft is only restored when it is safe to', () => {
 
   it('does not write an empty draft on mount', async () => {
     render(<AssessmentV2Page />);
-    await screen.findByRole('combobox', { name: AGE_LABEL });
+    // Step 1 with nothing seeded — the form's own first field.
+    await screen.findByLabelText('Full name');
     await new Promise((r) => setTimeout(r, 700));
     expect(window.sessionStorage.getItem(DRAFT_KEY)).toBeNull();
   });

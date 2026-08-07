@@ -1,9 +1,11 @@
-// PR-PHASE33 — the redesigned (v2) assessment layout: 8 sections, ~31 questions.
+// PR-PHASE33 — the redesigned (v2) assessment layout: 7 sections, ~37 questions,
+// presented as 8 steps (7 content + a declaration).
 //
 // Each SCORED sub-field reuses its existing qNN key + option strings verbatim
 // (pulled from questions.ts) so scoring is byte-identical (proven by
 // scripts/verify-v2-scoring.cjs). Compound questions group several sub-fields
-// under one heading. Section 8 + nationality add non-scored matching inputs;
+// under one heading. Section 7 (Study Preferences) + nationality add non-scored
+// matching inputs;
 // Q13/Q32 use the StudyField taxonomy.
 
 import { ALL_QUESTIONS } from '../questions';
@@ -128,7 +130,14 @@ export const ASSESSMENT_V2: V2SectionDef[] = [
     ],
   },
   {
-    id: 5, title: 'Finances',
+    // PR-PHASE33-STEPS — 'Readiness & Timeline' was merged in here when the form
+    // became multi-step. On its own it was three fields: a whole step, progress
+    // bar and Next button, for three questions. The pairing is not just size —
+    // both halves ask the same thing, "can you actually act?", in money,
+    // paperwork and timing. The live /scorecard reached the same conclusion
+    // independently; its section 3 is "Financial & operational readiness".
+    // No scored key changed, so scoring is untouched.
+    id: 5, title: 'Finances & Readiness',
     questions: [
       { id: 'funds', heading: 'Funds available', fields: [{ key: 'q33_funds', type: 'select', label: 'Funds available for study and settlement', options: opts('q33_funds'), required: true }] },
       { id: 'source', heading: 'Source of funds', fields: [{ key: 'q34_funds_source', type: 'select', label: 'Primary source of funds', options: opts('q34_funds_source'), required: true }] },
@@ -141,18 +150,13 @@ export const ASSESSMENT_V2: V2SectionDef[] = [
           { key: 'q38_settlement_support', type: 'select', label: 'Will you have settlement support on arrival?', options: opts('q38_settlement_support'), required: true },
         ],
       },
-    ],
-  },
-  {
-    id: 6, title: 'Readiness & Timeline',
-    questions: [
       { id: 'passport', heading: 'Passport', fields: [{ key: 'q39_passport', type: 'select', label: 'Do you have a valid passport?', options: opts('q39_passport'), required: true }] },
       { id: 'docs-ready', heading: 'Documents ready', fields: [{ key: 'q40_docs_ready', type: 'select', label: 'Are all your application documents ready?', options: opts('q40_docs_ready'), required: true }] },
       { id: 'timeline', heading: 'Timeline', fields: [{ key: 'q41_apply_timeline', type: 'select', label: 'When do you want to apply?', options: opts('q41_apply_timeline'), required: true }] },
     ],
   },
   {
-    id: 7, title: 'Immigration History',
+    id: 6, title: 'Immigration History',
     questions: [
       {
         id: 'refusal', heading: 'Visa refusals',
@@ -181,7 +185,7 @@ export const ASSESSMENT_V2: V2SectionDef[] = [
     ],
   },
   {
-    id: 8, title: 'Study Preferences',
+    id: 7, title: 'Study Preferences',
     questions: [
       { id: 'preferred-fields', heading: 'Preferred field(s) of study', fields: [{ key: 'q32_preferred_fields', type: 'studyfield-multi', label: 'Preferred field(s) of study', required: true, helper: 'Restricted to fields related to your qualification, plus Business & Management.' }] },
       { id: 'desired-level', heading: 'Desired qualification level', fields: [{ key: 'q33_desired_level', type: 'select', label: 'Desired qualification level', options: ['CERTIFICATE', 'DIPLOMA', 'BACHELOR', 'POSTGRADUATE_DIPLOMA', 'MASTER', 'PHD'], required: true }] },
