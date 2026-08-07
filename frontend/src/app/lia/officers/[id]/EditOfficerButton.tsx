@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Edit, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { CountrySelect } from '@/components/common/CountrySelect';
 
 // PR-LIA-10 — Edit-officer overlay.
 // Per Decision 2C any LIA can edit the shared profile fields.
@@ -113,9 +114,19 @@ export function EditOfficerButton({
             <input type="text" value={branch} onChange={(e) => setBranch(e.target.value)} maxLength={200} disabled={submitting}
               className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none disabled:bg-gray-50 mb-3" />
 
+            {/* PR-COUNTRY-PHONE — was free text (maxLength 120). Legacy rows may
+                hold a full name like "Iran"; CountrySelect renders that value
+                through unchanged (minus the flag) and normalises it to "IR" on
+                the next save, so no backfill is needed. */}
             <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Country of posting</label>
-            <input type="text" value={countryOfPosting} onChange={(e) => setCountryOfPosting(e.target.value)} maxLength={120} disabled={submitting}
-              className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-[#1E3A5F] focus:ring-1 focus:ring-[#1E3A5F] outline-none disabled:bg-gray-50 mb-3" />
+            <div className="mb-3">
+              <CountrySelect
+                value={countryOfPosting || null}
+                onChange={(code) => setCountryOfPosting(code ?? '')}
+                disabled={submitting}
+                placeholder="Select a country"
+              />
+            </div>
 
             <label className="block text-xs font-semibold text-[#4A4A4A] mb-1">Profile description</label>
             <textarea value={profileDescription} onChange={(e) => setProfileDescription(e.target.value)} rows={4} maxLength={5000} disabled={submitting}

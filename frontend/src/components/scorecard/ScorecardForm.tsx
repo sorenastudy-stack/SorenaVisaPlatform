@@ -14,6 +14,7 @@ import {
 import { fillHiddenAnswers } from '@/lib/scorecard/submit-helpers';
 import { LanguageSelect } from '@/components/scorecard/LanguageSelect';
 import { ScorecardCountrySelect } from '@/components/scorecard/ScorecardCountrySelect';
+import { PhoneInput } from '@/components/common/PhoneInput';
 import { localeToLanguageCode } from '@/lib/languages';
 import { useLocaleStore } from '@/lib/stores/localeStore';
 
@@ -595,6 +596,11 @@ function FieldRow({
 
       {q.type === 'language' ? (
         <LanguageSelect value={value} onChange={onChange} className={inputClasses} />
+      ) : q.type === 'phone' ? (
+        // PR-COUNTRY-PHONE — was a bare <input type="tel"> whose only guard was
+        // "must start with +". The emitted value is still one E.164 string, so
+        // the validator above and every stored lead are unaffected.
+        <PhoneInput value={value} onChange={onChange} ariaInvalid={Boolean(error)} />
       ) : q.type === 'country' ? (
         <ScorecardCountrySelect value={value} onChange={onChange} className={inputClasses} />
       ) : q.type === 'select' ? (
@@ -617,7 +623,7 @@ function FieldRow({
         />
       ) : (
         <input
-          type={q.type === 'email' ? 'email' : q.type === 'phone' ? 'tel' : 'text'}
+          type={q.type === 'email' ? 'email' : 'text'}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={inputClasses}

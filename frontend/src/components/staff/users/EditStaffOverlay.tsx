@@ -9,6 +9,7 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { CountryPicker } from '@/components/common/CountryPicker';
+import { PhoneInput } from '@/components/common/PhoneInput';
 import type { StaffUserDetail } from './types';
 
 // PR-CONSULT-4 — Edit staff profile overlay.
@@ -183,10 +184,17 @@ export function EditStaffOverlay({
             <label className="block text-xs font-semibold text-gray-600 mb-1">
               {t('staff.users.form.mobile')}
             </label>
-            <input
-              type="tel"
-              {...register('mobileNumber')}
-              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 min-h-[48px]"
+            <Controller
+              control={control}
+              name="mobileNumber"
+              render={({ field }) => (
+                <PhoneInput
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  ariaInvalid={Boolean(errors.mobileNumber)}
+                  placeholder="21 555 1234"
+                />
+              )}
             />
             {errors.mobileNumber && <p className="mt-1 text-xs text-rose-600">{errors.mobileNumber.message}</p>}
           </div>

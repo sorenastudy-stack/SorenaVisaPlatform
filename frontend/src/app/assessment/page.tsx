@@ -9,10 +9,13 @@
 // a single results screen. Q32's field options are restricted by the Q30 rule
 // using the SERVER-AUTHORITATIVE allowed set (never diverges from the matcher).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ASSESSMENT_V2, type V2FieldDef } from '@/lib/scorecard/v2/assessment-v2';
 import { buildScoringAnswers } from '@/lib/scorecard/v2/scoring-answers';
 import { buildMatchCriteria } from '@/lib/scorecard/v2/match-criteria';
+import { saveDraft, loadDraft, clearDraft, hasAnswers } from '@/lib/scorecard/v2/assessment-draft';
+import { CountrySelect } from '@/components/common/CountrySelect';
+import { PhoneInput } from '@/components/common/PhoneInput';
 
 // Demo-only override: when NEXT_PUBLIC_ASSESSMENT_LIVE=true (set ONLY on the demo
 // Railway env), this assessment IS the live funnel for the presentation, so the
@@ -51,6 +54,27 @@ export default function AssessmentV2Page() {
   useEffect(() => {
     fetch('/api/assessment/study-fields').then((r) => r.json()).then(setFields).catch(() => {});
   }, []);
+
+  // ── session-scoped autosave ───────────────────────────────────────────────
+  // Restore runs exactly once, BEFORE the save effect is allowed to write.
+  // Ordering matters under React StrictMode, which double-invokes effects in
+  // development: a save effect that ran first would persist the empty initial
+  // state and destroy the very draft we are about to restore. (Same failure
+  // that ate the Explore page's "what changed" timestamp.)
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const draft = loadDraft();
+    if (draft && hasAnswers(draft.answers)) setAnswers(draft.answers as Answers);
+  }, []);
+
+  useEffect(() => {
+    if (!restored.current) return;
+    if (!hasAnswers(answers)) return;
+    const id = setTimeout(() => saveDraft(answers), 500);
+    return () => clearTimeout(id);
+  }, [answers]);
 
   // Q32 restriction — refetch the server-authoritative allowed set when Q13 changes.
   const q13 = answers.q13_qualification_field as string | undefined;
@@ -97,6 +121,9 @@ export default function AssessmentV2Page() {
       ]);
       setPreview(await prevRes.json());
       setRecs(await recRes.json());
+      // Submitted successfully — the draft has served its purpose. Left behind,
+      // "Start over" in the same tab would hand back the answers just sent.
+      clearDraft();
       setPhase('result');
       window.scrollTo(0, 0);
     } catch {
@@ -106,7 +133,9 @@ export default function AssessmentV2Page() {
   }
 
   if (phase === 'result' && preview) {
-    return <ResultView preview={preview} recs={recs} onRestart={() => { setPhase('form'); setPreview(null); setRecs([]); }} />;
+    // "Start over" clears the answers too — with the draft already gone, leaving
+    // them in state would immediately re-save a draft of the form just submitted.
+    return <ResultView preview={preview} recs={recs} onRestart={() => { setAnswers({}); clearDraft(); setPhase('form'); setPreview(null); setRecs([]); }} />;
   }
 
   return (
@@ -215,13 +244,42 @@ function Field({ f, value, onChange, studyFields, allowedFields, allowedReady, q
       </div>
     );
   }
-  // text / email / phone / number / country
+  // PR-COUNTRY-PHONE — country and phone are never free text anywhere on the
+  // platform. Both were plain inputs here; the country one asked the applicant
+  // to know their own ISO 3166 code ("ISO code, e.g. IR").
+  if (f.type === 'country') {
+    return (
+      <div>
+        <span className="text-xs text-gray-600" id={`${f.key}-label`}>{f.label}</span>
+        <div className="mt-1">
+          <CountrySelect
+            id={f.key}
+            value={(value as string) || null}
+            onChange={(code) => onChange(code ?? '')}
+          />
+        </div>
+        {f.helper && <span className="mt-1 block text-[11px] text-gray-400">{f.helper}</span>}
+      </div>
+    );
+  }
+  if (f.type === 'phone') {
+    return (
+      <div>
+        <span className="text-xs text-gray-600">{f.label}</span>
+        <div className="mt-1">
+          <PhoneInput id={f.key} value={(value as string) ?? ''} onChange={onChange} />
+        </div>
+        {f.helper && <span className="mt-1 block text-[11px] text-gray-400">{f.helper}</span>}
+      </div>
+    );
+  }
+
+  // text / email / number
   return (
     <label className="block">
       <span className="text-xs text-gray-600">{f.label}</span>
       <input className={base} type={f.type === 'number' ? 'number' : f.type === 'email' ? 'email' : 'text'}
         value={(value as string) ?? ''}
-        placeholder={f.type === 'country' ? 'ISO code, e.g. IR' : undefined}
         onChange={(e) => onChange(f.type === 'number' ? Number(e.target.value) : e.target.value)} />
       {f.helper && <span className="mt-1 block text-[11px] text-gray-400">{f.helper}</span>}
     </label>

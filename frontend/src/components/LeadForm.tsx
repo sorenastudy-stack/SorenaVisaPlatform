@@ -1,11 +1,12 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState, useEffect } from 'react';
 import { leadSchema, LeadFormValues } from '@/lib/schemas/lead.schema';
 import { api, ApiError } from '@/lib/api';
 import { LeadResponse } from '@/types/acquisition';
+import { PhoneInput } from '@/components/common/PhoneInput';
 
 type FormStatus = 'idle' | 'submitting' | 'success-email' | 'success' | 'error';
 
@@ -35,6 +36,7 @@ export default function LeadForm() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<LeadFormValues>({
     resolver: zodResolver(leadSchema),
@@ -139,25 +141,23 @@ export default function LeadForm() {
         {errors.email && <p style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '4px' }}>{errors.email.message}</p>}
       </div>
 
-      {/* Phone + WhatsApp */}
+      {/* Phone + WhatsApp — PR-COUNTRY-PHONE. Both emit a single E.164 string,
+          exactly what the two free-text inputs here used to POST. */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        <div>
-          <input
-            {...register('phone')}
-            type="tel"
-            placeholder="Phone"
-            autoComplete="tel"
-            style={inputStyle}
-          />
-        </div>
-        <div>
-          <input
-            {...register('whatsapp')}
-            type="tel"
-            placeholder="WhatsApp"
-            style={inputStyle}
-          />
-        </div>
+        <Controller
+          control={control}
+          name="phone"
+          render={({ field }) => (
+            <PhoneInput value={field.value ?? ''} onChange={field.onChange} placeholder="Phone" theme="dark" />
+          )}
+        />
+        <Controller
+          control={control}
+          name="whatsapp"
+          render={({ field }) => (
+            <PhoneInput value={field.value ?? ''} onChange={field.onChange} placeholder="WhatsApp" theme="dark" autoComplete="off" />
+          )}
+        />
       </div>
 
       {/* Hidden destination */}

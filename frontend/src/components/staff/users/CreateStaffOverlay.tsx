@@ -13,6 +13,7 @@ import { ASSIGNABLE_ROLES, isExecutedWithPassword, isPendingApproval, type Actio
 import { TempPasswordModal } from './TempPasswordModal';
 import { notifySentForApproval } from './notify';
 import { CountryPicker } from '@/components/common/CountryPicker';
+import { PhoneInput } from '@/components/common/PhoneInput';
 
 // PR-CONSULT-3 — Create staff overlay.
 // PR-CONSULT-4 — extended with mobileNumber + countryOfResidence
@@ -212,12 +213,18 @@ export function CreateStaffOverlay({
             <label className="block text-xs font-semibold text-gray-600 mb-1">
               {t('staff.users.form.mobile')}
             </label>
-            <input
-              type="tel"
-              autoComplete="off"
-              placeholder="+64 21 …"
-              {...register('mobileNumber')}
-              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 min-h-[48px]"
+            <Controller
+              control={control}
+              name="mobileNumber"
+              render={({ field }) => (
+                <PhoneInput
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  ariaInvalid={Boolean(errors.mobileNumber)}
+                  autoComplete="off"
+                  placeholder="21 555 1234"
+                />
+              )}
             />
             {errors.mobileNumber && <p className="mt-1 text-xs text-rose-600">{errors.mobileNumber.message}</p>}
           </div>

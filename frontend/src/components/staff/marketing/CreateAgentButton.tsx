@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { PhoneInput } from '@/components/common/PhoneInput';
 
 // PR-SCORECARD-2 — Create-agent modal trigger button.
 
@@ -86,7 +87,10 @@ export function CreateAgentButton() {
 
             <Field label="Full name *" value={fullName} onChange={setFullName} />
             <Field label="Email"        value={email}    onChange={setEmail} type="email" />
-            <Field label="Phone"        value={phone}    onChange={setPhone} type="tel" />
+            <div className="mb-3">
+              <label className="block text-xs font-semibold text-[#1E3A5F]/80 mb-1">Phone</label>
+              <PhoneInput value={phone} onChange={setPhone} placeholder="21 555 1234" />
+            </div>
             <FieldLong label="Notes"    value={notes}    onChange={setNotes} />
 
             <div className="flex items-center justify-end gap-2 mt-5">
