@@ -66,7 +66,14 @@ inventory, not by a report.
 | `frontend/src/components/staff/users/CreateStaffOverlay.tsx` | `mobileNumber` → `PhoneInput` via `Controller`. |
 | `frontend/src/components/staff/users/EditStaffOverlay.tsx` | Same. |
 | `frontend/src/components/staff/marketing/CreateAgentButton.tsx` | `phone` → `PhoneInput`. |
-| `frontend/src/components/LeadForm.tsx` | `phone` + `whatsapp` → `PhoneInput theme="dark"`, via `Controller`. |
+| `frontend/src/components/LeadForm.tsx` | `phone` + `whatsapp` → `PhoneInput theme="dark"`, via `Controller`. **Since deleted — see below.** |
+
+**Deleted in the follow-up commit** (`0a9c…`, see the commit table): `LeadForm.tsx` and
+`lib/schemas/lead.schema.ts`, its only dependant. Both were dead code — nothing imported the
+component and no route rendered it. `types/acquisition.ts` was kept: `VerifyEmailResponse` is
+used by the live `/verify-email` route, and `LeadResponse` / `CreateLeadPayload` still document
+the shape of `POST /acquisition/leads`, which is live and receives the real marketing site's
+submissions.
 
 ---
 
@@ -171,18 +178,18 @@ sequences, so the picker shows the letters (`NZ`) rather than 🇳🇿. This is 
 behaviour shared with `CountryPicker` and `CountrySelect`, not a regression, and it is correct
 on macOS, iOS, and Android.
 
-**3. `LeadForm` is orphaned in this repo.** Nothing imports it — the live marketing lead form is
-on `www.sorenavisa.com`, which is a separate property (see the Railway URL topology note). It was
-updated for consistency and verified through a temporary harness, but **the change does not
-reach any live page from this repo.** If the marketing site is ever folded in, this component is
-ready; if it never is, this component is dead code and should be deleted rather than maintained.
+**3. ~~`LeadForm` is orphaned in this repo.~~ Resolved — it was deleted.** Nothing imported it;
+the live marketing lead form is on `www.sorenavisa.com`, a separate property (see the Railway
+URL topology note). It was updated for consistency during this phase and verified through a
+temporary harness, then removed once that was confirmed, along with `lib/schemas/lead.schema.ts`.
+The backend endpoint it posted to is untouched and still live.
 
-**4. `LeadForm` has a pre-existing bug that blocks submission.** `studyLevel` and
-`preferredLanguage` render an empty `""` option, which fails their `z.enum()` — and neither
-field renders its error message, so the form silently does nothing when Send is pressed. Found
-while testing, **not fixed** (out of scope, and the component is orphaned anyway). If the
-marketing form is ever wired up, fix this first: make both `.optional().or(z.literal(''))`, or
-strip empty strings before validation.
+**4. `LeadForm` had a pre-existing bug that blocked submission — recorded here because the real
+marketing form may share it.** `studyLevel` and `preferredLanguage` rendered an empty `""`
+option, which fails their `z.enum()`, and neither field rendered its error message — so the form
+silently did nothing when Send was pressed. It went out with the component rather than being
+fixed. **If the marketing site's form is built from the same schema, it has the same bug**: fix
+by making both `.optional().or(z.literal(''))`, or by stripping empty strings before validation.
 
 **5. `countryOfPosting` legacy values were not audited in production.** The local database has
 zero officer rows. Legacy free text renders through unchanged (without a flag) and normalises to

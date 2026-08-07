@@ -33,7 +33,14 @@ export interface PhoneInputProps {
   id?:          string;
   name?:        string;
   autoComplete?: string;
-  /** 'dark' matches the marketing LeadForm's translucent-on-navy styling. */
+  /**
+   * 'dark' renders translucent-on-navy, for a form sitting on a dark ground.
+   *
+   * Currently unused — its one consumer was the orphaned marketing LeadForm,
+   * deleted along with this note's original reference. Kept because the public
+   * landing page is dark and the variant is six lines of conditional classes,
+   * already verified in a browser. Delete it if no dark form appears.
+   */
   theme?:       'light' | 'dark';
 }
 
@@ -136,8 +143,8 @@ export function PhoneInput({
 
   return (
     // `min-w-0` matters: as a grid/flex child this would otherwise be sized by
-    // its min-content (prefix button + input) and overflow a narrow column —
-    // which is exactly what the LeadForm's two-up phone/WhatsApp row does.
+    // its min-content (prefix button + input) and overflow a narrow column.
+    // Two of these side by side in a `grid-cols-2` is where that showed up.
     <div ref={wrapperRef} className="relative w-full min-w-0">
       <div className={shellClass}>
         <button
