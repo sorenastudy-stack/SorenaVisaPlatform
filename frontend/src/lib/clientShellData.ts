@@ -93,6 +93,12 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
     // PR-RECS-1 — programme matches (read-only list + sort). Inline English label
     // (no dot → literal, keeps Persian frozen). Payment-gated to match the endpoint.
     { labelKey: 'Recommendations',      href: '/student/recommendations', iconName: 'graduationCap', lockedUntilPaid: true },
+    // PR-PHASE38 — the programme map/list. It was live and working but reachable
+    // only by typing the URL; nothing in the portal linked to it. Sits next to
+    // Recommendations because they answer the same question from two directions
+    // (matched-for-you vs browse-everything), and carries the same
+    // lockedUntilPaid gate so the whole post-payment group behaves alike.
+    { labelKey: 'portal.nav.explore',   href: '/student/explore',         iconName: 'mapPin',        lockedUntilPaid: true },
     { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText',      lockedUntilPaid: true },
     // Keyed via next-intl (PR-I18N-2: portal.nav.myAssessment / booking).
     { labelKey: 'portal.nav.booking',              href: '/portal/booking',        iconName: 'calendar' },

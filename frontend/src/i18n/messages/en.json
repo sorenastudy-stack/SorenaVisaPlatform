@@ -2157,7 +2157,8 @@
       "apply": "Apply / Study",
       "payments": "Payments",
       "myAssessment": "My Assessment",
-      "booking": "Booking"
+      "booking": "Booking",
+      "explore": "Explore"
     },
     "relogin": {
       "title": "You're all set!",
