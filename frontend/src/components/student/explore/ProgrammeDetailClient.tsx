@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Loader2, Star, MapPin, Clock, GraduationCap, Info, Sparkles, PlayCircle, ExternalLink,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import { ExploreGate } from './ExploreGate';
 import { Card, CardContent } from '@/components/ui/Card';
 
 // PR-EXPLORE — one programme, in full.
@@ -50,15 +51,23 @@ export function ProgrammeDetailClient({ programmeId }: { programmeId: string }) 
   const router = useRouter();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gated, setGated] = useState(false);
   const [changes, setChanges] = useState<ChangeItem[] | null>(null);
   const [videos, setVideos] = useState<VideoPayload | null>(null);
   const [videosLoading, setVideosLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    // PR-PHASE38 — a deep link to a programme is gated the same as the list.
+    // Without this an unpaid student who kept an old URL would still see the
+    // full detail page, which is exactly the hole the guard was added to close.
     api.get<Detail>(`/explore/programmes/${programmeId}`)
       .then((r) => { if (!cancelled) setD(r); })
-      .catch((e) => { if (!cancelled) setError(e?.message ?? 'Could not load this programme.'); });
+      .catch((e) => {
+        if (cancelled) return;
+        if (e instanceof ApiError && e.statusCode === 403) { setGated(true); return; }
+        setError(e?.message ?? 'Could not load this programme.');
+      });
 
     // What changed since this device last opened THIS programme.
     //
@@ -95,6 +104,7 @@ export function ProgrammeDetailClient({ programmeId }: { programmeId: string }) 
     return () => { cancelled = true; };
   }, [programmeId]);
 
+  if (gated) return <ExploreGate />;
   if (error) {
     return <div className="mx-auto max-w-4xl p-6"><Card><CardContent className="p-5 text-sm text-red-600">{error}</CardContent></Card></div>;
   }

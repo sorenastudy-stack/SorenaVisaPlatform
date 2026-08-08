@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Loader2, MapPin, Search, Star, Info } from 'lucide-react';
-import { api } from '@/lib/api';
+import { ExploreGate } from './ExploreGate';
+import { api, ApiError } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
 
 // PR-EXPLORE — student programme browser.
@@ -62,6 +63,7 @@ export function ExploreClient() {
   const router = useRouter();
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gated, setGated] = useState(false);
   const [sort, setSort] = useState('featured');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -80,7 +82,15 @@ export function ExploreClient() {
     setError(null);
     api.get<Payload>(`/explore?${params}`)
       .then((d) => { if (!cancelled) setData(d); })
-      .catch((e) => { if (!cancelled) setError(e?.message ?? 'Could not load programmes.'); });
+      .catch((e) => {
+        if (cancelled) return;
+        // PR-PHASE38 — the engagement-fee gate. EngagementPaidGuard answers 403
+        // for an unpaid student, exactly as it does for recommendations, so the
+        // panel below is shown rather than a raw error. Same detection the
+        // recommendations client uses; the server is the authority either way.
+        if (e instanceof ApiError && e.statusCode === 403) { setGated(true); return; }
+        setError(e?.message ?? 'Could not load programmes.');
+      });
     return () => { cancelled = true; };
   }, [sort, debounced]);
 
@@ -96,6 +106,12 @@ export function ExploreClient() {
   const selectedName = selectedProviderId
     ? data?.results.find((r) => r.provider.id === selectedProviderId)?.provider.name
     : null;
+
+  // PR-PHASE38 — the engagement-fee gate, worded and shaped exactly like the
+  // recommendations one so the two locked surfaces feel like one rule rather
+  // than two. Returned before the search box and the map so nothing about the
+  // catalogue is rendered, not even the controls.
+  if (gated) return <ExploreGate />;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
