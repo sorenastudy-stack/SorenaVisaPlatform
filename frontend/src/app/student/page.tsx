@@ -8,7 +8,7 @@ import { relativeTime } from '@/lib/date';
 import { formatMoney } from '@/lib/money';
 import {
   FileText, MessageCircle, CreditCard, ArrowRight,
-  CheckCircle, Clock, AlertCircle, Folder
+  CheckCircle, Clock, AlertCircle, Folder, MapPin
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -163,8 +163,9 @@ export default async function StudentDashboard() {
         </Link>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Stat cards — four since Explore was added, so the row splits 2-up on
+          tablet rather than leaving a lone card on a second line. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Documents */}
         <Link href="/student/documents" className="block">
           <Card className="hover:border-[#c9a961]/50 transition-colors cursor-pointer h-full">
@@ -250,6 +251,26 @@ export default async function StudentDashboard() {
             </Card>
           </Link>
         )}
+
+        {/* Explore — PR-PHASE38. The programme map and list existed and were
+            live, but nothing in the portal linked to them, so a student could
+            only reach /student/explore by typing the URL. */}
+        <Link href="/student/explore" className="block">
+          <Card className="hover:border-[#c9a961]/50 transition-colors cursor-pointer h-full">
+            <CardContent className="pt-5">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-[#1E3A5F]/10">
+                  <MapPin size={20} className="text-[#1E3A5F]" />
+                </div>
+                <div>
+                  <p className="text-xs text-[#4A4A4A]/60 uppercase tracking-wider">{t('explore')}</p>
+                  <p className="text-lg font-bold text-[#1E3A5F] mt-0.5">{t('exploreTitle')}</p>
+                  <p className="text-xs text-[#4A4A4A]/70 mt-1">{t('exploreSub')}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Bottom row */}
