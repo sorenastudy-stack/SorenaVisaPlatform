@@ -64,14 +64,57 @@ export function studyFieldKey(subjectArea: string | null, title: string): { key:
   if (/computing|it\b|information tech/.test(sa)) return { key: 'it_computer_science', unmapped: false };
   if (/health|nursing/.test(sa)) return { key: has(/nurs/) ? 'nursing' : 'healthcare_medical', unmapped: false };
   if (/engineering/.test(sa)) return { key: 'engineering', unmapped: false };
-  if (/construction|architecture/.test(sa)) return { key: 'construction_trades', unmapped: false };
+  if (/construction|architecture|trades|welding|plumb|carpentr|joinery|electrical|automotive/.test(sa)) {
+    return { key: 'construction_trades', unmapped: false };
+  }
   if (/science|environment/.test(sa)) return { key: 'science_environment', unmapped: false };
-  if (/hospitality|tourism/.test(sa)) return { key: 'hospitality_culinary', unmapped: false };
-  if (/beauty|hair/.test(sa)) return { key: 'personal_services', unmapped: false };
-  if (/sport|outdoor/.test(sa)) return { key: 'sport_recreation', unmapped: false };
+  // Culinary sits ABOVE the arts branch on purpose: "Culinary Arts / Cookery"
+  // and "Pâtisserie" are hospitality, and a broader arts rule would steal them.
+  if (/hospitality|tourism|culinar|cookery|patisserie|pâtisserie|baking|food, wine/.test(sa)) {
+    return { key: 'hospitality_culinary', unmapped: false };
+  }
+  if (/beauty|hair|barber|massage/.test(sa)) return { key: 'personal_services', unmapped: false };
+  if (/sport|outdoor|equine/.test(sa)) return { key: 'sport_recreation', unmapped: false };
   if (/english language|foundation|pathway/.test(sa)) return { key: 'foundation_pathways', unmapped: false };
-  if (/creative arts|media/.test(sa)) return { key: has(/media|journal|communicat|visual|film|broadcast/) ? 'media_communication' : 'arts_design', unmapped: false };
+  // PR-PHASE37 — these keys existed in the taxonomy from the start but nothing
+  // reached them, because the only tests for agriculture/aviation were nested
+  // inside the `other` branch below. 220 of 1,129 production programmes were
+  // landing in `other` as a result, including 31 law and 21 aviation rows.
+  if (/agricultur|horticultur|viticultur|dairy|farm(ing)?\b/.test(sa)) {
+    return { key: 'agriculture', unmapped: false };
+  }
+  if (/aviation|pilot|rererangi|maritime|marine|diving|transport|logistics/.test(sa)) {
+    return { key: 'aviation_transport', unmapped: false };
+  }
+  if (/\blaw\b|legal|criminal justice|politic|government/.test(sa)) {
+    return { key: 'law_government', unmapped: false };
+  }
+  // Performing arts, screen, audio and music all belong with design rather than
+  // with journalism — the media split below is about communication, not craft.
+  if (/creative arts|media|performing arts|art and design|art & design|arts,|game art|songwriting|screen|audio|music|film|animation|advertising|creative techn|creative\/performance/.test(sa)) {
+    return {
+      key: has(/media|journal|communicat|broadcast|advertis/) ? 'media_communication' : 'arts_design',
+      unmapped: false,
+    };
+  }
+  if (/communication studies/.test(sa)) return { key: 'media_communication', unmapped: false };
+  // Psychology → healthcare_medical, deliberately, for two reasons. The tag
+  // decides which applicants are SHOWN a programme, and people looking for
+  // psychology look under health. More importantly `social_community` carries
+  // backgroundWeight 0, so routing psychology there would also score a real
+  // psychology degree as 0 for field of study when used as a Q13 answer.
+  // Counselling without psychology stays social/community via the branch below.
+  if (/psychology/.test(sa)) return { key: 'healthcare_medical', unmapped: false };
+  if (/pharmac|chinese medicine/.test(sa)) return { key: 'healthcare_medical', unmapped: false };
   if (/education|social/.test(sa)) return { key: has(/social|counsel|community|support work|youth/) ? 'social_community' : 'education_teaching', unmapped: false };
+  if (/counsel|youth work|community service/.test(sa)) return { key: 'social_community', unmapped: false };
+  if (/property|valuation|financial services/.test(sa)) return { key: 'business_management', unmapped: false };
+  // Humanities-shaped subjects: real disciplines with no dedicated key, so they
+  // go to the general bucket rather than to `other`. `unmapped: false` because
+  // this IS the intended destination, not a failure to place them.
+  if (/theolog|christian|ministry|religio|humanities|language and culture|intercultural|international studies|maori|māori|indigenous|te ara poutama|te kawa a maui|te reo/.test(sa)) {
+    return { key: 'general_interdisciplinary', unmapped: false };
+  }
   if (/other/.test(sa)) {
     if (has(/ict|informatic|comput|software|data/)) return { key: 'it_computer_science', unmapped: false };
     if (has(/commerce|business|account|financ/)) return { key: 'business_management', unmapped: false };

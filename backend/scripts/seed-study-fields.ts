@@ -2,10 +2,19 @@
  * graph. Idempotent (upsert by key). Relations are marked APPROVED here as
  * curated starter data (staff-equivalent); production edits go PENDING→APPROVED
  * via the owner UI. `backgroundWeight` preserves q16's per-field scoring weight.
- * Run: npx ts-node scripts/seed-study-fields.ts */
+ *
+ * Run:
+ *   npx ts-node --transpile-only scripts/seed-study-fields.ts --dry-run
+ *   npx ts-node --transpile-only scripts/seed-study-fields.ts                     (local)
+ *   npx ts-node --transpile-only scripts/seed-study-fields.ts --confirm-production
+ *
+ * PR-PHASE37 — added the production guard and --dry-run. This script writes the
+ * taxonomy the Q13/Q32 pickers read, so running it is what unblocks the v2
+ * assessment on an environment where the tables exist but are empty. That makes
+ * it legitimately useful against production, which is exactly why it needs a
+ * deliberate flag rather than an outright refusal.
+ */
 import { PrismaClient, ReviewStatus } from '@prisma/client';
-
-const prisma = new PrismaClient();
 
 const CATEGORIES: Array<{ key: string; nameEn: string; nameFa: string; always?: boolean; order: number }> = [
   { key: 'management_business', nameEn: 'Management & Business', nameFa: 'مدیریت و کسب‌وکار', always: true, order: 1 },
@@ -67,7 +76,89 @@ const RELATIONS: Array<[string, string]> = [
   ['arts_design', 'media_communication'],
 ];
 
+// ── PRODUCTION GUARD ────────────────────────────────────────────────────────
+// Same rail as geocode-providers.ts and backfill-verification-status.ts.
+// "Local" is deliberately narrow — anything that is not localhost/127.0.0.1 is
+// treated as production, so a demo or staging URL is gated too. Better to ask
+// an unnecessary question than to skip a necessary one.
+const dryRun = process.argv.includes('--dry-run');
+const confirmed = process.argv.includes('--confirm-production');
+
+function guard(): PrismaClient {
+  const url = process.env.DATABASE_URL ?? '';
+  if (!url) {
+    console.error('REFUSING TO RUN: DATABASE_URL is not set.');
+    process.exit(1);
+  }
+  const isLocal = /localhost|127\.0\.0\.1/.test(url);
+  const host = (() => { try { return new URL(url).hostname; } catch { return '(unparseable host)'; } })();
+
+  // A dry run writes nothing, so it is allowed anywhere without the flag —
+  // that is the whole point of having one.
+  if (!isLocal && !confirmed && !dryRun) {
+    console.error('REFUSING TO RUN: DATABASE_URL is not local.');
+    console.error(`  target host : ${host}`);
+    console.error('');
+    console.error('This writes study_field_categories, study_fields and study_field_relations.');
+    console.error('Against production that is a real data change, so it needs to be deliberate:');
+    console.error('');
+    console.error('  npx ts-node --transpile-only scripts/seed-study-fields.ts --dry-run');
+    console.error('  npx ts-node --transpile-only scripts/seed-study-fields.ts --confirm-production');
+    console.error('');
+    console.error('Take a backup first, per the standing rule.');
+    process.exit(1);
+  }
+  if (!isLocal && !dryRun) {
+    console.log(`⚠ RUNNING AGAINST A NON-LOCAL DATABASE — host ${host}`);
+    console.log('  writing: study_field_categories, study_fields, study_field_relations');
+    console.log('  method : upsert by natural key — no deletes, no truncates\n');
+  }
+  if (isLocal && confirmed) {
+    console.log('note: --confirm-production given but DATABASE_URL is local; running locally.\n');
+  }
+  if (dryRun) console.log(`DRY RUN — no writes. Target host: ${host}\n`);
+
+  return new PrismaClient();
+}
+
+const prisma = guard();
+
+/**
+ * Report what a real run would do, without writing anything.
+ *
+ * Reads the current rows so the output distinguishes CREATE from UPDATE — on an
+ * empty production that means every line should read CREATE, and anything
+ * reading UPDATE is a signal that the target is not the empty database expected.
+ */
+async function dryRunReport(): Promise<void> {
+  const [cats, fields, rels] = await Promise.all([
+    prisma.studyFieldCategory.findMany({ select: { key: true } }),
+    prisma.studyField.findMany({ select: { key: true } }),
+    prisma.studyFieldRelation.count(),
+  ]);
+  const haveCat = new Set(cats.map((c) => c.key));
+  const haveField = new Set(fields.map((f) => f.key));
+
+  console.log(`CURRENT STATE  categories=${cats.length}  fields=${fields.length}  relations=${rels}\n`);
+
+  console.log(`study_field_categories — ${CATEGORIES.length} rows`);
+  for (const c of CATEGORIES) {
+    console.log(`  ${haveCat.has(c.key) ? 'UPDATE' : 'CREATE'}  ${c.key.padEnd(22)} ${c.nameEn}`);
+  }
+  console.log(`\nstudy_fields — ${FIELDS.length} rows`);
+  for (const f of FIELDS) {
+    console.log(`  ${haveField.has(f.key) ? 'UPDATE' : 'CREATE'}  ${f.key.padEnd(28)} w=${f.w}  cat=${f.cat}`);
+  }
+  console.log(`\nstudy_field_relations — ${RELATIONS.length} rows (all APPROVED)`);
+  for (const [src, tgt] of RELATIONS) console.log(`  UPSERT  ${src} → ${tgt}`);
+
+  console.log(`\nTOTAL: ${CATEGORIES.length} categories, ${FIELDS.length} fields, ${RELATIONS.length} relations`);
+  console.log('Writes are upsert-by-key only. No deleteMany, no truncate, no other table touched.');
+}
+
 async function main() {
+  if (dryRun) return dryRunReport();
+
   const catId: Record<string, string> = {};
   for (const c of CATEGORIES) {
     const row = await prisma.studyFieldCategory.upsert({
