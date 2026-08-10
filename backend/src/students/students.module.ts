@@ -14,6 +14,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
 import { EventsService } from '../events/events.service';
+import { DeclarationAcceptanceService } from '../common/declaration-acceptance.service';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { EventsService } from '../events/events.service';
     ChatbotModule,
   ],
   controllers: [StudentsController, AdmissionController, VisaController],
-  providers: [StudentsService, AdmissionService, VisaService, ProgrammeChoiceRulesService, EventsService],
+  providers: [StudentsService, AdmissionService, VisaService, ProgrammeChoiceRulesService, EventsService, DeclarationAcceptanceService],
   exports: [StudentsService],
 })
 export class StudentsModule {}

@@ -17,6 +17,7 @@ import {
   buildProgrammeChoiceAuditData, programmeLabel, type ProgrammeChoiceAction,
 } from './programme-choice-notice';
 import { decideReassignment } from '../../matching/intake-window';
+import { DeclarationAcceptanceService } from '../../common/declaration-acceptance.service';
 import {
   intakeReassignedNotice, intakeManualReviewNotice, reassignTaskTitle,
   manualReviewTaskTitle, intakeTermLabel,
@@ -374,6 +375,7 @@ export class AdmissionService {
     private crypto: CryptoService,
     private choiceRules: ProgrammeChoiceRulesService,
     private events: EventsService,
+    private declarations: DeclarationAcceptanceService,
   ) {}
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -649,7 +651,14 @@ export class AdmissionService {
     return this.loadFullApplication(caseRecord.id);
   }
 
-  async updateApplication(userId: string, body: Record<string, unknown>) {
+  async updateApplication(
+    userId: string,
+    body: Record<string, unknown>,
+    // PR-PHASE39 — where the agreement came from, for the audit row. Optional so
+    // every existing caller and test keeps compiling; a missing origin records
+    // the acceptance with null IP/device rather than not recording it at all.
+    origin: { ipAddress: string | null; userAgent: string | null } = { ipAddress: null, userAgent: null },
+  ) {
     const { contact, caseRecord } = await this.resolveContactAndCase(userId);
 
     const application = await this.prisma.admissionApplication.findFirst({
@@ -703,6 +712,31 @@ export class AdmissionService {
           newValue: { updatedFields: changedKeys },
         },
       });
+
+      // PR-PHASE39 — immutable proof of the two admission declarations.
+      //
+      // Written on the TRANSITION into agreement, not on every PATCH: the form
+      // re-sends whole steps, so keying off presence alone would file a fresh
+      // audit row each time the client edited an unrelated field on the page.
+      //
+      // The Boolean/timestamp above stays exactly as it was — it is still what
+      // the submit check at line ~358 reads. This is additive.
+      if (data.agentDeclarationAgreed === true && application.agentDeclarationAgreed !== true) {
+        await this.declarations.record({
+          userId,
+          type: 'AGENT_DECLARATION',
+          applicationId: application.id,
+          ...origin,
+        });
+      }
+      if (data.termsAgreedAt != null && application.termsAgreedAt == null) {
+        await this.declarations.record({
+          userId,
+          type: 'ADMISSION_ACCEPTANCE',
+          applicationId: application.id,
+          ...origin,
+        });
+      }
 
       // Auto-ticket: trigger when englishPreCourse is set to true in this PATCH.
       // Idempotency guarded inside the helper.

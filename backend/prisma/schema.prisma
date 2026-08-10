@@ -1400,9 +1400,29 @@ model WalletTransaction {
   @@map("wallet_transaction")
 }
 
-// Proof-of-acceptance of the cancellation/refund policy, captured server-side
-// BEFORE a paid booking's Stripe session is created. Stores who/when + IP,
-// device (user-agent), and the policy version they accepted.
+// Which declaration a PolicyAcceptance row records.
+//
+// NULL means the wallet cancellation/refund policy — the original and only use
+// until PR-PHASE39. Left null rather than backfilled so the wallet path is
+// untouched and its existing rows keep meaning exactly what they meant.
+enum DeclarationType {
+  AGENT_DECLARATION
+  ADMISSION_ACCEPTANCE
+  VISA_SUBMIT_DECLARATION
+}
+
+// Proof-of-acceptance, captured server-side. Stores who/when + IP, device
+// (user-agent), and the policy version they accepted.
+//
+// Originally the cancellation/refund policy before a paid booking's Stripe
+// session. PR-PHASE39 extends it to the three in-form declarations (agent,
+// admission acceptance, visa submit), which until now wrote only a Boolean or
+// timestamp onto the application row — a value the client could clear by
+// unticking, leaving no proof of what was agreed or when.
+//
+// APPEND-ONLY. Nothing updates or deletes a row here. Unticking and re-ticking
+// a box writes a NEW row; the application's own field remains the fast
+// "current status" check and may still be overwritten.
 model PolicyAcceptance {
   id             String   @id @default(cuid())
   userId         String
@@ -1413,10 +1433,25 @@ model PolicyAcceptance {
   userAgent      String?
   createdAt      DateTime @default(now())
 
+  // PR-PHASE39 — all nullable so existing wallet rows stay valid unchanged.
+  declarationType DeclarationType?
+  /// The literal text shown to the client, snapshotted at the moment of
+  /// agreement. `policyVersion` alone would not survive a wording change: the
+  /// version tells you WHICH text, this tells you WHAT text, so the row is
+  /// self-contained years later without a lookup into code history.
+  declarationText String?
+  /// The AdmissionApplication or VisaApplication this belongs to. Deliberately
+  /// NOT a foreign key: an audit row must outlive the record it describes, and
+  /// a cascade delete on the application would erase the very proof this table
+  /// exists to keep.
+  applicationId   String?
+
   user User @relation("PolicyAcceptanceUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([consultationId])
+  @@index([applicationId])
+  @@index([declarationType])
   @@map("policy_acceptance")
 }
 

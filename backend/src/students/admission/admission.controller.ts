@@ -25,6 +25,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { EngagementPaidGuard } from '../../common/guards/engagement-paid.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { AdmissionService } from './admission.service';
+import { requestOrigin } from '../../common/declaration-acceptance.service';
 import { MulterExceptionFilter } from './multer-exception.filter';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
@@ -127,7 +128,10 @@ export class AdmissionController {
 
   @Patch('application')
   updateApplication(@Req() req: any, @Body() body: Record<string, unknown>) {
-    return this.admissionService.updateApplication(req.user.userId, body);
+    // PR-PHASE39 — IP/device travel with the patch so an agreement ticked in
+    // this request can be recorded with where it came from. Derived here, in
+    // the controller, because only the controller has the request.
+    return this.admissionService.updateApplication(req.user.userId, body, requestOrigin(req));
   }
 
   @Post('application/programme-choices')

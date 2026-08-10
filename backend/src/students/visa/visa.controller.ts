@@ -26,6 +26,7 @@ import { EngagementPaidGuard } from '../../common/guards/engagement-paid.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { MulterExceptionFilter } from '../admission/multer-exception.filter';
 import { VisaService } from './visa.service';
+import { requestOrigin } from '../../common/declaration-acceptance.service';
 import { MilitaryHistoryDto } from './dto/military-history.dto';
 import { TravelHistoryDto } from './dto/travel-history.dto';
 import { ImmigrationAssistanceDto } from './dto/immigration-assistance.dto';
@@ -419,7 +420,9 @@ export class VisaController {
     @Req() req: any,
     @Body() body: SupportingDocuments2Dto,
   ) {
-    return this.visaService.saveSupportingDocuments2(req.user.userId, body);
+    // PR-PHASE39 — IP/device travel with the patch so a declaration ticked in
+    // this request is recorded with where it came from.
+    return this.visaService.saveSupportingDocuments2(req.user.userId, body, requestOrigin(req));
   }
 
   @Put('supporting-documents-2/other-evidence')

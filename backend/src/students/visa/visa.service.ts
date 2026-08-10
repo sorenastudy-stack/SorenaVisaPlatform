@@ -9,6 +9,7 @@ import * as path from 'path';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
+import { DeclarationAcceptanceService } from '../../common/declaration-acceptance.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { decryptPiiFields } from '../admission/admission-encryption.util';
 import { isValidCountryCode } from '../../common/country-codes';
@@ -245,6 +246,7 @@ export class VisaService {
   constructor(
     private prisma: PrismaService,
     private crypto: CryptoService,
+    private declarations: DeclarationAcceptanceService,
   ) {}
 
   // ── Auth helper — same shape as AdmissionService.resolveContactAndCase ──
@@ -2913,6 +2915,9 @@ export class VisaService {
       tookEnglishTest?: boolean | null;
       declarationChecked?: boolean | null;
     },
+    // PR-PHASE39 — where the agreement came from, for the audit row. Optional so
+    // existing callers and tests keep compiling.
+    origin: { ipAddress: string | null; userAgent: string | null } = { ipAddress: null, userAgent: null },
   ) {
     const { admission } = await this.resolveAdmissionApplication(userId);
     const visa = await this.prisma.visaApplication.findUnique({
@@ -3087,6 +3092,22 @@ export class VisaService {
         });
       }
     });
+
+    // PR-PHASE39 — immutable proof of the visa submit declaration, written on
+    // the TRANSITION into agreement. `pick` falls back to the persisted value,
+    // so this step re-saving unrelated fields does not file a duplicate row;
+    // unticking and re-ticking does, which is the point.
+    //
+    // The declarationChecked column above is unchanged — it stays the fast
+    // "currently agreed?" check that the step's own validation reads.
+    if (declarationChecked === true && visa.declarationChecked !== true) {
+      await this.declarations.record({
+        userId,
+        type: 'VISA_SUBMIT_DECLARATION',
+        applicationId: visa.id,
+        ...origin,
+      });
+    }
 
     return this.getSupportingDocuments2(userId);
   }
