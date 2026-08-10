@@ -88,9 +88,19 @@ export async function seedFixture(
   const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const tag = '__pr_lia_auto_assign_phase7__';
 
-  // 1. LIA user — created fresh per test so its open-case counter
-  //    starts at zero (ensures the load-balanced auto-pick lands on
-  //    this user, not on whatever real LIA happens to be in the DB).
+  // 1. LIA user — created fresh per test so its open-case counter starts at
+  //    zero, AND backdated so it wins the tie-break.
+  //
+  //    Zero open cases alone is NOT enough to make the auto-pick land here.
+  //    assignLiaToCase picks the lowest open-case count and breaks ties on
+  //    `createdAt ASC` (lia-assignment.service.ts:168) — so among equally idle
+  //    LIAs the OLDEST wins, and a freshly-created fixture user is the newest.
+  //    On a clean database that did not matter because no other idle LIA
+  //    existed; after enough test runs leave their own LIAs behind it fails,
+  //    and the failure looks like a broken feature rather than a stale premise.
+  //
+  //    Backdating to 1970 makes this user unambiguously the oldest idle LIA, so
+  //    the assertion holds no matter what else is in the database.
   const liaUser = await prisma.user.create({
     data: {
       name:         `Test LIA ${stamp}`,
@@ -98,6 +108,7 @@ export async function seedFixture(
       passwordHash: 'no-login',   // any non-empty string; never verified
       role:         'LIA',
       isActive:     true,
+      createdAt:    new Date(0),
     },
   });
 

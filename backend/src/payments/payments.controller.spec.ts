@@ -155,9 +155,12 @@ describe('PaymentsController.handlePaymentSucceeded (PR-LIA-AUTO-ASSIGN Phase 7)
       await handle(fx.accountOpeningSuccess);
 
       const after = await prisma.case.findUnique({ where: { id: ids.caseId } });
-      // The test LIA was the only LIA with zero open cases at seed time,
-      // so the load-balanced auto-pick lands on it (the real prod LIA
-      // Sheila has 3 open cases — higher count, loses the tie-break).
+      // The fixture LIA wins the auto-pick because it has zero open cases AND
+      // is backdated to the epoch, so it also wins the `createdAt ASC`
+      // tie-break among equally idle LIAs (see db-fixtures.ts). The original
+      // note here claimed it was "the only LIA with zero open cases" — true on
+      // a clean database, false once earlier runs leave their own idle LIAs
+      // behind, which is exactly how this test started failing.
       expect(after?.liaId).toBe(ids.liaUserId);
       expect(after?.liaAssignedAt).not.toBeNull();
     });
