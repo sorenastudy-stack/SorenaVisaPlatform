@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Clock, CheckCircle2, TrendingUp, Loader2, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
+import { ExchangeRateCard } from './ExchangeRateCard';
 
 // Finance portal — read-only dashboard. Three cards: payments awaiting
 // confirmation (→ Processing), confirmed in the last 7 days, confirmed all-time.
@@ -83,6 +84,11 @@ export function FinanceDashboardClient() {
           </div>
         </div>
       )}
+
+      {/* PR-PHASE40 — loads independently of the dashboard above: if the
+          confirmations query fails, Finance must still be able to set the rate,
+          since an unset rate blocks invoicing outright. */}
+      <ExchangeRateCard />
     </div>
   );
 }

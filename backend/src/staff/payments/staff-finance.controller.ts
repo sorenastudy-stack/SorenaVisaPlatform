@@ -1,8 +1,10 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../roles/staff-roles.guard';
 import { StaffRoles } from '../roles/staff-roles.decorator';
 import { StaffPaymentsService } from './staff-payments.service';
+import { ExchangeRateService } from '../../payments/exchange-rate.service';
+import { SetExchangeRateDto } from './dto/set-exchange-rate.dto';
 
 // Finance portal — read-only overview + confirmed-payments ledger.
 //
@@ -14,7 +16,10 @@ const CONFIRMERS = ['OWNER', 'FINANCE'] as const;
 @Controller('staff/finance')
 @UseGuards(JwtAuthGuard, StaffRolesGuard)
 export class StaffFinanceController {
-  constructor(private readonly service: StaffPaymentsService) {}
+  constructor(
+    private readonly service: StaffPaymentsService,
+    private readonly exchangeRates: ExchangeRateService,
+  ) {}
 
   // GET /staff/finance/dashboard → { pendingCount, confirmedThisWeek, confirmedAllTime }
   @Get('dashboard')
@@ -28,5 +33,30 @@ export class StaffFinanceController {
   @StaffRoles(...CONFIRMERS)
   finalised() {
     return this.service.listFinalised();
+  }
+
+  // PR-PHASE40 — the USD→NZD rate every invoice is stamped with.
+  //
+  // Same FINANCE/OWNER gate as the ledger above: the person who reconciles the
+  // GST is the person who sets the rate it is computed from. No external
+  // provider is involved — this endpoint pair IS the source of the number.
+  //
+  // GET /staff/finance/exchange-rate → current rate + who set it, and the trail.
+  @Get('exchange-rate')
+  @StaffRoles(...CONFIRMERS)
+  exchangeRate() {
+    return this.exchangeRates.getCurrentAndHistory();
+  }
+
+  // POST /staff/finance/exchange-rate → append a new rate. Never edits a row:
+  // the previous rate stays readable because issued invoices were stamped with it.
+  @Post('exchange-rate')
+  @StaffRoles(...CONFIRMERS)
+  async setExchangeRate(@Body() dto: SetExchangeRateDto, @Req() req: any) {
+    await this.exchangeRates.recordManualRate(dto.rate, {
+      id: req.user?.userId ?? req.user?.id,
+      name: req.user?.name ?? null,
+    });
+    return this.exchangeRates.getCurrentAndHistory();
   }
 }

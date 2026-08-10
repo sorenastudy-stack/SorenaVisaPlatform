@@ -34,13 +34,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { id: payload.sub },
       // secondaryRoles sourced from the DB (like role) so secondary-role grants
       // take effect on the very next request, not at next token-issue.
-      select: { id: true, email: true, role: true, secondaryRoles: true, isActive: true },
+      // PR-PHASE40 — `name` added for actor attribution. Several controllers
+      // already wrote `req.user?.name ?? null` into actor fields; without name
+      // on this shape those fields silently stored null forever.
+      select: { id: true, email: true, role: true, name: true, secondaryRoles: true, isActive: true },
     });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Account is inactive or no longer exists');
     }
     // Return shape stays { userId, role, email } + secondaryRoles (additive —
     // existing readers of req.user.userId/role are unaffected).
-    return { userId: user.id, email: user.email, role: user.role, secondaryRoles: user.secondaryRoles };
+    return { userId: user.id, email: user.email, role: user.role, name: user.name, secondaryRoles: user.secondaryRoles };
   }
 }

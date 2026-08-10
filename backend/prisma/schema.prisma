@@ -2813,13 +2813,24 @@ model ExchangeRate {
   quoteCurrency String
   /// Units of quote per 1 base. 6 dp is well beyond FX quoting precision.
   rate      Decimal  @db.Decimal(12, 6)
-  /// The DAY this rate represents, not the moment it was fetched.
+  /// The DAY this rate represents, not the moment it was entered.
   rateDate  DateTime @db.Date
+  /// Where the number came from: 'manual-entry' for everything a Finance Admin
+  /// types, 'open.er-api.com' for the one seeded row that predates manual entry.
   source    String
   fetchedAt DateTime @default(now())
   createdAt DateTime @default(now())
 
-  @@unique([baseCurrency, quoteCurrency, rateDate])
+  /// Who typed it. Nullable because the seeded row has no author, and because a
+  /// deleted staff account must not take an accounting record with it — hence a
+  /// plain id + a name SNAPSHOT rather than a relation.
+  enteredByUserId String?
+  enteredByName   String?
+
+  // Deliberately NOT unique on (base, quote, rateDate): this is an append-only
+  // ledger. A Finance Admin correcting a rate twice in one morning must leave
+  // two rows, both readable afterwards — an upsert would silently destroy the
+  // number an already-issued invoice was stamped with.
   @@index([baseCurrency, quoteCurrency, rateDate])
   @@map("exchange_rates")
 }

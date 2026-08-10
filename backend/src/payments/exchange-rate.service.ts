@@ -1,38 +1,47 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 // PR-PHASE40 — the USD→NZD rate used to state GST in NZD on a USD invoice.
 //
 // Invoices are denominated in USD; NZ GST is assessed and filed in NZD. So the
 // rate that bridges the two has to be recorded on the invoice at the moment it
-// is raised — reconstructing it later from a rate table is a guess, and IRD
-// wants the rate at the time of supply.
+// is raised — reconstructing it later is a guess, and IRD wants the rate at the
+// time of supply.
 //
-// ONE RATE PER DAY, cached. Not a live call per invoice: two invoices raised
-// minutes apart must not carry different rates, and a provider outage must not
-// be able to stop a client paying.
+// The rate is ENTERED BY A HUMAN, not fetched. No external provider is called
+// from this codebase: a Finance Admin sets the rate in Staff → Finance and it
+// stands until they set another one. That makes the number on a tax invoice
+// something a person chose and can be asked about, rather than whatever a free
+// API happened to return that morning — and it removes a third party from the
+// path of every invoice.
+//
+// The table is an append-only ledger. Nothing here ever updates or deletes a
+// row.
 
-export const RATE_SOURCE = 'exchangerate.host';
+export const MANUAL_SOURCE = 'manual-entry';
 export const BASE_CURRENCY = 'USD';
 export const QUOTE_CURRENCY = 'NZD';
 
+/** Guards against a typo putting an absurd rate on a tax invoice. */
+const MIN_RATE = 0.01;
+const MAX_RATE = 1000;
+
 /**
- * Thrown when the rate table is empty — no daily fetch has EVER succeeded.
+ * Thrown when the rate table is empty — no rate has EVER been entered.
  *
  * There is deliberately no fallback constant. A guessed rate would put a made-up
  * number on a tax invoice and be indistinguishable, after the fact, from a real
  * one; blocking is recoverable, a wrong filed GST figure is not.
  *
- * In practice this can only happen on day zero of a fresh environment, before
- * the 05:30 job has run once. The fix is to seed one rate manually, and it is
- * needed once.
+ * In practice this can only happen on day zero of a fresh environment. The fix
+ * is to enter one rate in Staff → Finance, and it is needed once.
  */
 export class MissingExchangeRateError extends Error {
   constructor(context: string) {
     super(
-      `Cannot raise ${context}: no ${BASE_CURRENCY}→${QUOTE_CURRENCY} exchange rate has ever been stored. ` +
+      `Cannot raise ${context}: no ${BASE_CURRENCY}→${QUOTE_CURRENCY} exchange rate has ever been entered. ` +
       `NZ GST is filed in ${QUOTE_CURRENCY} and this invoice is in ${BASE_CURRENCY}, so a rate is required. ` +
-      `Seed one row in exchange_rates (or run the daily job once) before invoicing.`,
+      `A Finance Admin can set it in Staff → Finance → Exchange rate.`,
     );
     this.name = 'MissingExchangeRateError';
   }
@@ -44,69 +53,116 @@ export interface ResolvedRate {
   timestamp: Date;
 }
 
+export interface RateEntry {
+  id: string;
+  rate: number;
+  rateDate: Date;
+  source: string;
+  enteredByName: string | null;
+  createdAt: Date;
+}
+
+export interface CurrentRateView {
+  base: string;
+  quote: string;
+  current: RateEntry | null;
+  history: RateEntry[];
+}
+
 @Injectable()
 export class ExchangeRateService {
   private readonly logger = new Logger(ExchangeRateService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Midnight UTC of the given day — the key rates are stored against. */
-  private static dayOf(d: Date): Date {
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  }
-
   /**
-   * Fetch today's rate and store it. Idempotent — re-running on the same day
-   * updates that day's row rather than adding a second one, so a retry after a
-   * transient failure cannot leave two rates for one date.
+   * Newest-first ordering.
    *
-   * Returns null on failure rather than throwing: a missed fetch must never
-   * take down the scheduler, and the previous day's rate remains usable.
+   * rateDate is the primary key of intent — it is the day the rate applies to.
+   * createdAt breaks ties, because the ledger allows several entries for one
+   * day and the last correction of the morning is the one that counts.
    */
-  async fetchAndStoreDailyRate(now: Date = new Date()): Promise<number | null> {
-    const url = `https://api.exchangerate.host/latest?base=${BASE_CURRENCY}&symbols=${QUOTE_CURRENCY}`;
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  private static readonly NEWEST_FIRST = [
+    { rateDate: 'desc' as const },
+    { createdAt: 'desc' as const },
+  ];
 
-      const body: any = await res.json();
-      const rate = Number(body?.rates?.[QUOTE_CURRENCY]);
-      // A provider can answer 200 with a malformed or absent rate; treating
-      // that as success would write a 0 or NaN into a tax record.
-      if (!Number.isFinite(rate) || rate <= 0) {
-        throw new Error(`no usable ${QUOTE_CURRENCY} rate in response`);
-      }
-
-      const rateDate = ExchangeRateService.dayOf(now);
-      await this.prisma.exchangeRate.upsert({
-        where: {
-          baseCurrency_quoteCurrency_rateDate: {
-            baseCurrency: BASE_CURRENCY, quoteCurrency: QUOTE_CURRENCY, rateDate,
-          },
-        },
-        update: { rate, source: RATE_SOURCE, fetchedAt: now },
-        create: {
-          baseCurrency: BASE_CURRENCY, quoteCurrency: QUOTE_CURRENCY,
-          rate, rateDate, source: RATE_SOURCE, fetchedAt: now,
-        },
-      });
-
-      this.logger.log(`[FX] ${BASE_CURRENCY}→${QUOTE_CURRENCY} ${rate} stored for ${rateDate.toISOString().slice(0, 10)}`);
-      return rate;
-    } catch (err: any) {
-      this.logger.error(`[FX] Failed to fetch ${BASE_CURRENCY}→${QUOTE_CURRENCY}: ${err?.message ?? err}`);
-      return null;
-    }
+  private static view(row: any): RateEntry {
+    return {
+      id: row.id,
+      rate: Number(row.rate),
+      rateDate: row.rateDate,
+      source: row.source,
+      enteredByName: row.enteredByName ?? null,
+      createdAt: row.createdAt,
+    };
   }
 
   /**
-   * The rate to stamp on an invoice: the most recent stored one, WHATEVER its
-   * age.
+   * What the Finance screen shows: the rate invoices are currently using, plus
+   * the trail of what it used to be and who changed it.
+   */
+  async getCurrentAndHistory(limit = 20): Promise<CurrentRateView> {
+    const rows = await this.prisma.exchangeRate.findMany({
+      where: { baseCurrency: BASE_CURRENCY, quoteCurrency: QUOTE_CURRENCY },
+      orderBy: ExchangeRateService.NEWEST_FIRST,
+      take: limit,
+    });
+    return {
+      base: BASE_CURRENCY,
+      quote: QUOTE_CURRENCY,
+      current: rows[0] ? ExchangeRateService.view(rows[0]) : null,
+      history: rows.map(ExchangeRateService.view),
+    };
+  }
+
+  /**
+   * Record a rate a human typed. Always an INSERT — never an update.
    *
-   * Deliberately "most recent" rather than "today's". A weekend, a public
-   * holiday or a run of failed fetches must not stop invoicing — last week's
-   * published rate is a defensible, auditable basis, and it is a real rate that
-   * really was published.
+   * Correcting a mistake means entering the right number, which supersedes the
+   * wrong one for future invoices while leaving it visible for anything already
+   * invoiced against it.
+   */
+  async recordManualRate(
+    rate: number,
+    actor: { id?: string | null; name?: string | null },
+    now: Date = new Date(),
+  ): Promise<RateEntry> {
+    if (!Number.isFinite(rate) || rate < MIN_RATE || rate > MAX_RATE) {
+      // Rejected rather than clamped: a rate outside this range is a typo, and
+      // quietly correcting a typo on a tax record is worse than refusing it.
+      throw new BadRequestException(
+        `Enter a ${BASE_CURRENCY}→${QUOTE_CURRENCY} rate between ${MIN_RATE} and ${MAX_RATE}.`,
+      );
+    }
+
+    const rateDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const row = await this.prisma.exchangeRate.create({
+      data: {
+        baseCurrency: BASE_CURRENCY,
+        quoteCurrency: QUOTE_CURRENCY,
+        rate,
+        rateDate,
+        source: MANUAL_SOURCE,
+        fetchedAt: now,
+        enteredByUserId: actor.id ?? null,
+        enteredByName: actor.name ?? null,
+      },
+    });
+
+    this.logger.log(
+      `[FX] ${BASE_CURRENCY}→${QUOTE_CURRENCY} set to ${rate} by ${actor.name ?? actor.id ?? 'unknown'}`,
+    );
+    return ExchangeRateService.view(row);
+  }
+
+  /**
+   * The rate to stamp on an invoice: the most recently entered one, WHATEVER
+   * its age.
+   *
+   * Age is never a reason to block or to warn. Under manual entry an old rate
+   * is not a symptom of anything failing — it means Finance has not changed it,
+   * which is a decision, not an outage. It keeps applying until they do.
    *
    * Throws only when the table has never held a rate at all. That is a
    * day-zero condition, not an operating one.
@@ -114,7 +170,7 @@ export class ExchangeRateService {
   async getRateForInvoice(context = 'this invoice'): Promise<ResolvedRate> {
     const latest = await this.prisma.exchangeRate.findFirst({
       where: { baseCurrency: BASE_CURRENCY, quoteCurrency: QUOTE_CURRENCY },
-      orderBy: { rateDate: 'desc' },
+      orderBy: ExchangeRateService.NEWEST_FIRST,
     });
 
     if (!latest) {
@@ -122,22 +178,10 @@ export class ExchangeRateService {
       // permanent. The caller turns this into a blocked invoice plus an audit
       // row, so it reaches someone rather than only the log.
       this.logger.error(
-        `[FX] BLOCKING ${context}: no ${BASE_CURRENCY}→${QUOTE_CURRENCY} rate has ever been stored. ` +
-        `The daily job has not yet succeeded. Seed one rate to unblock invoicing.`,
+        `[FX] BLOCKING ${context}: no ${BASE_CURRENCY}→${QUOTE_CURRENCY} rate has ever been entered. ` +
+        `A Finance Admin must set one in Staff → Finance before invoicing.`,
       );
       throw new MissingExchangeRateError(context);
-    }
-
-    const ageDays = Math.floor(
-      (Date.now() - new Date(latest.rateDate).getTime()) / 86_400_000,
-    );
-    if (ageDays > 7) {
-      // Still used — a real old rate beats a guess — but worth noticing, since
-      // it means the daily job has been failing for over a week.
-      this.logger.warn(
-        `[FX] Using a ${ageDays}-day-old ${BASE_CURRENCY}→${QUOTE_CURRENCY} rate for ${context}. ` +
-        `The daily fetch appears to be failing.`,
-      );
     }
 
     return {

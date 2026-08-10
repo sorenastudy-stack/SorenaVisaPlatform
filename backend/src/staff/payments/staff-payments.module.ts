@@ -4,6 +4,7 @@ import { StaffRolesModule } from '../roles/staff-roles.module';
 import { StaffPaymentsController } from './staff-payments.controller';
 import { StaffFinanceController } from './staff-finance.controller';
 import { StaffPaymentsService } from './staff-payments.service';
+import { PaymentsModule } from '../../payments/payments.module';
 
 // Piece #3 — accountant "confirm payments" module. FINANCE/OWNER-gated
 // endpoints to list processing invoices, view the uploaded receipt, confirm
@@ -13,7 +14,11 @@ import { StaffPaymentsService } from './staff-payments.service';
 // Finance portal (this piece) adds StaffFinanceController — read-only
 // dashboard + finalised ledger, same service, same FINANCE/OWNER gate.
 @Module({
-  imports: [PrismaModule, StaffRolesModule],
+  // PaymentsModule is imported only for its exported ExchangeRateService, which
+  // backs the Finance exchange-rate screen. Declaring a second instance here
+  // instead would give the two modules separate loggers over the same table for
+  // no benefit.
+  imports: [PrismaModule, StaffRolesModule, PaymentsModule],
   controllers: [StaffPaymentsController, StaffFinanceController],
   providers: [StaffPaymentsService],
 })
