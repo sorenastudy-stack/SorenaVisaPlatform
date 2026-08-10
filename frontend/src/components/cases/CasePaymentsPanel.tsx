@@ -124,7 +124,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
   // a different backend endpoint.
   const [customOpen,       setCustomOpen]       = useState(false);
   const [customAmount,     setCustomAmount]     = useState('');
-  const [customCurrency,   setCustomCurrency]   = useState('NZD');
+  const [customCurrency,   setCustomCurrency]   = useState('USD');
   const [customSubmitting, setCustomSubmitting] = useState(false);
   const [customError,      setCustomError]      = useState<string | null>(null);
   const [customResult,     setCustomResult]     = useState<CustomLinkResult | null>(null);
@@ -133,7 +133,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
   // Manual-payment form
   const [manualOpen,       setManualOpen]       = useState(false);
   const [manualAmount,     setManualAmount]     = useState('');
-  const [manualCurrency,   setManualCurrency]   = useState('NZD');
+  const [manualCurrency,   setManualCurrency]   = useState('USD');
   const [manualNote,       setManualNote]       = useState('');
   const [manualReceipt,    setManualReceipt]    = useState<File | null>(null);
   const [manualError,      setManualError]      = useState<string | null>(null);
@@ -223,7 +223,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
 
   const resetCustomForm = () => {
     setCustomAmount('');
-    setCustomCurrency('NZD');
+    setCustomCurrency('USD');
     setCustomError(null);
     setCustomResult(null);
     setCustomCopied(false);
@@ -289,7 +289,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
 
   const resetManualForm = () => {
     setManualAmount('');
-    setManualCurrency('NZD');
+    setManualCurrency('USD');
     setManualNote('');
     setManualReceipt(null);
     setManualError(null);

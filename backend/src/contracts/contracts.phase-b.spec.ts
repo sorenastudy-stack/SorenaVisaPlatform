@@ -94,7 +94,7 @@ describe('Phase B — lead-based contract + case auto-creation', () => {
     const liaAssignments = new LiaAssignmentService(prisma as any, mail);
     const events = new EventsService(prisma as any);
     const cases = new CasesService(prisma as any, events, {} as any, liaAssignments);
-    service = new ContractsService(prisma as any, {} as any, mail, liaAssignments, r2Mock as any, docusealMock as any, cases);
+    service = new ContractsService(prisma as any, {} as any, mail, liaAssignments, r2Mock as any, docusealMock as any, cases, { getRateForInvoice: async () => ({ rate: 1.6423, source: 'exchangerate.host', timestamp: new Date()}) } as any);
     bookings = new StaffBookingsService(prisma as any, {} as any);
 
     // A real staff user to attribute CONTRACT_SENT audit rows to (the userId FK

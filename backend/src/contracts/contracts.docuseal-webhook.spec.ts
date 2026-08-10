@@ -131,6 +131,10 @@ function makeMocks() {
     r2,
     docuseal,
     cases,
+    // PR-PHASE40 — exchangeRates. The engagement invoice stamps an FX rate;
+    // this path does not assert on it, so a fixed stub keeps the test
+    // deterministic and off the network.
+    { getRateForInvoice: async () => ({ rate: 1.6423, source: 'exchangerate.host', timestamp: new Date()}) } as any,
   );
 
   return { service, prisma, captured, docuseal, cases };

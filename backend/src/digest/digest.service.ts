@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { FEE_CURRENCY } from '../payments/fee-config';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { MailService } from '../mail/mail.service';
 import { buildDigestEmail } from './digest.email';
@@ -449,7 +450,7 @@ export class DigestService {
       if (row.eventType === 'PAYMENT_RECORDED_MANUAL') {
         // newValue carries amount + currency from PaymentsService.
         const amount   = typeof v.amount   === 'number' ? v.amount   : linkedPayment?.amount   ?? 0;
-        const currency = typeof v.currency === 'string' ? v.currency : linkedPayment?.currency ?? 'nzd';
+        const currency = typeof v.currency === 'string' ? v.currency : linkedPayment?.currency ?? FEE_CURRENCY;
         items.push({
           type:       'PAYMENT_RECORDED_MANUAL',
           occurredAt: row.createdAt,

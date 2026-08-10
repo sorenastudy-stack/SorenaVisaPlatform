@@ -10,7 +10,7 @@ import { api } from '@/lib/api';
 //
 // FAITHFUL MOVE — the money path is unchanged: it POSTs { leadId,
 // consultationType } to /payments/consultation-link and the SERVER derives the
-// amount from the type. The client never sends an amount. The NZD figures in
+// amount from the type. The client never sends an amount. The USD figures in
 // the button labels are display-only (they mirror the server's amounts); they
 // are not sent to the endpoint. Only the auth transport changed: it now uses
 // the platform session (api client) instead of the legacy localStorage token.
@@ -75,15 +75,15 @@ export function ConsultationLinkGenerator({
   let body: React.ReactNode;
   switch (recommendedRoute) {
     case 'ROADMAP':
-      body = <Btn variant="green" label="Generate Gap-Closing Session Link (30 NZD)" consultationType="GAP_CLOSING" />;
+      body = <Btn variant="green" label="Generate Gap-Closing Session Link (USD 20 + GST + card fee = USD 23.97)" consultationType="GAP_CLOSING" />;
       break;
     case 'ADMISSION_CONSULTATION':
-      body = <Btn variant="green" label="Generate Admission Consultation Link (50 NZD)" consultationType="ADMISSION_CONSULTATION" />;
+      body = <Btn variant="green" label="Generate Admission Consultation Link (USD 50 + GST + card fee = USD 59.47)" consultationType="ADMISSION_CONSULTATION" />;
       break;
     case 'LIA_CONSULTATION':
       body = (
         <div className="space-y-2">
-          <Btn variant="red" label="Generate LIA Consultation Link (150 NZD)" consultationType="LIA_CONSULTATION" />
+          <Btn variant="red" label="Generate LIA Consultation Link (USD 58 + GST + card fee = USD 68.93)" consultationType="LIA_CONSULTATION" />
           <p className="text-center text-xs font-bold text-[#991b1b]">⚠️ Do not proceed without LIA clearance</p>
         </div>
       );
@@ -92,7 +92,7 @@ export function ConsultationLinkGenerator({
       body = (
         <div className="space-y-2">
           <Btn variant="green" label="Book Free 15-Min Session" consultationType="FREE_SESSION" />
-          <Btn variant="grey" label="Generate Account Opening Link (200 NZD)" consultationType="ACCOUNT_OPENING" />
+          <Btn variant="grey" label="Generate Account Opening Link (USD 200 + GST + card fee = USD 236.97)" consultationType="ACCOUNT_OPENING" />
         </div>
       );
       break;

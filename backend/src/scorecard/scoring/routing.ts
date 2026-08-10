@@ -28,6 +28,7 @@
 
 import type { BandEnum } from './bands';
 import { getSessionConfig } from '../../booking/session-config';
+import { getFee } from '../../payments/fee-config';
 import type { HardStop } from './hard-stops';
 
 export type ScorecardNextActionValue =
@@ -108,11 +109,16 @@ export function determineRouting(
     });
   }
 
+  const accountOpening = getFee('ACCOUNT_OPENING');
+
   // Bands 4, 5, 6 — mandatory free 15-min session
   return decision('BOOK_FREE_15MIN_SESSION', {
     heading: 'You qualify for a free 15-minute consultation with our team.',
     bullets: [
-      'After this mandatory session, you may proceed with the NZD 200 account opening to activate full case management.',
+      // PR-PHASE40 — was the literal "NZD 200". Read from fee-config now, the
+      // same way the Gap-Closing heading above already reads its price, so a
+      // price change cannot leave this line quietly stating the old one.
+      `After this mandatory session, you may proceed with the ${accountOpening.currency.toUpperCase()} ${accountOpening.priceCents / 100} account opening to activate full case management.`,
       'Your case advisor will confirm your pathway and walk you through the next steps.',
     ],
   });

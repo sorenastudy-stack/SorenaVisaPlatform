@@ -15,6 +15,17 @@ import { IsInt, IsNotEmpty, IsOptional, IsString, Length, MaxLength, Min } from 
 // belongs to this case (a caller can't attach someone else's document).
 
 export class RecordManualPaymentDto {
+  /**
+   * The BASE price in integer cents, BEFORE GST.
+   *
+   * PR-PHASE40 — finance enters the base, exactly as every other pathway takes
+   * a base, and the server adds 15% GST on top. It is deliberately NOT the
+   * total off the bank statement: deriving the base by dividing a total by 1.15
+   * makes the tax a function of what happened to arrive, so a client who
+   * transferred a rounded figure would silently change the GST recorded.
+   *
+   * A bank transfer carries no card fee, so total = base + GST.
+   */
   @IsInt({ message: 'amount must be an integer (cents)' })
   @Min(1, { message: 'amount must be at least 1 cent' })
   amount!: number;

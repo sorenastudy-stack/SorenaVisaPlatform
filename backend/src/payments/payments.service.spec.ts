@@ -94,7 +94,7 @@ const VALID_RECEIPT = { id: 'doc-receipt-1', caseId: 'case-1', status: 'UPLOADED
 describe('PaymentsService.listPaymentsForCase', () => {
   it('returns whitelisted shape including verification fields + isManual flag', async () => {
     const directPayment = {
-      id: 'pay-direct', amount: 20000, currency: 'nzd', status: 'succeeded',
+      id: 'pay-direct', amount: 20000, currency: 'usd', status: 'succeeded',
       paymentType: 'ACCOUNT_OPENING',
       createdAt: new Date('2026-06-15T10:00:00Z'),
       verificationStatus: 'CONFIRMED',
@@ -104,7 +104,7 @@ describe('PaymentsService.listPaymentsForCase', () => {
       receiptDocumentId:  null,
     };
     const indirectPayment = {
-      id: 'pay-indirect', amount: 5000, currency: 'nzd', status: 'succeeded',
+      id: 'pay-indirect', amount: 5000, currency: 'usd', status: 'succeeded',
       paymentType: 'consultation',
       createdAt: new Date('2026-06-10T10:00:00Z'),
       verificationStatus: 'PENDING',
@@ -114,7 +114,7 @@ describe('PaymentsService.listPaymentsForCase', () => {
       receiptDocumentId:  null,
     };
     const manualPayment = {
-      id: 'pay-manual', amount: 30000, currency: 'nzd', status: 'succeeded',
+      id: 'pay-manual', amount: 30000, currency: 'usd', status: 'succeeded',
       paymentType: 'manual',
       createdAt: new Date('2026-06-17T10:00:00Z'),
       verificationStatus: 'PENDING',
@@ -134,7 +134,7 @@ describe('PaymentsService.listPaymentsForCase', () => {
 
     // Manual row — PENDING, has receipt, no verifier yet.
     expect(rows[0]).toEqual({
-      id: 'pay-manual', amount: 30000, currency: 'nzd', status: 'succeeded',
+      id: 'pay-manual', amount: 30000, currency: 'usd', status: 'succeeded',
       paymentType: 'manual',
       createdAt: new Date('2026-06-17T10:00:00Z'),
       isManual:           true,
@@ -188,7 +188,7 @@ describe('PaymentsService.listPaymentsForCase', () => {
 
   it('skips the user.findMany lookup entirely when no row has a verifier', async () => {
     const pending = {
-      id: 'pay-1', amount: 1, currency: 'nzd', status: 'succeeded',
+      id: 'pay-1', amount: 1, currency: 'usd', status: 'succeeded',
       paymentType: 'consultation',
       createdAt: new Date('2026-06-10T10:00:00Z'),
       verificationStatus: 'PENDING',
@@ -244,7 +244,7 @@ describe('PaymentsService.recordManualPayment', () => {
 
     const result = await service.recordManualPayment(
       'case-1',
-      { amount: 25000, currency: 'NZD', note: 'Cash on signing', receiptDocumentId: 'doc-receipt-1' },
+      { amount: 25000, currency: 'USD', note: 'Cash on signing', receiptDocumentId: 'doc-receipt-1' },
       ACTOR,
     );
 
@@ -252,15 +252,26 @@ describe('PaymentsService.recordManualPayment', () => {
     expect(capturedPaymentArgs.data.caseId).toBe('case-1');
     expect(capturedPaymentArgs.data.paymentType).toBe('manual');
     expect(capturedPaymentArgs.data.status).toBe('succeeded');
-    expect(capturedPaymentArgs.data.amount).toBe(25000);
-    expect(capturedPaymentArgs.data.currency).toBe('nzd');
+    // PR-PHASE40 — finance enters the BASE price and the server ADDS 15% GST,
+    // the same base → +GST → total pattern as every other pathway. The stored
+    // `amount` is the total that moved (matching what the Stripe path records
+    // from `amount_received`), with the tax split out beside it.
+    //
+    // Deliberately NOT extraction (base = total ÷ 1.15): that would make the
+    // tax a function of whatever figure happened to land in the account, so a
+    // client rounding their transfer would change the GST on the record.
+    expect(capturedPaymentArgs.data.amount).toBe(28750);        // 25000 + 3750
+    expect(capturedPaymentArgs.data.gstCents).toBe(3750);       // 15% OF the base
+    expect(capturedPaymentArgs.data.cardFeeCents).toBe(0);      // bank transfer
+    expect(capturedPaymentArgs.data.currency).toBe('usd');
     // Phase 6.5 — new fields on the write.
     expect(capturedPaymentArgs.data.verificationStatus).toBe('PENDING');
     expect(capturedPaymentArgs.data.receiptDocumentId).toBe('doc-receipt-1');
 
     expect(result.isManual).toBe(true);
     expect(result).toEqual(expect.objectContaining({
-      id: 'pay-new', amount: 25000, currency: 'nzd', status: 'succeeded',
+      // 25000 base + 3750 GST — the total that moved, not the base entered.
+      id: 'pay-new', amount: 28750, currency: 'usd', status: 'succeeded',
       paymentType: 'manual', isManual: true,
       verificationStatus: 'PENDING',
       receiptDocumentId:  'doc-receipt-1',
@@ -344,7 +355,7 @@ describe('PaymentsService.recordManualPayment', () => {
     expect(audit.actorRoleSnapshot).toBe('ADMIN');
     expect(audit.newValue).toEqual({
       caseId: 'case-1', leadId: 'lead-x', paymentType: 'manual',
-      amount: 12345, currency: 'nzd', hasNote: true,
+      amount: 12345, currency: 'usd', hasNote: true,
       receiptDocumentId: 'doc-receipt-1',
       verificationStatus: 'PENDING',
     });
@@ -455,7 +466,7 @@ describe('PaymentsService.recordManualPayment', () => {
     expect(paymentCreate).not.toHaveBeenCalled();
   });
 
-  it('defaults currency to "nzd" when omitted; lowercases when provided uppercase', async () => {
+  it('defaults currency to "usd" when omitted; lowercases when provided uppercase', async () => {
     let capturedPaymentArgs: any = null;
     const paymentCreate = jest.fn(async (args: any) => {
       capturedPaymentArgs = args;
@@ -478,7 +489,7 @@ describe('PaymentsService.recordManualPayment', () => {
       { amount: 100, receiptDocumentId: 'doc-receipt-1' },
       ACTOR,
     );
-    expect(capturedPaymentArgs.data.currency).toBe('nzd');
+    expect(capturedPaymentArgs.data.currency).toBe('usd');
 
     await service.recordManualPayment(
       'case-1',
@@ -511,12 +522,40 @@ describe('PaymentsService.createConsultationLinkForCase', () => {
     });
     expect(stripe.createConsultationPaymentLink).toHaveBeenCalledTimes(1);
     expect(stripe.createConsultationPaymentLink).toHaveBeenCalledWith(
-      'lead-from-case', 'ADMISSION_CONSULTATION', 50, 'nzd', 'case-99',
+      // PR-PHASE40 — the 3rd arg is now the whole fee breakdown, not a bare
+      // amount: the price, the GST and the card fee are computed once in
+      // fee-config and passed down together, so Stripe can itemise them.
+      // Asserting the numbers here also pins the ADMISSION_CONSULTATION row of
+      // the agreed fee table to the real delegation path.
+      'lead-from-case',
+      'ADMISSION_CONSULTATION',
+      {
+        baseCents: 5000,
+        gstCents: 750,
+        subtotalWithGstCents: 5750,
+        cardFeeCents: 197,
+        totalCents: 5947,
+        currency: 'usd',
+        paymentMethod: 'card',
+      },
+      'case-99',
     );
     expect(result).toEqual({
       url: 'https://buy.stripe.com/test_link_abc',
       free: false,
       consultationType: 'ADMISSION_CONSULTATION',
+      // PR-PHASE40 — the breakdown comes back with the link so the caller (and
+      // the staff UI) can show the client what the total is made of instead of
+      // re-deriving it and risking a different answer.
+      breakdown: {
+        baseCents: 5000,
+        gstCents: 750,
+        subtotalWithGstCents: 5750,
+        cardFeeCents: 197,
+        totalCents: 5947,
+        currency: 'usd',
+        paymentMethod: 'card',
+      },
     });
   });
 
@@ -570,7 +609,7 @@ describe('PaymentsService.createCustomLinkForCase', () => {
     const result = await service.createCustomLinkForCase(
       'case-99',
       7500,        // $75.00 NZD in integer cents
-      'nzd',
+      'usd',
     );
 
     // Case lookup uses the right id + selects only leadId.
@@ -587,7 +626,7 @@ describe('PaymentsService.createCustomLinkForCase', () => {
       'lead-from-case',
       'case-99',
       7500,
-      'nzd',
+      'usd',
       undefined,
     );
 
@@ -596,7 +635,7 @@ describe('PaymentsService.createCustomLinkForCase', () => {
     expect(result).toEqual({
       url:      'https://buy.stripe.com/test_custom_link',
       amount:   7500,
-      currency: 'nzd',
+      currency: 'usd',
     });
   });
 
@@ -610,7 +649,7 @@ describe('PaymentsService.createCustomLinkForCase', () => {
     expect(stripe.createCustomAmountPaymentLink).not.toHaveBeenCalled();
   });
 
-  it('defaults currency to "nzd" when the caller omits it', async () => {
+  it('defaults currency to "usd" when the caller omits it', async () => {
     const { service, stripe } = makeService({
       caseRow: { id: 'case-1', leadId: 'lead-1' },
     });
@@ -624,7 +663,7 @@ describe('PaymentsService.createCustomLinkForCase', () => {
       'lead-1',
       'case-1',
       5000,
-      'nzd',
+      'usd',
       undefined, // invoiceId — not an invoice-linked payment
     );
   });

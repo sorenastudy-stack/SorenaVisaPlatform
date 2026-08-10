@@ -27,6 +27,7 @@ import { DocuSignService } from './docusign.service';
 import { DocusealService } from './docuseal.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { CasesService } from '../cases/cases.service';
+import { ExchangeRateService } from '../payments/exchange-rate.service';
 import { MailService } from '../mail/mail.service';
 import { R2Service } from '../common/r2/r2.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -242,6 +243,17 @@ describe('ContractsService.handleWebhook (PR-DOCUSIGN-1 step 5 piece 3)', () => 
         // DocuSign webhook spec drives case-based contracts (caseId set), so the
         // lead-based auto-create path never fires; a bare stub satisfies DI.
         { provide: CasesService,          useValue: {} },
+        // PR-PHASE40 — the engagement invoice stamps an FX rate. This spec
+        // drives the DocuSign webhook, not invoicing, so a fixed stub satisfies
+        // DI and keeps the suite off the network.
+        {
+          provide: ExchangeRateService,
+          useValue: {
+            getRateForInvoice: async () => ({
+              rate: 1.6423, source: 'exchangerate.host', timestamp: new Date(),
+            }),
+          },
+        },
       ],
     }).compile();
 

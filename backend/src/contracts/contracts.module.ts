@@ -8,12 +8,13 @@ import { DocusealWebhookGuard } from './docuseal-webhook.guard';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MailModule } from '../mail/mail.module';
 import { CasesModule } from '../cases/cases.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { R2Module } from '../common/r2/r2.module';
 
 @Module({
   // PR-LIA-2: CasesModule exports LiaAssignmentService for the
   // post-sign auto-assignment hook.
-  imports: [PrismaModule, MailModule, CasesModule, R2Module],
+  imports: [PrismaModule, MailModule, CasesModule, R2Module, PaymentsModule],
   controllers: [ContractsController],
   providers: [
     ContractsService,

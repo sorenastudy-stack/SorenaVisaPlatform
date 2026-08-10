@@ -33,6 +33,8 @@ import { CreateContractDto } from './dto/create-contract.dto';
 import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { CasesService } from '../cases/cases.service';
+import { ExchangeRateService, MissingExchangeRateError } from '../payments/exchange-rate.service';
+import { calculateGST } from '../payments/fee-config';
 import { docusignToContractStatus } from './contract-status';
 import { stampLiaIdentity } from './engagement-letter-stamp';
 import { linkCaseContactToUser } from '../common/link-case-contact.helper';
@@ -99,6 +101,8 @@ export class ContractsService {
     // lead-based contract. CasesModule already exports CasesService and
     // ContractsModule imports it, so this is a plain (non-circular) injection.
     private cases: CasesService,
+    // PR-PHASE40 — the daily USD→NZD rate stamped onto each invoice.
+    private exchangeRates: ExchangeRateService,
   ) {}
 
   // PR-DOCUSIGN-1 step 5 piece 2 — multi-signer envelope creation.
@@ -1430,6 +1434,8 @@ export class ContractsService {
         );
         return;
       }
+      const fx = await this.exchangeRates.getRateForInvoice(`engagement invoice for case ${caseId}`);
+
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 14);
 
@@ -1440,10 +1446,25 @@ export class ContractsService {
             contactId,
             invoiceNumber,
             description: 'Account opening fee',
+            // The BASE price. GST sits in its own column.
             amount:      new Prisma.Decimal(amountCents).div(100),
             currency,
             status:      'SENT',
             dueDate,
+            // PR-PHASE40 — GST on every invoice, no exceptions.
+            //
+            // The card fee is deliberately NOT stored here: it depends on how
+            // the client chooses to pay, which is unknown at issue time, and an
+            // invoice settled by bank transfer must never carry a fee the
+            // client did not incur. The Stripe pay-link path adds it at
+            // checkout instead.
+            gstAmount:   new Prisma.Decimal(calculateGST(amountCents)).div(100),
+            // FX audit — NZ GST is filed in NZD while this invoice is in USD,
+            // so the rate bridging them is stamped at the moment of issue
+            // rather than reconstructed later.
+            exchangeRateUsed:      new Prisma.Decimal(fx.rate),
+            exchangeRateSource:    fx.source,
+            exchangeRateTimestamp: fx.timestamp,
           },
           select: { id: true },
         });
@@ -1477,6 +1498,27 @@ export class ContractsService {
       this.logger.error(
         `Engagement invoice creation failed for case ${caseId}: ${err?.message ?? err}`,
       );
+      // PR-PHASE40 — a missing FX rate BLOCKS invoicing rather than inventing a
+      // number, and a log line alone would let that sit unnoticed until someone
+      // asked why a signed client had no invoice. Write an audit row so it
+      // surfaces where staff already look, and name the fix in the record.
+      if (err instanceof MissingExchangeRateError) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId:            null,
+            action:            'INVOICE_BLOCKED_NO_FX_RATE',
+            eventType:         'INVOICE_BLOCKED_NO_FX_RATE',
+            entityType:        'Case',
+            entityId:          caseId,
+            newValue: {
+              reason: 'No USD→NZD exchange rate has ever been stored',
+              fix:    'Seed one exchange_rates row, or let the daily FX job run once, then re-trigger the invoice',
+            } as Prisma.InputJsonValue,
+            actorNameSnapshot: 'SYSTEM',
+            actorRoleSnapshot: 'SYSTEM',
+          },
+        }).catch(() => undefined);   // an audit failure must not mask the original one
+      }
     }
   }
 

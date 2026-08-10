@@ -52,6 +52,10 @@ describe('Client self-service Request Contract', () => {
       {} as any,       // r2 (only used on completion)
       docusealStub,    // docuseal (network stubbed)
       {} as any,       // cases (only used on client-sign webhook)
+      // PR-PHASE40 — exchangeRates. Stubbed: this suite exercises the contract
+      // request path, not the FX stamp, and a real service would reach the
+      // network from a test.
+      { getRateForInvoice: async () => ({ rate: 1.6423, source: 'exchangerate.host', timestamp: new Date()}) } as any,
     );
     portal = new PortalService(prisma as any, {} as any, {} as any, contracts);
   }, 60000);

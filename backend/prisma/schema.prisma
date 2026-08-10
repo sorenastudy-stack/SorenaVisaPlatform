@@ -2795,6 +2795,35 @@ model TicketMessage {
   @@map("ticket_messages")
 }
 
+// PR-PHASE40 — the daily USD→NZD rate, fetched once a day and read from here
+// by every invoice raised that day.
+//
+// Cached rather than fetched per invoice, deliberately: two invoices raised
+// minutes apart must not carry different rates, and IRD wants "the rate at the
+// time of supply", which in practice is a published daily rate — not whatever a
+// live API happened to return mid-transaction. It also means an outage at the
+// rate provider cannot block a client from paying.
+//
+// Append-only in practice: one row per (base, quote, rateDate), never updated,
+// so the rate a historical invoice used stays exactly what it was.
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  /// ISO 4217, uppercase. USD for everything today.
+  baseCurrency  String
+  quoteCurrency String
+  /// Units of quote per 1 base. 6 dp is well beyond FX quoting precision.
+  rate      Decimal  @db.Decimal(12, 6)
+  /// The DAY this rate represents, not the moment it was fetched.
+  rateDate  DateTime @db.Date
+  source    String
+  fetchedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@unique([baseCurrency, quoteCurrency, rateDate])
+  @@index([baseCurrency, quoteCurrency, rateDate])
+  @@map("exchange_rates")
+}
+
 // ─── INVOICES & PAYMENTS ──────────────────────────────────────────────────────
 
 model Invoice {
@@ -2803,9 +2832,35 @@ model Invoice {
   contactId       String
   invoiceNumber   String        @unique
   description     String
+  /// The BASE price, before GST and before any card fee. Unchanged in meaning
+  /// by PR-PHASE40 — the new columns sit alongside it rather than folding into
+  /// it, so `amount` is still what the service is worth.
   amount          Decimal       @db.Decimal(10, 2)
-  currency        String        @default("NZD")
+  currency        String        @default("USD")
   status          InvoiceStatus @default(DRAFT)
+
+  // PR-PHASE40 — the parts of the total, stored separately because accounting
+  // needs them apart: GST is tax collected for IRD, the card fee is a
+  // pass-through of Stripe's charge, and neither is revenue.
+  //
+  // Decimal to match `amount` (the Payment model uses cents; this one has
+  // always used Decimal dollars and changing that would rewrite every reader).
+  //
+  // Nullable: rows written before this migration have no breakdown, and
+  // back-filling a GST figure that was never charged would be inventing a tax
+  // record.
+  gstAmount       Decimal?      @db.Decimal(10, 2)
+  /// NULL for bank transfer — an invoice paid by transfer must never carry a
+  /// fee the client did not incur.
+  cardFeeAmount   Decimal?      @db.Decimal(10, 2)
+
+  // PR-PHASE40 — FX audit trail. NZ GST is assessed in NZD while these invoices
+  // are denominated in USD, so the rate used to convert has to be recorded at
+  // the moment of issue: reconstructing it later from a rate table is a guess,
+  // and IRD wants the rate at the time of supply. Stamped at invoice creation.
+  exchangeRateUsed      Decimal?  @db.Decimal(12, 6)
+  exchangeRateSource    String?
+  exchangeRateTimestamp DateTime?
   dueDate         DateTime?
   issuedAt        DateTime?
   paidAt          DateTime?
@@ -2865,8 +2920,19 @@ model Payment {
   caseId                String?
   paymentType           String
   amount                Int
-  currency              String   @default("nzd")
+  currency              String   @default("usd")
   status                String
+
+  // PR-PHASE40 — the invoice arithmetic, stored in parts rather than as one
+  // total. Accounting needs the GST separately (it is tax collected on behalf
+  // of IRD, not revenue), and the card fee separately (it is a pass-through of
+  // Stripe's charge, not income either). All INTEGER CENTS, matching `amount`.
+  //
+  // Nullable because every row written before this migration has no breakdown
+  // to record, and inventing one retrospectively would be a fabricated tax
+  // figure. `amount` keeps meaning exactly what it always meant.
+  gstCents              Int?
+  cardFeeCents          Int?
   metadata              Json?
   createdAt             DateTime @default(now())
 

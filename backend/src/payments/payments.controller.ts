@@ -2,6 +2,7 @@ import { Controller, Post, Get, Body, Req, Param, UseGuards, RawBodyRequest, Log
 import { SkipThrottle } from '@nestjs/throttler';
 import { StripeService } from './stripe.service';
 import { PaymentsService } from './payments.service';
+import { FEE_CURRENCY } from './fee-config';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EventsService } from '../events/events.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -103,7 +104,7 @@ export class PaymentsController {
     return this.paymentsService.createCustomLinkForCase(
       caseId,
       dto.amount,
-      (dto.currency ?? 'nzd').toLowerCase(),
+      (dto.currency ?? FEE_CURRENCY).toLowerCase(),
     );
   }
 
@@ -271,7 +272,7 @@ export class PaymentsController {
           caseId: (paymentIntent.metadata?.caseId as string | undefined) ?? null,
           paymentType: (paymentIntent.metadata?.paymentType as string | undefined) ?? 'unknown',
           amount: paymentIntent.amount_received,
-          currency: paymentIntent.currency ?? 'nzd',
+          currency: paymentIntent.currency ?? FEE_CURRENCY,
           status: 'succeeded',
           metadata: paymentIntent.metadata ?? {},
           // Phase 6.5 — finance must still sign off on Stripe payments.
@@ -355,7 +356,7 @@ export class PaymentsController {
         lead.contact.email,
         lead.contact.fullName,
         paymentIntent.amount_received,
-        paymentIntent.currency ?? 'nzd',
+        paymentIntent.currency ?? FEE_CURRENCY,
         consultationType,
         paymentIntent.id,
       );

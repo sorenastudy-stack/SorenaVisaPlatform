@@ -73,7 +73,7 @@ describe('Phase C — invoice + promotion fire at LIA-signed (not full completio
     const liaAssignments = new LiaAssignmentService(prisma as any, mail);
     const events = new EventsService(prisma as any);
     const cases = new CasesService(prisma as any, events, {} as any, liaAssignments);
-    service = new ContractsService(prisma as any, {} as any, mail, liaAssignments, r2Mock as any, docusealMock as any, cases);
+    service = new ContractsService(prisma as any, {} as any, mail, liaAssignments, r2Mock as any, docusealMock as any, cases, { getRateForInvoice: async () => ({ rate: 1.6423, source: 'exchangerate.host', timestamp: new Date()}) } as any);
 
     const staff = await prisma.user.create({
       data: { name: 'Actor Admin', email: `actor.pc.${Date.now()}@test.local`, passwordHash: 'x', role: 'ADMIN', isActive: true },

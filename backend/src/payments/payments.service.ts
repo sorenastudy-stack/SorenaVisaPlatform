@@ -9,14 +9,21 @@ import { randomUUID } from 'crypto';
 import { StripeService } from './stripe.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
+import { FEE_CURRENCY, GST_RATE, calculateFeeBreakdown, getFeePriceCents, isFeeType } from './fee-config';
 
-const CONSULTATION_AMOUNTS: Record<string, number> = {
-  GAP_CLOSING: 30,
-  ADMISSION_CONSULTATION: 50,
-  LIA_CONSULTATION: 150,
-  ACCOUNT_OPENING: 200,
-  FREE_SESSION: 0,
-};
+// PR-PHASE40 — this table used to live here with its own numbers (GAP_CLOSING
+// 30, LIA_CONSULTATION 150, both NZD) while booking priced the same two
+// sessions at USD 20 and USD 58. Same session, different money, depending on
+// whether the client booked a slot or was sent a payment link.
+//
+// Prices now come from fee-config, which re-exports the booking config for the
+// bookable types, so the two cannot diverge again. FREE_SESSION is kept as an
+// alias for FREE_15 because sales-side callers still send that string.
+function consultationAmountCents(consultationType: string): number | undefined {
+  if (consultationType === 'FREE_SESSION') return 0;
+  if (!isFeeType(consultationType)) return undefined;
+  return getFeePriceCents(consultationType);
+}
 
 export interface PaymentActor {
   id:   string;
@@ -34,29 +41,38 @@ export class PaymentsService {
   async createConsultationPaymentLink(
     leadId: string,
     consultationType: string,
+    /** Override in WHOLE UNITS (dollars), as callers have always passed it. */
     amount?: number,
-    currency: string = 'nzd',
+    currency: string = FEE_CURRENCY,
     // PR-LIA-AUTO-ASSIGN — optional caseId, plumbed through to the Stripe
     // link's metadata so the post-payment webhook can auto-assign an LIA
     // to that case. Callers that don't have a case (regular consultation
     // bookings) omit this and the chain behaves as before.
     caseId?: string,
   ) {
-    const amountNZD = amount ?? CONSULTATION_AMOUNTS[consultationType];
-    if (amountNZD === undefined) {
+    const baseCents = amount !== undefined
+      ? Math.round(amount * 100)
+      : consultationAmountCents(consultationType);
+    if (baseCents === undefined) {
       throw new BadRequestException(`Unknown consultation type: ${consultationType}`);
     }
-    if (amountNZD === 0) {
+    if (baseCents === 0) {
       return { url: null, free: true, consultationType };
     }
+
+    // PR-PHASE40 — a payment link is a CARD payment, so the client pays base +
+    // GST + Stripe's fee. The breakdown is computed here and passed down whole:
+    // Stripe renders it as separate line items, so the client sees the tax and
+    // the processing fee rather than one opaque number.
+    const breakdown = calculateFeeBreakdown(baseCents, 'card', currency);
+
     const paymentLink = await this.stripeService.createConsultationPaymentLink(
       leadId,
       consultationType,
-      amountNZD,
-      currency,
+      breakdown,
       caseId,
     );
-    return { url: paymentLink.url, free: false, consultationType };
+    return { url: paymentLink.url, free: false, consultationType, breakdown };
   }
 
   // ─── Case-keyed convenience: resolve leadId from caseId, then delegate ──
@@ -86,8 +102,8 @@ export class PaymentsService {
     return this.createConsultationPaymentLink(
       c.leadId,
       consultationType,
-      undefined,   // amount — fall back to CONSULTATION_AMOUNTS[type]
-      'nzd',
+      undefined,   // amount — fall back to the fee-config price for this type
+      FEE_CURRENCY,
       caseId,      // 5th arg threads caseId into the Stripe link metadata
     );
   }
@@ -106,7 +122,7 @@ export class PaymentsService {
   async createCustomLinkForCase(
     caseId:      string,
     amountCents: number,
-    currency:    string = 'nzd',
+    currency:    string = FEE_CURRENCY,
     invoiceId?:  string,
   ) {
     const c = await this.prisma.case.findUnique({
@@ -256,7 +272,20 @@ export class PaymentsService {
     }
 
     const stripePaymentIntentId = `manual_${randomUUID()}`;
-    const currency = (dto.currency ?? 'nzd').toLowerCase();
+    const currency = (dto.currency ?? FEE_CURRENCY).toLowerCase();
+
+    // PR-PHASE40 — GST on the manual (bank transfer) path.
+    //
+    // `dto.amount` is the BASE price, the same thing every other pathway starts
+    // from, and GST is ADDED on top. All three pathways therefore compute tax
+    // identically — base → +GST → total — and the only difference is the card
+    // fee, which is absent here because a bank transfer never touches Stripe.
+    //
+    // Deliberately not the reverse (base = total ÷ 1.15). Extracting tax from
+    // whatever figure landed in the account makes the GST a function of the
+    // amount transferred, so a client who rounded their payment would change
+    // the tax recorded against the invoice.
+    const breakdown = calculateFeeBreakdown(dto.amount, 'bank', currency);
 
     const metadata: Record<string, unknown> = {
       manual:    true,
@@ -273,8 +302,14 @@ export class PaymentsService {
           leadId:      c.leadId,
           caseId:      c.id,
           paymentType: 'manual',
-          amount:      dto.amount,
+          // The TOTAL that moved, matching what the Stripe path records
+          // (`paymentIntent.amount_received`, likewise GST-inclusive).
+          // `gstCents` carries the tax component so the parts stay recoverable
+          // without anyone re-deriving them.
+          amount:      breakdown.totalCents,
           currency,
+          gstCents:     breakdown.gstCents,
+          cardFeeCents: breakdown.cardFeeCents,   // 0 — no card was processed
           status:      'succeeded',
           metadata:    metadata as Prisma.InputJsonValue,
           // Phase 6.5 — finance verification.

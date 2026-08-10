@@ -1,4 +1,6 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import type { FeeBreakdown } from './fee-config';
+import { FEE_CURRENCY } from './fee-config';
 
 const Stripe = require('stripe');
 
@@ -33,8 +35,10 @@ export class StripeService {
   async createConsultationPaymentLink(
     leadId: string,
     consultationType: string,
-    amountNZD: number,
-    currency: string = 'nzd',
+    // PR-PHASE40 — the caller passes the whole breakdown (base, GST, card fee)
+    // rather than a single amount, so the currency and the arithmetic both come
+    // from fee-config and this file no longer decides either.
+    breakdown: FeeBreakdown,
     // PR-LIA-AUTO-ASSIGN — optional caseId to plumb through the Stripe
     // link metadata. The webhook handler reads this to know which case
     // to assign an LIA to on ACCOUNT_OPENING success. Existing callers
@@ -42,7 +46,10 @@ export class StripeService {
     caseId?: string,
   ) {
     this.assertConfigured();
-    const amountCents = Math.round(amountNZD * 100);
+    const currency = breakdown.currency;
+
+    const friendly = consultationType
+      .replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase());
 
     // `stripe.prices.create` accepts an inline `product_data` whose schema is
     // narrower than the one used by Checkout Sessions: it allows `name`,
@@ -52,13 +59,30 @@ export class StripeService {
     // from the Stripe SDK. The customer-facing label is the product
     // `name`, which already renders the friendly type (e.g. "Admission
     // Consultation") on the hosted Payment Link page.
+    //
+    // PR-PHASE40 — three prices, not one. GST and the card fee are separate
+    // line items so the hosted page itemises them; a single grossed-up figure
+    // would show the client a number they cannot reconcile against the fee
+    // table, and GST has to be visible on a tax invoice anyway.
     const price = await this.stripe.prices.create({
       currency,
-      unit_amount: amountCents,
-      product_data: {
-        name: consultationType.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase()),
-      },
+      unit_amount: breakdown.baseCents,
+      product_data: { name: friendly },
     });
+    const gstPrice = breakdown.gstCents > 0
+      ? await this.stripe.prices.create({
+          currency,
+          unit_amount: breakdown.gstCents,
+          product_data: { name: 'GST 15%' },
+        })
+      : null;
+    const cardFeePrice = breakdown.cardFeeCents > 0
+      ? await this.stripe.prices.create({
+          currency,
+          unit_amount: breakdown.cardFeeCents,
+          product_data: { name: 'Card Processing Fee' },
+        })
+      : null;
 
     // PR-LIA-AUTO-ASSIGN — when this is the $200 account-opening charge,
     // tag the metadata with paymentType: 'ACCOUNT_OPENING' so the
@@ -90,7 +114,11 @@ export class StripeService {
     // is written, no Payment appears on the case. We keep top-level
     // metadata too so the link stays searchable in the Stripe Dashboard.
     const paymentLink = await this.stripe.paymentLinks.create({
-      line_items: [{ price: price.id, quantity: 1 }],
+      line_items: [
+        { price: price.id, quantity: 1 },
+        ...(gstPrice ? [{ price: gstPrice.id, quantity: 1 }] : []),
+        ...(cardFeePrice ? [{ price: cardFeePrice.id, quantity: 1 }] : []),
+      ],
       metadata,
       payment_intent_data: {
         metadata,
@@ -132,7 +160,7 @@ export class StripeService {
     leadId:      string,
     caseId:      string,
     amountCents: number,
-    currency:    string = 'nzd',
+    currency:    string = FEE_CURRENCY,
     invoiceId?:  string,
   ) {
     this.assertConfigured();
@@ -213,7 +241,7 @@ export class StripeService {
     // Return the user to the right booking page on cancel (gap / lia).
     const cancelType = params.bookingType === 'LIA' ? 'lia' : 'gap';
     const ccy = params.currency.toLowerCase();
-    // Currency driven by config (never a hardcoded 'nzd'). The fee is a SEPARATE
+    // Currency driven by config (never a hardcoded default). The fee is a SEPARATE
     // disclosed line item so it also shows on the Stripe page (mirrors the
     // account-opening pay screen's disclosed fee). Stripe's amount_total = base
     // + fee, which the webhook trusts as the captured amount.
