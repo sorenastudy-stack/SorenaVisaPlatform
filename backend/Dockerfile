@@ -10,9 +10,28 @@ RUN npx prisma generate
 COPY src ./src/
 RUN npm run build
 
+# PR-PHASE40 — pg_dump for the pre-migration backup.
+#
+# Production Postgres is 18.4, and pg_dump refuses to dump a server newer than
+# itself, so 18 is the floor. Alpine's stable branches only package up to
+# postgresql17-client, so the binary is lifted out of the official postgres:18
+# image rather than pulled from alpine edge — mixing an edge repo into a stable
+# base can drag musl along with it and break node.
+FROM postgres:18-alpine AS pgtools
+
 FROM node:22-alpine AS production
 WORKDIR /app
-RUN apk add --no-cache openssl
+# libpq's runtime dependencies. icu/zstd/lz4 are the obvious ones; krb5-libs
+# and openldap are the ones that are easy to miss, because libpq links GSSAPI
+# and LDAP support unconditionally even though this app uses neither — a first
+# attempt without them failed the build on ldap_* and gss_* relocation errors.
+RUN apk add --no-cache openssl icu-libs zstd-libs lz4-libs krb5-libs openldap
+COPY --from=pgtools /usr/local/bin/pg_dump /usr/local/bin/pg_dump
+COPY --from=pgtools /usr/local/lib/libpq.so.5 /usr/local/lib/libpq.so.5
+# Runs pg_dump at BUILD time. If a shared library is missing, this fails the
+# image build — which leaves the currently-running deploy untouched — instead of
+# failing preDeployCommand later and blocking every deploy with a broken image.
+RUN pg_dump --version
 COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm ci --only=production
