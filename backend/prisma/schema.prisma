@@ -440,7 +440,13 @@ model User {
   // until the user links Google. @unique prevents two app users from
   // binding the same Google account.
   googleId          String?    @unique
-  role              UserRole   @default(SALES)
+  /// No default, deliberately. It used to default to SALES, which was harmless
+  /// only while SALES could reach nothing; now that the role is active, a user
+  /// created without one would silently receive a working staff account. There
+  /// is no "unassigned" value to fall back to, so the role is simply required —
+  /// every create in the codebase already passes one explicitly, and dropping
+  /// the default makes the compiler keep it that way.
+  role              UserRole
   // Secondary roles WIDEN access only — they never change `role` (which still
   // drives login, routing, and the UI badge), never narrow access, and default
   // to empty so every existing row is unaffected. Permission gates (RolesGuard,

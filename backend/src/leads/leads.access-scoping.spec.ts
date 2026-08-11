@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { ForbiddenException } from '@nestjs/common';
 import { LeadsService } from './leads.service';
+import { StaffLeadsService } from './staff-leads.service';
 import { CommissionsService } from '../commissions/commissions.service';
 
 /**
@@ -22,6 +23,7 @@ jest.setTimeout(60000);
 describe('Lead + commission access scoping', () => {
   let prisma: PrismaClient;
   let leads: LeadsService;
+  let staffLeads: StaffLeadsService;
   let commissions: CommissionsService;
 
   // Everything created here, torn down in reverse dependency order.
@@ -38,7 +40,8 @@ describe('Lead + commission access scoping', () => {
   };
 
   let salesA: string, salesB: string, owner: string, support: string;
-  let leadOfA: string, leadOfB: string, leadUnowned: string;
+  let consultant: string, finance: string;
+  let leadOfA: string, leadOfB: string, leadUnowned: string, leadOfConsultant: string;
   let commissionOfA: string, commissionOfB: string;
 
   let seq = 0;
@@ -102,12 +105,16 @@ describe('Lead + commission access scoping', () => {
     prisma = new PrismaClient();
     await prisma.$connect();
     leads = new LeadsService(prisma as any, {} as any, {} as any, {} as any);
+    staffLeads = new StaffLeadsService(prisma as any);
     commissions = new CommissionsService(prisma as any, {} as any);
 
     salesA = await mkUser('SALES');
     salesB = await mkUser('SALES');
     owner = await mkUser('OWNER');
     support = await mkUser('SUPPORT');
+    consultant = await mkUser('CONSULTANT');
+    finance = await mkUser('FINANCE');
+    leadOfConsultant = await mkLead(consultant);
 
     leadOfA = await mkLead(salesA);
     leadOfB = await mkLead(salesB);
@@ -208,6 +215,81 @@ describe('Lead + commission access scoping', () => {
       // Fail closed: a missing actor id must never fall through to "no filter".
       await expect(leads.findAll({}, { id: null, role: 'SALES', secondaryRoles: [] }))
         .rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('the role column has no default', () => {
+    it('a user cannot be created without an explicit role', async () => {
+      // It used to default to SALES. That was harmless only while SALES could
+      // reach nothing; now the role is active, so a create that forgot to set
+      // one would have quietly minted a working staff account.
+      await expect(
+        prisma.user.create({
+          data: { name: 'No Role', email: `norole.${stamp()}@t.local`, passwordHash: 'x' } as any,
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('existing rows kept the role they already had', async () => {
+      // Dropping a column default rewrites nothing.
+      const u = await prisma.user.findUnique({ where: { id: salesA } });
+      expect(u!.role).toBe('SALES');
+    });
+  });
+
+  describe('/staff/leads — the management surface', () => {
+    // This list is the manager's view across everyone's queues, so oversight
+    // roles stay unrestricted. CONSULTANT is not one: it is a working role
+    // (Admission Officer) and was reading every lead here for the same reason
+    // it could on /leads — a role gate mistaken for a scope.
+    const staffActor = (id: string, role: string, secondaryRoles: string[] = []) =>
+      ({ id, role, secondaryRoles, name: role } as any);
+
+    it('CONSULTANT sees only their own leads, exactly like SALES', async () => {
+      const res = await staffLeads.list({}, staffActor(consultant, 'CONSULTANT'));
+      expect(res.leads.every((r: any) => r.assignedToId === consultant)).toBe(true);
+      expect(res.leads.map((r: any) => r.id)).toContain(leadOfConsultant);
+      expect(res.leads.map((r: any) => r.id)).not.toContain(leadOfA);
+    });
+
+    it('CONSULTANT cannot widen with assignedToId', async () => {
+      const res = await staffLeads.list(
+        { assignedToId: salesA },
+        staffActor(consultant, 'CONSULTANT'),
+      );
+      expect(res.leads.every((r: any) => r.assignedToId === consultant)).toBe(true);
+    });
+
+    it('CONSULTANT cannot open another owner’s lead detail', async () => {
+      await expect(staffLeads.detail(leadOfA, staffActor(consultant, 'CONSULTANT')))
+        .rejects.toThrow(/not found/i);
+      await expect(staffLeads.detail(leadOfConsultant, staffActor(consultant, 'CONSULTANT')))
+        .resolves.toMatchObject({ id: leadOfConsultant });
+    });
+
+    it.each([['OWNER'], ['SUPER_ADMIN'], ['ADMIN'], ['FINANCE']])(
+      '%s visibility is unchanged — still sees other owners’ leads',
+      async (role) => {
+        const id = role === 'FINANCE' ? finance : owner;
+        const res = await staffLeads.list({}, staffActor(id, role));
+        const ids = res.leads.map((r: any) => r.id);
+        expect(ids).toEqual(expect.arrayContaining([leadOfA, leadOfConsultant]));
+      },
+    );
+
+    it('OWNER can still open any lead detail', async () => {
+      await expect(staffLeads.detail(leadOfA, staffActor(owner, 'OWNER')))
+        .resolves.toMatchObject({ id: leadOfA });
+    });
+
+    it('a SECONDARY oversight role widens CONSULTANT here too', async () => {
+      const res = await staffLeads.list({}, staffActor(consultant, 'CONSULTANT', ['ADMIN']));
+      expect(res.leads.map((r: any) => r.id)).toEqual(expect.arrayContaining([leadOfA]));
+    });
+
+    it('no actor keeps the surface unscoped, for internal callers', async () => {
+      const res = await staffLeads.list({});
+      expect(res.leads.length).toBeGreaterThan(1);
     });
   });
 

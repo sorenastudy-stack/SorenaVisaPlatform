@@ -72,7 +72,10 @@ function RouteList({ routes }: { routes: RouteGrant[] }) {
       {groups.map(([controller, rs]) => (
         <div key={controller}>
           <p className="mb-1 text-xs font-bold uppercase tracking-wide text-sorena-text/50">
-            {controller.replace(/Controller$/, '')}
+            {/* Split the camel case before upper-casing. "CaseConversationNotes"
+                rendered as CASECONVERSATIONNOTES is a wall of letters; the
+                spaces are what make it a name again. */}
+            {controller.replace(/Controller$/, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2')}
           </p>
           <ul className="space-y-1">
             {rs.map((r) => (

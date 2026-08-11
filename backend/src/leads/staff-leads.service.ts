@@ -31,6 +31,9 @@ interface Actor {
   id: string;
   name?: string | null;
   role?: string | null;
+  // Needed by hasRole: a secondary oversight role must widen this surface the
+  // same way it widens every other one.
+  secondaryRoles?: readonly string[] | null;
 }
 
 export interface LeadListRow {
@@ -76,6 +79,16 @@ export interface ListFilters {
   sortOrder?: 'asc' | 'desc';
 }
 
+// Who sees every lead on this surface. It is the management view — the list a
+// manager uses to see across everyone's queues — so oversight roles are
+// unrestricted here by design.
+//
+// CONSULTANT is not one of them. It is a working role (Admission Officer), and
+// it was reading all 4302 leads here for the same reason it could on /leads:
+// the role gate was mistaken for a scope. It now sees its own queue, exactly
+// like SALES.
+const LEADS_OVERSIGHT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'FINANCE'];
+
 @Injectable()
 export class StaffLeadsService {
   private readonly logger = new Logger(StaffLeadsService.name);
@@ -84,7 +97,7 @@ export class StaffLeadsService {
 
   // ─── List ──────────────────────────────────────────────────────────
 
-  async list(filters: ListFilters): Promise<LeadListResult> {
+  async list(filters: ListFilters, actor?: Actor): Promise<LeadListResult> {
     const limit = Math.min(100, Math.max(1, filters.limit ?? 25));
     const offset = Math.max(0, filters.offset ?? 0);
 
@@ -157,6 +170,14 @@ export class StaffLeadsService {
       default:       orderBy = { createdAt: sortOrder };
     }
 
+    // LAST, and unconditional. assignedToId is an accepted query parameter, so
+    // a scope applied before it would be silently overwritten by the caller —
+    // the filter narrows what you asked for, it never widens what you may see.
+    if (actor && !hasRole(actor, ...LEADS_OVERSIGHT_ROLES)) {
+      if (!actor.id) throw new ForbiddenException('You are not allowed to view the lead list.');
+      where.ownerId = actor.id;
+    }
+
     const [rows, total] = await Promise.all([
       this.prisma.lead.findMany({
         where,
@@ -225,6 +246,16 @@ export class StaffLeadsService {
       },
     });
     if (!lead) throw new NotFoundException('Lead not found');
+
+    // Same boundary as the list. Scoping only the list would leave the detail
+    // page reachable by id — and this payload is far richer than a list row:
+    // contact details, payments, the full status history.
+    //
+    // Not-found rather than forbidden: "it exists but is not yours" confirms a
+    // record the caller is not entitled to know about.
+    if (!hasRole(actor, ...LEADS_OVERSIGHT_ROLES) && lead.ownerId !== actor.id) {
+      throw new NotFoundException('Lead not found');
+    }
 
     // Audit the view. Best-effort: a failed audit row must not block the
     // page load.

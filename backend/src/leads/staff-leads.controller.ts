@@ -45,6 +45,7 @@ export class StaffLeadsController {
     @Query('offset') offset?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
+    @Req() req?: any,
   ) {
     return this.service.list({
       source, status, assignedToId, search, dateFrom, dateTo, band,
@@ -52,7 +53,7 @@ export class StaffLeadsController {
       offset: offset ? parseInt(offset, 10) : undefined,
       sortBy: (sortBy as any) ?? undefined,
       sortOrder: (sortOrder as any) ?? undefined,
-    });
+    }, this.actor(req));
   }
 
   // List of staff users eligible to receive a lead assignment. Used
@@ -94,6 +95,9 @@ export class StaffLeadsController {
       id: req.user?.userId ?? req.user?.id,
       name: req.user?.name ?? null,
       role: req.user?.role ?? null,
+      // Secondary roles widen every other gate; this surface must not be the
+      // one place a granted oversight role is ignored.
+      secondaryRoles: req.user?.secondaryRoles ?? [],
     };
   }
 }
