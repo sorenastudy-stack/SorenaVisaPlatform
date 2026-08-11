@@ -12,7 +12,7 @@ import { formatRelativeTime } from '@/lib/format-relative-time';
 
 // PR-COMPLIANCE — Owner-dashboard Compliance section. Composes:
 //   1. Flagged cases (NEW)          — GET /api/staff/compliance/flagged-cases
-//   2. Contract exceptions (reuse)  — GET /ops/compliance/non-compliant
+//   2. Contract exceptions          — GET /api/staff/compliance/non-compliant
 //   3. Override / audit log (reuse) — GET /api/staff/compliance/override-log (→ /admin/audit)
 //   4. Owner-approval queue (reuse) — link to /staff/approvals
 // Read-only; every action lives on the linked surface.
@@ -59,7 +59,7 @@ export function ComplianceClient() {
 
   useEffect(() => {
     api.get<FlaggedRow[]>('/api/staff/compliance/flagged-cases').then(setFlagged).catch(() => setErrs((e) => ({ ...e, flagged: true })));
-    api.get<{ rows: ContractRow[] }>('/ops/compliance/non-compliant').then((d) => setContracts(d.rows)).catch(() => setErrs((e) => ({ ...e, contracts: true })));
+    api.get<{ rows: ContractRow[] }>('/api/staff/compliance/non-compliant').then((d) => setContracts(d.rows)).catch(() => setErrs((e) => ({ ...e, contracts: true })));
     api.get<OverrideRow[]>('/api/staff/compliance/override-log?limit=25').then(setOverrides).catch(() => setErrs((e) => ({ ...e, overrides: true })));
   }, []);
 

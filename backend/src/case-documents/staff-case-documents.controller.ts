@@ -27,6 +27,18 @@ import { CaseDocumentsService } from './case-documents.service';
 export class StaffCaseDocumentsController {
   constructor(private readonly service: CaseDocumentsService) {}
 
+  // PR-OPS-RETIRE — every unreviewed document across active cases, moved from
+  // /ops/documents/unreviewed. That route was gated to OPERATIONS (no users) and
+  // no frontend ever called it. The queue is worth keeping, so it lives here
+  // under the oversight tier instead of being deleted with the route.
+  //
+  // Declared BEFORE the bare @Get() so 'unreviewed' is not swallowed by it.
+  @Get('unreviewed')
+  @Roles('OWNER', 'SUPER_ADMIN')
+  unreviewed() {
+    return this.service.listUnreviewedAcrossCases();
+  }
+
   @Get()
   listAll(@Req() req: any) {
     return this.service.listAllDocumentsAcrossCases({

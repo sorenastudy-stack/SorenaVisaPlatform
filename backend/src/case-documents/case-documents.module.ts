@@ -4,7 +4,6 @@ import { CryptoModule } from '../common/crypto/crypto.module';
 import { CaseDocumentsService } from './case-documents.service';
 import { CaseDocumentsController } from './case-documents.controller';
 import { StaffCaseDocumentsController } from './staff-case-documents.controller';
-import { OpsDocumentsController } from './ops-documents.controller';
 import { StudentDocumentStatusService } from './student-document-status.service';
 import { StudentDocumentStatusController } from './student-document-status.controller';
 
@@ -15,7 +14,7 @@ import { StudentDocumentStatusController } from './student-document-status.contr
 // view (GET /students/me/documents/review-status), owner-scoped by JWT userId.
 @Module({
   imports: [PrismaModule, CryptoModule],
-  controllers: [CaseDocumentsController, StaffCaseDocumentsController, OpsDocumentsController, StudentDocumentStatusController],
+  controllers: [CaseDocumentsController, StaffCaseDocumentsController, StudentDocumentStatusController],
   providers: [CaseDocumentsService, StudentDocumentStatusService],
   exports: [CaseDocumentsService],
 })
