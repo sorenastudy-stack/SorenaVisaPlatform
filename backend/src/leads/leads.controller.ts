@@ -38,8 +38,12 @@ export class LeadsController {
 
   @Post()
   @Roles(...FUNNEL_ROLES)
-  create(@Body() dto: CreateLeadDto) {
-    return this.leadsService.create(dto);
+  create(@Body() dto: CreateLeadDto, @Request() req) {
+    return this.leadsService.create(dto, {
+      id: req.user?.userId ?? req.user?.id ?? null,
+      role: req.user?.role ?? null,
+      secondaryRoles: req.user?.secondaryRoles ?? [],
+    });
   }
 
   @Get()

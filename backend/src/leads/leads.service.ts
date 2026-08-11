@@ -41,7 +41,21 @@ export class LeadsService {
     private liaAssignments: LiaAssignmentService,
   ) {}
 
-  async create(dto: CreateLeadDto) {
+  /**
+   * Roles that always own what they create.
+   *
+   * A salesperson creating a lead is creating their own work, and `ownerId` is
+   * an accepted body field — so without this a rep could file a lead under
+   * someone else's name. That is not a read leak (the scoping already stops
+   * them seeing it afterwards), but it lets one person put work into another
+   * person's queue, and it puts a name on a record that did not do the work.
+   *
+   * Kept as a list so the question "should CONSULTANT be here too?" is a
+   * one-line answer rather than a rewrite. It is deliberately only SALES today.
+   */
+  static readonly SELF_OWNING_ROLES = ['SALES'];
+
+  async create(dto: CreateLeadDto, actor?: Actor) {
     const contact = await this.prisma.contact.findUnique({
       where: { id: dto.contactId },
     });
@@ -50,13 +64,22 @@ export class LeadsService {
       throw new BadRequestException('Contact not found');
     }
 
+    // Decided server-side. A self-owning role's `ownerId` is overwritten rather
+    // than validated: rejecting it would turn a field the client should simply
+    // not control into an error someone has to work around.
+    const selfOwning =
+      !!actor?.id &&
+      hasRole(actor, ...LeadsService.SELF_OWNING_ROLES) &&
+      !hasRole(actor, ...LeadsService.FUNNEL_OVERSIGHT_ROLES);
+    const ownerId = selfOwning ? actor!.id! : (dto.ownerId || null);
+
     // PR-CLIENT-ID — permanent human-readable id (country from the contact).
     const clientId = await generateClientId(this.prisma, { contactId: dto.contactId });
     const lead = await this.prisma.lead.create({
       data: {
         clientId,
         contactId: dto.contactId,
-        ownerId: dto.ownerId || null,
+        ownerId,
         leadStatus: 'NEW',
       },
       include: { contact: true },

@@ -104,7 +104,10 @@ describe('Lead + commission access scoping', () => {
   beforeAll(async () => {
     prisma = new PrismaClient();
     await prisma.$connect();
-    leads = new LeadsService(prisma as any, {} as any, {} as any, {} as any);
+    // create() emits a LEAD_CREATED event; only the network-ish deps are stubbed
+    // so the ownership decision under test runs for real against the database.
+    const events: any = { emit: jest.fn().mockResolvedValue(undefined) };
+    leads = new LeadsService(prisma as any, events, {} as any, {} as any);
     staffLeads = new StaffLeadsService(prisma as any);
     commissions = new CommissionsService(prisma as any, {} as any);
 
@@ -215,6 +218,76 @@ describe('Lead + commission access scoping', () => {
       // Fail closed: a missing actor id must never fall through to "no filter".
       await expect(leads.findAll({}, { id: null, role: 'SALES', secondaryRoles: [] }))
         .rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('lead creation ownership', () => {
+    async function mkContact() {
+      const s = stamp();
+      const c = await prisma.contact.create({ data: { fullName: `NC ${s}`, email: `nc.${s}@t.local` } });
+      made.contacts.push(c.id);
+      return c.id;
+    }
+
+    it('SALES cannot create a lead owned by someone else, even by sending ownerId', async () => {
+      const contactId = await mkContact();
+      const lead: any = await leads.create(
+        { contactId, ownerId: salesB } as any,
+        actor(salesA, 'SALES') as any,
+      );
+      made.leads.push(lead.id);
+      // The payload asked for salesB; the server decided salesA.
+      expect(lead.ownerId).toBe(salesA);
+      expect(lead.ownerId).not.toBe(salesB);
+    });
+
+    it('SALES omitting ownerId still owns what they create', async () => {
+      const contactId = await mkContact();
+      const lead: any = await leads.create({ contactId } as any, actor(salesA, 'SALES') as any);
+      made.leads.push(lead.id);
+      expect(lead.ownerId).toBe(salesA);
+    });
+
+    it('the lead SALES just created is visible to them and not to the other rep', async () => {
+      const contactId = await mkContact();
+      const lead: any = await leads.create(
+        { contactId, ownerId: salesB } as any,
+        actor(salesA, 'SALES') as any,
+      );
+      made.leads.push(lead.id);
+      const mine = (await leads.findAll({}, actor(salesA, 'SALES'))).map((r: any) => r.id);
+      const theirs = (await leads.findAll({}, actor(salesB, 'SALES'))).map((r: any) => r.id);
+      expect(mine).toContain(lead.id);
+      expect(theirs).not.toContain(lead.id);
+    });
+
+    it('OWNER can still create a lead on someone else’s behalf', async () => {
+      // Assigning work to a rep is a manager's job; this restriction is about
+      // a rep putting work into someone else's queue, not about delegation.
+      const contactId = await mkContact();
+      const lead: any = await leads.create(
+        { contactId, ownerId: salesA } as any,
+        actor(owner, 'OWNER') as any,
+      );
+      made.leads.push(lead.id);
+      expect(lead.ownerId).toBe(salesA);
+    });
+
+    it('a SECONDARY oversight role lets a SALES user assign on behalf', async () => {
+      const contactId = await mkContact();
+      const lead: any = await leads.create(
+        { contactId, ownerId: salesB } as any,
+        actor(salesA, 'SALES', ['ADMIN']) as any,
+      );
+      made.leads.push(lead.id);
+      expect(lead.ownerId).toBe(salesB);
+    });
+
+    it('internal callers with no actor are unaffected', async () => {
+      const contactId = await mkContact();
+      const lead: any = await leads.create({ contactId, ownerId: salesB } as any);
+      made.leads.push(lead.id);
+      expect(lead.ownerId).toBe(salesB);
     });
   });
 
