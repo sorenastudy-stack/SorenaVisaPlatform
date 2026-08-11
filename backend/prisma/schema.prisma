@@ -667,6 +667,12 @@ model User {
   wallet            Wallet?            @relation("WalletUser")
   policyAcceptances PolicyAcceptance[] @relation("PolicyAcceptanceUser")
 
+  // PR-HANDOFF — stage handoffs this user sent / received, and their in-app
+  // notifications. All SetNull/Cascade so deleting a user never blocks.
+  handoffsSent     CaseHandoff[]  @relation("HandoffFrom")
+  handoffsReceived CaseHandoff[]  @relation("HandoffTo")
+  notifications    Notification[]
+
   @@map("users")
 }
 
@@ -1597,7 +1603,86 @@ model Case {
   // not data-corrupting, and we don't want a UNIQUE clash to crash a
   // submit transaction.
   @@index([inzApplicationNumber])
+  // PR-HANDOFF — explicit stage-to-stage handoffs on this case.
+  handoffs              CaseHandoff[]
   @@map("cases")
+}
+
+/// The four staff stages a case moves through, in order. These are the existing
+/// Case ownership slots named as stages — no new assignment concept, so a
+/// handoff moves the case along the same slots auto-assignment already fills.
+///   ADMISSION → Case.ownerId    SUPPORT → Case.supportId
+///   FINANCE   → Case.financeId  LIA     → Case.liaId
+enum CaseSlot {
+  ADMISSION
+  SUPPORT
+  FINANCE
+  LIA
+}
+
+enum HandoffState {
+  PENDING
+  ACCEPTED
+  CANCELLED
+}
+
+/// PR-HANDOFF — a case being handed from one stage to the next.
+///
+/// The stuck-case detection on /staff/handoffs infers trouble from state; this
+/// records the event itself, so "who passed this to whom, when, and did they
+/// pick it up" is answerable rather than reconstructed.
+///
+/// Deliberately NOT AuditLog: a work queue is read as "open items addressed to
+/// me", which needs a status column and an index on the recipient. Expressing
+/// that over AuditLog's JSON payload would mean scanning the audit table on
+/// every queue load.
+model CaseHandoff {
+  id       String       @id @default(cuid())
+  caseId   String
+  fromSlot CaseSlot
+  toSlot   CaseSlot
+  /// Nullable + name snapshots, so deleting a staff account leaves the history
+  /// readable rather than taking a record of who did what with it.
+  fromUserId   String?
+  toUserId     String?
+  fromUserName String?
+  toUserName   String?
+  note     String?
+  status   HandoffState @default(PENDING)
+  acceptedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  case Case  @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  from User? @relation("HandoffFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  to   User? @relation("HandoffTo",   fields: [toUserId],   references: [id], onDelete: SetNull)
+
+  /// The queue read: open items addressed to one person.
+  @@index([toUserId, status])
+  /// The case-history read: this case's handoffs, newest first.
+  @@index([caseId, createdAt])
+  @@map("case_handoffs")
+}
+
+/// PR-HANDOFF — in-app notifications.
+///
+/// Kept to the minimum that makes an unread badge and a list work. `link` is a
+/// path the frontend routes to, and `type` exists so a future sender can be
+/// added without another migration — not a general notification framework.
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The badge read: unread count for one user.
+  @@index([userId, read])
+  @@map("notifications")
 }
 
 // ─── VISA OUTCOME (PR-LIA-8) ──────────────────────────────────────────
