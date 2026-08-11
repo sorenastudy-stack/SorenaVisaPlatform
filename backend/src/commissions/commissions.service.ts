@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CommissionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { hasRole } from '../auth/role.util';
 import { EventsService, EventSource } from '../events/events.service';
 import { CreateCommissionDto } from './dto/create-commission.dto';
 import { UpdateCommissionStatusDto } from './dto/update-commission-status.dto';
@@ -91,21 +92,33 @@ export class CommissionsService {
     });
   }
 
-  // Who may read the commission ledger. Commissions have NO per-user owner
-  // field (they hang off application → provider → programme, not a sales rep),
-  // so "your own commissions" is not expressible — the correct scoping is a
-  // role gate: the money-managing tier sees the ledger, everyone else is
-  // refused. Enforced here in the service, not just the controller, so no
-  // future caller (internal or a new route) can bypass it.
-  // PR-COMMISSIONS-UI — the money-managing tier reads the ledger (OWNER + FINANCE,
-  // + SUPER_ADMIN). Enforced here in the service, not just the controller.
-  static readonly VIEW_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'];
+  // Who may read the commission ledger.
+  //
+  // An earlier note here said "your own commissions" was not expressible because
+  // Commission has no per-user owner column. That was true of the column and
+  // false of the model: a commission reaches a person through the lead behind it
+  // (Commission → Application → Case → Lead.ownerId), which is exactly the
+  // relation the scoped filter below walks.
+  //
+  // Enforced here in the service, not only on the controller, so no future
+  // internal caller or new route can reach the ledger unscoped.
+  static readonly VIEW_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE', 'SALES'];
+
+  // Who sees the WHOLE ledger. SALES is deliberately absent: a salesperson sees
+  // only the commissions arising from leads they own, and holds no write access
+  // at all (create/confirm/status/reminder stay on the money-managing tier).
+  static readonly LEDGER_OVERSIGHT_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'];
 
   async findAll(
     query: CommissionListQueryDto,
-    actor: { id?: string | null; name?: string | null; role?: string | null },
+    actor: {
+      id?: string | null;
+      name?: string | null;
+      role?: string | null;
+      secondaryRoles?: readonly string[] | null;
+    },
   ) {
-    if (!actor?.role || !CommissionsService.VIEW_ROLES.includes(actor.role)) {
+    if (!hasRole(actor, ...CommissionsService.VIEW_ROLES)) {
       throw new ForbiddenException('You are not allowed to view commissions.');
     }
 
@@ -128,6 +141,20 @@ export class CommissionsService {
     }
     if (query.providerId) {
       where.providerId = query.providerId;
+    }
+
+    if (!hasRole(actor, ...CommissionsService.LEDGER_OVERSIGHT_ROLES)) {
+      // A commission belongs to a salesperson through the lead they own:
+      //   Commission → Application → Case → Lead → ownerId
+      // There is no direct salesperson column, so the relation is walked rather
+      // than denormalised — no migration, and it cannot drift out of sync with
+      // who actually owns the lead.
+      //
+      // Applied last and unconditionally, so no query parameter can widen it.
+      if (!actor.id) {
+        throw new ForbiddenException('You are not allowed to view commissions.');
+      }
+      where.application = { case: { lead: { ownerId: actor.id } } };
     }
 
     return this.prisma.commission.findMany({

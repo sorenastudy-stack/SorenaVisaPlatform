@@ -25,7 +25,11 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 // and every route carries an explicit @Roles — reads/writes are gated to the
 // funnel roles; notes/override stay SUPER_ADMIN-only. The modern equivalent is
 // /staff/leads; the two now agree on entitlement.
-const FUNNEL_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'FINANCE'] as const;
+// Sourced from the service rather than re-declared. These two lists were
+// duplicated, and adding SALES to the service alone left the controller
+// refusing the very role the change was for — a 403 no unit test could see,
+// because unit tests call the service directly and never pass this guard.
+const FUNNEL_ROLES = LeadsService.FUNNEL_ROLES;
 
 @Controller('leads')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -50,7 +54,13 @@ export class LeadsController {
   ) {
     return this.leadsService.findAll(
       { status, scoreBand, ownerId, isNurtureCandidate },
-      { role: req.user?.role ?? null },
+      {
+        // id + secondaryRoles are required now that the funnel is scoped
+        // per-user for non-oversight roles.
+        id: req.user?.userId ?? req.user?.id ?? null,
+        role: req.user?.role ?? null,
+        secondaryRoles: req.user?.secondaryRoles ?? [],
+      },
     );
   }
 

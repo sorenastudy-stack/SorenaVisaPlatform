@@ -14,6 +14,7 @@ import { EventsService } from '../events/events.service';
 import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { linkCaseContactToUser } from '../common/link-case-contact.helper';
+import { hasRole } from '../auth/role.util';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadStatusDto, isValidTransition } from './dto/update-lead-status.dto';
 import { UpdateLeadNotesDto } from './dto/update-lead-notes.dto';
@@ -65,14 +66,22 @@ export class LeadsService {
     return lead;
   }
 
-  // Who legitimately needs the lead funnel. Matches the modern, already-gated
-  // staff route (staff-leads.controller: OWNER/SUPER_ADMIN/ADMIN/CONSULTANT/
-  // FINANCE) so the two lead surfaces agree on entitlement. SALES is excluded
-  // exactly as it is there. The funnel is a shared resource among these roles
-  // (Lead.ownerId is only a filter, never a per-user access boundary), so this
-  // is a role gate, not per-user scoping. Enforced in the service so no caller
-  // can bypass it.
-  static readonly FUNNEL_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'FINANCE'];
+  // Who may reach the lead funnel at all. SALES is included: it is the role the
+  // /sales portal exists for, and it was excluded only because that portal's
+  // pages had been stubbed out.
+  static readonly FUNNEL_ROLES = [
+    'OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'FINANCE', 'SALES',
+  ];
+
+  // Who sees the WHOLE funnel. Everyone else in FUNNEL_ROLES sees only the leads
+  // assigned to them.
+  //
+  // The split matters because the two groups need the funnel for different
+  // reasons: oversight roles need the shape of the pipeline, a caseworker needs
+  // their own queue. Before this, every entitled role saw all 52 leads — an
+  // access hole that stayed invisible only because the roles it would have
+  // exposed (CONSULTANT, ADMIN) happen to have no users yet.
+  static readonly FUNNEL_OVERSIGHT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'FINANCE'];
 
   async findAll(
     filters: {
@@ -81,9 +90,12 @@ export class LeadsService {
       ownerId?: string;
       isNurtureCandidate?: boolean;
     },
-    actor: { role?: string | null },
+    actor: { id?: string | null; role?: string | null; secondaryRoles?: readonly string[] | null },
   ) {
-    if (!actor?.role || !LeadsService.FUNNEL_ROLES.includes(actor.role)) {
+    // hasRole, not `includes(role)` — secondary roles widen access everywhere
+    // else in this codebase, and a gate that ignored them would silently deny a
+    // user their granted access.
+    if (!hasRole(actor, ...LeadsService.FUNNEL_ROLES)) {
       throw new ForbiddenException('You are not allowed to view the lead funnel.');
     }
 
@@ -94,6 +106,17 @@ export class LeadsService {
     if (filters.ownerId) where.ownerId = filters.ownerId;
     if (filters.isNurtureCandidate !== undefined)
       where.isNurtureCandidate = filters.isNurtureCandidate;
+
+    if (!hasRole(actor, ...LeadsService.FUNNEL_OVERSIGHT_ROLES)) {
+      // Scoped roles are pinned to their own leads. Assigned LAST and
+      // unconditionally, so an `ownerId` query param cannot be used to read
+      // someone else's queue — a caller-supplied filter is a convenience, never
+      // a way to widen what the caller is entitled to.
+      if (!actor.id) {
+        throw new ForbiddenException('You are not allowed to view the lead funnel.');
+      }
+      where.ownerId = actor.id;
+    }
 
     return this.prisma.lead.findMany({
       where,

@@ -61,16 +61,18 @@ export class CommissionsController {
   }
 
   // Role-gated at the controller AND enforced again in the service (money data).
-  // Commissions have no per-user owner, so this is a role gate, not per-user
-  // scoping — the entitled tier sees the ledger, everyone else is refused.
+  // SALES reads too, but scoped: the service pins them to commissions arising
+  // from leads they own. Read only — every write route above stays on the
+  // money-managing tier.
   @Get()
-  @Roles('OWNER', 'SUPER_ADMIN', 'FINANCE')
+  @Roles('OWNER', 'SUPER_ADMIN', 'FINANCE', 'SALES')
   @Throttle({ default: { ttl: 60_000, limit: 30 } })
   findAll(@Query() query: CommissionListQueryDto, @Req() req: any) {
     return this.commissionsService.findAll(query, {
       id: req.user?.userId ?? req.user?.id ?? null,
       name: req.user?.name ?? null,
       role: req.user?.role ?? null,
+      secondaryRoles: req.user?.secondaryRoles ?? [],
     });
   }
 

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { LeadStatus, Prisma, ScorecardBand } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { hasRole } from '../auth/role.util';
 
 // PR-CRM-LEADS — Staff-side leads service.
 //
@@ -20,7 +21,11 @@ import { PrismaService } from '../prisma/prisma.service';
 // (which still serves the older sales-side UI). Both share the same
 // underlying Lead model; there's no schema fork.
 
-const ASSIGNEE_ROLES = ['OWNER', 'ADMIN', 'CONSULTANT'] as const;
+// Who may RECEIVE a lead. SALES is included now that the /sales portal is wired
+// to the funnel — a salesperson who cannot be handed a lead has nothing to work.
+// Who may PERFORM the assignment is separate and unchanged (OWNER/SUPER_ADMIN/
+// ADMIN on the controller): being assignable is not permission to assign.
+const ASSIGNEE_ROLES = ['OWNER', 'ADMIN', 'CONSULTANT', 'SALES'] as const;
 
 interface Actor {
   id: string;
@@ -414,12 +419,17 @@ export class StaffLeadsService {
     if (newOwnerId) {
       const assignee = await this.prisma.user.findUnique({
         where: { id: newOwnerId },
-        select: { id: true, role: true, isActive: true },
+        select: { id: true, role: true, secondaryRoles: true, isActive: true },
       });
       if (!assignee) throw new BadRequestException('Assignee not found');
       if (!assignee.isActive) throw new BadRequestException('Assignee is not active');
-      if (!(ASSIGNEE_ROLES as readonly string[]).includes(assignee.role)) {
-        throw new ForbiddenException('Assignee must be an OWNER, ADMIN, or CONSULTANT');
+      // hasRole: a user granted SALES as a SECONDARY role is a legitimate
+      // assignee. Checking `assignee.role` alone silently refused them, which
+      // is the opposite of what secondary roles are for.
+      if (!hasRole(assignee, ...ASSIGNEE_ROLES)) {
+        throw new ForbiddenException(
+          `Assignee must hold one of: ${ASSIGNEE_ROLES.join(', ')}`,
+        );
       }
     }
 
