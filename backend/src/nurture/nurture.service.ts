@@ -374,6 +374,23 @@ export class NurtureService {
   private async ensureEmailSent(
     leadId: string, step: number, email: string | null, name: string | null, ctaUrl: string, unsubscribeUrl: string,
   ): Promise<boolean> {
+    // DISARMED — steps 1/3/5/6 still carry placeholder bodies ("copy TBD").
+    //
+    // Gated here as well as on the cron, because POST /staff/nurture/run-sweep-now
+    // reaches this same code and would send them on an admin's click.
+    //
+    // Returns BEFORE the ledger row is written, deliberately. leadNurtureSent is
+    // the dedup anchor: recording a step marks it sent forever, so writing one
+    // here would permanently stop the real copy from ever reaching that lead —
+    // the exact harm this gate exists to prevent.
+    if (process.env.NURTURE_SWEEP_ENABLED !== 'true') {
+      this.logger.warn(
+        `[Nurture] Sequence email step ${step} for lead ${leadId} suppressed — ` +
+        'placeholder copy. Set NURTURE_SWEEP_ENABLED=true once it is written.',
+      );
+      return false;
+    }
+
     const existing = await this.prisma.leadNurtureSent.findUnique({
       where: { uniq_lead_nurture_step: { leadId, step: String(step) } },
     });

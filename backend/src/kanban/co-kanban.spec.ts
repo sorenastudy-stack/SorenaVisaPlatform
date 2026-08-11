@@ -17,6 +17,12 @@ jest.setTimeout(60000);
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
 const mail: any = { sendNurtureSequenceEmail: jest.fn().mockResolvedValue(true), sendNurtureNewsletter: jest.fn().mockResolvedValue(true) };
 
+// The sequence sender is gated off in production until its placeholder copy is
+// written (NURTURE_SWEEP_ENABLED). These suites exercise the sweep's real
+// behaviour, so they arm it explicitly rather than asserting the disarmed path —
+// which has its own suite in nurture-disarmed.spec.ts.
+process.env.NURTURE_SWEEP_ENABLED = 'true';
+
 describe('CO kanban — override, sweep-skip, tickets, scoping', () => {
   let prisma: PrismaClient;
   let nurture: NurtureService;
