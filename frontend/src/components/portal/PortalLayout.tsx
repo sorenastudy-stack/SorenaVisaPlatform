@@ -8,7 +8,7 @@ import {
   Shield, ShieldCheck, FileSearch, CheckSquare, BarChart2,
   MessageSquare, CreditCard, Menu, X, LogOut, Globe,
   ClipboardList, LineChart, Clock, UserSquare2, BarChart3,
-  Scale, Cog, type LucideIcon,
+  Scale, Cog, CalendarClock, type LucideIcon,
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { cn } from '@/lib/cn';
@@ -59,6 +59,8 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     // /staff/meetings.
     { label: 'Dashboard',     href: '/sales',               icon: <LayoutDashboard size={18} /> },
     { label: 'Leads',         href: '/sales/leads',         icon: <Users size={18} /> },
+    // PR-SALES-CONSULTATIONS: sessions on this rep's own leads, whoever runs them.
+    { label: 'Consultations', href: '/sales/consultations', icon: <CalendarClock size={18} /> },
   ],
   lia: [
     { label: 'Dashboard',       href: '/lia',              icon: <LayoutDashboard size={18} /> },

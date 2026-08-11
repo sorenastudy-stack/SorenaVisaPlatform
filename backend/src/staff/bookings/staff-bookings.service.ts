@@ -7,6 +7,8 @@ import {
 import { ConsultationType, LegalDecision, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RefundService } from '../../payments/refund.service';
+import { hasRole } from '../../auth/role.util';
+import { LeadsService } from '../../leads/leads.service';
 
 // PR-WALLET slice 2 — staff bookings list backing /staff/bookings.
 //
@@ -24,6 +26,75 @@ export class StaffBookingsService {
     private readonly prisma: PrismaService,
     private readonly refunds: RefundService,
   ) {}
+
+  /**
+   * Consultations for the leads a rep OWNS — the sales view.
+   *
+   * Deliberately a separate method from list(), because it answers a different
+   * question. list() is "sessions I am running" (Consultation.assignedToId); this
+   * is "sessions belonging to my clients" (Consultation.leadId → Lead.ownerId).
+   * A salesperson usually holds none of the sessions on their own leads — an LIA
+   * or an admission officer does — so folding the two together would show a rep
+   * an empty page and call it correct.
+   *
+   * Scoping matches Leads and Commissions exactly, including which roles count
+   * as oversight, so there is one answer to "who sees everything" rather than a
+   * third one invented here.
+   */
+  async listForOwnedLeads(
+    actor: { userId?: string | null; role?: string | null; secondaryRoles?: readonly string[] | null },
+    now = new Date(),
+  ) {
+    const from = new Date(now.getTime() - 90 * 86_400_000);
+
+    const where: Prisma.ConsultationWhereInput = {
+      status: { in: [...LISTED_STATUSES] },
+      OR: [
+        { scheduledAt: { gte: from } },
+        // A consultation that was never scheduled still matters to the rep —
+        // an unbooked ADMISSION session is work waiting to happen, and filtering
+        // on a date would hide exactly the ones needing a nudge.
+        { scheduledAt: null },
+      ],
+    };
+
+    if (!hasRole(actor, ...LeadsService.FUNNEL_OVERSIGHT_ROLES)) {
+      if (!actor.userId) {
+        throw new ForbiddenException('You are not allowed to view consultations.');
+      }
+      // Applied unconditionally — there is no caller-supplied filter here today,
+      // and this must stay true if one is ever added.
+      where.lead = { ownerId: actor.userId };
+    }
+
+    const rows = await this.prisma.consultation.findMany({
+      where,
+      orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'desc' }],
+      select: {
+        id: true, type: true, status: true,
+        paymentStatus: true, amountNZD: true, currency: true, paidWith: true,
+        scheduledAt: true, scheduledEndAt: true, durationMinutes: true,
+        bookingTimezone: true, meetingLink: true,
+        decision: true, decidedAt: true, outcomeNotes: true,
+        createdAt: true,
+        assignedTo: { select: { id: true, name: true, role: true } },
+        lead: {
+          select: {
+            id: true, clientId: true, leadStatus: true, ownerId: true,
+            contact: { select: { fullName: true, email: true } },
+          },
+        },
+      },
+    });
+
+    return rows.map((r) => ({
+      ...r,
+      amountNZD: r.amountNZD == null ? null : Number(r.amountNZD),
+      clientName: r.lead?.contact?.fullName ?? null,
+      clientEmail: r.lead?.contact?.email ?? null,
+      assignedToName: r.assignedTo?.name ?? null,
+    }));
+  }
 
   async list(actor: { userId: string; role: string }, now = new Date()) {
     const isAdmin = ADMIN_TIER.has(actor.role);

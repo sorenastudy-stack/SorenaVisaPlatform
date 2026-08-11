@@ -5,6 +5,7 @@ import { BookingCancellationModule } from '../../booking/booking-cancellation.mo
 import { PaymentsModule } from '../../payments/payments.module';
 import { OwnerApprovalModule } from '../owner-approval/owner-approval.module';
 import { StaffBookingsController } from './staff-bookings.controller';
+import { SalesConsultationsController } from './sales-consultations.controller';
 import { StaffBookingsService } from './staff-bookings.service';
 
 // PR-WALLET slice 2 — staff bookings list + No-Show/Completed/Cancel marker.
@@ -13,7 +14,9 @@ import { StaffBookingsService } from './staff-bookings.service';
 // that an OWNER must approve before any money moves.
 @Module({
   imports: [PrismaModule, StaffRolesModule, BookingCancellationModule, PaymentsModule, OwnerApprovalModule],
-  controllers: [StaffBookingsController],
+  // SalesConsultationsController is here rather than in its own module because
+  // it reads through the same service; it just carries a different guard.
+  controllers: [StaffBookingsController, SalesConsultationsController],
   providers: [StaffBookingsService],
 })
 export class StaffBookingsModule {}
