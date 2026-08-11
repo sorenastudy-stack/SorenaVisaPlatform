@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Delete, Param, Query, UseGuards } from '@nestjs/common';
+import { Req, Controller, Get, Post, Body, Patch, Delete, Param, Query, UseGuards } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
@@ -27,14 +27,14 @@ export class ContactsController {
 
   @Get()
   @Roles(...CRM_ROLES)
-  findAll(@Query('search') search?: string) {
-    return this.contactsService.findAll(search);
+  findAll(@Query('search') search: string | undefined, @Req() req: any) {
+    return this.contactsService.findAll(search, this.actor(req));
   }
 
   @Get(':id')
   @Roles(...CRM_ROLES)
-  findOne(@Param('id') id: string) {
-    return this.contactsService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: any) {
+    return this.contactsService.findOne(id, this.actor(req));
   }
 
   @Patch(':id')
@@ -47,5 +47,13 @@ export class ContactsController {
   @Roles(...CRM_ADMIN)
   softDelete(@Param('id') id: string) {
     return this.contactsService.softDelete(id);
+  }
+
+  private actor(req: any) {
+    return {
+      id: req.user?.userId ?? req.user?.id ?? null,
+      role: req.user?.role ?? null,
+      secondaryRoles: req.user?.secondaryRoles ?? [],
+    };
   }
 }
