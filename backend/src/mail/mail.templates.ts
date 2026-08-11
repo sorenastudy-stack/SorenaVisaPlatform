@@ -211,6 +211,25 @@ export function newLiaAssignmentBody(liaName: string, caseId: string, clientName
   `;
 }
 
+// PR-HANDOFF — a case passed to you by a colleague. Names the sender and the
+// stage, because "you have a new case" without either is a notification the
+// recipient has to go and investigate before they can act on it.
+export function caseHandoffBody(
+  toName: string,
+  caseId: string,
+  clientName: string,
+  fromName: string,
+  toStageLabel: string,
+  link: string,
+): string {
+  return `
+    <p>Hi ${esc(toName)},</p>
+    <p><strong>${esc(fromName)}</strong> has handed <strong>${esc(clientName)}</strong>'s case (<code style="font-family:Menlo,Consolas,monospace;font-size:13px;color:${NAVY};">${esc(caseId.slice(0, 8))}</code>) to you at the <strong>${esc(toStageLabel)}</strong> stage.</p>
+    <p>It is waiting in your handoff queue.</p>
+    ${primaryButton('Open my queue', link)}
+  `;
+}
+
 // EMAIL-MIGRATION (NotificationsService → MailService): the `clientName`
 // arg is optional. When provided, the email names the client; otherwise
 // it falls back to the generic "another LIA" copy MailService shipped

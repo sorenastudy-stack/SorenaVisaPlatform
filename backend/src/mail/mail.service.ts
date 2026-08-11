@@ -12,6 +12,7 @@ import {
   admissionSubmittedToOwnerBody,
   contractReadyBody,
   newLiaAssignmentBody,
+  caseHandoffBody,
   liaAssignmentReleasedBody,
   inzSubmittedToClientBody,
   visaIssuedToClientBody,
@@ -177,8 +178,27 @@ export class MailService implements OnModuleInit {
     });
   }
 
-  // EMAIL-MIGRATION: optional `clientName` matches what the LIA-assignment
-  // service has been passing through NotificationsService all along.
+  // PR-HANDOFF — a colleague passed a case to this person. Mirrors
+  // sendNewLiaAssignment: same wrapper, same button, links to the queue rather
+  // than the case, because the queue is where it gets accepted.
+  async sendCaseHandoff(
+    to: string,
+    toName: string,
+    caseId: string,
+    clientName: string,
+    fromName: string,
+    toStageLabel: string,
+  ): Promise<void> {
+    const link = `${this.frontendUrl}/staff/handoffs/my-queue`;
+    await this.send({
+      to,
+      subject: `Case handed to you: ${clientName}`,
+      html: wrapHtml(caseHandoffBody(toName, caseId, clientName, fromName, toStageLabel, link), {
+        heading: 'A case was handed to you',
+      }),
+    });
+  }
+
   async sendLiaAssignmentReleased(
     to:          string,
     liaName:     string,
