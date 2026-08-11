@@ -17,6 +17,7 @@ import type { Session } from '@/lib/auth';
 import { BackToTop } from '@/components/common/BackToTop';
 import { api } from '@/lib/api';
 import { StaffAvatar } from '@/components/staff/StaffAvatar';
+import { STAFF_PORTAL_ROLES, hasRole } from '@/lib/roles';
 
 type Portal = 'admin' | 'ops' | 'sales' | 'lia' | 'student';
 
@@ -134,15 +135,26 @@ export function PortalLayout({ children, portal, session, hasCase, studentUnread
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // PR-STAFF-PHOTOS — these portal shells serve staff (lia/ops/sales/admin).
   // The photoUrl is a short-lived presigned URL, so it's fetched (not in the
-  // JWT session). A 403 (non-staff) or any error → initials fallback.
+  // JWT session).
+  //
+  // Only asked for by roles /api/staff/me actually admits. It is gated to
+  // STAFF_PORTAL_ROLES, which excludes SALES and OPERATIONS because they route
+  // to their own portals — so for those the request could only ever 403. The
+  // catch below made that harmless but not silent: every page load in the sales
+  // portal logged a failed request, which is noise in exactly the place someone
+  // looks when something is actually wrong.
+  const canFetchStaffPhoto = hasRole(
+    session?.role, (session as any)?.secondaryRoles, STAFF_PORTAL_ROLES,
+  );
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   useEffect(() => {
+    if (!canFetchStaffPhoto) return;
     let alive = true;
     api.get<{ photoUrl: string | null }>('/api/staff/me')
       .then((m) => { if (alive) setPhotoUrl(m.photoUrl ?? null); })
-      .catch(() => { /* not staff / no photo → fallback */ });
+      .catch(() => { /* no photo set → initials fallback */ });
     return () => { alive = false; };
-  }, []);
+  }, [canFetchStaffPhoto]);
   const pathname = usePathname();
   const router = useRouter();
   const { locale, toggleLocale } = useLocaleStore();
