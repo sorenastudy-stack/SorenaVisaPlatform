@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { RolesAccessModule } from './staff/roles-access/roles-access.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -69,6 +70,7 @@ import { SlaModule } from './sla/sla.module';
 
 @Module({
   imports: [
+    RolesAccessModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),
