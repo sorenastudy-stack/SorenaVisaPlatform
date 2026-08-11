@@ -19,6 +19,15 @@ import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadStatusDto, isValidTransition } from './dto/update-lead-status.dto';
 import { UpdateLeadNotesDto } from './dto/update-lead-notes.dto';
 
+/** Caller identity for ownership-scoped reads. Optional on service methods so
+ *  internal callers, which have already established their own right to act,
+ *  are not forced to fabricate one. */
+export interface Actor {
+  id?: string | null;
+  role?: string | null;
+  secondaryRoles?: readonly string[] | null;
+}
+
 @Injectable()
 export class LeadsService {
   private readonly logger = new Logger(LeadsService.name);
@@ -125,7 +134,23 @@ export class LeadsService {
     });
   }
 
-  async findOne(id: string) {
+  /**
+   * A single lead.
+   *
+   * `actor` is optional because internal callers (updateStatus, notes, the
+   * nurture sweep) legitimately load any lead — they have already established
+   * their own right to act. When an actor IS supplied, this enforces the same
+   * boundary the list does: scoping only the list would leave the obvious hole,
+   * where a rep who cannot SEE another rep's lead can still fetch it by id.
+   *
+   * Not-found rather than forbidden on purpose: telling someone "that lead
+   * exists but is not yours" confirms the existence of a record they are not
+   * entitled to know about.
+   */
+  async findOne(
+    id: string,
+    actor?: { id?: string | null; role?: string | null; secondaryRoles?: readonly string[] | null },
+  ) {
     const lead = await this.prisma.lead.findUnique({
       where: { id },
       include: { contact: true },
@@ -135,11 +160,24 @@ export class LeadsService {
       throw new NotFoundException('Lead not found');
     }
 
+    if (actor && !hasRole(actor, ...LeadsService.FUNNEL_OVERSIGHT_ROLES)) {
+      if (!actor.id || lead.ownerId !== actor.id) {
+        throw new NotFoundException('Lead not found');
+      }
+    }
+
     return lead;
   }
 
-  async updateStatus(id: string, dto: UpdateLeadStatusDto, userId: string) {
-    const lead = await this.findOne(id);
+  async updateStatus(
+    id: string,
+    dto: UpdateLeadStatusDto,
+    userId: string,
+    actor?: Actor,
+  ) {
+    // findOne enforces ownership when an actor is given, so a scoped role
+    // cannot move a lead that is not theirs.
+    const lead = await this.findOne(id, actor);
 
     if (!isValidTransition(lead.leadStatus as any, dto.status as any)) {
       throw new BadRequestException(
@@ -322,7 +360,8 @@ export class LeadsService {
     return updatedLead;
   }
 
-  async undoLastChange(leadId: string, userId: string) {
+  async undoLastChange(leadId: string, userId: string, actor?: Actor) {
+    await this.findOne(leadId, actor);
     const last = await this.prisma.leadStatusHistory.findFirst({
       where: { leadId },
       orderBy: { createdAt: 'desc' },
@@ -373,7 +412,9 @@ export class LeadsService {
     return updatedLead;
   }
 
-  async getHistory(leadId: string): Promise<LeadStatusHistory[]> {
+  async getHistory(leadId: string, actor?: Actor): Promise<LeadStatusHistory[]> {
+    // History is lead content: reachable exactly when the lead itself is.
+    await this.findOne(leadId, actor);
     return this.prisma.leadStatusHistory.findMany({
       where: { leadId },
       orderBy: { createdAt: 'desc' },

@@ -75,6 +75,12 @@ describe('exchange_rates is an append-only ledger (real DB)', () => {
   it('resolves same-day entries to the LAST one entered', async () => {
     const day = new Date(Date.UTC(2026, 7, 12));
     await append(1.5, 'Typo', day);
+    // createdAt has millisecond precision, and two inserts can land inside the
+    // same millisecond — which made this assertion flaky, not the ordering
+    // wrong. A real correction is a human returning to the screen, so the gap
+    // is realistic; without it the test was asserting something the timestamp
+    // cannot express.
+    await new Promise((r) => setTimeout(r, 5));
     await append(1.75, 'Corrected', day);
 
     const latest = await prisma.exchangeRate.findFirst({

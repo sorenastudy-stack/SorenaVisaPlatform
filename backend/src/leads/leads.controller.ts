@@ -66,8 +66,8 @@ export class LeadsController {
 
   @Get(':id')
   @Roles(...FUNNEL_ROLES)
-  findOne(@Param('id') id: string) {
-    return this.leadsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.leadsService.findOne(id, { id: req.user?.userId ?? req.user?.id ?? null, role: req.user?.role ?? null, secondaryRoles: req.user?.secondaryRoles ?? [] });
   }
 
   @Patch(':id')
@@ -77,7 +77,7 @@ export class LeadsController {
     @Body() dto: UpdateLeadStatusDto,
     @Request() req,
   ) {
-    return this.leadsService.updateStatus(id, dto, req.user.userId);
+    return this.leadsService.updateStatus(id, dto, req.user.userId, { id: req.user?.userId ?? req.user?.id ?? null, role: req.user?.role ?? null, secondaryRoles: req.user?.secondaryRoles ?? [] });
   }
 
   @Patch(':id/notes')
@@ -105,12 +105,12 @@ export class LeadsController {
   @Post(':id/undo')
   @Roles(...FUNNEL_ROLES)
   undo(@Param('id') id: string, @Request() req) {
-    return this.leadsService.undoLastChange(id, req.user.userId);
+    return this.leadsService.undoLastChange(id, req.user.userId, { id: req.user?.userId ?? req.user?.id ?? null, role: req.user?.role ?? null, secondaryRoles: req.user?.secondaryRoles ?? [] });
   }
 
   @Get(':id/history')
   @Roles(...FUNNEL_ROLES)
-  history(@Param('id') id: string) {
-    return this.leadsService.getHistory(id);
+  history(@Param('id') id: string, @Request() req) {
+    return this.leadsService.getHistory(id, { id: req.user?.userId ?? req.user?.id ?? null, role: req.user?.role ?? null, secondaryRoles: req.user?.secondaryRoles ?? [] });
   }
 }

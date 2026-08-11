@@ -170,6 +170,40 @@ describe('Lead + commission access scoping', () => {
         .rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it('SALES cannot fetch another rep’s lead BY ID', async () => {
+      // The hole that scoping only the list would leave: the detail page fetches
+      // GET /leads/:id, so a rep who cannot see a lead in their list could still
+      // read it — and everything on it — by guessing or being given the id.
+      await expect(leads.findOne(leadOfB, actor(salesA, 'SALES')))
+        .rejects.toThrow(/not found/i);
+      // Their own lead still resolves.
+      await expect(leads.findOne(leadOfA, actor(salesA, 'SALES')))
+        .resolves.toMatchObject({ id: leadOfA });
+    });
+
+    it('reports another rep’s lead as NOT FOUND, not as forbidden', async () => {
+      // "Forbidden" would confirm the record exists. Not-found tells someone
+      // with an id they should not have exactly nothing.
+      await expect(leads.findOne(leadOfB, actor(salesA, 'SALES')))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it('SALES cannot read another rep’s lead history', async () => {
+      await expect(leads.getHistory(leadOfB, actor(salesA, 'SALES')))
+        .rejects.toThrow(/not found/i);
+    });
+
+    it('internal callers with no actor still reach any lead', async () => {
+      // Nurture sweeps and other internal work legitimately load any lead; they
+      // establish their own right to act and must not be broken by user scoping.
+      await expect(leads.findOne(leadOfB)).resolves.toMatchObject({ id: leadOfB });
+    });
+
+    it('OWNER can still fetch any lead by id', async () => {
+      await expect(leads.findOne(leadOfB, actor(owner, 'OWNER')))
+        .resolves.toMatchObject({ id: leadOfB });
+    });
+
     it('a scoped role with no resolvable id is refused, not silently unscoped', async () => {
       // Fail closed: a missing actor id must never fall through to "no filter".
       await expect(leads.findAll({}, { id: null, role: 'SALES', secondaryRoles: [] }))

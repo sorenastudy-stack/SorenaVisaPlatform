@@ -50,11 +50,13 @@ const NAV_CONFIG: Record<Portal, NavItem[]> = {
     { label: 'Cases',       href: '/ops/cases',        icon: <Briefcase size={18} /> },
   ],
   sales: [
-    // PR-COMMISSIONS-UI / sales cleanup: the Pipeline, Consultations, and
-    // Commissions pages were empty stubs (each blocked on the SALES role not being
-    // admitted to the underlying APIs) and were removed. Institutional commissions
-    // now live in the Owner dashboard (/staff/commissions, OWNER/FINANCE). Pipeline
-    // + consultations are served for the Owner by /staff/leads + /staff/meetings.
+    // Pipeline, Consultations and Commissions were removed from this portal when
+    // SALES could not reach the APIs behind them. SALES is now admitted: it reads
+    // the funnel and the commission ledger, both scoped to the leads that rep
+    // owns. Leads is back below. A scoped Commissions view belongs here too and
+    // is NOT built yet — the Owner ledger stays at /staff/commissions
+    // (OWNER/FINANCE), and consultations are still served for the Owner by
+    // /staff/meetings.
     { label: 'Dashboard',     href: '/sales',               icon: <LayoutDashboard size={18} /> },
     { label: 'Leads',         href: '/sales/leads',         icon: <Users size={18} /> },
   ],
