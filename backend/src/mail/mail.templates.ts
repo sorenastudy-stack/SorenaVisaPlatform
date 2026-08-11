@@ -225,7 +225,7 @@ export function caseHandoffBody(
   return `
     <p>Hi ${esc(toName)},</p>
     <p><strong>${esc(fromName)}</strong> has handed <strong>${esc(clientName)}</strong>'s case (<code style="font-family:Menlo,Consolas,monospace;font-size:13px;color:${NAVY};">${esc(caseId.slice(0, 8))}</code>) to you at the <strong>${esc(toStageLabel)}</strong> stage.</p>
-    <p>It is waiting in your handoff queue.</p>
+    <p>Accepting it in your queue lets ${esc(fromName)} know you've picked it up.</p>
     ${primaryButton('Open my queue', link)}
   `;
 }
