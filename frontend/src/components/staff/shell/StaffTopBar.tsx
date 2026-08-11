@@ -8,6 +8,7 @@ import { useLocaleStore } from '@/lib/stores/localeStore';
 import { invalidateTokenCache } from '@/lib/api';
 import { StaffRoleBadge } from './StaffRoleBadge';
 import { StaffAvatar } from '@/components/staff/StaffAvatar';
+import { NotificationBell } from './NotificationBell';
 
 // PR-CONSULT-2 — Staff top bar.
 //
@@ -45,6 +46,10 @@ export function StaffTopBar() {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* PR-HANDOFF — unread badge. First item so it sits nearest the content
+            it refers to rather than beside sign-out. */}
+        <NotificationBell />
+
         <button
           onClick={toggleLocale}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500 hover:bg-gray-100 transition-colors min-h-[36px]"

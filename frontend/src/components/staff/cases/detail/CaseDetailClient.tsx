@@ -6,6 +6,7 @@ import { useStaff } from '@/contexts/StaffContext';
 import { CaseHeader } from './CaseHeader';
 import { CaseAssignmentsPanel } from './CaseAssignmentsPanel';
 import { SendContractPanel } from './SendContractPanel';
+import { HandoffPanel } from './HandoffPanel';
 import { CaseTabs, type CaseTab } from './CaseTabs';
 import { CaseOverviewTab } from './CaseOverviewTab';
 import { CaseActivityTab } from './CaseActivityTab';
@@ -86,6 +87,8 @@ export function CaseDetailClient({ caseId, canEdit }: { caseId: string; canEdit?
     <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10 space-y-6">
       <CaseHeader data={data} />
       <CaseAssignmentsPanel data={data} onChanged={refresh} />
+      {/* PR-HANDOFF — sits under the assignments it acts on. */}
+      <HandoffPanel data={data} onDone={refresh} />
       <SendContractPanel caseId={data.id} onSent={refresh} />
 
       <div>

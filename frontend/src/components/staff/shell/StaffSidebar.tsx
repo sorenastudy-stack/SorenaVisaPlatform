@@ -159,6 +159,10 @@ const NAV: NavItem[] = [
   // PR-ROLES-REFERENCE: who can reach what, read from the live permission
   // metadata. Same OWNER/SUPER_ADMIN gate as the backend route behind it.
   { label: 'Roles & access',              href: '/staff/roles',              icon: <ShieldCheck size={18} />, roleGate: SLA_SETTINGS_ROLES },
+  // PR-HANDOFF — cases a colleague passed to this person. No role gate: the
+  // queue is scoped to the caller server-side, so anyone who can hold a stage
+  // can have one, and anyone who cannot simply sees an empty page.
+  { label: 'My handoffs',                 href: '/staff/handoffs/my-queue',  icon: <Inbox size={18} /> },
   // Available to every staff member — inline English label (no dot → literal).
   { label: 'Account',                      href: '/staff/account',            icon: <KeyRound size={18} /> },
 ];

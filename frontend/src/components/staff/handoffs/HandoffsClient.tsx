@@ -61,12 +61,32 @@ function humanizeReason(reason: string | null): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+interface PendingHandoffRow {
+  id: string;
+  fromSlot: string;
+  toSlot: string;
+  fromUserName: string | null;
+  toUserName: string | null;
+  createdAt: string;
+  case: { id: string; lead: { clientId: string | null; contact: { fullName: string | null } | null } | null } | null;
+}
+
+const HANDOFF_SLOT_LABEL: Record<string, string> = {
+  ADMISSION: 'Admission', SUPPORT: 'Student Support',
+  FINANCE: 'Finance', LIA: 'Immigration Adviser',
+};
+
 export function HandoffsClient() {
   const [data, setData] = useState<HandoffsResponse | null>(null);
   const [error, setError] = useState(false);
+  // PR-HANDOFF — explicit handoffs still waiting to be accepted. Fetched
+  // separately so a failure here cannot blank the two stuck-case sections,
+  // which are the older and more load-bearing half of this page.
+  const [pending, setPending] = useState<PendingHandoffRow[] | null>(null);
 
   useEffect(() => {
     api.get<HandoffsResponse>('/api/staff/handoffs').then(setData).catch(() => setError(true));
+    api.get<PendingHandoffRow[]>('/api/staff/handoffs/pending-handoffs').then(setPending).catch(() => setPending([]));
   }, []);
 
   const staffingRows = data?.staffing.rows ?? [];
@@ -216,15 +236,44 @@ export function HandoffsClient() {
         </Section>
       )}
 
-      {/* ── Deferred (backlog) note ──────────────────────────────────────── */}
-      <div className="rounded-xl border border-dashed border-gray-200 bg-[#faf8f3] px-4 py-3 text-xs text-gray-500">
-        <span className="font-semibold text-gray-600">Not yet built (backlog):</span> a full
-        stage-transition history — a per-case timeline of every ADMISSION → VISA → INZ → COMPLETED move
-        with timestamps and durations. That needs new tracking (a transition table, or an audit event on
-        every stage write) and is deferred alongside the SLA/deadline system. Until then, waiting times
-        above are measured from the one timestamp each rule already has (contract signed, visa issued,
-        INZ submitted), not from stage entry.
-      </div>
+      {/* ── 3. Pending handoffs (PR-HANDOFF) ──────────────────────────────
+          Explicit handoffs nobody has accepted yet. The two sections above infer
+          neglect from state; this shows the deliberate act, so a case someone
+          passed on and nobody picked up is visible immediately rather than only
+          once it has been stuck long enough to trip a rule. */}
+      <Section
+        icon={<ArrowLeftRight size={14} className="text-[#1e3a5f]" />}
+        title="Pending handoffs"
+        subtitle="Passed to someone but not yet accepted, across every case."
+      >
+        {pending === null && <p className="text-sm text-gray-400">Loading…</p>}
+        {pending?.length === 0 && (
+          <p className="text-sm text-gray-500">Nothing waiting — every handoff has been accepted.</p>
+        )}
+        {!!pending?.length && (
+          <ul className="divide-y divide-gray-100">
+            {pending.map((h) => (
+              <li key={h.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5 text-sm">
+                <span className="min-w-0">
+                  <span className="font-semibold text-[#1e3a5f]">
+                    {h.case?.lead?.contact?.fullName ?? 'Unknown client'}
+                  </span>
+                  {h.case?.lead?.clientId && (
+                    <code className="ml-2 font-mono text-[11px] text-gray-400">{h.case.lead.clientId}</code>
+                  )}
+                  <span className="ml-2 text-gray-500">
+                    {HANDOFF_SLOT_LABEL[h.fromSlot] ?? h.fromSlot} → {HANDOFF_SLOT_LABEL[h.toSlot] ?? h.toSlot}
+                  </span>
+                </span>
+                <span className="text-xs text-gray-400">
+                  {h.fromUserName ?? 'someone'} → {h.toUserName ?? 'unassigned'} ·{' '}
+                  {new Date(h.createdAt).toLocaleDateString('en-NZ')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
     </div>
   );
 }

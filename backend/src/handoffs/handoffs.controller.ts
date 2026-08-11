@@ -4,6 +4,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { HandoffsService } from './handoffs.service';
 import { OpsHandoffsService } from '../ops-handoffs/ops-handoffs.service';
+import { CaseHandoffService } from './case-handoff.service';
 
 // PR-HANDOFFS — Owner-dashboard Handoffs section. OWNER / SUPER_ADMIN only, the
 // same oversight tier as /admin/audit and the Compliance section.
@@ -19,6 +20,7 @@ export class HandoffsController {
   constructor(
     private readonly service: HandoffsService,
     private readonly opsHandoffs: OpsHandoffsService,
+    private readonly caseHandoffs: CaseHandoffService,
   ) {}
 
   // GET /api/staff/handoffs — staffing exceptions + stuck cases in one payload.
@@ -32,5 +34,16 @@ export class HandoffsController {
   @Get('pending')
   pending() {
     return this.opsHandoffs.listPendingHandoffs();
+  }
+
+  // PR-HANDOFF — explicit handoffs nobody has accepted yet, org-wide.
+  //
+  // Named 'pending-handoffs' rather than 'pending' because that name was
+  // already taken by the staffing-exception list above, and the two mean
+  // different things: one is a slot nobody filled, the other is a case someone
+  // deliberately passed on that has not been picked up.
+  @Get('pending-handoffs')
+  pendingHandoffs() {
+    return this.caseHandoffs.listPending();
   }
 }
