@@ -40,6 +40,12 @@ export const SLOT_LABEL: Record<CaseSlot, string> = {
 /** Roles that may hand off any case regardless of which slot they hold. */
 const OVERRIDE_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'];
 
+/** How many handoffs a page shows. The table keeps everything. */
+const RECENT_LIMIT = 50;
+
+/** How close together two handoffs to the same stage count as one double-click. */
+const DUPLICATE_WINDOW_MS = 60_000;
+
 export interface HandoffActor {
   id: string;
   name?: string | null;
@@ -105,18 +111,37 @@ export class CaseHandoffService {
       );
     }
 
-    // Already-open handoff to the same stage → return it rather than stacking
-    // duplicates. Double-clicking a button must not queue the case twice.
-    const open = await this.prisma.caseHandoff.findFirst({
-      where: { caseId, toSlot, status: HandoffState.PENDING },
+    // Double-click guard.
+    //
+    // This used to key off status PENDING, which stopped working the moment
+    // handoffs became accepted on creation — nothing is ever pending, so the
+    // check silently matched nothing and every click made a row.
+    //
+    // It is a time window instead, because "already handed to this stage" is no
+    // longer a state that persists. A double-click lands within seconds; a
+    // genuine re-handoff — a case that went forward, came back, and is being
+    // passed on again — is minutes or days later and must still be recorded.
+    const justNow = new Date(Date.now() - DUPLICATE_WINDOW_MS);
+    const duplicate = await this.prisma.caseHandoff.findFirst({
+      where: { caseId, toSlot, createdAt: { gte: justNow } },
+      orderBy: { createdAt: 'desc' },
     });
-    if (open) return open;
+    if (duplicate) return duplicate;
 
     const toUserId = await this.resolveRecipient(caseId, toSlot, opts.toUserId ?? null, actor);
     const toUser = toUserId
       ? await this.prisma.user.findUnique({ where: { id: toUserId }, select: { id: true, name: true, email: true } })
       : null;
 
+    // Accepted on creation. Nobody waits on anybody: the case has already moved
+    // to the next slot and the recipient has already been told, so a separate
+    // human acknowledgement would only have recorded how long someone took to
+    // click a button. firstViewedAt measures that better, without blocking.
+    //
+    // acceptedAt is the row's own createdAt rather than a second new Date(), so
+    // the two are identical by construction — a few milliseconds of drift would
+    // show up as real latency in a report built on these columns.
+    const now = new Date();
     const handoff = await this.prisma.caseHandoff.create({
       data: {
         caseId, fromSlot, toSlot,
@@ -125,7 +150,9 @@ export class CaseHandoffService {
         toUserId: toUser?.id ?? null,
         toUserName: toUser?.name ?? null,
         note: opts.note?.trim() || null,
-        status: HandoffState.PENDING,
+        status: HandoffState.ACCEPTED,
+        createdAt: now,
+        acceptedAt: now,
       },
     });
 
@@ -221,11 +248,20 @@ export class CaseHandoffService {
     ).catch((e) => this.logger.error(`[handoff] email failed: ${e?.message ?? e}`));
   }
 
-  /** Open handoffs addressed to this person. */
-  async myQueue(userId: string) {
+  /**
+   * Cases recently handed to this person.
+   *
+   * No longer a queue of things to action — handoffs are accepted on creation,
+   * so there is nothing pending. It answers "what landed on my desk lately",
+   * newest first, which is what a recipient actually opens this page for.
+   */
+  async myQueue(userId: string, limit = RECENT_LIMIT) {
     return this.prisma.caseHandoff.findMany({
-      where: { toUserId: userId, status: HandoffState.PENDING },
-      orderBy: { createdAt: 'asc' },
+      where: { toUserId: userId },
+      // createdAt then id: two handoffs made in the same millisecond would
+      // otherwise order arbitrarily, and the newest is the one being looked for.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
       include: {
         case: {
           select: {
@@ -237,28 +273,43 @@ export class CaseHandoffService {
     });
   }
 
-  /** Acknowledge receipt. Only the recipient may do it. */
-  async accept(handoffId: string, actor: HandoffActor) {
-    const h = await this.prisma.caseHandoff.findUnique({ where: { id: handoffId } });
-    if (!h) throw new NotFoundException('Handoff not found');
-    if (h.toUserId !== actor.id) {
-      // Not-found, not forbidden: a handoff addressed to someone else is not a
-      // record this caller is entitled to know exists.
-      throw new NotFoundException('Handoff not found');
+  /**
+   * Record that the RECIPIENT of a handoff has opened the case.
+   *
+   * Fire-and-forget by design. It hangs off the case-detail read, which is the
+   * most-hit staff page there is, so it must not slow that read down and must
+   * not be able to fail it — hence no await on the caller's side and a catch
+   * here.
+   *
+   * `firstViewedAt: null` in the WHERE is what makes it write-once: the second
+   * view matches nothing. No read-then-write, so no race between two tabs.
+   *
+   * Matches nothing at all for the common case — someone opening a case that
+   * was never handed to them — which costs one indexed lookup and no write.
+   */
+  async markFirstViewed(caseId: string, viewerId: string | null | undefined): Promise<void> {
+    if (!viewerId) return;
+    try {
+      await this.prisma.caseHandoff.updateMany({
+        where: { caseId, toUserId: viewerId, firstViewedAt: null },
+        data: { firstViewedAt: new Date() },
+      });
+    } catch (e: any) {
+      this.logger.warn(`[handoff] firstViewedAt not recorded for case ${caseId}: ${e?.message ?? e}`);
     }
-    if (h.status !== HandoffState.PENDING) return h;
-
-    return this.prisma.caseHandoff.update({
-      where: { id: handoffId },
-      data: { status: HandoffState.ACCEPTED, acceptedAt: new Date() },
-    });
   }
 
-  /** Every in-flight handoff, for the oversight page. */
-  async listPending() {
+  /**
+   * The handoff log, for oversight.
+   *
+   * Every handoff, newest first, capped for the page. The full history stays in
+   * the table regardless — this limit is what one screen shows, not what is
+   * kept, and a reporting layer reads the table directly.
+   */
+  async listRecent(limit = RECENT_LIMIT) {
     return this.prisma.caseHandoff.findMany({
-      where: { status: HandoffState.PENDING },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
       include: {
         case: {
           select: {

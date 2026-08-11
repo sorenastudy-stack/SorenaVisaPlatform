@@ -36,14 +36,16 @@ export class HandoffsController {
     return this.opsHandoffs.listPendingHandoffs();
   }
 
-  // PR-HANDOFF — explicit handoffs nobody has accepted yet, org-wide.
+  // PR-HANDOFF — the handoff log, org-wide, newest first.
   //
-  // Named 'pending-handoffs' rather than 'pending' because that name was
-  // already taken by the staffing-exception list above, and the two mean
-  // different things: one is a slot nobody filled, the other is a case someone
-  // deliberately passed on that has not been picked up.
-  @Get('pending-handoffs')
-  pendingHandoffs() {
-    return this.caseHandoffs.listPending();
+  // Was 'pending-handoffs' when handoffs waited to be accepted. Nothing waits
+  // now, so it is a history rather than a queue — and a history is the more
+  // useful thing to have under an oversight page anyway. The route keeps its
+  // own name rather than 'pending', which belongs to the staffing-exception
+  // list above and means something different: a slot nobody filled, versus a
+  // record of a case being passed on.
+  @Get('recent-handoffs')
+  recentHandoffs() {
+    return this.caseHandoffs.listRecent();
   }
 }

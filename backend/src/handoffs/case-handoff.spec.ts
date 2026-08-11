@@ -172,7 +172,9 @@ describe('Case handoffs', () => {
       assignFinance.mockResolvedValueOnce({ status: 'no_candidates', financeId: null });
       const h = await service.handOff(k, 'SUPPORT', actor(support, 'SUPPORT'));
       expect(h.toUserId).toBeNull();
-      expect(h.status).toBe('PENDING');
+      // Still ACCEPTED: acceptance is automatic and does not depend on there
+      // being anybody to accept it. The unassigned recipient is the signal.
+      expect(h.status).toBe('ACCEPTED');
     });
 
     it('a double-click does not queue the same case twice', async () => {
@@ -214,34 +216,89 @@ describe('Case handoffs', () => {
     });
   });
 
-  describe('the queue and accepting', () => {
-    it('my-queue shows only what is addressed to me, still pending', async () => {
+  describe('auto-acceptance', () => {
+    it('is created ACCEPTED, with acceptedAt equal to createdAt', async () => {
+      // Nobody waits on anybody. The two timestamps are the same instant by
+      // construction — drift between them would read as real latency in a
+      // report built on these columns.
       const k = await mkCase({ ownerId: admission });
       const h = await service.handOff(k, 'ADMISSION', actor(admission, 'CONSULTANT'));
-
-      const mine = await service.myQueue(support);
-      expect(mine.map((x: any) => x.id)).toContain(h.id);
-      const theirs = await service.myQueue(finance);
-      expect(theirs.map((x: any) => x.id)).not.toContain(h.id);
+      expect(h.status).toBe('ACCEPTED');
+      expect(h.acceptedAt).toBeTruthy();
+      expect(h.acceptedAt!.getTime()).toBe(h.createdAt.getTime());
     });
 
-    it('only the recipient can accept, and it is idempotent', async () => {
+    it('there is no accept step left to call', () => {
+      // The endpoint and the service method are gone; this pins that so a
+      // half-revert cannot quietly bring back a blocking step.
+      expect((service as any).accept).toBeUndefined();
+    });
+
+    it('my list shows what was handed to me, newest first', async () => {
+      const k1 = await mkCase({ ownerId: admission });
+      const first = await service.handOff(k1, 'ADMISSION', actor(admission, 'CONSULTANT'));
+      await new Promise((r) => setTimeout(r, 5));
+      const k2 = await mkCase({ ownerId: admission });
+      const second = await service.handOff(k2, 'ADMISSION', actor(admission, 'CONSULTANT'));
+
+      const mine = await service.myQueue(support);
+      const ids = mine.map((x: any) => x.id);
+      expect(ids).toEqual(expect.arrayContaining([first.id, second.id]));
+      // Newest first — the opposite of the old pending queue's oldest-first.
+      expect(ids.indexOf(second.id)).toBeLessThan(ids.indexOf(first.id));
+
+      const theirs = await service.myQueue(finance);
+      expect(theirs.map((x: any) => x.id)).not.toContain(first.id);
+    });
+
+    it('the oversight log includes accepted handoffs', async () => {
+      // The old listPending would have returned nothing at all now.
+      const k = await mkCase({ ownerId: admission });
+      const h = await service.handOff(k, 'ADMISSION', actor(admission, 'CONSULTANT'));
+      const recent = await service.listRecent();
+      expect(recent.map((x: any) => x.id)).toContain(h.id);
+    });
+  });
+
+  describe('firstViewedAt', () => {
+    it('is stamped when the recipient first opens the case', async () => {
+      const k = await mkCase({ ownerId: admission });
+      const h = await service.handOff(k, 'ADMISSION', actor(admission, 'CONSULTANT'));
+      expect((await prisma.caseHandoff.findUnique({ where: { id: h.id } }))!.firstViewedAt).toBeNull();
+
+      await service.markFirstViewed(k, support);
+      const after = await prisma.caseHandoff.findUnique({ where: { id: h.id } });
+      expect(after!.firstViewedAt).toBeTruthy();
+    });
+
+    it('is never overwritten by a later view', async () => {
+      // Write-once. The WHERE carries firstViewedAt: null, so the second view
+      // matches nothing — no read-then-write, and no race between two tabs.
       const k = await mkCase({ ownerId: admission });
       const h = await service.handOff(k, 'ADMISSION', actor(admission, 'CONSULTANT'));
 
-      // Not-found rather than forbidden: a handoff addressed to someone else is
-      // not a record this caller may know exists.
-      await expect(service.accept(h.id, actor(finance, 'FINANCE')))
-        .rejects.toBeInstanceOf(NotFoundException);
+      await service.markFirstViewed(k, support);
+      const first = (await prisma.caseHandoff.findUnique({ where: { id: h.id } }))!.firstViewedAt!;
+      await new Promise((r) => setTimeout(r, 8));
+      await service.markFirstViewed(k, support);
+      const second = (await prisma.caseHandoff.findUnique({ where: { id: h.id } }))!.firstViewedAt!;
 
-      const ok = await service.accept(h.id, actor(support, 'SUPPORT'));
-      expect(ok.status).toBe('ACCEPTED');
-      expect(ok.acceptedAt).toBeTruthy();
+      expect(second.getTime()).toBe(first.getTime());
+    });
 
-      const again = await service.accept(h.id, actor(support, 'SUPPORT'));
-      expect(again.acceptedAt!.getTime()).toBe(ok.acceptedAt!.getTime());
+    it('is not stamped when somebody else opens the case', async () => {
+      // It measures the RECIPIENT's response, not case views in general. An
+      // admin or the sender opening it must leave this null.
+      const k = await mkCase({ ownerId: admission });
+      const h = await service.handOff(k, 'ADMISSION', actor(admission, 'CONSULTANT'));
 
-      expect((await service.myQueue(support)).map((x: any) => x.id)).not.toContain(h.id);
+      await service.markFirstViewed(k, owner);
+      await service.markFirstViewed(k, admission);
+      expect((await prisma.caseHandoff.findUnique({ where: { id: h.id } }))!.firstViewedAt).toBeNull();
+    });
+
+    it('does nothing, and does not throw, without a viewer', async () => {
+      await expect(service.markFirstViewed('any-case', null)).resolves.toBeUndefined();
     });
   });
 

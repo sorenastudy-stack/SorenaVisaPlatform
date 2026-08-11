@@ -1648,8 +1648,25 @@ model CaseHandoff {
   fromUserName String?
   toUserName   String?
   note     String?
+  /// Currently single-valued: handoffs are created ACCEPTED and nothing sets
+  /// CANCELLED. Kept because dropping it would be a destructive migration and
+  /// the enum is referenced elsewhere — and because cancelling a handoff is a
+  /// plausible future feature, at which point this column is already here.
   status   HandoffState @default(PENDING)
+  /// Equal to createdAt: acceptance is automatic, so the two are the same
+  /// instant by construction rather than by coincidence.
   acceptedAt DateTime?
+  /// The first time the RECEIVING user of this handoff opened the case.
+  ///
+  /// NOT "the first time anyone viewed this case" — it is only ever set for the
+  /// person the handoff was addressed to. A case opened by someone else, or a
+  /// case with no handoff at all, leaves this null forever. Read it as "how
+  /// long until the recipient looked at what they were given", which is what a
+  /// KPI layer would want, and do not read it as case-view telemetry.
+  ///
+  /// Set once and never overwritten (the update is conditional on it being
+  /// null). Passive: nothing is gated on it.
+  firstViewedAt DateTime?
   createdAt  DateTime   @default(now())
 
   case Case  @relation(fields: [caseId], references: [id], onDelete: Cascade)

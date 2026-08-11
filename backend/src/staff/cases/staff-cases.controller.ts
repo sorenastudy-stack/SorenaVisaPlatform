@@ -2,6 +2,7 @@ import { BadRequestException, Controller, Get, Param, Query, Req, UseGuards } fr
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../roles/staff-roles.guard';
 import { AdminTier, StaffRoles, StaffAccessRole } from '../roles/staff-roles.decorator';
+import { CaseHandoffService } from '../../handoffs/case-handoff.service';
 import { StaffCasesService } from './staff-cases.service';
 import { StaffCasesListQueryDto } from './dto/staff-cases.dto';
 
@@ -14,7 +15,10 @@ import { StaffCasesListQueryDto } from './dto/staff-cases.dto';
 @Controller('api/staff/cases')
 @UseGuards(JwtAuthGuard, StaffRolesGuard)
 export class StaffCasesController {
-  constructor(private readonly cases: StaffCasesService) {}
+  constructor(
+    private readonly cases: StaffCasesService,
+    private readonly handoffs: CaseHandoffService,
+  ) {}
 
   @Get()
   @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
@@ -57,6 +61,10 @@ export class StaffCasesController {
   @Get(':id')
   @StaffRoles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'CLIENT_CONSULTANT', 'SUPPORT', 'FINANCE', 'OPERATIONS')
   detail(@Req() req: any, @Param('id') id: string) {
+    // PR-HANDOFF — passive: if this viewer was handed this case, stamp the first
+    // time they opened it. Deliberately NOT awaited — it is reporting data, and
+    // the case page must not wait on it or fail because of it.
+    void this.handoffs.markFirstViewed(id, req.user?.userId ?? req.user?.id);
     return this.cases.getCaseDetail(
       { userId: req.user.userId, role: req.user.role as StaffAccessRole },
       id,

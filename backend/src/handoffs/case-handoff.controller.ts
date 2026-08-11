@@ -62,11 +62,4 @@ export class CaseHandoffController {
   myQueue(@Req() req: any) {
     return this.service.myQueue(this.actor(req).id);
   }
-
-  // POST /handoffs/:id/accept — only the recipient can accept.
-  @Post('handoffs/:id/accept')
-  @Roles(...HANDOFF_ROLES)
-  accept(@Param('id') id: string, @Req() req: any) {
-    return this.service.accept(id, this.actor(req));
-  }
 }

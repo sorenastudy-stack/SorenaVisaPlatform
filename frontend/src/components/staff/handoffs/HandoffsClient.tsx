@@ -61,13 +61,14 @@ function humanizeReason(reason: string | null): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-interface PendingHandoffRow {
+interface HandoffLogRow {
   id: string;
   fromSlot: string;
   toSlot: string;
   fromUserName: string | null;
   toUserName: string | null;
   createdAt: string;
+  firstViewedAt: string | null;
   case: { id: string; lead: { clientId: string | null; contact: { fullName: string | null } | null } | null } | null;
 }
 
@@ -79,14 +80,16 @@ const HANDOFF_SLOT_LABEL: Record<string, string> = {
 export function HandoffsClient() {
   const [data, setData] = useState<HandoffsResponse | null>(null);
   const [error, setError] = useState(false);
-  // PR-HANDOFF — explicit handoffs still waiting to be accepted. Fetched
+  // PR-HANDOFF — the handoff log. Was "waiting to be accepted" until handoffs
+  // became automatic; it is now a history, which is the more useful thing under
+  // an oversight page and the groundwork the KPI layer will read. Fetched
   // separately so a failure here cannot blank the two stuck-case sections,
   // which are the older and more load-bearing half of this page.
-  const [pending, setPending] = useState<PendingHandoffRow[] | null>(null);
+  const [pending, setPending] = useState<HandoffLogRow[] | null>(null);
 
   useEffect(() => {
     api.get<HandoffsResponse>('/api/staff/handoffs').then(setData).catch(() => setError(true));
-    api.get<PendingHandoffRow[]>('/api/staff/handoffs/pending-handoffs').then(setPending).catch(() => setPending([]));
+    api.get<HandoffLogRow[]>('/api/staff/handoffs/recent-handoffs').then(setPending).catch(() => setPending([]));
   }, []);
 
   const staffingRows = data?.staffing.rows ?? [];
@@ -243,12 +246,12 @@ export function HandoffsClient() {
           once it has been stuck long enough to trip a rule. */}
       <Section
         icon={<ArrowLeftRight size={14} className="text-[#1e3a5f]" />}
-        title="Pending handoffs"
-        subtitle="Passed to someone but not yet accepted, across every case."
+        title="Recent handoffs"
+        subtitle="The 50 most recent, newest first. Full history is kept in the record."
       >
         {pending === null && <p className="text-sm text-gray-400">Loading…</p>}
         {pending?.length === 0 && (
-          <p className="text-sm text-gray-500">Nothing waiting — every handoff has been accepted.</p>
+          <p className="text-sm text-gray-500">No handoffs recorded yet.</p>
         )}
         {!!pending?.length && (
           <ul className="divide-y divide-gray-100">
@@ -268,6 +271,9 @@ export function HandoffsClient() {
                 <span className="text-xs text-gray-400">
                   {h.fromUserName ?? 'someone'} → {h.toUserName ?? 'unassigned'} ·{' '}
                   {new Date(h.createdAt).toLocaleDateString('en-NZ')}
+                  {/* Passive signal: whether the recipient has opened it yet. Not a
+                      warning — an unopened recent handoff is entirely normal. */}
+                  {h.firstViewedAt ? ' · opened' : ' · not opened yet'}
                 </span>
               </li>
             ))}
