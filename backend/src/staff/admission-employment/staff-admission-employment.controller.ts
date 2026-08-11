@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards, Req } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { assertCaseReadable } from '../../cases/assert-case-read';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -11,26 +13,41 @@ import { StaffAdmissionEmploymentService } from './staff-admission-employment.se
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT')
 export class StaffAdmissionEmploymentController {
-  constructor(private readonly service: StaffAdmissionEmploymentService) {}
+  constructor(private readonly service: StaffAdmissionEmploymentService, private readonly prisma: PrismaService) {}
+
+  // Every method, not just the reads. Writing employment history onto someone
+  // else's case is worse than reading it, and a role gate alone allowed both.
+  private viewer(req: any) {
+    return { userId: req.user?.userId ?? req.user?.id, role: req.user?.role };
+  }
 
   @Get()
-  list(@Param('caseId') caseId: string) {
+  async list(@Param('caseId') caseId: string, @Req() req: any) {
+    await assertCaseReadable(this.prisma, caseId, this.viewer(req));
     return this.service.list(caseId);
   }
 
   @Post()
-  add(@Param('caseId') caseId: string, @Body() body: any) {
+  async add(@Param('caseId') caseId: string, @Body() body: any, @Req() req: any) {
+    await assertCaseReadable(this.prisma, caseId, this.viewer(req));
     return this.service.add(caseId, body);
   }
 
   @Patch(':entryId')
-  update(@Param('caseId') caseId: string, @Param('entryId') entryId: string, @Body() body: any) {
+  async update(
+    @Param('caseId') caseId: string,
+    @Param('entryId') entryId: string,
+    @Body() body: any,
+    @Req() req: any,
+  ) {
+    await assertCaseReadable(this.prisma, caseId, this.viewer(req));
     return this.service.update(caseId, entryId, body);
   }
 
   @Delete(':entryId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('caseId') caseId: string, @Param('entryId') entryId: string) {
+  async remove(@Param('caseId') caseId: string, @Param('entryId') entryId: string, @Req() req: any) {
+    await assertCaseReadable(this.prisma, caseId, this.viewer(req));
     return this.service.remove(caseId, entryId);
   }
 }

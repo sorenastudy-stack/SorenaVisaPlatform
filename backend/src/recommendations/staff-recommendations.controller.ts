@@ -1,4 +1,6 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { assertCaseReadable } from '../cases/assert-case-read';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -11,10 +13,18 @@ import { RecommendationsService, type RecommendationSort } from './recommendatio
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CONSULTANT')
 export class StaffRecommendationsController {
-  constructor(private readonly service: RecommendationsService) {}
+  constructor(private readonly service: RecommendationsService, private readonly prisma: PrismaService) {}
 
   @Get()
-  current(@Param('caseId') caseId: string, @Query('sort') sort?: string) {
+  async current(
+    @Param('caseId') caseId: string,
+    @Req() req: any,
+    @Query('sort') sort?: string,
+  ) {
+    await assertCaseReadable(this.prisma, caseId, {
+      userId: req.user?.userId ?? req.user?.id,
+      role: req.user?.role,
+    });
     // No markViewed — staff viewing shouldn't flip the client's GENERATED→VIEWED state.
     return this.service.getCurrentForCase(caseId, (sort as RecommendationSort) ?? 'default', false);
   }
