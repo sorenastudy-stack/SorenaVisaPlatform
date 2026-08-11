@@ -50,10 +50,12 @@ export class LeadsService {
    * them seeing it afterwards), but it lets one person put work into another
    * person's queue, and it puts a name on a record that did not do the work.
    *
-   * Kept as a list so the question "should CONSULTANT be here too?" is a
-   * one-line answer rather than a rewrite. It is deliberately only SALES today.
+   * CONSULTANT is here for the same reason: it became a scoped role in the same
+   * pass, so a consultant filing a lead under someone else's name would create
+   * a record they then could not see — a trap rather than a leak, but a trap
+   * with nothing to recommend it.
    */
-  static readonly SELF_OWNING_ROLES = ['SALES'];
+  static readonly SELF_OWNING_ROLES = ['SALES', 'CONSULTANT'];
 
   async create(dto: CreateLeadDto, actor?: Actor) {
     const contact = await this.prisma.contact.findUnique({

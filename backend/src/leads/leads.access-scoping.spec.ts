@@ -261,6 +261,18 @@ describe('Lead + commission access scoping', () => {
       expect(theirs).not.toContain(lead.id);
     });
 
+    it('CONSULTANT also owns what it creates', async () => {
+      // Same reasoning as SALES: it is a scoped role now, so a lead filed under
+      // someone else's name would be one the creator could not then see.
+      const contactId = await mkContact();
+      const lead: any = await leads.create(
+        { contactId, ownerId: salesB } as any,
+        actor(consultant, 'CONSULTANT') as any,
+      );
+      made.leads.push(lead.id);
+      expect(lead.ownerId).toBe(consultant);
+    });
+
     it('OWNER can still create a lead on someone else’s behalf', async () => {
       // Assigning work to a rep is a manager's job; this restriction is about
       // a rep putting work into someone else's queue, not about delegation.
