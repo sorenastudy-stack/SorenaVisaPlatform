@@ -12,8 +12,11 @@ import { todayAsDateBoundary } from './licence-validity';
 // silently failing cannot leave a lapsed adviser looking current. See
 // licence-validity.ts for why both exist.
 //
-// Runs at 09:30 NZ — after the visa-expiry sweep (09:00) and the nurture sweep
-// (09:15), so the three daily jobs do not contend.
+// Runs at 09:45 NZ. The daily jobs are staggered so they do not contend, and
+// 09:30 was already taken by submissionFollowUpSweep — whose own comment says
+// it sits after the 09:00 and 09:15 sweeps, because 09:30 was free when it was
+// written. The ladder is now 09:00 visa-expiry, 09:15 nurture, 09:30 submission
+// follow-up, 09:45 this one. Check the ladder before adding the next.
 //
 // ScheduleModule.forRoot() is registered app-wide (visa-expiry.module), so this
 // @Cron is discovered without re-registering it.
@@ -25,7 +28,7 @@ export class LicenceExpiryCronService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  @Cron('30 9 * * *', { name: 'liaLicenceExpirySweep', timeZone: TIMEZONE })
+  @Cron('45 9 * * *', { name: 'liaLicenceExpirySweep', timeZone: TIMEZONE })
   async runDailySweep(): Promise<void> {
     try {
       await this.sweep();
