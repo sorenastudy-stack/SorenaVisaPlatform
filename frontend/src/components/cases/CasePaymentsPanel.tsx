@@ -615,7 +615,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                 <button
                   type="button"
                   onClick={handleCopyLink}
-                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#c9a961] text-white text-sm font-semibold hover:bg-[#b8985a] transition-colors min-h-[48px]"
+                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#c9a961] text-[#1e3a5f] text-sm font-semibold hover:bg-[#1e3a5f] hover:text-[#c9a961] transition-colors min-h-[48px]"
                 >
                   {linkCopied ? <Check size={14} /> : <ClipboardCopy size={14} />}
                   {linkCopied
@@ -758,7 +758,7 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                 <button
                   type="button"
                   onClick={handleCopyCustom}
-                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#c9a961] text-white text-sm font-semibold hover:bg-[#b8985a] transition-colors min-h-[48px]"
+                  className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl bg-[#c9a961] text-[#1e3a5f] text-sm font-semibold hover:bg-[#1e3a5f] hover:text-[#c9a961] transition-colors min-h-[48px]"
                 >
                   {customCopied ? <Check size={14} /> : <ClipboardCopy size={14} />}
                   {customCopied
