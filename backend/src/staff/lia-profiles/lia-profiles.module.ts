@@ -3,6 +3,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { LiaProfilesController } from './lia-profiles.controller';
 import { LiaProfilesVerifierController } from './lia-profiles-verifier.controller';
 import { LiaProfilesService } from './lia-profiles.service';
+import { LicenceExpiryCronService } from './licence-expiry-cron.service';
 
 // PR-DOCUSIGN-1 step 3 — LIA licence upload + OWNER/ADMIN verification.
 // Populates lia_profiles rows so the future assignment-time
@@ -16,6 +17,6 @@ import { LiaProfilesService } from './lia-profiles.service';
 @Module({
   imports:     [PrismaModule],
   controllers: [LiaProfilesController, LiaProfilesVerifierController],
-  providers:   [LiaProfilesService],
+  providers:   [LiaProfilesService, LicenceExpiryCronService],
 })
 export class LiaProfilesModule {}

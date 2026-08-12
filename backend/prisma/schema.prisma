@@ -630,6 +630,14 @@ model User {
   createdAffiliateAgents AffiliateAgent[] @relation("AffiliateAgentCreator")
   createdTrackingLinks   TrackingLink[]   @relation("TrackingLinkCreator")
 
+  // PR-AGENT-PORTAL phase 0.
+  // `affiliateAgent`         — the agent this account signs in as, if it is an
+  //                            agent login rather than a staff or client one.
+  // `affiliateAgentsVerified` — agents whose ID/business documents this
+  //                            OWNER reviewed.
+  affiliateAgent          AffiliateAgent?  @relation("AffiliateAgentLogin")
+  affiliateAgentsVerified AffiliateAgent[] @relation("AffiliateAgentVerifier")
+
   // PR-SCORECARD-4: OWNER-editable platform settings (booking URLs +
   // Wix webhook secret) and the Wix payments matched to this user by
   // email at webhook-receive time.
@@ -3683,6 +3691,26 @@ model LiaProfile {
   iaaLicenceVerifiedAt   DateTime?
   iaaLicenceVerifiedById String?
 
+  // ── PR-AGENT-PORTAL phase 0 ────────────────────────────────────────────────
+
+  /// When the IAA licence expires. Nullable because every row predates this
+  /// field and because a profile exists before anything is submitted.
+  ///
+  /// A verified licence is not a permanent fact. Without this the platform
+  /// would keep treating a lapsed adviser as current, which is the one thing
+  /// licence verification exists to prevent.
+  licenceExpiryDate DateTime? @db.Date
+
+  /// Set by the daily sweep when licenceExpiryDate has passed.
+  ///
+  /// This flag is for LISTING — "who has lapsed", cheaply, without date
+  /// arithmetic across every row. It is NOT the boundary: gates compare the
+  /// date at request time as well, because a licence that expires at midnight
+  /// must not stay usable until the sweep next runs, and a cron that silently
+  /// stops must not leave everyone permanently valid. Flag for the queue, date
+  /// for the decision.
+  isLicenceExpired Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -5217,12 +5245,79 @@ model AffiliateAgent {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
+  // ── PR-AGENT-PORTAL phase 0 ────────────────────────────────────────────────
+
+  /// The login this agent signs in with, once they have one.
+  ///
+  /// Nullable and added late on purpose: agents existed as attribution records
+  /// long before they could log in, and an agent the Owner is still onboarding
+  /// has no account yet. One User to one AffiliateAgent — an account cannot
+  /// stand for two agents, which would make attribution ambiguous.
+  userId String? @unique
+  user   User?   @relation("AffiliateAgentLogin", fields: [userId], references: [id], onDelete: SetNull)
+
+  /// True when this agent is themselves a licensed immigration adviser handling
+  /// their own clients' visa work, rather than only introducing clients.
+  ///
+  /// One model with a flag, not two models: everything about attribution,
+  /// commission and payables is identical for both, and only the extra
+  /// obligations differ. An LIA-type agent's User carries role LIA, so every
+  /// existing case gate applies to them unchanged — including that, once
+  /// assigned as case.liaId, they see that case exactly as any staff LIA does.
+  /// That is intended, not an oversight.
+  isLiaType Boolean @default(false)
+
+  /// This agent's share of a provider commission, as a percentage.
+  ///
+  /// Null means "use the company default" (AGENT_COMMISSION_RATE_PERCENT). The
+  /// rate is still snapshotted onto every AgentPayable at derivation, so
+  /// changing it here can never restate what an agent has already been told
+  /// they are owed.
+  commissionRatePercent Float?
+
+  // ── Verification: who this agent actually is ───────────────────────────────
+  // Standard agents prove identity and that they are a real operating referral
+  // business. LIA-type agents additionally hold an IAA licence, which lives on
+  // LiaProfile against their User rather than being duplicated here.
+  //
+  // Documents follow the case-document pattern: the bytes live in R2 and only
+  // the key plus display metadata are stored. Nothing is served from disk.
+
+  /// Passport or national ID.
+  idDocumentR2Key     String?
+  idDocumentName      String?
+  idDocumentMime      String?
+  idDocumentSizeBytes Int?
+  idDocumentUploadedAt DateTime?
+
+  /// Evidence of a real operating business — company registration, tax
+  /// registration, a bank statement header, letterhead. Free text rather than
+  /// an enum because the acceptable set will change with each country the
+  /// company recruits from, and a human is reading it either way.
+  businessDocumentR2Key     String?
+  businessDocumentName      String?
+  businessDocumentMime      String?
+  businessDocumentSizeBytes Int?
+  businessDocumentType      String?  @db.VarChar(120)
+  businessDocumentUploadedAt DateTime?
+
+  /// The Owner's decision on the documents above. Verified means the documents
+  /// were reviewed and accepted — it says nothing about the contract, which is
+  /// the separate half of the gate.
+  verifiedAt      DateTime?
+  verifiedById    String?
+  verifiedBy      User?     @relation("AffiliateAgentVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  /// Why verification was refused. Kept so a resubmission can answer it.
+  verificationRejectedAt     DateTime?
+  verificationRejectionReason String?  @db.Text
+
   createdBy       User           @relation("AffiliateAgentCreator", fields: [createdById], references: [id])
   trackingLinks   TrackingLink[]
   attributedLeads Lead[]         @relation("LeadAttributedAgent")
   payables        AgentPayable[]
 
   @@index([status, fullName])
+  @@index([isLiaType])
   @@map("affiliate_agents")
 }
 

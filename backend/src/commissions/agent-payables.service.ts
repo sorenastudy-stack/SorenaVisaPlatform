@@ -113,6 +113,32 @@ export class AgentPayablesService {
       },
     });
 
+    // Each agent's own rate, read once rather than per commission.
+    // PR-AGENT-PORTAL phase 0: the rate used to be one company-wide constant.
+    // It is now whatever the Owner agreed with that agent, falling back to the
+    // constant when nothing was agreed. Only the SOURCE of the number changes —
+    // it is still snapshotted onto the payable below and never recomputed, so
+    // an agent already told what they are owed is unaffected by a later change.
+    const agentIds = [
+      ...new Set(
+        candidates
+          .map((c) => c.programmeChoice?.admissionApplication?.case?.lead?.attributedAgentId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const rateByAgent = new Map<string, number>();
+    if (agentIds.length) {
+      const agents = await this.prisma.affiliateAgent.findMany({
+        where: { id: { in: agentIds } },
+        select: { id: true, commissionRatePercent: true },
+      });
+      for (const a of agents) {
+        // A null rate means "no override agreed"; 0 is a real answer and is
+        // kept, which is why this tests for null rather than falsiness.
+        rateByAgent.set(a.id, a.commissionRatePercent ?? AGENT_COMMISSION_RATE_PERCENT);
+      }
+    }
+
     let created = 0;
     for (const c of candidates) {
       const agentId = c.programmeChoice?.admissionApplication?.case?.lead?.attributedAgentId;
@@ -120,7 +146,8 @@ export class AgentPayablesService {
       // No agent, or nothing to take a share of — skip rather than write a zero.
       if (!agentId || basis == null) continue;
 
-      const amount = Math.round(basis * (AGENT_COMMISSION_RATE_PERCENT / 100) * 100) / 100;
+      const rate = rateByAgent.get(agentId) ?? AGENT_COMMISSION_RATE_PERCENT;
+      const amount = Math.round(basis * (rate / 100) * 100) / 100;
       try {
         await this.prisma.agentPayable.create({
           data: {
@@ -128,7 +155,7 @@ export class AgentPayablesService {
             commissionId: c.id,
             amount: new Prisma.Decimal(amount),
             currency: c.currency,
-            ratePercent: AGENT_COMMISSION_RATE_PERCENT,
+            ratePercent: rate,
           },
         });
         created += 1;

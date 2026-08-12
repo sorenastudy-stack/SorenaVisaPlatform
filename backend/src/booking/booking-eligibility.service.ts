@@ -223,7 +223,23 @@ export class BookingEligibilityService {
 
   private async countVerifiedLiaAdvisers(): Promise<number> {
     return this.prisma.user.count({
-      where: { role: 'LIA', isActive: true, liaProfile: { iaaLicenceVerifiedAt: { not: null } } },
+      where: {
+        role: 'LIA',
+        isActive: true,
+        liaProfile: {
+          iaaLicenceVerifiedAt: { not: null },
+          // PR-AGENT-PORTAL phase 0 — a licence that has run out no longer
+          // makes somebody bookable. Verification says it was checked once;
+          // the expiry says whether it still holds.
+          //
+          // Both conditions, because they fail differently: the date is the
+          // boundary (correct the instant a licence lapses), the flag is what
+          // the daily sweep maintains. Today every row has a NULL expiry, so
+          // this changes nothing until the Owner records dates.
+          isLicenceExpired: false,
+          OR: [{ licenceExpiryDate: null }, { licenceExpiryDate: { gte: new Date() } }],
+        },
+      },
     });
   }
 }

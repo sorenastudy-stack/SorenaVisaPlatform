@@ -195,6 +195,63 @@ describe('AgentPayablesService', () => {
       expect(after!.ratePercent).toBe(99);
     });
 
+    it('uses the agent’s own rate when the Owner has set one', async () => {
+      // PR-AGENT-PORTAL phase 0 — the rate moved from one company-wide constant
+      // to a per-agent figure. Only the source changed; the snapshot did not.
+      const special = await mkAgent();
+      await prisma.affiliateAgent.update({
+        where: { id: special },
+        data: { commissionRatePercent: 25 },
+      });
+      const com = await mkCommission({ agentId: special, actual: 1000 });
+      await svc.syncFromCommissions();
+
+      const p = await forCommission(com);
+      expect(Number(p!.amount)).toBe(250);
+      expect(p!.ratePercent).toBe(25);
+    });
+
+    it('falls back to the company rate when the agent has none', async () => {
+      const plain = await mkAgent();
+      const com = await mkCommission({ agentId: plain, actual: 1000 });
+      await svc.syncFromCommissions();
+
+      const p = await forCommission(com);
+      expect(p!.ratePercent).toBe(AGENT_COMMISSION_RATE_PERCENT);
+      expect(Number(p!.amount)).toBe(1000 * (AGENT_COMMISSION_RATE_PERCENT / 100));
+    });
+
+    it('honours a zero rate rather than treating it as unset', async () => {
+      // 0% is a real agreement — an agent who introduces for other reasons.
+      // Reading it as "no override" would quietly pay them the company rate.
+      const freeAgent = await mkAgent();
+      await prisma.affiliateAgent.update({
+        where: { id: freeAgent },
+        data: { commissionRatePercent: 0 },
+      });
+      const com = await mkCommission({ agentId: freeAgent, actual: 1000 });
+      await svc.syncFromCommissions();
+
+      const p = await forCommission(com);
+      expect(p).not.toBeNull();
+      expect(p!.ratePercent).toBe(0);
+      expect(Number(p!.amount)).toBe(0);
+    });
+
+    it('gives two agents their own rates in the same sync', async () => {
+      const a = await mkAgent();
+      const b = await mkAgent();
+      await prisma.affiliateAgent.update({ where: { id: a }, data: { commissionRatePercent: 5 } });
+      await prisma.affiliateAgent.update({ where: { id: b }, data: { commissionRatePercent: 20 } });
+      const comA = await mkCommission({ agentId: a, actual: 1000 });
+      const comB = await mkCommission({ agentId: b, actual: 1000 });
+
+      await svc.syncFromCommissions();
+
+      expect(Number((await forCommission(comA))!.amount)).toBe(50);
+      expect(Number((await forCommission(comB))!.amount)).toBe(200);
+    });
+
     it('keeps the commission’s own currency', async () => {
       const com = await mkCommission({ agentId: agentA, actual: 500, currency: 'USD' });
       await svc.syncFromCommissions();
