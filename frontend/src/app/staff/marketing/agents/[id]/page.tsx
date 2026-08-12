@@ -56,14 +56,14 @@ export default async function AgentDetailPage({ params }: { params: { id: string
 
   return (
     <div className="max-w-5xl">
-      <Link href="/staff/marketing/agents" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] mb-4">
+      <Link href="/staff/marketing/agents" className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b28f4e] mb-4">
         ← Back to agents
       </Link>
 
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <Users size={22} className="text-[#b8941f]" />
+            <Users size={22} className="text-[#b28f4e]" />
             {data.fullName}
           </h1>
           <div className="mt-2 flex items-center gap-3 text-sm text-[#4A4A4A]/80 flex-wrap">
@@ -131,7 +131,7 @@ export default async function AgentDetailPage({ params }: { params: { id: string
                   </div>
                   <div className="flex items-center gap-3 text-right">
                     <span className="text-xs text-[#4A4A4A]/70">{l.clickCount} clicks</span>
-                    <Link href={`/staff/marketing/links/${l.id}`} className="text-[#1E3A5F] hover:text-[#b8941f]">
+                    <Link href={`/staff/marketing/links/${l.id}`} className="text-[#1E3A5F] hover:text-[#b28f4e]">
                       <ArrowRight size={14} />
                     </Link>
                   </div>

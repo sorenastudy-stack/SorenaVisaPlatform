@@ -142,7 +142,7 @@ export default function ClientLoginPage() {
                     <button
                       type="button"
                       onClick={() => { setMode('magic'); setError(''); }}
-                      className="font-semibold text-sorena-navy underline underline-offset-4 hover:text-[#b8941f]"
+                      className="font-semibold text-sorena-navy underline underline-offset-4 hover:text-[#b28f4e]"
                     >
                       Email me a magic link instead
                     </button>
@@ -178,7 +178,7 @@ export default function ClientLoginPage() {
                     <button
                       type="button"
                       onClick={() => { setMode('password'); setError(''); }}
-                      className="font-semibold text-sorena-navy underline underline-offset-4 hover:text-[#b8941f]"
+                      className="font-semibold text-sorena-navy underline underline-offset-4 hover:text-[#b28f4e]"
                     >
                       Sign in with a password instead
                     </button>

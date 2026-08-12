@@ -121,7 +121,7 @@ function CardView({ card, onChanged, onRaiseTicket }: { card: Card; onChanged: (
         <Link href={card.href} className="inline-flex items-center gap-1 font-semibold text-[#1e3a5f] hover:underline">
           Open <ExternalLink size={11} />
         </Link>
-        <button type="button" onClick={onRaiseTicket} className="inline-flex items-center gap-1 font-semibold text-[#b8941f] hover:underline">
+        <button type="button" onClick={onRaiseTicket} className="inline-flex items-center gap-1 font-semibold text-[#b28f4e] hover:underline">
           <TicketIcon size={11} /> Raise ticket
         </button>
       </div>

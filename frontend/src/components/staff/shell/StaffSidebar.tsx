@@ -277,7 +277,7 @@ export function StaffSidebar() {
         </div>
         <div className="leading-tight">
           <div className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</div>
-          <div className="text-[#b8941f] text-[10px] font-bold uppercase tracking-wider">
+          <div className="text-[#b28f4e] text-[10px] font-bold uppercase tracking-wider">
             {portalLabel}
           </div>
         </div>
@@ -300,7 +300,7 @@ export function StaffSidebar() {
               {active && (
                 <span
                   aria-hidden
-                  className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-[#F3CE49]"
+                  className="absolute left-0 top-2 bottom-2 w-1 rounded-r bg-[#c9a961]"
                 />
               )}
               {item.icon}
@@ -311,7 +311,7 @@ export function StaffSidebar() {
               {item.label.includes('.') ? t(item.label) : item.label}
               {item.badge === 'agentPayoutRelease' && payoutCount > 0 && (
                 <span
-                  className="ml-auto min-w-[20px] rounded-full bg-[#F3CE49] px-1.5 py-0.5 text-center text-[11px] font-bold text-sorena-navy"
+                  className="ml-auto min-w-[20px] rounded-full bg-[#c9a961] px-1.5 py-0.5 text-center text-[11px] font-bold text-sorena-navy"
                   aria-label={`${payoutCount} awaiting release`}
                 >
                   {payoutCount > 9 ? '9+' : payoutCount}

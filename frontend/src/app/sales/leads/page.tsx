@@ -41,7 +41,7 @@ const bandStyles: Record<string, string> = {
 
 const statusStyles: Record<string, string> = {
   NEW: 'bg-[#FAF8F3] text-[#1E3A5F] border-[#1E3A5F]/20',
-  QUALIFIED: 'bg-[#F3CE49]/10 text-[#1E3A5F] border-[#F3CE49]/40',
+  QUALIFIED: 'bg-[#c9a961]/10 text-[#1E3A5F] border-[#c9a961]/40',
   CONTACTED: 'bg-blue-50 text-blue-700 border-blue-200',
   NURTURE: 'bg-purple-50 text-purple-700 border-purple-200',
   CONVERTED: 'bg-green-50 text-green-700 border-green-200',
@@ -117,7 +117,7 @@ export default async function SalesLeadsPage() {
                     <td className="px-4 py-3">
                       <Link
                         href={`/sales/leads/${lead.id}`}
-                        className="text-[#1E3A5F] font-medium hover:text-[#b8941f] transition-colors"
+                        className="text-[#1E3A5F] font-medium hover:text-[#b28f4e] transition-colors"
                       >
                         {lead.contact.fullName}
                       </Link>

@@ -39,7 +39,7 @@ export function NurtureControl({ leadId }: { leadId: string }) {
     <Card>
       <CardContent>
         <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500 flex items-center gap-1.5 mb-1">
-          <HeartHandshake size={16} className="text-[#b8941f]" /> Nurture
+          <HeartHandshake size={16} className="text-[#b28f4e]" /> Nurture
         </h2>
         <p className="text-xs text-gray-400 mb-3">
           Not ready after their free consultation? Start the 21-day nurture sequence (emails + call tasks),

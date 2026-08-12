@@ -420,7 +420,7 @@ function EmptyState() {
   return (
     <div className="rounded-2xl border border-dashed border-[#c9a961]/40 bg-[#faf8f3] py-16 text-center">
       <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#c9a961]/15">
-        <CalendarClock size={26} className="text-[#b8941f]" />
+        <CalendarClock size={26} className="text-[#b28f4e]" />
       </div>
       <p className="text-lg font-bold text-[#1e3a5f]">No meetings yet</p>
       <p className="mx-auto mt-2 max-w-sm text-sm text-[#4A4A4A]/60">

@@ -83,7 +83,7 @@ export function DiaryClient() {
       {/* ── Today ──────────────────────────────────────────────────────── */}
       {data && (
         <Section
-          icon={<CalendarClock size={16} className="text-[#b8941f]" />}
+          icon={<CalendarClock size={16} className="text-[#b28f4e]" />}
           title="Today"
           subtitle="Calls due and sessions scheduled for today."
           count={todayCount}
@@ -111,7 +111,7 @@ function CallRow({ c, overdue }: { c: DiaryCall; overdue?: boolean }) {
         <div className="min-w-0">
           <Link href={`/staff/leads/${c.leadId}`} className="font-medium text-[#1e3a5f] hover:underline">{c.clientName ?? '—'}</Link>
           <div className="text-xs text-gray-500">
-            <span className="font-semibold text-[#b8941f]">{CALL_STEP[c.step] ?? `Call step ${c.step}`}</span>
+            <span className="font-semibold text-[#b28f4e]">{CALL_STEP[c.step] ?? `Call step ${c.step}`}</span>
             {c.reason ? ` · ${c.reason}` : ''} · <span className="whitespace-nowrap">{overdue ? 'due' : ''} {formatRelativeTime(c.dueDate)}</span>
           </div>
         </div>
@@ -132,7 +132,7 @@ function MeetingRow({ m, overdue }: { m: DiaryMeeting; overdue?: boolean }) {
         <div className="min-w-0">
           <span className="font-medium text-[#1e3a5f]">{m.clientName ?? '—'}</span>
           <div className="text-xs text-gray-500">
-            <span className="font-semibold text-[#b8941f]">{MEETING_LABEL[m.type] ?? m.type}</span>
+            <span className="font-semibold text-[#b28f4e]">{MEETING_LABEL[m.type] ?? m.type}</span>
             {' · '}<span className="uppercase tracking-wide text-[10px]">{m.status}</span>
             {m.scheduledAt && <> · <span className="inline-flex items-center gap-1 whitespace-nowrap"><Clock size={11} />{formatRelativeTime(m.scheduledAt)}</span></>}
           </div>

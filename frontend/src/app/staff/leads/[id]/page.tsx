@@ -155,7 +155,7 @@ export default function StaffLeadDetailPage({
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-[#1E3A5F] truncate">{lead.name}</h1>
               {lead.clientId && (
-                <div className="mt-0.5 font-mono text-sm font-semibold text-[#b8941f]" title="Client ID">
+                <div className="mt-0.5 font-mono text-sm font-semibold text-[#b28f4e]" title="Client ID">
                   {lead.clientId}
                 </div>
               )}
@@ -242,7 +242,7 @@ export default function StaffLeadDetailPage({
             <CardContent>
               <Link
                 href={`/sales/leads/${lead.id}`}
-                className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]"
+                className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b28f4e]"
               >
                 Open in legacy sales view <ExternalLink size={12} />
               </Link>
@@ -261,7 +261,7 @@ function BackLink() {
   return (
     <Link
       href="/staff/leads"
-      className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] font-medium mb-4"
+      className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b28f4e] font-medium mb-4"
     >
       <ArrowLeft size={14} /> Back to leads
     </Link>
@@ -569,7 +569,7 @@ function ScorecardCard({ scorecard }: {
       <Card>
         <CardContent>
           <h2 className="text-base font-bold text-[#1E3A5F] flex items-center gap-2 mb-2">
-            <Award size={16} className="text-[#b8941f]" /> Scorecard
+            <Award size={16} className="text-[#b28f4e]" /> Scorecard
           </h2>
           <p className="text-sm text-[#4A4A4A]/60 italic">No assessment yet.</p>
         </CardContent>
@@ -581,11 +581,11 @@ function ScorecardCard({ scorecard }: {
       <CardContent>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <h2 className="text-base font-bold text-[#1E3A5F] flex items-center gap-2">
-            <Award size={16} className="text-[#b8941f]" /> Scorecard
+            <Award size={16} className="text-[#b28f4e]" /> Scorecard
           </h2>
           <Link
             href={`/staff/scorecards/${scorecard.submissionId}`}
-            className="text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f] inline-flex items-center gap-1"
+            className="text-sm font-medium text-[#1E3A5F] hover:text-[#b28f4e] inline-flex items-center gap-1"
           >
             View full scorecard <ExternalLink size={12} />
           </Link>
@@ -637,7 +637,7 @@ function AttributionCard({
     <Card>
       <CardContent>
         <h2 className="text-base font-bold text-[#1E3A5F] flex items-center gap-2 mb-2">
-          <Megaphone size={16} className="text-[#b8941f]" /> Attribution
+          <Megaphone size={16} className="text-[#b28f4e]" /> Attribution
         </h2>
         <div className="space-y-1.5 text-sm">
           {attributedAgent && (
@@ -645,7 +645,7 @@ function AttributionCard({
               <span className="text-[#4A4A4A]/70">Referred by</span>{' '}
               <Link
                 href={`/staff/marketing/agents/${attributedAgent.id}`}
-                className="font-semibold text-[#1E3A5F] hover:text-[#b8941f] underline-offset-2 hover:underline"
+                className="font-semibold text-[#1E3A5F] hover:text-[#b28f4e] underline-offset-2 hover:underline"
               >
                 {attributedAgent.fullName}
               </Link>

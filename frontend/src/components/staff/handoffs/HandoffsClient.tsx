@@ -117,7 +117,7 @@ export function HandoffsClient() {
       {/* ── 1. Unstaffed roles (reuse /ops/handoffs rules) ───────────────── */}
       {data && (
         <Section
-          icon={<Users size={16} className="text-[#b8941f]" />}
+          icon={<Users size={16} className="text-[#b28f4e]" />}
           title="Unstaffed roles"
           subtitle="A specialist slot is due but empty — past the point auto-assignment should have filled it. Oldest-waiting first."
         >
@@ -192,7 +192,7 @@ export function HandoffsClient() {
       {/* ── 2. Stuck cases (NEW, state-derived) ──────────────────────────── */}
       {data && (
         <Section
-          icon={<PauseCircle size={16} className="text-[#b8941f]" />}
+          icon={<PauseCircle size={16} className="text-[#b28f4e]" />}
           title="Stuck cases"
           subtitle={`Cases that cleared a gate but didn't move on — signed + paid yet still in Admission, visa approved without a Pastoral handoff, or over ${data.inzAgeThresholdDays} days in INZ with no outcome. Oldest first.`}
         >

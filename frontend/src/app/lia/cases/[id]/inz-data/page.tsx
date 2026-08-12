@@ -253,7 +253,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
       <div className="flex items-start justify-between flex-wrap gap-3 mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <FileSearch size={22} className="text-[#b8941f]" />
+            <FileSearch size={22} className="text-[#b28f4e]" />
             INZ Application Data
           </h1>
           <p className="text-sm text-[#4A4A4A]/70 mt-1">
@@ -270,7 +270,7 @@ export default async function InzDataPage({ params }: { params: { id: string } }
       </div>
 
       {data.case?.stage === 'INZ_SUBMITTED' && data.case.inzApplicationNumber && data.case.inzSubmittedAt && (
-        <div className="mb-6 rounded-xl border border-[#F3CE49]/40 bg-[#F3CE49]/10 px-4 py-3 flex items-start gap-2 flex-wrap">
+        <div className="mb-6 rounded-xl border border-[#c9a961]/40 bg-[#c9a961]/10 px-4 py-3 flex items-start gap-2 flex-wrap">
           <span className="text-emerald-700 font-bold text-lg leading-6">✓</span>
           <p className="text-sm text-[#1E3A5F] flex-1 min-w-0">
             This case was submitted to INZ on{' '}

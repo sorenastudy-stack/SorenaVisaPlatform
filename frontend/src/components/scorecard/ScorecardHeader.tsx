@@ -21,7 +21,7 @@ export function ScorecardHeader({ className = '' }: Props) {
   return (
     <header
       className={['w-full bg-white border-b', className].join(' ')}
-      style={{ borderBottomColor: '#F3CE4922' }}
+      style={{ borderBottomColor: '#c9a96122' }}
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col items-center sm:items-start">
         <Link

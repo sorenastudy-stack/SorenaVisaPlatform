@@ -112,7 +112,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-6 md:p-8 mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <Award size={24} className="text-[#b8941f]" />
+            <Award size={24} className="text-[#b28f4e]" />
             <h1 className="text-2xl md:text-3xl font-extrabold text-[#1E3A5F]">
               {t('result.headerTitle')}
             </h1>
@@ -170,9 +170,9 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
         </div>
 
         {/* Next best action */}
-        <div className="bg-white rounded-2xl shadow-md border-2 border-[#F3CE49]/50 p-6 md:p-8 mb-6">
+        <div className="bg-white rounded-2xl shadow-md border-2 border-[#c9a961]/50 p-6 md:p-8 mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={18} className="text-[#b8941f]" />
+            <Sparkles size={18} className="text-[#b28f4e]" />
             <h2 className="text-lg font-bold text-[#1E3A5F]">
               {t('result.nextActionTitle')}
             </h2>
@@ -208,7 +208,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               truth, shared with the booking page). Buttons carry a REAL
               `disabled` and the reason copy is server-provided. */}
           {elig && (
-            <div className="mt-4 pt-4 border-t border-[#F3CE49]/30 space-y-6">
+            <div className="mt-4 pt-4 border-t border-[#c9a961]/30 space-y-6">
               {/* No submission — edge case (the report needs one); stay honest */}
               {!elig.hasSubmission && (
                 <p className="text-sm text-[#4A4A4A] leading-relaxed">
@@ -330,7 +330,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
                     </span>
                   </div>
                   <div className="w-full h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-[#F3CE49]" style={{ width: `${pct}%` }} />
+                    <div className="h-full bg-[#c9a961]" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );
@@ -403,7 +403,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
             <button
               type="button"
               onClick={() => setOpenAnswerLog((o) => !o)}
-              className="text-sm font-semibold text-[#1E3A5F] hover:text-[#b8941f] inline-flex items-center gap-1"
+              className="text-sm font-semibold text-[#1E3A5F] hover:text-[#b28f4e] inline-flex items-center gap-1"
             >
               {openAnswerLog ? '▾' : '▸'} {t('result.fullAnswerLog')}
             </button>
@@ -428,7 +428,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
           />
           <Link
             href="/portal/case"
-            className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]"
+            className="inline-flex items-center gap-1 text-sm font-medium text-[#1E3A5F] hover:text-[#b28f4e]"
           >
             {t('result.backToDashboard')} <ArrowRight size={14} className="rtl:rotate-180" />
           </Link>
@@ -457,7 +457,7 @@ function PrimaryBookingButton({
       onClick={onClick}
       disabled={disabled}
       style={{ minHeight: 56 }}
-      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#F3CE49] text-[#1E3A5F] font-bold text-base hover:bg-[#d4a91f] transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#F3CE49]"
+      className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-4 rounded-xl bg-[#c9a961] text-[#1E3A5F] font-bold text-base hover:bg-[#b28f4e] transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#c9a961]"
     >
       {disabled ? <Lock size={16} /> : icon}
       {label}

@@ -201,7 +201,7 @@ export default function StaffLeadsPage() {
       <div className="mb-6 flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-center gap-2">
-            <Users size={22} className="text-[#b8941f]" />
+            <Users size={22} className="text-[#b28f4e]" />
             Leads
             <span className="ml-1 text-xs font-semibold uppercase tracking-wide bg-[#FAF8F3] text-[#1E3A5F]/80 px-2 py-0.5 rounded-full border border-[#1E3A5F]/15">
               {total.toLocaleString('en-NZ')}
@@ -319,7 +319,7 @@ export default function StaffLeadsPage() {
               <button
                 type="button"
                 onClick={clearFilters}
-                className="inline-flex items-center gap-1 text-[#1E3A5F] font-medium hover:text-[#b8941f]"
+                className="inline-flex items-center gap-1 text-[#1E3A5F] font-medium hover:text-[#b28f4e]"
               >
                 <X size={11} /> Clear all
               </button>
@@ -351,7 +351,7 @@ export default function StaffLeadsPage() {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="mt-3 inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] font-medium"
+                  className="mt-3 inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b28f4e] font-medium"
                 >
                   <X size={12} /> Clear filters
                 </button>
@@ -388,7 +388,7 @@ export default function StaffLeadsPage() {
                             <div className="min-w-0">
                               <Link
                                 href={`/staff/leads/${r.id}`}
-                                className="text-[#1E3A5F] font-semibold hover:text-[#b8941f] transition-colors block truncate"
+                                className="text-[#1E3A5F] font-semibold hover:text-[#b28f4e] transition-colors block truncate"
                               >
                                 {r.name}
                               </Link>
@@ -423,7 +423,7 @@ export default function StaffLeadsPage() {
                         <td className="py-2.5">
                           <Link
                             href={`/staff/leads/${r.id}`}
-                            className="text-sm font-medium text-[#1E3A5F] hover:text-[#b8941f]"
+                            className="text-sm font-medium text-[#1E3A5F] hover:text-[#b28f4e]"
                           >
                             View
                           </Link>
@@ -440,7 +440,7 @@ export default function StaffLeadsPage() {
                   <li key={r.id}>
                     <Link
                       href={`/staff/leads/${r.id}`}
-                      className="block rounded-xl border border-gray-200 p-3 hover:border-[#F3CE49]/50 transition-colors"
+                      className="block rounded-xl border border-gray-200 p-3 hover:border-[#c9a961]/50 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">

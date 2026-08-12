@@ -19,7 +19,7 @@ import { useRoleLabel } from '@/lib/role-label';
 // staff subset.
 
 const STYLES: Record<string, string> = {
-  OWNER:       'bg-[#F3CE49] text-[#1e3a5f]',
+  OWNER:       'bg-[#c9a961] text-[#1e3a5f]',
   SUPER_ADMIN: 'bg-[#1e3a5f] text-[#faf8f3]',
   ADMIN:       'bg-slate-700 text-white',
   LIA:         'bg-gray-100 text-gray-800',

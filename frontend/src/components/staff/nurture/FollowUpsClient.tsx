@@ -102,7 +102,7 @@ export function FollowUpsClient() {
                       {t.clientId && <span className="font-mono text-[10px] text-gray-400">{t.clientId}</span>}
                     </div>
                     <div className="mt-0.5 text-xs text-gray-500">
-                      <span className="font-semibold text-[#b8941f]">{STEP_LABEL[t.step] ?? `Step ${t.step}`}</span>
+                      <span className="font-semibold text-[#b28f4e]">{STEP_LABEL[t.step] ?? `Step ${t.step}`}</span>
                       {t.clientEmail ? ` · ${t.clientEmail}` : ''}
                     </div>
                     {t.reason && <div className="mt-1 text-xs text-gray-500">Reason: {t.reason}</div>}

@@ -77,7 +77,7 @@ export function EditOfficerButton({
         type="button"
         onClick={() => setOpen(true)}
         title="Edit officer profile"
-        className="inline-flex items-center gap-1 text-[#4A4A4A] hover:text-[#b8941f] transition-colors"
+        className="inline-flex items-center gap-1 text-[#4A4A4A] hover:text-[#b28f4e] transition-colors"
       >
         <Edit size={16} />
       </button>
@@ -143,7 +143,7 @@ export function EditOfficerButton({
               <button type="button" onClick={close} disabled={submitting} className="min-h-[44px] px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-[#4A4A4A] hover:bg-gray-50">
                 Cancel
               </button>
-              <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="min-h-[44px] px-5 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#F3CE49] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
+              <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="min-h-[44px] px-5 py-2 rounded-xl bg-[#1E3A5F] text-white text-sm font-semibold hover:bg-[#c9a961] hover:text-[#1E3A5F] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
                 {submitting ? 'Saving…' : 'Save changes'}
               </button>
             </div>

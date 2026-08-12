@@ -88,7 +88,7 @@ export function MyDocumentsClient() {
 
       {rows !== null && rows.length === 0 && (
         <div className="rounded-xl border border-dashed border-gray-200 bg-[#faf8f3] p-10 text-center">
-          <FileText size={28} className="mx-auto text-[#b8941f] mb-2" />
+          <FileText size={28} className="mx-auto text-[#b28f4e] mb-2" />
           <p className="text-sm text-gray-500">No documents you have access to yet.</p>
         </div>
       )}

@@ -75,7 +75,7 @@ function Attachments({ items }: { items: TicketAttachment[] }) {
         return (
           <a key={i} href={a.url ?? '#'} target="_blank" rel="noopener noreferrer"
              className="inline-flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs text-[#1E3A5F] hover:bg-[#faf8f3] max-w-[220px]">
-            <FileText size={15} className="shrink-0 text-[#b8941f]" />
+            <FileText size={15} className="shrink-0 text-[#b28f4e]" />
             <span className="truncate font-medium">{a.name}</span>
             <span className="shrink-0 text-[10px] text-[#4A4A4A]/60">{fmtSize(a.size)}</span>
           </a>

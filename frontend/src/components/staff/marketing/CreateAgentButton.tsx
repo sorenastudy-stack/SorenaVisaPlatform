@@ -100,7 +100,7 @@ export function CreateAgentButton() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#F3CE49] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a91f] disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#c9a961] text-[#1E3A5F] text-sm font-bold hover:bg-[#b28f4e] disabled:opacity-60"
               >
                 {submitting && <Loader2 size={12} className="animate-spin" />}
                 Create
@@ -123,7 +123,7 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-[#1E3A5F] focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40"
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-[#1E3A5F] focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40"
       />
     </div>
   );
@@ -137,7 +137,7 @@ function FieldLong({ label, value, onChange }: { label: string; value: string; o
         rows={3}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-[#1E3A5F] focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40"
+        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm text-[#1E3A5F] focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40"
       />
     </div>
   );

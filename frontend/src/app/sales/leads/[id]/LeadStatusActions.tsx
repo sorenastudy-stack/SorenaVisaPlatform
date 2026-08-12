@@ -40,13 +40,13 @@ const ALL_ACTIONS: Record<LeadStatus, { label: string; tone: 'primary' | 'neutra
 };
 
 const buttonToneClasses: Record<string, string> = {
-  primary: 'bg-[#F3CE49] text-[#1E3A5F] hover:bg-[#d4a51e] disabled:bg-[#F3CE49]/50',
+  primary: 'bg-[#c9a961] text-[#1E3A5F] hover:bg-[#b28f4e] disabled:bg-[#c9a961]/50',
   neutral: 'bg-white text-[#1E3A5F] border border-[#1E3A5F]/20 hover:bg-[#FAF8F3] disabled:opacity-50',
   danger:  'bg-white text-red-700 border border-red-200 hover:bg-red-50 disabled:opacity-50',
 };
 
 const stripToneClasses: Record<string, string> = {
-  primary: 'bg-[#F3CE49]/10 text-[#1E3A5F] border-[#F3CE49]/40',
+  primary: 'bg-[#c9a961]/10 text-[#1E3A5F] border-[#c9a961]/40',
   neutral: 'bg-purple-50 text-purple-700 border-purple-200',
   danger:  'bg-red-50 text-red-700 border-red-200',
 };
@@ -186,7 +186,7 @@ export function LeadStatusActions({
                   key={outcome}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                     isActive
-                      ? 'bg-[#F3CE49] text-[#1E3A5F] border-[#F3CE49] shadow-sm'
+                      ? 'bg-[#c9a961] text-[#1E3A5F] border-[#c9a961] shadow-sm'
                       : stripToneClasses[action.tone] + ' opacity-60'
                   }`}
                 >
@@ -202,9 +202,9 @@ export function LeadStatusActions({
 
       {/* Next Step Guide card */}
       {guide && (
-        <div className="rounded-2xl border border-[#F3CE49]/30 bg-[#F3CE49]/5 p-5">
+        <div className="rounded-2xl border border-[#c9a961]/30 bg-[#c9a961]/5 p-5">
           <div className="flex items-center gap-2 mb-3">
-            <ArrowRight size={16} className="text-[#b8941f]" />
+            <ArrowRight size={16} className="text-[#b28f4e]" />
             <h4 className="text-sm font-semibold text-[#1E3A5F]">
               Next Step Guide — {shortLabel(currentStatus)}
             </h4>
@@ -223,7 +223,7 @@ export function LeadStatusActions({
               <p className="text-[#4A4A4A]">{guide.nextStep}</p>
             </div>
             <div className="flex items-start gap-2">
-              <Clock size={14} className="text-[#b8941f] mt-0.5 flex-shrink-0" />
+              <Clock size={14} className="text-[#b28f4e] mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-[#4A4A4A]/60 mb-0.5">
                   SLA
@@ -232,7 +232,7 @@ export function LeadStatusActions({
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <User size={14} className="text-[#b8941f] mt-0.5 flex-shrink-0" />
+              <User size={14} className="text-[#b28f4e] mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-[#4A4A4A]/60 mb-0.5">
                   Client experience
@@ -242,7 +242,7 @@ export function LeadStatusActions({
             </div>
           </div>
           {guide.warning && (
-            <div className="mt-3 pt-3 border-t border-[#F3CE49]/30 flex items-start gap-2">
+            <div className="mt-3 pt-3 border-t border-[#c9a961]/30 flex items-start gap-2">
               <AlertTriangle size={14} className="text-orange-600 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-orange-700">{guide.warning}</p>
             </div>

@@ -154,7 +154,7 @@ export default function StaffTicketDetailPage({
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-[#1E3A5F] flex items-start gap-2">
-                <Inbox size={20} className="text-[#b8941f] mt-1 flex-shrink-0" />
+                <Inbox size={20} className="text-[#b28f4e] mt-1 flex-shrink-0" />
                 <span className="break-words">{ticket.subject}</span>
               </h1>
               <div className="mt-2 flex items-center gap-3 flex-wrap text-sm text-[#4A4A4A]/70">
@@ -260,7 +260,7 @@ function BackLink() {
   return (
     <Link
       href="/staff/tickets"
-      className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b8941f] font-medium mb-4"
+      className="inline-flex items-center gap-1 text-sm text-[#1E3A5F] hover:text-[#b28f4e] font-medium mb-4"
     >
       <ArrowLeft size={14} /> Back to tickets
     </Link>
@@ -500,7 +500,7 @@ function ReplyCard({
           <div className="mt-2 flex flex-wrap gap-2">
             {attachments.map((a, i) => (
               <span key={i} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-[#faf8f3] px-2.5 py-1.5 text-xs text-[#1E3A5F]">
-                <Paperclip size={11} className="text-[#b8941f]" />
+                <Paperclip size={11} className="text-[#b28f4e]" />
                 <span className="max-w-[160px] truncate">{a.name}</span>
                 <button type="button" onClick={() => removeAttachment(i)} aria-label={`Remove ${a.name}`}
                         className="text-gray-400 hover:text-red-600">

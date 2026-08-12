@@ -52,7 +52,7 @@ export function SlaReportClient() {
         <Card key={o.officerId ?? 'unassigned'}><CardContent>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="flex items-center gap-1.5 text-sm font-bold text-[#1e3a5f]">
-              <UserRound size={15} className="text-[#b8941f]" /> {o.officerName}
+              <UserRound size={15} className="text-[#b28f4e]" /> {o.officerName}
             </h2>
             <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-700">{o.cases.length} overdue</span>
           </div>

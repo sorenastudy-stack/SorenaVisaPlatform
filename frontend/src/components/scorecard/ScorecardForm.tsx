@@ -436,7 +436,7 @@ export function ScorecardForm({
         </div>
         <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
           <div
-            className="h-full bg-[#F3CE49] transition-all"
+            className="h-full bg-[#c9a961] transition-all"
             style={{ width: `${((currentStep + 1) / TOTAL_SECTIONS) * 100}%` }}
           />
         </div>
@@ -545,7 +545,7 @@ export function ScorecardForm({
             type="button"
             onClick={handleSubmit}
             disabled={!declarationChecked || submitting}
-            className="inline-flex items-center gap-1.5 px-6 py-3 rounded-xl bg-[#F3CE49] text-[#1E3A5F] font-bold text-sm hover:bg-[#d4a91f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center gap-1.5 px-6 py-3 rounded-xl bg-[#c9a961] text-[#1E3A5F] font-bold text-sm hover:bg-[#b28f4e] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {submitting && <Loader2 size={14} className="animate-spin" />}
             {submitting ? FORM_UI.submitting : FORM_UI.submit}
@@ -577,7 +577,7 @@ function FieldRow({
 }) {
   const inputClasses = [
     'w-full px-3 py-2.5 rounded-xl border bg-white text-[#1E3A5F]',
-    'focus:outline-none focus:ring-2 focus:ring-[#F3CE49]/40',
+    'focus:outline-none focus:ring-2 focus:ring-[#c9a961]/40',
     error
       ? 'border-red-300 focus:border-red-400'
       : 'border-gray-200 focus:border-[#1E3A5F]',

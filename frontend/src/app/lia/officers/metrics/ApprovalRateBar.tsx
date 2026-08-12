@@ -8,7 +8,7 @@ export function ApprovalRateBar({ rate }: { rate: number }) {
   const tone = pct >= 70
     ? 'bg-emerald-500'
     : pct >= 50
-      ? 'bg-[#F3CE49]'
+      ? 'bg-[#c9a961]'
       : pct >= 30
         ? 'bg-orange-400'
         : 'bg-red-500';

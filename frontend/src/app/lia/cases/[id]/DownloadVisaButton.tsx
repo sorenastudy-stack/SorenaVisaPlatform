@@ -45,7 +45,7 @@ export function DownloadVisaButton({
         onClick={handleClick}
         disabled={working}
         title={`Download ${fileName}`}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#1E3A5F] bg-white border border-gray-200 hover:border-[#F3CE49] hover:text-[#b8941f] transition-colors disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#1E3A5F] bg-white border border-gray-200 hover:border-[#c9a961] hover:text-[#b28f4e] transition-colors disabled:opacity-50"
       >
         <Download size={12} /> {working ? '…' : 'Download visa document'}
       </button>

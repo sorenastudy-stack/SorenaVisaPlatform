@@ -82,7 +82,7 @@ export function SubmitToInzButton({ caseId }: { caseId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="min-h-[48px] inline-flex items-center gap-2 rounded-xl bg-[#F3CE49] text-[#1E3A5F] text-sm font-bold px-5 py-2.5 hover:bg-[#d4a615] transition-colors shadow-sm"
+        className="min-h-[48px] inline-flex items-center gap-2 rounded-xl bg-[#c9a961] text-[#1E3A5F] text-sm font-bold px-5 py-2.5 hover:bg-[#b28f4e] transition-colors shadow-sm"
       >
         <Send size={16} />
         Submit to INZ
@@ -94,7 +94,7 @@ export function SubmitToInzButton({ caseId }: { caseId: string }) {
           <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-[#F3CE49]/20 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-[#c9a961]/20 flex items-center justify-center flex-shrink-0">
                   <Send size={18} className="text-[#1E3A5F]" />
                 </div>
                 <h2 className="text-lg font-bold text-[#1E3A5F]">Submit to Immigration NZ</h2>
@@ -174,7 +174,7 @@ export function SubmitToInzButton({ caseId }: { caseId: string }) {
               <button type="button" onClick={() => (setOpen(false), reset())} disabled={submitting} className="min-h-[44px] px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-[#4A4A4A] hover:bg-gray-50">
                 Cancel
               </button>
-              <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="min-h-[44px] px-5 py-2 rounded-xl bg-[#F3CE49] text-[#1E3A5F] text-sm font-bold hover:bg-[#d4a615] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
+              <button type="button" onClick={handleSubmit} disabled={!canSubmit} className="min-h-[44px] px-5 py-2 rounded-xl bg-[#c9a961] text-[#1E3A5F] text-sm font-bold hover:bg-[#b28f4e] disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed">
                 {submitting ? 'Submitting…' : 'Submit to INZ'}
               </button>
             </div>

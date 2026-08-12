@@ -21,7 +21,7 @@ export default async function FinanceTrainingPage() {
       <p className="text-sm text-[#4A4A4A]/70">Finance training guides and company news, in one place.</p>
       <div className="mt-6 rounded-2xl border border-dashed border-sorena-gold/40 bg-[#faf8f3] py-16 text-center">
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-sorena-gold/15">
-          <BookOpen size={26} className="text-[#b8941f]" />
+          <BookOpen size={26} className="text-[#b28f4e]" />
         </div>
         <p className="text-lg font-bold text-sorena-navy">Nothing here yet</p>
         <p className="mx-auto mt-2 max-w-sm text-sm text-sorena-text/60">

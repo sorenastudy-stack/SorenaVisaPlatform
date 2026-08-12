@@ -117,7 +117,7 @@ export function SendContractPanel({
 
   const header = (
     <div className="flex items-center gap-2 mb-3">
-      <FileText size={16} className="text-[#b8941f]" />
+      <FileText size={16} className="text-[#b28f4e]" />
       <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">
         Engagement contract
       </h2>

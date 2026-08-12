@@ -76,7 +76,7 @@ export function ComplianceClient() {
       </div>
 
       {/* ── 1. Flagged cases (NEW) ─────────────────────────────────────── */}
-      <Section icon={<ShieldAlert size={16} className="text-[#b8941f]" />} title="Flagged cases"
+      <Section icon={<ShieldAlert size={16} className="text-[#b28f4e]" />} title="Flagged cases"
         subtitle="Leads/cases with an active hard stop (HS1-HS6) or red-flag (LIA escalation). Cleared/approved leads drop off automatically.">
         {errs.flagged && <ErrorNote>Couldn’t load flagged cases.</ErrorNote>}
         {!flagged && !errs.flagged && <LoadingRow />}
@@ -132,7 +132,7 @@ export function ComplianceClient() {
       </Section>
 
       {/* ── 2. Contract compliance exceptions (reuse) ──────────────────── */}
-      <Section icon={<FileWarning size={16} className="text-[#b8941f]" />} title="Contract compliance exceptions"
+      <Section icon={<FileWarning size={16} className="text-[#b28f4e]" />} title="Contract compliance exceptions"
         subtitle="Active cases whose engagement contract needs attention — longest-waiting first.">
         {errs.contracts && <ErrorNote>Couldn’t load contract exceptions.</ErrorNote>}
         {!contracts && !errs.contracts && <LoadingRow />}
@@ -172,7 +172,7 @@ export function ComplianceClient() {
       </Section>
 
       {/* ── 3. Override & audit log (reuse, pre-filtered) ──────────────── */}
-      <Section icon={<ScrollText size={16} className="text-[#b8941f]" />} title="Override & audit log"
+      <Section icon={<ScrollText size={16} className="text-[#b28f4e]" />} title="Override & audit log"
         subtitle="Recent high-sensitivity actions — hard-stop clears, gate clears, legal decisions, manual reassignments, settings changes."
         action={<Link href="/admin/audit" className="inline-flex items-center gap-1 text-xs font-semibold text-[#1e3a5f] hover:underline">Full audit log <ExternalLink size={12} /></Link>}>
         {errs.overrides && <ErrorNote>Couldn’t load the override log.</ErrorNote>}
@@ -205,7 +205,7 @@ export function ComplianceClient() {
         <Card className="transition-all hover:border-[#1e3a5f]/30 hover:shadow">
           <CardContent className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <ClipboardCheck size={18} className="text-[#b8941f]" />
+              <ClipboardCheck size={18} className="text-[#b28f4e]" />
               <div>
                 <div className="text-sm font-bold text-[#1e3a5f]">Owner-approval queue</div>
                 <div className="text-xs text-gray-500">Two-person control for staff changes, deletions, refunds, and settings.</div>

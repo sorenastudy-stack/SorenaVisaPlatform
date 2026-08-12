@@ -67,7 +67,7 @@ export default async function OpsDashboard() {
               <Card className="transition-shadow hover:shadow-md">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm text-gray-500">
-                    <Briefcase size={16} className="text-[#b8941f]" />
+                    <Briefcase size={16} className="text-[#b28f4e]" />
                     {STAGE_LABEL[c.stage] ?? c.stage}
                   </CardTitle>
                 </CardHeader>

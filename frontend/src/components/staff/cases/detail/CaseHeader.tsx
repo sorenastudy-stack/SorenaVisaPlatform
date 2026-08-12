@@ -29,7 +29,7 @@ export function CaseHeader({ data }: { data: CaseDetail }) {
         </h1>
         {data.student.clientId && (
           <span
-            className="rounded-full bg-[#1e3a5f]/5 px-2.5 py-0.5 font-mono text-xs font-semibold text-[#b8941f]"
+            className="rounded-full bg-[#1e3a5f]/5 px-2.5 py-0.5 font-mono text-xs font-semibold text-[#b28f4e]"
             title="Client ID"
           >
             {data.student.clientId}

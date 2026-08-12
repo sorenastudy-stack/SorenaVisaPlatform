@@ -121,7 +121,7 @@ export function AdmissionTasksClient() {
                       <p className="mt-1 text-sm font-medium text-[#1e3a5f]">{t.title}</p>
                       <div className="mt-0.5 text-xs text-gray-500">
                         {t.studentName && <span>{t.studentName} · </span>}
-                        <Link href={`/staff/cases/${t.caseId}`} className="text-[#b8941f] hover:underline">Open case</Link>
+                        <Link href={`/staff/cases/${t.caseId}`} className="text-[#b28f4e] hover:underline">Open case</Link>
                         <span className="ms-2 inline-flex items-center gap-1 text-gray-400"><Clock size={11} /> {formatRelativeTime(t.createdAt)}</span>
                       </div>
                     </div>
