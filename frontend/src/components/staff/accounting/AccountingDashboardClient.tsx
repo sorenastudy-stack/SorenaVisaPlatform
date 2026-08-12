@@ -6,6 +6,7 @@ import {
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { api } from '@/lib/api';
+import { useStaff } from '@/contexts/StaffContext';
 import './accounting-dashboard.css';
 
 // PR-ACCOUNTING-DASHBOARD — the front page the accountant opens each morning.
@@ -250,7 +251,14 @@ const SECTIONS = [
   ['gst',        'GST'],
 ] as const;
 
-export function AccountingDashboardClient({ firstName }: { firstName?: string }) {
+export function AccountingDashboardClient() {
+  // The name comes from /api/staff/me, the same source the header uses. The
+  // session cookie cannot supply it: the JWT carries sub, email, role and
+  // secondaryRoles and no name, so reading it there yields the email address —
+  // which is how this page came to greet its reader by their login.
+  const { me } = useStaff();
+  const firstName = me?.fullName?.trim().split(/\s+/)[0];
+
   const [ov, setOv] = useState<Overview | null>(null);
   const [fx, setFx] = useState<FxView | null>(null);
   const [agents, setAgents] = useState<AgentSummaryRow[] | null>(null);
@@ -329,6 +337,23 @@ export function AccountingDashboardClient({ firstName }: { firstName?: string })
     count: b.count,
   }));
   const anyAgeing = (pc?.ageing ?? []).some((b) => b.count > 0);
+
+  // Invoiced this month, per currency — the newest month in the series, which
+  // is the one an accountant is standing in.
+  const thisMonth = ov?.revenueByMonth?.[ov.revenueByMonth.length - 1] ?? null;
+  const invoicedNow = Object.entries(thisMonth?.invoicedByCurrency ?? {}).filter(([, v]) => v > 0).sort();
+
+  // Receivable is what has been invoiced to a provider and not yet arrived —
+  // which is exactly what the ageing buckets hold, so it is summed from those
+  // rather than derived a second way that could disagree with the chart.
+  const receivableByCurrency = new Map<string, number>();
+  for (const b of pc?.ageing ?? []) {
+    for (const [c, v] of Object.entries(b.byCurrency)) {
+      receivableByCurrency.set(c, (receivableByCurrency.get(c) ?? 0) + v);
+    }
+  }
+  const receivable = [...receivableByCurrency.entries()].filter(([, v]) => v > 0).sort();
+  const anyCommission = (pc?.earned.count ?? 0) > 0;
 
   // Colour by age, not by series: the oldest bucket is the problem and keeps
   // coral, per the rule that problems never lose their colour.
@@ -479,11 +504,31 @@ export function AccountingDashboardClient({ firstName }: { firstName?: string })
         <div className="ad-grid ad-g-kpi" style={{ marginTop: 16 }}>
           <div className="ad-kpi ad-fade">
             <div className="ad-kpi-top"><i className="ad-dot" style={{ background: C.sun }} /><span className="ad-label">Invoiced</span></div>
-            <p className="ad-kpi-none">Not totalled by month yet.</p>
+            {invoicedNow.length === 0 ? (
+              <p className="ad-kpi-none">Nothing invoiced this month yet.</p>
+            ) : (
+              <>
+                <div className="ad-kpi-fig" style={{ color: C.sun, fontSize: invoicedNow.length > 1 ? 20 : undefined }}>
+                  {invoicedNow.map(([c, v]) => money(c, v)).join('  ·  ')}
+                </div>
+                <div className="ad-kpi-sub">invoiced this month</div>
+              </>
+            )}
           </div>
           <div className="ad-kpi ad-fade">
             <div className="ad-kpi-top"><i className="ad-dot" style={{ background: C.sky }} /><span className="ad-label">Commission receivable</span></div>
-            <p className="ad-kpi-none">No commissions recorded yet.</p>
+            {receivable.length === 0 ? (
+              <p className="ad-kpi-none">
+                {anyCommission ? 'Every invoiced commission has been received.' : 'No commissions recorded yet.'}
+              </p>
+            ) : (
+              <>
+                <div className="ad-kpi-fig" style={{ color: C.sky, fontSize: receivable.length > 1 ? 20 : undefined }}>
+                  {receivable.map(([c, v]) => money(c, v)).join('  ·  ')}
+                </div>
+                <div className="ad-kpi-sub">invoiced, not yet received</div>
+              </>
+            )}
           </div>
           <div className="ad-kpi ad-fade">
             <div className="ad-kpi-top"><i className="ad-dot" style={{ background: C.pink }} /><span className="ad-label">Commission payable</span></div>

@@ -14,8 +14,7 @@ export default async function AccountingDashboardPage() {
   const session = await getSession();
   if (!session) redirect('/login?next=/staff/accounting/dashboard');
   if (!ALLOWED.has(session.role)) redirect('/staff');
-  // The greeting names whoever is actually signed in. It was written against
-  // the Owner's name in the design spec, which greeted the accountant as
-  // somebody else.
-  return <AccountingDashboardClient firstName={session.name.trim().split(/\s+/)[0]} />;
+  // The greeting names whoever is actually signed in — the client reads that
+  // from /api/staff/me, because the session JWT carries no name.
+  return <AccountingDashboardClient />;
 }
