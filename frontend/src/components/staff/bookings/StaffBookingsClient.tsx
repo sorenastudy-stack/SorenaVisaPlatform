@@ -14,6 +14,9 @@ interface Row {
   status: string;
   paymentStatus: string;
   amountNZD: number;
+  /** ISO 4217, as stored on the booking. `amountNZD` is a legacy column name —
+   *  the money is in THIS currency, which has been USD since fee-config. */
+  currency: string | null;
   scheduledAt: string | null;
   timezone: string | null;
   staffName: string | null;
@@ -32,6 +35,16 @@ const STATUS_STYLE: Record<string, string> = {
   CANCELLED: 'bg-gray-100 text-gray-500 border border-gray-200',
   NO_SHOW: 'bg-red-50 text-red-600 border border-red-200',
 };
+
+// Same shape as SalesConsultationsClient's `money` — one convention for
+// currency display, rather than a second one invented here.
+//
+// The page used to print a hardcoded "NZD" beside an amount that has been USD
+// since fee-config shipped, so a USD 58 booking read as NZD 58 — not a stale
+// label but a materially wrong number.
+function currencyCode(currency: string | null): string {
+  return (currency ?? 'usd').toUpperCase();
+}
 
 function fmt(iso: string | null, tz: string | null): string {
   if (!iso) return '—';
@@ -70,15 +83,15 @@ export function StaffBookingsClient() {
 
   // PR-CARD-REFUND (two-person control) — this does NOT refund directly. It
   // sends a refund REQUEST that an OWNER must approve before any money moves.
-  async function requestRefund(id: string, amountNZD: number, clientName: string) {
+  async function requestRefund(id: string, amountNZD: number, currency: string | null, clientName: string) {
     if (!window.confirm(
-      `Request a NZD ${amountNZD} card refund for ${clientName}?\n\nThis sends a refund request for owner approval — no money moves until an owner approves it. Use this only for the exceptional cases (legal / service not provided).`,
+      `Request a ${currencyCode(currency)} ${amountNZD} card refund for ${clientName}?\n\nThis sends a refund request for owner approval — no money moves until an owner approves it. Use this only for the exceptional cases (legal / service not provided).`,
     )) return;
     setBusyId(id); setMsg(null);
     try {
       await api.post(`/staff/consultations/${id}/refund-to-card`, {});
       setRequestedIds((prev) => new Set(prev).add(id));
-      setMsg({ kind: 'ok', text: `Refund request sent for owner approval (NZD ${amountNZD} to ${clientName}).` });
+      setMsg({ kind: 'ok', text: `Refund request sent for owner approval (${currencyCode(currency)} ${amountNZD} to ${clientName}).` });
     } catch (e) {
       setMsg({ kind: 'err', text: e instanceof ApiError ? e.message : 'Could not send the refund request.' });
     } finally { setBusyId(null); }
@@ -116,7 +129,7 @@ export function StaffBookingsClient() {
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_STYLE[b.status] ?? 'bg-gray-100 text-gray-500'}`}>{b.status}</span>
                   </div>
                   <p className="mt-1 text-sm text-sorena-text/70">{fmt(b.scheduledAt, b.timezone)}{b.staffName ? ` · ${b.staffName}` : ''}</p>
-                  <p className="text-xs text-sorena-text/50">NZD {b.amountNZD} · {b.paymentStatus}</p>
+                  <p className="text-xs text-sorena-text/50">{currencyCode(b.currency)} {b.amountNZD} · {b.paymentStatus}</p>
                 </div>
                 {(active || b.cardRefundable) && (
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -131,7 +144,7 @@ export function StaffBookingsClient() {
                       requestedIds.has(b.id) ? (
                         <span className="rounded-lg border border-sorena-gold/40 bg-sorena-gold/10 px-2.5 py-1 text-xs font-semibold text-[#8a6d10]">Refund requested — awaiting owner</span>
                       ) : (
-                        <button type="button" disabled={busy} onClick={() => requestRefund(b.id, b.amountNZD, b.clientName)} title="Sends a refund request for owner approval" className="rounded-lg border border-red-300 bg-red-50/50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Refund to card</button>
+                        <button type="button" disabled={busy} onClick={() => requestRefund(b.id, b.amountNZD, b.currency, b.clientName)} title="Sends a refund request for owner approval" className="rounded-lg border border-red-300 bg-red-50/50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Refund to card</button>
                       )
                     )}
                   </div>

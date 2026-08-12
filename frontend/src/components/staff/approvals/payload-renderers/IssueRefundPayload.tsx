@@ -65,8 +65,12 @@ export function IssueRefundPayload({ payload }: { payload: Record<string, unknow
     );
   }
 
+  // Fallback is USD, the platform default (FEE_CURRENCY in fee-config). The
+  // preview endpoint does send `currency`, so this only covers its absence —
+  // but defaulting to NZD guessed the one currency the platform no longer
+  // charges in, which turned a missing field into a wrong number.
   const amount = preview.capturedAmountNZD != null
-    ? `${preview.currency ?? 'NZD'} ${preview.capturedAmountNZD.toFixed(2)}`
+    ? `${(preview.currency ?? 'usd').toUpperCase()} ${preview.capturedAmountNZD.toFixed(2)}`
     : '—';
 
   return (

@@ -108,7 +108,13 @@ export class StaffBookingsService {
       },
       orderBy: { scheduledAt: 'asc' },
       select: {
+        // `currency` travels with `amountNZD` and is not optional. The column
+        // name is legacy — it holds the base price in whatever `currency` says,
+        // which has been USD since fee-config shipped — so an amount sent
+        // without its currency is a number the page cannot label truthfully.
+        // It used to be omitted here, and the page printed a hardcoded "NZD".
         id: true, type: true, status: true, paymentStatus: true, amountNZD: true,
+        currency: true,
         paidWith: true, stripePaymentId: true,
         scheduledAt: true, scheduledEndAt: true, durationMinutes: true,
         bookingTimezone: true, assignedToId: true, meetingLink: true,
@@ -141,6 +147,7 @@ export class StaffBookingsService {
       decision: r.decision,
       paymentStatus: r.paymentStatus,
       amountNZD: r.amountNZD,
+      currency: r.currency,
       scheduledAt: r.scheduledAt,
       scheduledEndAt: r.scheduledEndAt,
       durationMinutes: r.durationMinutes,
