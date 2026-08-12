@@ -5,6 +5,7 @@ import { StaffRoles } from '../roles/staff-roles.decorator';
 import { StaffPaymentsService } from './staff-payments.service';
 import { ExchangeRateService } from '../../payments/exchange-rate.service';
 import { SetExchangeRateDto } from './dto/set-exchange-rate.dto';
+import { AccountingOverviewService } from './accounting-overview.service';
 
 // Finance portal — read-only overview + confirmed-payments ledger.
 //
@@ -19,7 +20,22 @@ export class StaffFinanceController {
   constructor(
     private readonly service: StaffPaymentsService,
     private readonly exchangeRates: ExchangeRateService,
+    private readonly accounting: AccountingOverviewService,
   ) {}
+
+  // GET /staff/finance/accounting-overview → the counts behind the accounting
+  // dashboard. Same gate as the rest of this controller: the page is the
+  // accountant's, and everything on it is money.
+  //
+  // Note `pendingPaymentCount` here answers a DIFFERENT question from
+  // `pendingCount` on /dashboard above: this one counts PAYMENTS a person must
+  // verify, that one counts INVOICES whose receipt is waiting on review. Both
+  // are real queues; they are labelled differently on screen for that reason.
+  @Get('accounting-overview')
+  @StaffRoles(...CONFIRMERS)
+  accountingOverview() {
+    return this.accounting.overview();
+  }
 
   // GET /staff/finance/dashboard → { pendingCount, confirmedThisWeek, confirmedAllTime }
   @Get('dashboard')

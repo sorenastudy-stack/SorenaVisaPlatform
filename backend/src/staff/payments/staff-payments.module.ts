@@ -3,6 +3,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { StaffRolesModule } from '../roles/staff-roles.module';
 import { StaffPaymentsController } from './staff-payments.controller';
 import { StaffFinanceController } from './staff-finance.controller';
+import { AccountingOverviewService } from './accounting-overview.service';
 import { StaffPaymentsService } from './staff-payments.service';
 import { PaymentsModule } from '../../payments/payments.module';
 
@@ -20,6 +21,6 @@ import { PaymentsModule } from '../../payments/payments.module';
   // no benefit.
   imports: [PrismaModule, StaffRolesModule, PaymentsModule],
   controllers: [StaffPaymentsController, StaffFinanceController],
-  providers: [StaffPaymentsService],
+  providers: [StaffPaymentsService, AccountingOverviewService],
 })
 export class StaffPaymentsModule {}

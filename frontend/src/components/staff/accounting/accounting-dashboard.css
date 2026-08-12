@@ -1,0 +1,281 @@
+/* PR-ACCOUNTING-DASHBOARD — the accountant's front page.
+ *
+ * Plain CSS with custom properties, per the design spec, rather than the
+ * Tailwind the rest of the app uses. The point is that every colour, radius and
+ * shadow on this page is editable from one place — the palette carries meaning
+ * here (teal is "settled", coral is "a problem"), and a token that lives in one
+ * file cannot drift into meaning something else three components later.
+ *
+ * Every class is prefixed `ad-` and scoped under `.ad-root`, so nothing here
+ * reaches the rest of the application.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Inter:wght@400;500;600&display=swap');
+
+.ad-root {
+  /* Seven accents, each with one fixed meaning. Never reuse one for another
+     meaning — the semantics are the whole point of the palette. */
+  --sun:   #FFC53D;  /* revenue, GST, pending            */
+  --coral: #FF7A5A;  /* money out, overdue, rejected     */
+  --teal:  #00B39F;  /* confirmed, received, settled     */
+  --sky:   #5B8DEF;  /* invoiced, in progress            */
+  --grape: #A56BF0;  /* exchange rate, student counts    */
+  --lime:  #6FD44E;  /* growth, all-clear                */
+  --pink:  #FF6FA5;  /* agents                           */
+
+  --ink:   #2B2440;  /* primary text — deep purple-navy, never pure black */
+  --ink2:  #6E6689;
+  --card:  #FFFFFF;
+  --line:  #EDE9F7;
+  --track: #F1EDFA;
+  --grid:  #F0ECF9;
+
+  color: var(--ink);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100%;
+  padding: 26px 22px 80px;
+  background:
+    radial-gradient(900px 420px at 8% -8%,  #FFF0D6 0%, rgba(255, 240, 214, 0) 62%),
+    radial-gradient(760px 400px at 96% 2%,  #DCF6F1 0%, rgba(220, 246, 241, 0) 60%),
+    #FAF8FF;
+}
+
+.ad-wrap { max-width: 1240px; margin: 0 auto; }
+
+/* Numbers that stack or align must line up. */
+.ad-root .ad-num,
+.ad-root .ad-hero-fig,
+.ad-root .ad-kpi-fig,
+.ad-root .ad-fx-fig,
+.ad-root .ad-win-fig,
+.ad-root .ad-row-amt,
+.ad-root table { font-variant-numeric: tabular-nums; }
+
+/* ── Motion ───────────────────────────────────────────────────────────────
+   One entrance animation. Nothing else on the page moves. */
+.ad-fade { animation: ad-up .5s ease both; }
+@keyframes ad-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ad-root *, .ad-root *::before, .ad-root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Keyboard focus is visible on everything interactive, at the same offset. */
+.ad-root a:focus-visible,
+.ad-root button:focus-visible {
+  outline: 2px solid var(--grape);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+/* ── Type ─────────────────────────────────────────────────────────────────── */
+.ad-h1 { font-family: Nunito, sans-serif; font-size: 27px; font-weight: 800; letter-spacing: -.02em; margin: 0; }
+.ad-h2 { font-family: Nunito, sans-serif; font-size: 19px; font-weight: 800; letter-spacing: -.015em; margin: 0; }
+.ad-h3 { font-family: Nunito, sans-serif; font-size: 15px; font-weight: 700; margin: 0; }
+.ad-cap { font-size: 12.5px; color: var(--ink2); margin: 3px 0 12px; }
+.ad-label { font-size: 12px; font-weight: 600; color: var(--ink2); }
+.ad-eyebrow {
+  font-size: 12.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--ink2);
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────────── */
+.ad-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 6px 20px rgba(43, 36, 64, .05);
+  padding: 20px 22px;
+}
+
+.ad-note {
+  background: var(--card);
+  border: 1px dashed #D9D2F0;
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink2);
+}
+.ad-note b { color: var(--ink); font-weight: 700; }
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.ad-head {
+  display: flex; flex-wrap: wrap; align-items: flex-start;
+  justify-content: space-between; gap: 14px; margin-bottom: 16px;
+}
+.ad-head p { margin: 6px 0 0; color: var(--ink2); font-size: 14px; }
+
+.ad-chip {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 999px; padding: 9px 16px;
+  box-shadow: 0 4px 14px rgba(43, 36, 64, .06);
+}
+.ad-chip-l { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink2); }
+.ad-chip-v { font-family: Nunito, sans-serif; font-size: 17px; font-weight: 800; color: var(--grape); }
+
+/* ── Jump nav ─────────────────────────────────────────────────────────────── */
+.ad-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.ad-nav button {
+  font: inherit; font-size: 12.5px; color: var(--ink2);
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 999px; padding: 7px 14px; cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.ad-nav button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(43, 36, 64, .08);
+}
+
+/* ── Grids ────────────────────────────────────────────────────────────────── */
+.ad-grid { display: grid; gap: 16px; }
+.ad-g-hero  { grid-template-columns: 1.35fr 1fr; }
+.ad-g-kpi   { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.ad-g-2a    { grid-template-columns: 2fr 1fr; }
+.ad-g-3     { grid-template-columns: 1fr 1fr 1fr; }
+.ad-g-2     { grid-template-columns: 1fr 1fr; }
+.ad-g-4     { grid-template-columns: repeat(4, 1fr); }
+
+.ad-sec { margin: 34px 0 14px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.ad-sec span { font-size: 13px; color: var(--ink2); }
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+.ad-hero {
+  display: flex; flex-direction: column;
+  background: linear-gradient(135deg, #FFF6E0 0%, #FFECEA 52%, #F1ECFF 100%);
+  border: 1px solid #F4E7D6; border-radius: 20px;
+  box-shadow: 0 6px 20px rgba(43, 36, 64, .05);
+  padding: 20px 22px;
+}
+.ad-hero-fig {
+  font-family: Nunito, sans-serif; font-size: 46px; font-weight: 800;
+  letter-spacing: -.03em; margin: 8px 0 10px; line-height: 1.05;
+}
+.ad-badge {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+  background: #E6F8E4; color: #2E7D32; border-radius: 999px;
+  padding: 5px 12px; font-size: 12.5px; font-weight: 600;
+}
+/* No y-axis here, so no negative pull — it was clipping the first x label. */
+.ad-hero-chart { flex: 1; min-height: 170px; }
+
+/* ── Monthly goal ─────────────────────────────────────────────────────────── */
+.ad-goal-top { display: flex; align-items: center; gap: 18px; }
+.ad-ring { position: relative; width: 118px; height: 118px; flex: none; }
+.ad-ring-pct {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: Nunito, sans-serif; font-size: 22px; font-weight: 800;
+}
+.ad-goal-stats { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; }
+.ad-goal-stat b { font-family: Nunito, sans-serif; font-size: 15px; font-weight: 800; display: block; }
+.ad-goal-stat span { font-size: 12px; color: var(--ink2); }
+
+/* ── KPI ──────────────────────────────────────────────────────────────────── */
+.ad-kpi {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 18px; box-shadow: 0 5px 16px rgba(43, 36, 64, .05);
+  padding: 16px 18px 8px; overflow: hidden;
+}
+.ad-kpi-top { display: flex; align-items: center; gap: 7px; }
+.ad-dot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
+.ad-kpi-fig {
+  font-family: Nunito, sans-serif; font-size: 26px; font-weight: 800;
+  letter-spacing: -.02em; margin: 8px 0 2px;
+}
+.ad-kpi-sub { font-size: 12px; color: var(--ink2); }
+/* Bleeds past the card padding so it touches both edges. */
+.ad-spark { height: 44px; margin: 6px -18px -8px; }
+
+/* ── Legend chips ─────────────────────────────────────────────────────────── */
+.ad-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; }
+.ad-leg { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ink2); }
+.ad-leg i { width: 10px; height: 10px; border-radius: 3px; display: block; flex: none; }
+.ad-leg b { font-family: Nunito, sans-serif; font-weight: 700; color: var(--ink); }
+
+/* ── List rows ────────────────────────────────────────────────────────────── */
+.ad-row {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 0; border-bottom: 1px solid var(--line);
+}
+.ad-row:last-child { border-bottom: none; }
+.ad-av {
+  width: 34px; height: 34px; border-radius: 11px; flex: none;
+  display: grid; place-items: center; color: #fff;
+  font-family: Nunito, sans-serif; font-weight: 800; font-size: 13px;
+}
+.ad-row-name { font-size: 13.5px; font-weight: 600; }
+.ad-row-sub { font-size: 12px; color: var(--ink2); }
+.ad-row-amt { margin-left: auto; font-family: Nunito, sans-serif; font-weight: 800; font-size: 15px; }
+.ad-bar { height: 8px; border-radius: 999px; background: var(--track); margin-top: 6px; overflow: hidden; }
+.ad-bar i { display: block; height: 100%; border-radius: 999px; }
+
+/* ── Celebration ──────────────────────────────────────────────────────────── */
+.ad-win {
+  border-radius: 18px; padding: 18px 20px; color: #fff;
+  box-shadow: 0 8px 22px rgba(43, 36, 64, .10);
+}
+.ad-win-emoji { font-size: 22px; line-height: 1; }
+.ad-win-fig { font-family: Nunito, sans-serif; font-size: 24px; font-weight: 800; margin: 8px 0 4px; }
+.ad-win p { margin: 0; font-size: 12.5px; opacity: .92; }
+
+/* ── Tooltip ──────────────────────────────────────────────────────────────── */
+.ad-tip {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(43, 36, 64, .12); padding: 10px 12px; font-size: 12.5px;
+}
+.ad-tip-h { font-family: Nunito, sans-serif; font-weight: 700; color: var(--ink); margin-bottom: 5px; }
+.ad-tip-r { display: flex; align-items: center; gap: 12px; }
+.ad-tip-r span { color: var(--ink2); }
+.ad-tip-r b { margin-left: auto; font-family: Nunito, sans-serif; font-weight: 700; color: var(--ink); }
+
+/* Fixed heights so nothing shifts when the data resolves. */
+.ad-ch { width: 100%; }
+.ad-ch-y { margin-left: -14px; }
+
+/* ── One breakpoint ───────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .ad-root { padding: 18px 13px 60px; }
+  .ad-g-hero, .ad-g-kpi, .ad-g-2a, .ad-g-3, .ad-g-2, .ad-g-4 { grid-template-columns: 1fr; }
+  .ad-hero-fig { font-size: 38px; }
+}
+
+/* ── Empty states ───────────────────────────────────────────────────────────
+   Two visually distinct kinds, because they mean different things. `waiting` is
+   the ordinary quiet of a young business and stays warm. `unbuilt` is a gap in
+   the software and reads cooler and flatter, so it is not mistaken for a slow
+   month. Neither ever shows a zero where a figure would go. */
+.ad-empty {
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: flex-start;
+}
+.ad-empty p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink2); }
+.ad-empty-tag {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
+}
+.ad-empty-waiting { background: #FFF8E8; border: 1px dashed #F0DFB6; }
+.ad-empty-waiting .ad-empty-tag { background: #FBEFD2; color: #8A6A16; }
+.ad-empty-unbuilt { background: #F7F5FC; border: 1px dashed #DFD9EF; }
+.ad-empty-unbuilt .ad-empty-tag { background: #E9E4F6; color: #5D5480; }
+
+/* A KPI whose figure has no data behind it — the label and dot stay, the number
+   is replaced by a short reason rather than a zero. */
+.ad-kpi-none {
+  font-size: 13px; color: var(--ink2); line-height: 1.45;
+  margin: 10px 0 2px; min-height: 34px;
+}
+
+.ad-fx-meta { font-size: 12.5px; color: var(--ink2); margin: 0 0 14px; }
