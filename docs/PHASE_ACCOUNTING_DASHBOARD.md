@@ -2,7 +2,7 @@
 
 **Date:** 12 August 2026
 **Commits:** `2490ed1` (dashboard) · `74e0e9b` (revenue + GST aggregation) ·
-`SHA4` (provider commission + agent payables phase 1)
+`c5ac865` (provider commission + agent payables phase 1)
 **Route:** `/staff/accounting/dashboard`
 
 ## 1. What this does
