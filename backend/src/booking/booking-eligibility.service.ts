@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ScorecardBand } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { notExpiredFilter } from '../staff/lia-profiles/licence-validity';
 import { BookingSessionType } from './session-config';
 import { getSessionPricing } from './session-pricing';
 
@@ -236,8 +237,12 @@ export class BookingEligibilityService {
           // boundary (correct the instant a licence lapses), the flag is what
           // the daily sweep maintains. Today every row has a NULL expiry, so
           // this changes nothing until the Owner records dates.
-          isLicenceExpired: false,
-          OR: [{ licenceExpiryDate: null }, { licenceExpiryDate: { gte: new Date() } }],
+          //
+          // The shared fragment, not a hand-written `gte: new Date()` — that
+          // version shipped and was wrong: comparing a raw timestamp against a
+          // DATE column casts it in UTC, so for the first twelve hours of each
+          // NZ day a licence that lapsed yesterday still counted as current.
+          ...notExpiredFilter(),
         },
       },
     });

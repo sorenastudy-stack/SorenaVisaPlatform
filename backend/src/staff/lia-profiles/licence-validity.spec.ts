@@ -3,6 +3,8 @@ import {
   daysUntilExpiry,
   isLicenceCurrent,
   isLicenceExpired,
+  notExpiredFilter,
+  todayAsDateBoundary,
 } from './licence-validity';
 import { LicenceExpiryCronService } from './licence-expiry-cron.service';
 
@@ -54,6 +56,41 @@ describe('licence validity (pure)', () => {
     expect(daysUntilExpiry({ licenceExpiryDate: d('2026-08-12') }, d('2026-08-12'))).toBe(0);
     expect(daysUntilExpiry({ licenceExpiryDate: d('2026-08-10') }, d('2026-08-12'))).toBeLessThan(0);
     expect(daysUntilExpiry({ licenceExpiryDate: null })).toBeNull();
+  });
+});
+
+describe('the DATE-column boundary', () => {
+  // The bug this pins shipped, passed every test, and was found in production
+  // by running the same check twelve hours later.
+  //
+  // licenceExpiryDate is a DATE column, so Postgres casts the comparison value
+  // down to a date IN UTC. A raw `new Date()` sent from New Zealand therefore
+  // carries YESTERDAY's UTC date for the first twelve hours of every local day,
+  // and a licence that lapsed yesterday reads as current all morning.
+
+  it('is the local calendar day, not the UTC one', () => {
+    // 08:40 NZST on 13 Aug is still 12 Aug in UTC — the hour the bug appeared.
+    const morningNZ = new Date('2026-08-13T08:40:00+12:00');
+    expect(morningNZ.toISOString().slice(0, 10)).toBe('2026-08-12'); // the trap
+    expect(todayAsDateBoundary(morningNZ).toISOString().slice(0, 10)).toBe('2026-08-13');
+  });
+
+  it('holds at both ends of the local day', () => {
+    for (const iso of ['2026-08-13T00:05:00+12:00', '2026-08-13T23:55:00+12:00']) {
+      expect(todayAsDateBoundary(new Date(iso)).toISOString().slice(0, 10)).toBe('2026-08-13');
+    }
+  });
+
+  it('builds a filter that excludes yesterday and admits today', () => {
+    const morningNZ = new Date('2026-08-13T08:40:00+12:00');
+    const f: any = notExpiredFilter(morningNZ);
+    expect(f.isLicenceExpired).toBe(false);
+    const gte = f.OR[1].licenceExpiryDate.gte as Date;
+    expect(gte.toISOString().slice(0, 10)).toBe('2026-08-13');
+    // A licence expiring on the 12th is strictly before the boundary; one
+    // expiring on the 13th is not.
+    expect(new Date(Date.UTC(2026, 7, 12)) < gte).toBe(true);
+    expect(new Date(Date.UTC(2026, 7, 13)) < gte).toBe(false);
   });
 });
 

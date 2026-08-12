@@ -24,6 +24,47 @@ export interface LicenceWindow {
 }
 
 /**
+ * Today, as a whole date, for comparing against a DATE column.
+ *
+ * Built from LOCAL calendar parts and pinned to UTC midnight, and it must be
+ * used by EVERY query that compares licenceExpiryDate. Two separate traps make
+ * the obvious version wrong, and both fail silently:
+ *
+ *   licenceExpiryDate is a DATE column, so Postgres casts whatever it is
+ *   compared against down to a date — in UTC. Passing a raw `new Date()` from
+ *   New Zealand therefore compares against YESTERDAY's date for the first
+ *   twelve hours of every local day, and a licence that lapsed yesterday reads
+ *   as still valid all morning.
+ *
+ *   Building it from UTC parts instead of local ones shifts the boundary the
+ *   other way, for the other half of the day.
+ *
+ * This was not caught by tests or by reading the code. It was caught by running
+ * the same check at 08:40 the next morning, when the UTC date had not yet
+ * caught up — the identical query had passed at 23:50 the night before. Which
+ * is the argument for one shared helper rather than the same expression
+ * written out at each call site.
+ */
+export function todayAsDateBoundary(now = new Date()): Date {
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+}
+
+/**
+ * The Prisma `where` fragment for "this licence has not lapsed".
+ *
+ * Exported as a fragment so every gate asks the question the same way. A
+ * NULL expiry passes: every row predates the field, and a data gap must not
+ * read as a licence failure.
+ */
+export function notExpiredFilter(now = new Date()) {
+  const today = todayAsDateBoundary(now);
+  return {
+    isLicenceExpired: false,
+    OR: [{ licenceExpiryDate: null }, { licenceExpiryDate: { gte: today } }],
+  };
+}
+
+/**
  * Has the licence run out?
  *
  * A NULL expiry is NOT expired. Every row predates this field, and treating

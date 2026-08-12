@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
+import { todayAsDateBoundary } from './licence-validity';
 
 // PR-AGENT-PORTAL phase 0 — the daily licence sweep.
 //
@@ -66,7 +67,7 @@ export class LicenceExpiryCronService {
     //
     // `lt` therefore means "expired strictly before today", so a licence is
     // valid THROUGH its expiry date, which is how it reads on paper.
-    const cutoff = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const cutoff = todayAsDateBoundary(now);
 
     const expired = await this.prisma.liaProfile.updateMany({
       where: { licenceExpiryDate: { lt: cutoff }, isLicenceExpired: false },
