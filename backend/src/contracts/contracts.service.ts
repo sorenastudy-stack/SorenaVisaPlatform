@@ -34,7 +34,7 @@ import { MailService } from '../mail/mail.service';
 import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { CasesService } from '../cases/cases.service';
 import { ExchangeRateService, MissingExchangeRateError } from '../payments/exchange-rate.service';
-import { calculateGST } from '../payments/fee-config';
+import { calculateGST, getFee } from '../payments/fee-config';
 import { docusignToContractStatus } from './contract-status';
 import { stampLiaIdentity } from './engagement-letter-stamp';
 import { linkCaseContactToUser } from '../common/link-case-contact.helper';
@@ -1386,9 +1386,9 @@ export class ContractsService {
   // Gap #4 — auto-create the fixed engagement invoice when the client signs.
   //
   // Trigger: a CLIENT/GUARDIAN signer on this contract has signedAt set (the
-  // client has signed) — the LIA/director are NOT required. Fee is config-
-  // driven (ENGAGEMENT_FEE_CENTS / ENGAGEMENT_FEE_CURRENCY, defaults
-  // 20000 / USD) so the number is never hardcoded in the logic body.
+  // client has signed) — the LIA/director are NOT required. The fee is the
+  // Account Opening fee, read from fee-config, which is the single definition
+  // of it.
   //
   // Idempotent — ONE engagement invoice per case, ever: the invoiceNumber is
   // the deterministic `ENG-<caseId>` and `Invoice.invoiceNumber` is @unique.
@@ -1425,15 +1425,22 @@ export class ContractsService {
         return;
       }
 
-      // Config-driven fee (never hardcode the amount in the body).
-      const amountCents = Number(process.env.ENGAGEMENT_FEE_CENTS ?? 20000);
-      const currency = (process.env.ENGAGEMENT_FEE_CURRENCY ?? 'USD').toUpperCase();
-      if (!Number.isFinite(amountCents) || amountCents <= 0) {
-        this.logger.error(
-          `Engagement invoice skipped for case ${caseId} — invalid ENGAGEMENT_FEE_CENTS "${process.env.ENGAGEMENT_FEE_CENTS}"`,
-        );
-        return;
-      }
+      // The Account Opening fee, read from the one place that defines it.
+      //
+      // This invoice IS that fee — its own description says so — reached through
+      // the contracts path instead of a sales-sent payment link. It used to read
+      // its own ENGAGEMENT_FEE_CENTS / ENGAGEMENT_FEE_CURRENCY, which happened
+      // to agree with fee-config at 20000 / USD and would have stopped agreeing
+      // the moment either side was edited alone. That is the exact failure
+      // fee-config was built to end, and this file already trusted it for the
+      // GST arithmetic below — only the amount was still its own.
+      //
+      // Uppercased because invoices store 'USD' while fee-config speaks Stripe's
+      // lowercase 'usd'; the three existing invoice rows are uppercase and must
+      // stay comparable.
+      const accountOpening = getFee('ACCOUNT_OPENING');
+      const amountCents = accountOpening.priceCents;
+      const currency = accountOpening.currency.toUpperCase();
       const fx = await this.exchangeRates.getRateForInvoice(`engagement invoice for case ${caseId}`);
 
       const dueDate = new Date();

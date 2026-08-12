@@ -174,6 +174,15 @@ specs pass as a regression check.
 - The engagement fee is minted as **USD 200** (env default). If the business
   intends NZD, set `ENGAGEMENT_FEE_CURRENCY=NZD` — a config change, not code.
 
+  > **Correction, added 12 Aug 2026 (backlog item #3, Fee & Currency Policy v2):**
+  > `ENGAGEMENT_FEE_CURRENCY` and `ENGAGEMENT_FEE_CENTS` no longer exist —
+  > `contracts.service.ts` now reads the Account Opening fee directly from
+  > `fee-config.ts` (`getFee('ACCOUNT_OPENING')`), which is fixed at USD per the
+  > locked Fee & Currency Policy. There is no config-only way to switch this
+  > invoice to NZD anymore; it would require a currency-policy decision and a
+  > code change. The line above is left as written — it records what was true
+  > when this phase shipped.
+
 ## 8. How a future developer would extend this
 
 - **The LIA-signed webhook branch** lives in `ContractsService.handleDocusealWebhook`

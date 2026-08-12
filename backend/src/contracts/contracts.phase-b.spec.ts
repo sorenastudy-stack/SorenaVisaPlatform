@@ -29,6 +29,7 @@ import { LiaAssignmentService } from '../cases/lia-assignment.service';
 import { CasesService } from '../cases/cases.service';
 import { EventsService } from '../events/events.service';
 import { StaffBookingsService } from '../staff/bookings/staff-bookings.service';
+import { calculateGST, getFee } from '../payments/fee-config';
 
 const DIRECTOR_EMAIL = 'director.phaseb@test.local';
 const DIRECTOR_NAME = 'Phase B Director';
@@ -207,6 +208,18 @@ describe('Phase B — lead-based contract + case auto-creation', () => {
     expect(finalContract?.status).toBe('SIGNED');
     const invoice = await prisma.invoice.findUnique({ where: { invoiceNumber: `ENG-${caseId}` } });
     expect(invoice).not.toBeNull();                                      // created at full completion
+
+    // The engagement invoice IS the Account Opening fee — its description says
+    // so — so it must equal fee-config, not merely happen to. It used to be
+    // built from its own ENGAGEMENT_FEE_CENTS default, which agreed by
+    // coincidence and would have diverged the first time either side moved.
+    // Compared against getFee rather than a literal 200, so this assertion
+    // tracks a price change instead of having to be remembered during one.
+    const accountOpening = getFee('ACCOUNT_OPENING');
+    expect(invoice!.amount.toNumber()).toBe(accountOpening.priceCents / 100);
+    expect(invoice!.currency).toBe(accountOpening.currency.toUpperCase());
+    // GST unchanged by the rewiring: still 15% of the base, in its own column.
+    expect(invoice!.gstAmount?.toNumber()).toBe(calculateGST(accountOpening.priceCents) / 100);
     expect((await prisma.user.findUnique({ where: { id: clientUser.id } }))?.role).toBe('STUDENT');
     // Timing proof: the invoice was created strictly after the case (i.e. at the
     // final signature, not the first).
