@@ -167,6 +167,24 @@ interface Overview {
     exGstByCurrency: Record<string, number>;
     unassignedCount: number;
   };
+  providerCommission: {
+    earned: { count: number; byCurrency: Record<string, number> };
+    invoiced: { count: number; byCurrency: Record<string, number> };
+    received: { count: number; byCurrency: Record<string, number> };
+    ageing: Array<{ bucket: string; count: number; byCurrency: Record<string, number> }>;
+    unpricedCount: number;
+  };
+}
+
+/** One agent's balance in one currency — see the service on why currency is
+ *  part of the key rather than blended away. */
+interface AgentSummaryRow {
+  agentId: string;
+  agentName: string | null;
+  currency: string;
+  owedMinorUnits: number;
+  paidMinorUnits: number;
+  count: number;
 }
 interface RateEntry { id: string; rate: number; rateDate: string; source: string; enteredByName: string | null }
 interface FxView { base: string; quote: string; current: RateEntry | null; history: RateEntry[] }
@@ -222,6 +240,7 @@ const SECTIONS = [
 export function AccountingDashboardClient() {
   const [ov, setOv] = useState<Overview | null>(null);
   const [fx, setFx] = useState<FxView | null>(null);
+  const [agents, setAgents] = useState<AgentSummaryRow[] | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -231,6 +250,11 @@ export function AccountingDashboardClient() {
     ])
       .then(([o, f]) => { setOv(o); setFx(f); })
       .catch(() => setFailed(true));
+    // Its own ledger, its own request — a slow or failing payables query must
+    // not take the rest of the page down with it.
+    api.get<AgentSummaryRow[]>('/staff/agent-payables/summary')
+      .then(setAgents)
+      .catch(() => setAgents([]));
   }, []);
 
   const jump = useCallback((id: string) => {
@@ -265,6 +289,39 @@ export function AccountingDashboardClient() {
   const invoicedCurrencies = currenciesIn(ov?.revenueByMonth ?? [], 'invoicedByCurrency');
   const receivedCurrencies = currenciesIn(ov?.revenueByMonth ?? [], 'receivedByCurrency');
   const anyRevenue = invoicedCurrencies.length > 0 || receivedCurrencies.length > 0;
+
+  // Pipeline as three nested stages, in the commission's own currency. A single
+  // bar per stage per currency — never summed across currencies.
+  const pc = ov?.providerCommission ?? null;
+  const pcCurrencies = pc
+    ? [...new Set([
+        ...Object.keys(pc.earned.byCurrency),
+        ...Object.keys(pc.invoiced.byCurrency),
+        ...Object.keys(pc.received.byCurrency),
+      ])].sort()
+    : [];
+  const pipeline = pc && pcCurrencies.length
+    ? [
+        { name: 'Earned', ...Object.fromEntries(pcCurrencies.map((c) => [c, (pc.earned.byCurrency[c] ?? 0) / 100])) },
+        { name: 'Invoiced', ...Object.fromEntries(pcCurrencies.map((c) => [c, (pc.invoiced.byCurrency[c] ?? 0) / 100])) },
+        { name: 'Received', ...Object.fromEntries(pcCurrencies.map((c) => [c, (pc.received.byCurrency[c] ?? 0) / 100])) },
+      ]
+    : [];
+  const ageingRows = (pc?.ageing ?? []).map((b) => ({
+    name: b.bucket,
+    ...Object.fromEntries(Object.keys(b.byCurrency).map((c) => [c, b.byCurrency[c] / 100])),
+    count: b.count,
+  }));
+  const anyAgeing = (pc?.ageing ?? []).some((b) => b.count > 0);
+
+  // Colour by age, not by series: the oldest bucket is the problem and keeps
+  // coral, per the rule that problems never lose their colour.
+  const AGE_COLOUR: Record<string, string> = {
+    '0-30 days': C.teal, '31-45 days': C.lime, '46-60 days': C.sun, '60+ days': C.coral,
+  };
+
+  const agentRows = agents ?? [];
+  const anyAgentBalance = agentRows.length > 0;
 
   const gst = ov?.gstByPeriod ?? null;
   const gstCurrencies = gst ? currenciesIn([gst], 'exGstByCurrency') : [];
@@ -519,17 +576,72 @@ export function AccountingDashboardClient() {
           <section className="ad-card ad-fade">
             <h3 className="ad-h3">Pipeline</h3>
             <p className="ad-cap">Earned, then invoiced, then in the bank.</p>
-            <Empty kind="waiting">
-              No commissions recorded yet. The first one appears here when Finance approves
-              a commission claim.
-            </Empty>
+            {pipeline.length === 0 ? (
+              <Empty kind="waiting">
+                No commissions recorded yet. The first one appears here when Finance approves
+                a commission claim.
+              </Empty>
+            ) : (
+              <>
+                <Chart h={226} pullLeft label="Provider commission pipeline">
+                  <BarChart data={pipeline} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid vertical={false} stroke={C.grid} />
+                    <XAxis dataKey="name" {...axisProps} />
+                    <YAxis {...axisProps} width={46} domain={[0, 'auto']} />
+                    <Tooltip content={<Tip money={false} />} cursor={{ fill: 'rgba(43,36,64,.04)' }} />
+                    {/* Coloured by STAGE, not by series — earned, invoiced, received
+                        each keep their own meaning from the palette, which is what
+                        makes the three bars read as one pipeline. */}
+                    {pcCurrencies.map((c) => (
+                      <Bar key={c} dataKey={c} name={c} maxBarSize={62} radius={[10, 10, 0, 0]}>
+                        {pipeline.map((row, i) => (
+                          <Cell key={row.name} fill={[C.sun, C.sky, C.teal][i] ?? C.sun} />
+                        ))}
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </Chart>
+                <p style={{ fontSize: 12, color: C.ink2, marginTop: 8 }}>
+                  {pc!.earned.count} earned · {pc!.invoiced.count} invoiced · {pc!.received.count} received
+                  {pc!.unpricedCount > 0 && ` · ${pc!.unpricedCount} not yet priced`}
+                </p>
+              </>
+            )}
           </section>
           <section className="ad-card ad-fade">
             <h3 className="ad-h3">How long they take to pay</h3>
             <p className="ad-cap">Invoiced but not yet received, by age.</p>
-            <Empty kind="waiting">
-              Nothing is outstanding, because nothing has been invoiced to a provider yet.
-            </Empty>
+            {!anyAgeing ? (
+              <Empty kind="waiting">
+                {pc && pc.invoiced.count === 0
+                  ? 'Nothing is outstanding, because nothing has been invoiced to a provider yet.'
+                  : 'Nothing is outstanding — every invoiced commission has been received.'}
+              </Empty>
+            ) : (
+              <>
+                <Chart h={226} pullLeft label="Provider commission ageing by bucket">
+                  <BarChart data={ageingRows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid vertical={false} stroke={C.grid} />
+                    <XAxis dataKey="name" {...axisProps} />
+                    <YAxis {...axisProps} width={46} domain={[0, 'auto']} />
+                    <Tooltip content={<Tip money={false} />} cursor={{ fill: 'rgba(43,36,64,.04)' }} />
+                    {pcCurrencies.map((c) => (
+                      <Bar key={c} dataKey={c} name={c} maxBarSize={48} radius={[10, 10, 0, 0]}>
+                        {ageingRows.map((r) => <Cell key={r.name} fill={AGE_COLOUR[r.name] ?? C.sun} />)}
+                      </Bar>
+                    ))}
+                  </BarChart>
+                </Chart>
+                <div className="ad-legend">
+                  {(pc?.ageing ?? []).map((b) => (
+                    <span className="ad-leg" key={b.bucket}>
+                      <i style={{ background: AGE_COLOUR[b.bucket] ?? C.sun }} />
+                      {b.bucket} <b>{b.count}</b>
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
         </div>
 
@@ -542,18 +654,73 @@ export function AccountingDashboardClient() {
           <section className="ad-card ad-fade">
             <h3 className="ad-h3">Earned by agent</h3>
             <p className="ad-cap">Paid so far against what’s still waiting to be released.</p>
-            <Empty kind="unbuilt">
-              Agents are recorded for attribution only — who introduced a client — with no
-              rate, no balance and no payout. There is nothing to total until agent
-              commission is built.
-            </Empty>
+            {!anyAgentBalance ? (
+              <Empty kind="waiting">
+                No agent has earned anything yet. A balance appears here when a commission
+                Sorena earns traces back to a client an agent introduced.
+              </Empty>
+            ) : (
+              <>
+                <Chart h={236} pullLeft label="Agent commission paid against owed">
+                  <BarChart
+                    data={agentRows.map((r) => ({
+                      name: r.agentName ?? 'Agent',
+                      paid: r.paidMinorUnits / 100,
+                      owed: r.owedMinorUnits / 100,
+                    }))}
+                    barGap={5} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}
+                  >
+                    <CartesianGrid vertical={false} stroke={C.grid} />
+                    <XAxis dataKey="name" interval={0} {...axisProps} tick={{ ...AXIS, fontSize: 11 }} />
+                    <YAxis {...axisProps} width={46} domain={[0, 'auto']} />
+                    <Tooltip content={<Tip money={false} />} cursor={{ fill: 'rgba(43,36,64,.04)' }} />
+                    <Bar dataKey="paid" name="Paid" fill={C.teal} maxBarSize={30} radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="owed" name="Owed" fill={C.pink} maxBarSize={30} radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </Chart>
+                <div className="ad-legend">
+                  <span className="ad-leg"><i style={{ background: C.teal, borderRadius: 999 }} />Paid</span>
+                  <span className="ad-leg"><i style={{ background: C.pink, borderRadius: 999 }} />Owed</span>
+                </div>
+              </>
+            )}
           </section>
           <section className="ad-card ad-fade">
             <h3 className="ad-h3">Who’s waiting</h3>
             <p className="ad-cap">Approved amounts need a second person to release them.</p>
-            <Empty kind="unbuilt">
-              No agent is owed anything on record, because amounts owed aren’t stored yet.
-            </Empty>
+            {!anyAgentBalance ? (
+              <Empty kind="waiting">
+                Nobody is waiting on a payout yet.
+              </Empty>
+            ) : (
+              <>
+                {agentRows.map((r) => {
+                  const total = r.owedMinorUnits + r.paidMinorUnits;
+                  const pct = total > 0 ? r.paidMinorUnits / total : 0;
+                  return (
+                    <div className="ad-row" key={`${r.agentId}-${r.currency}`}>
+                      <span className="ad-av" style={{ background: C.pink }}>
+                        {(r.agentName ?? 'A').split(' ').map((w) => w[0]).slice(0, 2).join('')}
+                      </span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="ad-row-name">{r.agentName ?? 'Agent'}</div>
+                        <div className="ad-row-sub">
+                          {r.count} commission{r.count === 1 ? '' : 's'} · {money(r.currency, r.paidMinorUnits)} paid
+                        </div>
+                        <div className="ad-bar"><i style={{ width: `${pct * 100}%`, background: C.pink }} /></div>
+                      </div>
+                      <span className="ad-row-amt" style={{ color: C.pink }}>
+                        {money(r.currency, r.owedMinorUnits)}
+                      </span>
+                    </div>
+                  );
+                })}
+                <p style={{ fontSize: 12, color: C.ink2, marginTop: 10 }}>
+                  Amounts owed are a share of commissions Sorena has earned. Approving and
+                  releasing them arrives in the next pass.
+                </p>
+              </>
+            )}
           </section>
         </div>
 

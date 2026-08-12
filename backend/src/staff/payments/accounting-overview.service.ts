@@ -12,7 +12,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 // copy. Which bucket is grey and which is coral is a decision about meaning
 // that belongs with the design tokens, not in a service.
 //
-// Deliberately NOT here: service mix and agent payables.
+// Deliberately NOT here: service mix.
 //
 // Service mix has no fee-type column to group by. `Payment.paymentType` records
 // HOW money arrived (manual / consultation), not WHAT was sold, and the fee type
@@ -20,10 +20,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 // Manual payments never captured it at all, so it cannot be recovered
 // retrospectively. That needs a column and a capture point, not a query.
 //
-// Agent payables have no data model: AffiliateAgent carries no rate, balance or
-// payout. Returning zeros for either would let the page draw an empty chart that
-// reads as "nothing happened" when the truth is "this is not built yet", so the
-// page is told nothing about them and says so in its own words.
+// Agent payables now have a model of their own and are served from
+// /staff/agent-payables, not from here — they are a different ledger with a
+// different lifecycle, and folding them into this response would tie two
+// unrelated things to one shape.
+//
+// Returning zeros for anything unbuilt would let the page draw an empty chart
+// that reads as "nothing happened" when the truth is "this is not built yet",
+// so the page is told nothing about it and says so in its own words.
 
 /** Months of case history the students-per-month series covers. */
 const STUDENT_MONTHS = 6;
@@ -91,6 +95,26 @@ export interface AccountingOverview {
     gstByCurrency: Record<string, number>;
     exGstByCurrency: Record<string, number>;
     unassignedCount: number;
+  };
+
+  /**
+   * Provider commission, as a funnel and as an ageing profile.
+   *
+   * `earned` is every live commission; `invoiced` and `received` are the
+   * subsets that have reached those points. Nested, not exclusive — a received
+   * commission was also invoiced and also earned, which is what makes the three
+   * bars read as a pipeline rather than three unrelated groups.
+   *
+   * Ageing counts only what has been invoiced and not yet received, measured
+   * from `invoiceSentAt`. A commission nobody has billed for is not overdue.
+   */
+  providerCommission: {
+    earned: { count: number; byCurrency: Record<string, number> };
+    invoiced: { count: number; byCurrency: Record<string, number> };
+    received: { count: number; byCurrency: Record<string, number> };
+    ageing: Array<{ bucket: string; count: number; byCurrency: Record<string, number> }>;
+    /** Live commissions with no amount on them yet — excluded from every total. */
+    unpricedCount: number;
   };
 
   /** Payments a person still has to look at. */
@@ -187,6 +211,73 @@ export class AccountingOverviewService {
   }
 
   /**
+   * Provider commission: the pipeline, and how long the billed ones have waited.
+   *
+   * Amount basis is actual before estimated — once a provider says what they are
+   * really paying, the pipeline follows the real number. A commission carrying
+   * neither is counted in `unpricedCount` and left out of the totals rather than
+   * added as a zero, which would read as "worth nothing" instead of "not yet
+   * priced".
+   *
+   * CANCELLED commissions are excluded throughout: a withdrawn commission was
+   * never money owed.
+   */
+  private async providerCommission(now: Date) {
+    const rows = await this.prisma.commission.findMany({
+      where: { status: { not: 'CANCELLED' } },
+      select: {
+        currency: true, status: true, actualAmountNZD: true, estimatedAmountNZD: true,
+        invoiceSentAt: true, paidAt: true,
+      },
+    });
+
+    const earned = { count: 0, byCurrency: {} as Record<string, number> };
+    const invoiced = { count: 0, byCurrency: {} as Record<string, number> };
+    const received = { count: 0, byCurrency: {} as Record<string, number> };
+
+    // Days since invoicing. The upper edges are inclusive, so a commission
+    // invoiced exactly 30 days ago sits in 0–30 rather than falling to 31–45.
+    const BUCKETS: Array<[string, number, number]> = [
+      ['0-30 days', 0, 30],
+      ['31-45 days', 31, 45],
+      ['46-60 days', 46, 60],
+      ['60+ days', 61, Number.POSITIVE_INFINITY],
+    ];
+    const ageing = BUCKETS.map(([bucket]) => ({ bucket, count: 0, byCurrency: {} as Record<string, number> }));
+
+    let unpricedCount = 0;
+
+    for (const c of rows) {
+      const dollars = c.actualAmountNZD ?? c.estimatedAmountNZD;
+      if (dollars == null || dollars <= 0) { unpricedCount += 1; continue; }
+      const minor = Math.round(dollars * 100);
+
+      earned.count += 1;
+      AccountingOverviewService.add(earned.byCurrency, c.currency, minor);
+
+      if (c.invoiceSentAt) {
+        invoiced.count += 1;
+        AccountingOverviewService.add(invoiced.byCurrency, c.currency, minor);
+      }
+      if (c.paidAt) {
+        received.count += 1;
+        AccountingOverviewService.add(received.byCurrency, c.currency, minor);
+      }
+
+      // Outstanding: billed, not yet in the bank.
+      if (c.invoiceSentAt && !c.paidAt) {
+        const days = Math.floor((now.getTime() - c.invoiceSentAt.getTime()) / 86_400_000);
+        const idx = BUCKETS.findIndex(([, lo, hi]) => days >= lo && days <= hi);
+        const slot = ageing[idx >= 0 ? idx : ageing.length - 1];
+        slot.count += 1;
+        AccountingOverviewService.add(slot.byCurrency, c.currency, minor);
+      }
+    }
+
+    return { earned, invoiced, received, ageing, unpricedCount };
+  }
+
+  /**
    * GST for the return period `now` falls in.
    *
    * Periods are calendar-aligned blocks of GST_PERIOD_MONTHS, so August 2026
@@ -264,10 +355,12 @@ export class AccountingOverviewService {
 
     const revenueByMonth = await this.revenueByMonth(now);
     const gstByPeriod = await this.gstForPeriod(now);
+    const providerCommission = await this.providerCommission(now);
 
     return {
       revenueByMonth,
       gstByPeriod,
+      providerCommission,
       invoicesByStatus: AccountingOverviewService.tally(invoices, 'status'),
       paymentsByStatus: AccountingOverviewService.tally(payStatus, 'verificationStatus'),
       paymentsByType: AccountingOverviewService.tally(payType, 'paymentType'),

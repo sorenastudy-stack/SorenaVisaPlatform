@@ -1,7 +1,8 @@
 # Phase — Accounting Dashboard
 
 **Date:** 12 August 2026
-**Commits:** `2490ed1` (dashboard) · `74e0e9b` (revenue + GST aggregation)
+**Commits:** `2490ed1` (dashboard) · `74e0e9b` (revenue + GST aggregation) ·
+`SHA4` (provider commission + agent payables phase 1)
 **Route:** `/staff/accounting/dashboard`
 
 ## 1. What this does
@@ -11,18 +12,23 @@ read-only reporting screens that already exist. Built from a complete external d
 spec (design system, 16 charts, all copy), adapted where the spec described data the
 platform does not have.
 
-Six of the sixteen cards carry real figures — payments by status, payments by type,
-invoices by status, students per month, money received by month, and GST for the current
-return period — plus the exchange rate. **The rest say so rather than drawing a zero.**
+Ten of the sixteen cards carry real figures — payments by status, payments by type,
+invoices by status, students per month, money received by month, GST for the current
+return period, the provider commission pipeline and its ageing, and the two agent
+payable cards — plus the exchange rate. **The rest say so rather than drawing a zero.**
 That is the substance of this phase: the dashboard tells the truth about how much the
 platform currently knows.
 
-Built in two passes, then extended in a third:
+Built in passes, each reviewed before the next:
 
 1. Layout against the design spec's example figures.
 2. Wiring to what the platform actually records, with honest empty states for the rest.
-3. Revenue-by-month and GST-by-period aggregation (below), which moved two more cards
-   from "not tracked yet" to real numbers.
+3. Revenue-by-month and GST-by-period aggregation.
+4. Provider commission wiring, and **Agent Payables phase 1** — a new feature, not a
+   wiring gap: agents had no money fields at all until this pass.
+
+Every card now reads from real data or says plainly why it cannot. The only remaining
+"not tracked yet" is service mix (§9).
 
 ## 2. Files changed
 
@@ -48,9 +54,28 @@ Built in two passes, then extended in a third:
 - `frontend/src/components/staff/accounting/AccountingDashboardClient.tsx` — the two
   cards those fields feed
 
+**Added in the provider-commission + agent-payables pass**
+- `backend/prisma/migrations/20260812200000_agent_payables/` — enum + table, additive
+- `backend/src/commissions/agent-payables.service.ts` — the rate, the derivation, the ledger
+- `backend/src/commissions/agent-payables.controller.ts` — two read-only routes
+- `backend/src/commissions/agent-payables.spec.ts` — 15 tests over derivation and access
+
+**Modified in that pass**
+- `backend/prisma/schema.prisma` — `AgentPayableStatus`, `AgentPayable`, two back-relations
+- `backend/src/commissions/commissions.module.ts` — registration
+- `backend/src/staff/payments/accounting-overview.service.ts` — `providerCommission`
+- `backend/src/staff/payments/accounting-overview.spec.ts` — 9 tests over pipeline + ageing
+- `frontend/src/components/staff/accounting/AccountingDashboardClient.tsx` — the four
+  cards in the Provider commission and Agents sections
+
 ## 3. Database
 
-**No schema change. No migration**, in either pass.
+**One additive migration**, in the agent-payables pass:
+`20260812200000_agent_payables` — the `AgentPayableStatus` enum and the `agent_payables`
+table, with `commissionId` UNIQUE. Nothing dropped, re-typed or rewritten, so unlike the
+commission re-anchor there is no destructive step to guard.
+
+**No schema change** in the first three passes.
 
 The aggregation pass looked like it needed one and did not: `Invoice.issuedAt` already
 existed as a nullable column and was simply never written by anything. The fix was a
@@ -86,8 +111,22 @@ no console errors, SUPPORT redirected to `/staff`. Production figures at the tim
 1 PAID + 2 CANCELLED invoices, 5 PENDING / 2 CONFIRMED / 2 REJECTED payments, 6 cases
 across six months, 2 exchange rates, 0 invoices carrying a locked rate.
 
-After the aggregation pass: 6 charts, and the GST card explains its own zero — no
-invoices issued in the current period, 3 older ones carrying no issue date.
+After the aggregation pass: 6 charts, and the GST card explains its own zero.
+
+7. `GET /staff/agent-payables` and `/staff/agent-payables/summary` — OWNER, SUPER_ADMIN,
+   FINANCE. Both empty on production until a commission exists on an introduced lead.
+8. `npx jest src/commissions/agent-payables.spec.ts` and
+   `src/staff/payments/accounting-overview.spec.ts`.
+
+Proven on demo with a fixture chain — one agent, three commissions (NZ$4,600 invoiced 12
+days ago, NZ$5,100 at 50 days, NZ$8,400 paid):
+
+```
+Pipeline : 3 earned NZ$18,100 · 3 invoiced · 1 received NZ$8,400
+Ageing   : 0-30 → 1 (NZ$4,600) · 46-60 → 1 (NZ$5,100)   the paid one stops ageing
+Payables : NZ$840 / NZ$510 / NZ$460 — exactly 10% of each, all PENDING
+Summary  : owed NZ$1,810.00, paid NZ$0.00, across 3 commissions
+```
 
 ## 7. Design decisions
 
@@ -95,8 +134,10 @@ invoices issued in the current period, 3 older ones carrying no issue date.
 the ordinary quiet of a young business and will fill in. "Not tracked yet" (grey) is a
 gap in the software and will not, until someone builds it. Drawing a chart at zero would
 claim the first when the truth is the second — a claim about the business rather than
-about the code. Agent payables are the clearest case: `AffiliateAgent` has no rate, no
-balance and no payout, so the card says that instead of showing `NZ$0.00`.
+about the code. Agent payables were the clearest case: while `AffiliateAgent` had no rate,
+no balance and no payout, the card said so instead of showing `NZ$0.00`. Building the
+feature is what changed it from grey to amber — the card now says "nothing yet", which is
+true, because the derivation runs and finds no attributed commissions.
 
 **One endpoint, returning facts only.** The spec named five endpoints, none of which
 existed. They are one route now, because the page reads all of it together on one screen.
@@ -148,6 +189,46 @@ so the class of bug is closed rather than the one instance.
 and `Payment.amount` is integer cents; the endpoint normalises both to cents so no caller
 has to know which it is holding.
 
+**The provider pipeline is derived from timestamps, not from status.** `invoiceSentAt`
+and `paidAt` are facts about what happened; `status` is a label that can drift out of step
+with them. The three stages are **nested, not exclusive** — a received commission is also
+invoiced and also earned — which is what makes the bars read as one funnel rather than
+three unrelated groups.
+
+**An unpriced commission is counted separately, never as zero.** A commission with neither
+an actual nor an estimated amount goes to `unpricedCount` and is excluded from every
+total. Adding it as zero would read as "worth nothing" when the truth is "not yet priced"
+— the same trap as drawing an empty chart for an unbuilt feature.
+
+**Ageing bucket edges are inclusive.** A commission invoiced exactly 30 days ago sits in
+0–30, not 31–45. And 60+ keeps coral: an old unpaid commission is a problem, and problems
+do not lose their colour.
+
+**The pipeline is coloured by stage, not by series.** First rendered with one colour per
+currency, which made all three bars identical when there is only one currency — caught in
+a screenshot and corrected to sun → sky → teal, so each stage keeps its meaning from the
+palette.
+
+**Agent payables are derived, never asserted.** There is no "submit" step, because there
+is nobody to submit: the amount falls out of a commission Sorena has already earned, so a
+human claiming it would only be retyping arithmetic. That also fixes the risk shape — a
+share of money already earned means Sorena cannot owe an agent for a lead that never
+enrolled or never paid.
+
+**`amount` and `ratePercent` are snapshots, never recomputed.** The same principle as an
+invoice's locked exchange rate: changing the company rate must not silently restate what
+an agent has already been told they are owed, still less what has already been paid. A
+test proves an existing payable survives a rate change untouched.
+
+**The rate lives in one findable place.** `AGENT_COMMISSION_RATE_PERCENT` in
+`agent-payables.service.ts`, exported and named rather than written inline. Per-agent
+override is a plausible extension — the snapshot exists precisely so introducing one later
+cannot rewrite history — but nothing reads a per-agent field today.
+
+**Derivation runs on read, not on a schedule.** Idempotent and insert-only: `commissionId`
+is unique, so a second run creates nothing. A nightly job would leave a window where a
+commission exists and its payable does not, and would need backfilling whenever it missed.
+
 **Two role names in the spec did not exist.** `FINANCE_ADMIN` is not in `UserRole`; the
 gate is `OWNER, SUPER_ADMIN, FINANCE`, matching `/staff/commissions` and `/staff/finance`.
 
@@ -166,8 +247,21 @@ written against imagined data. Confirmed with the Owner before changing.
 
 ## 9. Known limitations / backlog
 
-**Done since the first pass:** revenue-by-month and GST-by-period, both shipped in the
-aggregation pass.
+**Done since the first pass:** revenue-by-month, GST-by-period, provider commission
+pipeline and ageing, and agent payables phase 1.
+
+**Agent payables phase 2 — approve and pay, not built.** Dual control, mirroring the
+card-refund pattern: FINANCE moves PENDING → APPROVED, OWNER moves APPROVED → PAID. The
+person who confirms a debt is not the person who releases the money. The columns those
+steps write (`approvedById`/`approvedByName`/`approvedAt`, and the same trio for paid)
+already exist on `AgentPayable` and are unused until then. Held deliberately: phase 1 is
+derivation and visibility only.
+
+**⚠ Cleanup, now more urgent.** Production holds two `AffiliateAgent` rows: one named
+`jacki` with notes `"test"`, and one carrying the Owner's own email. They were harmless
+while agents were attribution-only. Once phase 2 ships they can appear in a real money
+ledger with a real balance and a real Pay button. Decide whether to remove or rename them
+before that, not after.
 
 Still deliberately not built. Each is its own piece of work, not unfinished business here.
 
@@ -184,13 +278,14 @@ Still deliberately not built. Each is its own piece of work, not unfinished busi
 3. **`issuedAt` on the three existing invoices stays null.** They predate the write path
    and belong to no return period. Backfilling would mean guessing a date on a tax
    record; `unassignedCount` surfaces them instead.
-4. **Agent payables** — the largest. `AffiliateAgent` records attribution only. Rates,
-   balances and payouts do not exist; the schema comment defers them to `PR-AFFILIATE-1`.
-   Closer in size to the Commissions build than to a dashboard wiring pass.
-5. **Provider commission** figures depend on commissions existing (0 in production today);
-   the cards are wired to an empty state and will need real aggregation when they do.
-6. **Money out** — the other half of "cash in vs cash out" is agent payouts, which item 4
-   blocks. The card shows money received and says so.
+4. **Money out** — the other half of "cash in vs cash out". Agent payables now exist and
+   carry an amount, but nothing has been *paid* until phase 2 ships, so there is still no
+   outgoing figure to plot. The card shows money received and says so.
+5. **The rate is one number for every agent.** No per-agent override, no tiering, no
+   minimum. The snapshot on each payable is what makes adding one later safe.
+6. **Both new sections stand on production data that does not exist yet** — 0 commissions
+   and 0 attributed leads today. The derivation is proven on demo fixtures (§6); the
+   production cards correctly show "nothing yet" rather than zeros.
 7. **`paymentType` is not a payment method.** "How clients pay" shows manual /
    consultation / unknown, which is the nearest available field, not Stripe / link /
    transfer as the spec intended.
@@ -201,8 +296,12 @@ Still deliberately not built. Each is its own piece of work, not unfinished busi
 replaces an `<Empty>` with a chart. Keep the "facts only, no presentation" split. When a
 card gains real data, delete its `<Empty>` — do not leave both behind a flag.
 
-**Rollback.** Revert the aggregation commit for the two new fields, or `2490ed1` as well
-to remove the route entirely. No migration to unwind and no configuration to undo. The
-only lasting effect of the aggregation pass is that invoices issued after it carry an
-`issuedAt` — reverting stops new ones being stamped but leaves existing values intact,
-which is harmless: the column was nullable before and remains so.
+**Rollback.** Revert per pass. The aggregation pass has no migration to unwind; its only
+lasting effect is that invoices issued after it carry an `issuedAt`, and reverting simply
+stops new ones being stamped — the column was nullable before and remains so.
+
+The agent-payables pass added a table. Reverting the code leaves `agent_payables` in place
+and unused, which is harmless and is the safer order: drop the table only after the code
+that reads it is gone, and only if the rows in it are not wanted. `AgentPayable` rows are
+derived, so they can be rebuilt by running the sync again — but any that phase 2 has
+approved or paid carry a human decision and must not be discarded to save a migration.

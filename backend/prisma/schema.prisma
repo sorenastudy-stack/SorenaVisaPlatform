@@ -262,6 +262,12 @@ enum ApplicationStatus {
   WITHDRAWN
 }
 
+enum AgentPayableStatus {
+  PENDING
+  APPROVED
+  PAID
+}
+
 enum CommissionTriggerStatus {
   PENDING
   APPROVED
@@ -2344,6 +2350,7 @@ model Commission {
   programmeChoice AdmissionProgrammeChoice @relation(fields: [programmeChoiceId], references: [id])
   provider        EducationProvider        @relation(fields: [providerId], references: [id])
   programme       EducationProgramme       @relation(fields: [programmeId], references: [id])
+  agentPayable    AgentPayable?
 
   @@index([status])
   @@index([providerId])
@@ -2390,6 +2397,62 @@ model CommissionTrigger {
   @@index([status])
   @@index([programmeChoiceId])
   @@map("commission_triggers")
+}
+
+/// PR-AGENT-PAYABLES — what Sorena owes an introducing agent.
+///
+/// Derived, never asserted. A payable exists only where a Commission Sorena has
+/// actually earned traces back to a Lead an agent introduced:
+///
+///   AgentPayable → Commission → AdmissionProgrammeChoice → AdmissionApplication
+///                → Case → Lead.attributedAgentId → AffiliateAgent
+///
+/// That shape is the whole risk model. Paying a share of money already earned
+/// means Sorena cannot owe an agent for a lead that never enrolled or never
+/// paid — there is no payable without a commission to take a share of.
+///
+/// `amount` and `ratePercent` are SNAPSHOTS taken when the payable is derived,
+/// not recomputed on read. The same reasoning as an invoice's locked exchange
+/// rate: changing the company rate must not silently restate what an agent was
+/// already told they were owed, or what has already been paid.
+///
+/// One payable per commission, enforced by @unique — the same rule shape as one
+/// commission per programme choice.
+///
+/// Actor fields are plain id + name snapshots with no relation, matching
+/// CommissionTrigger and Payment.verifiedById in this codebase.
+model AgentPayable {
+  id           String             @id @default(cuid())
+  agentId      String
+  commissionId String             @unique
+  /// Share of the commission, in the commission's own currency.
+  amount       Decimal            @db.Decimal(10, 2)
+  currency     String
+  /// The rate this row was calculated at, kept so an old payable stays
+  /// explicable after the company rate changes.
+  ratePercent  Float
+  status       AgentPayableStatus @default(PENDING)
+
+  /// Finance agreed the amount is owed.
+  approvedById   String?
+  approvedByName String?
+  approvedAt     DateTime?
+  /// The Owner released the money. Deliberately separate from approval — the
+  /// person who confirms a debt is not the person who pays it.
+  paidById       String?
+  paidByName     String?
+  paidAt         DateTime?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agent      AffiliateAgent @relation(fields: [agentId], references: [id])
+  commission Commission     @relation(fields: [commissionId], references: [id])
+
+  @@index([status])
+  @@index([agentId, status])
+  @@map("agent_payables")
 }
 
 // ─── EDUCATION PROVIDERS ─────────────────────────────────────────────────────
@@ -5138,6 +5201,7 @@ model AffiliateAgent {
   createdBy       User           @relation("AffiliateAgentCreator", fields: [createdById], references: [id])
   trackingLinks   TrackingLink[]
   attributedLeads Lead[]         @relation("LeadAttributedAgent")
+  payables        AgentPayable[]
 
   @@index([status, fullName])
   @@map("affiliate_agents")

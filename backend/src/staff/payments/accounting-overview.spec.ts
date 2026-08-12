@@ -18,7 +18,9 @@ describe('AccountingOverviewService — revenue and GST', () => {
   let prisma: PrismaClient;
   let svc: AccountingOverviewService;
 
-  const made = { invoices: [] as string[], payments: [] as string[], leads: [] as string[], contacts: [] as string[] };
+  const made = { invoices: [] as string[], payments: [] as string[], leads: [] as string[], contacts: [] as string[],
+    commissions: [] as string[], choices: [] as string[], admissions: [] as string[], cases: [] as string[],
+    programmes: [] as string[], providers: [] as string[] };
   let contactId: string;
   let leadId: string;
 
@@ -74,6 +76,13 @@ describe('AccountingOverviewService — revenue and GST', () => {
   }, 90000);
 
   afterAll(async () => {
+    await prisma.agentPayable.deleteMany({ where: { commissionId: { in: made.commissions } } }).catch(() => {});
+    await prisma.commission.deleteMany({ where: { id: { in: made.commissions } } }).catch(() => {});
+    await prisma.admissionProgrammeChoice.deleteMany({ where: { id: { in: made.choices } } }).catch(() => {});
+    await prisma.admissionApplication.deleteMany({ where: { id: { in: made.admissions } } }).catch(() => {});
+    await prisma.case.deleteMany({ where: { id: { in: made.cases } } }).catch(() => {});
+    await prisma.educationProgramme.deleteMany({ where: { id: { in: made.programmes } } }).catch(() => {});
+    await prisma.educationProvider.deleteMany({ where: { id: { in: made.providers } } }).catch(() => {});
     await prisma.invoice.deleteMany({ where: { id: { in: made.invoices } } }).catch(() => {});
     await prisma.payment.deleteMany({ where: { id: { in: made.payments } } }).catch(() => {});
     await prisma.lead.deleteMany({ where: { id: { in: made.leads } } }).catch(() => {});
@@ -216,6 +225,82 @@ describe('AccountingOverviewService — revenue and GST', () => {
       const after = await svc.overview(NOW);
       expect(after.gstByPeriod.invoiceCount).toBe(before.gstByPeriod.invoiceCount);
       expect(after.gstByPeriod.unassignedCount).toBe(before.gstByPeriod.unassignedCount);
+    });
+  });
+
+  describe('provider commission pipeline and ageing', () => {
+    /** A commission whose invoice went out `daysAgo`, optionally already paid. */
+    async function mkCom(opts: { amount: number|null; invoicedDaysAgo?: number|null; paid?: boolean; status?: string }) {
+      const s = stamp();
+      const c2 = await prisma.contact.create({ data: { fullName: `PC ${s}`, email: `pc.${s}@t.local` } });
+      made.contacts.push(c2.id);
+      const l2 = await prisma.lead.create({ data: { contactId: c2.id, leadStatus: 'NEW' } as any });
+      made.leads.push(l2.id);
+      const k = await prisma.case.create({ data: { leadId: l2.id } });
+      made.cases.push(k.id);
+      const adm = await prisma.admissionApplication.create({ data: { caseId: k.id, contactId: c2.id } as any });
+      made.admissions.push(adm.id);
+      const prov = await prisma.educationProvider.create({ data: { name: `PProv ${s}`, providerType: 'UNIVERSITY' } as any });
+      made.providers.push(prov.id);
+      const prog = await prisma.educationProgramme.create({ data: { providerId: prov.id, name: `PProg ${s}`, level: 'BACHELOR', nzqfLevel: 'LEVEL_7' } as any });
+      made.programmes.push(prog.id);
+      const ch = await prisma.admissionProgrammeChoice.create({ data: { admissionApplicationId: adm.id, programmeId: prog.id, intakeMonth: 2, intakeYear: 2027, priority: 1 } as any });
+      made.choices.push(ch.id);
+      const com = await prisma.commission.create({ data: {
+        programmeChoiceId: ch.id, providerId: prov.id, programmeId: prog.id, commissionValue: 15,
+        actualAmountNZD: opts.amount, currency: 'NZD', status: (opts.status ?? 'ESTIMATED') as any,
+        invoiceSentAt: opts.invoicedDaysAgo == null ? null : new Date(NOW.getTime() - opts.invoicedDaysAgo * 86400000),
+        paidAt: opts.paid ? new Date(NOW.getTime() - 86400000) : null,
+      } as any });
+      made.commissions.push(com.id);
+      return com.id;
+    }
+
+    const bucket = (r: any, name: string) => r.providerCommission.ageing.find((b: any) => b.bucket === name);
+
+    it('a commission is earned, and only invoiced once it has been billed', async () => {
+      const before = await svc.overview(NOW);
+      await mkCom({ amount: 100, invoicedDaysAgo: null });
+      const after = await svc.overview(NOW);
+      expect(after.providerCommission.earned.count).toBe(before.providerCommission.earned.count + 1);
+      expect(after.providerCommission.invoiced.count).toBe(before.providerCommission.invoiced.count);
+      // Never billed, so it cannot be overdue.
+      expect(bucket(after,'0-30 days').count).toBe(bucket(before,'0-30 days').count);
+    });
+
+    it('the pipeline nests — a received commission is also invoiced and earned', async () => {
+      const before = await svc.overview(NOW);
+      await mkCom({ amount: 100, invoicedDaysAgo: 10, paid: true, status: 'PAID' });
+      const a = await svc.overview(NOW);
+      expect(a.providerCommission.earned.count).toBe(before.providerCommission.earned.count + 1);
+      expect(a.providerCommission.invoiced.count).toBe(before.providerCommission.invoiced.count + 1);
+      expect(a.providerCommission.received.count).toBe(before.providerCommission.received.count + 1);
+      // Paid, so it stops ageing.
+      expect(bucket(a,'0-30 days').count).toBe(bucket(before,'0-30 days').count);
+    });
+
+    it.each([[10,'0-30 days'],[30,'0-30 days'],[31,'31-45 days'],[45,'31-45 days'],[46,'46-60 days'],[60,'46-60 days'],[61,'60+ days'],[400,'60+ days']])(
+      'invoiced %i days ago falls in %s', async (days, name) => {
+        const before = await svc.overview(NOW);
+        await mkCom({ amount: 100, invoicedDaysAgo: days as number, status: 'INVOICED' });
+        const after = await svc.overview(NOW);
+        expect(bucket(after, name as string).count).toBe(bucket(before, name as string).count + 1);
+      });
+
+    it('an unpriced commission is counted separately, not added as zero', async () => {
+      const before = await svc.overview(NOW);
+      await mkCom({ amount: null, invoicedDaysAgo: 5 });
+      const after = await svc.overview(NOW);
+      expect(after.providerCommission.unpricedCount).toBe(before.providerCommission.unpricedCount + 1);
+      expect(after.providerCommission.earned.count).toBe(before.providerCommission.earned.count);
+    });
+
+    it('a cancelled commission is excluded entirely', async () => {
+      const before = await svc.overview(NOW);
+      await mkCom({ amount: 100, invoicedDaysAgo: 5, status: 'CANCELLED' });
+      const after = await svc.overview(NOW);
+      expect(after.providerCommission.earned.count).toBe(before.providerCommission.earned.count);
+      expect(after.providerCommission.unpricedCount).toBe(before.providerCommission.unpricedCount);
     });
   });
 });
