@@ -3535,7 +3535,11 @@ model SopDocument {
 enum SubmissionMethod {
   PORTAL // the institution's own online application portal
   EMAIL // emailed to an admissions inbox
-  AGENT_PORTAL // a third-party agent/aggregator portal
+  // NOT the Sorena agent portal (PR-AGENT-PORTAL, /agent). This is how an
+  // application was lodged WITH AN INSTITUTION — through a third-party
+  // agent/aggregator portal such as an ITP's partner system. Grepping
+  // AGENT_PORTAL finds both; they have nothing to do with each other.
+  AGENT_PORTAL
   OTHER
 }
 
@@ -5310,6 +5314,31 @@ model AffiliateAgent {
   /// Why verification was refused. Kept so a resubmission can answer it.
   verificationRejectedAt     DateTime?
   verificationRejectionReason String?  @db.Text
+
+  // ── PR-AGENT-PORTAL phase 1: the contract half of the gate ─────────────────
+  // An agent may do nothing in the portal until they are BOTH verified and
+  // under contract. Verification is above; this is the other half.
+
+  /// When the agent came under contract. Set by the DocuSeal flow in phase 3,
+  /// or by an Owner override until that exists.
+  contractSignedAt DateTime?
+
+  /// TRUE when a human cleared this rather than the agent signing anything.
+  ///
+  /// The distinction has to survive phase 3, when real signatures start
+  /// arriving in the same column. Without it, an override recorded today
+  /// becomes indistinguishable from a signed agreement later, and nobody can
+  /// tell which agents actually have one on file. The UI reads this flag and
+  /// says "manually cleared", never "signed".
+  contractIsManualOverride Boolean @default(false)
+
+  /// Who cleared it, and why. The name is snapshotted because the JWT carries
+  /// none and because an audit trail that turns into a bare id is not a trail.
+  /// The reason is required at the service boundary: "why is this agent live
+  /// without a contract" is exactly the question asked months later.
+  contractClearedById    String?
+  contractClearedByName  String?
+  contractClearedReason  String?  @db.Text
 
   createdBy       User           @relation("AffiliateAgentCreator", fields: [createdById], references: [id])
   trackingLinks   TrackingLink[]

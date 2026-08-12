@@ -15,6 +15,7 @@ import {
   TrackingLinkStatus,
   UpdateAffiliateAgentDto,
 } from './dto/marketing.dto';
+import { ClearAgentContractDto } from './dto/clear-agent-contract.dto';
 
 // PR-SCORECARD-2 — Staff-facing marketing endpoints.
 //
@@ -69,6 +70,19 @@ export class MarketingController {
     @Req() req: any,
   ) {
     return this.agents.changeStatus(id, dto.status, this.actor(req));
+  }
+
+  // PR-AGENT-PORTAL phase 1 — mark an agent as under contract without one.
+  // OWNER only (the service re-checks), reason required, audited as its own
+  // event. A stand-in until the DocuSeal agent-contract flow ships.
+  @Patch('agents/:id/clear-contract')
+  @Roles('OWNER')
+  clearAgentContract(
+    @Param('id') id: string,
+    @Body() dto: ClearAgentContractDto,
+    @Req() req: any,
+  ) {
+    return this.agents.clearContract(id, dto.reason, this.actor(req));
   }
 
   @Delete('agents/:id')

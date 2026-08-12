@@ -16,6 +16,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { ProvidersModule } from './providers/providers.module';
 import { MatchingModule } from './matching/matching.module';
 import { AiModule } from './ai/ai.module';
+import { AgentsModule } from './agents/agents.module';
 import { CasesModule } from './cases/cases.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { CommissionsModule } from './commissions/commissions.module';
@@ -97,6 +98,7 @@ import { SlaModule } from './sla/sla.module';
     ProvidersModule,
     MatchingModule,
     AiModule,
+    AgentsModule,
     CasesModule,
     ApplicationsModule,
     CommissionsModule,

@@ -3,6 +3,7 @@ import {
   Injectable, Logger, NotFoundException,
 } from '@nestjs/common';
 import { AffiliateAgentStatus, Prisma } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateAffiliateAgentDto, UpdateAffiliateAgentDto,
@@ -39,7 +40,22 @@ export interface AgentListItem {
   updatedAt: string;
 }
 
+/** PR-AGENT-PORTAL phase 1 — whether this agent can actually use the portal,
+ *  and why not. Mirrors resolveAgentAccess so the Owner sees the same verdict
+ *  the agent does rather than a second opinion assembled here. */
+export interface AgentPortalAccess {
+  hasLogin: boolean;
+  verified: boolean;
+  contracted: boolean;
+  /** TRUE when a human cleared the contract rather than the agent signing. */
+  contractIsManualOverride: boolean;
+  contractClearedByName: string | null;
+  contractClearedReason: string | null;
+  allowed: boolean;
+}
+
 export interface AgentDetail extends AgentListItem {
+  portalAccess: AgentPortalAccess;
   links: Array<{
     id: string;
     shortCode: string;
@@ -98,6 +114,7 @@ export class AffiliateAgentsService {
       where: { id },
       include: {
         _count: { select: { attributedLeads: true } },
+        user: { select: { id: true } },
         trackingLinks: {
           orderBy: { createdAt: 'desc' },
           select: {
@@ -141,6 +158,16 @@ export class AffiliateAgentsService {
         createdAt: l.createdAt.toISOString(),
       })),
       bandDistribution,
+      portalAccess: {
+        hasLogin: !!row.userId,
+        verified: !!row.verifiedAt,
+        contracted: !!row.contractSignedAt,
+        contractIsManualOverride: row.contractIsManualOverride,
+        contractClearedByName: row.contractClearedByName,
+        contractClearedReason: row.contractClearedReason,
+        // Same three conditions the guard applies, in the same order.
+        allowed: row.status === 'ACTIVE' && !!row.verifiedAt && !!row.contractSignedAt,
+      },
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -150,14 +177,30 @@ export class AffiliateAgentsService {
     const fullName = dto.fullName.trim();
     if (!fullName) throw new BadRequestException('Full name is required.');
 
+    const email = dto.email?.trim() || null;
+
     const created = await this.prisma.$transaction(async (tx) => {
+      // PR-AGENT-PORTAL phase 1 — an agent with an email gets a login here.
+      //
+      // Provisioned at creation rather than as a second deliberate step,
+      // because the account is not what grants access: the gate is. A
+      // provisioned agent can request a magic link and reach exactly one
+      // screen, which tells them what is still outstanding. Making it a
+      // separate action would add a state to test and no safety.
+      //
+      // No usable password is ever set. The hash below is random bytes that
+      // no input can produce, so the only way in is a magic link to the
+      // address the Owner entered.
+      const userId = email ? await this.provisionLogin(tx, email, fullName) : null;
+
       const agent = await tx.affiliateAgent.create({
         data: {
           fullName,
-          email: dto.email?.trim() || null,
+          email,
           phone: dto.phone?.trim() || null,
           notes: dto.notes?.trim() || null,
           createdById: actor.userId,
+          userId,
         },
       });
       await tx.auditLog.create({
@@ -172,6 +215,7 @@ export class AffiliateAgentsService {
             fullName: agent.fullName,
             hasEmail: !!agent.email,
             hasPhone: !!agent.phone,
+            loginProvisioned: !!agent.userId,
           } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name ?? null,
           actorRoleSnapshot: actor.role ?? null,
@@ -250,6 +294,121 @@ export class AffiliateAgentsService {
           entityId: id,
           oldValue: { status: existing.status } as Prisma.InputJsonValue,
           newValue: { agentId: id, status, fullName: existing.fullName } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+    });
+
+    return this.get(id);
+  }
+
+  /**
+   * Create (or reuse) the User an agent signs in as.
+   *
+   * Reuses an existing account when the address already belongs to one. An
+   * email is one person: minting a second User for somebody who is already a
+   * client or a staff member would split them in two, and the one-to-one
+   * constraint on AffiliateAgent.userId would then be enforcing nothing useful.
+   *
+   * The password hash is 48 random bytes. bcrypt.compare against it can never
+   * succeed for any input, so the account exists but has no password path —
+   * magic link only.
+   */
+  private async provisionLogin(
+    tx: Prisma.TransactionClient,
+    email: string,
+    fullName: string,
+  ): Promise<string> {
+    const normalized = email.toLowerCase();
+    const existing = await tx.user.findUnique({
+      where: { email: normalized },
+      select: { id: true, affiliateAgent: { select: { id: true } } },
+    });
+    if (existing) {
+      if (existing.affiliateAgent) {
+        throw new ConflictException(
+          'That email already belongs to another agent. Use a different address.',
+        );
+      }
+      return existing.id;
+    }
+
+    const unusable = randomBytes(48).toString('base64');
+    const user = await tx.user.create({
+      data: {
+        name: fullName,
+        email: normalized,
+        passwordHash: unusable,
+        role: 'AGENT',
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    return user.id;
+  }
+
+  /**
+   * Mark an agent as under contract without a contract.
+   *
+   * A stand-in until the DocuSeal flow arrives, and recorded as exactly that:
+   * `contractIsManualOverride` stays true forever on this row, so a future
+   * reader can tell which agents actually signed something. The reason is
+   * required because "why is this agent live without a contract" is the
+   * question an audit asks, and a blank answer makes the row unexplainable
+   * rather than merely undocumented.
+   *
+   * OWNER only — enforced at the controller and re-checked here, so the rule
+   * does not depend on the route shape.
+   */
+  async clearContract(id: string, reason: string, actor: Actor): Promise<AgentDetail> {
+    if (actor.role !== 'OWNER') {
+      throw new ForbiddenException('Only the Owner can clear an agent contract.');
+    }
+    const clean = (reason ?? '').trim();
+    if (clean.length < 3) {
+      throw new BadRequestException(
+        'Say why this agent may work without a signed contract — the reason is kept on the record.',
+      );
+    }
+
+    const agent = await this.prisma.affiliateAgent.findUnique({
+      where: { id },
+      select: { id: true, fullName: true, contractSignedAt: true, contractIsManualOverride: true },
+    });
+    if (!agent) throw new NotFoundException('Affiliate agent not found.');
+    if (agent.contractSignedAt) {
+      throw new BadRequestException('That agent is already under contract.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.affiliateAgent.update({
+        where: { id },
+        data: {
+          contractSignedAt: new Date(),
+          contractIsManualOverride: true,
+          contractClearedById: actor.userId,
+          contractClearedByName: actor.name ?? null,
+          contractClearedReason: clean,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId,
+          // Its own event type, not folded into a generic update: this is a
+          // human deciding to bypass a control, and it should be findable as
+          // that rather than buried among field edits.
+          action: 'AGENT_CONTRACT_MANUALLY_CLEARED',
+          eventType: 'AGENT_CONTRACT_MANUALLY_CLEARED',
+          entityType: 'AFFILIATE_AGENT',
+          entityId: id,
+          newValue: {
+            agentId: id,
+            agentName: agent.fullName,
+            reason: clean,
+            manualOverride: true,
+            note: 'No contract was signed. Cleared by hand pending the DocuSeal flow.',
+          } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name ?? null,
           actorRoleSnapshot: actor.role ?? null,
         },

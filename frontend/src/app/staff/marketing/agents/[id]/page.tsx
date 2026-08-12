@@ -4,6 +4,7 @@ import { Users, Mail, Phone, Link2, ArrowRight, FileText } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { AgentActions } from '@/components/staff/marketing/AgentActions';
+import { AgentPortalAccessCard, type PortalAccess } from '@/components/staff/marketing/AgentPortalAccessCard';
 
 // PR-SCORECARD-2 — Affiliate agent detail.
 
@@ -26,6 +27,7 @@ interface AgentDetail {
     createdAt: string;
   }>;
   bandDistribution: Record<string, number>;
+  portalAccess: PortalAccess;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +76,10 @@ export default async function AgentDetailPage({ params }: { params: { id: string
           </div>
         </div>
         <AgentActions agentId={data.id} status={data.status} fullName={data.fullName} hasActiveLinks={data.activeLinkCount > 0} />
+
+        <div className="mt-4">
+          <AgentPortalAccessCard agentId={data.id} access={data.portalAccess} hasEmail={!!data.email} />
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-6">
