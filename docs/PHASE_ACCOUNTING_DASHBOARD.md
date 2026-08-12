@@ -2,7 +2,8 @@
 
 **Date:** 12 August 2026
 **Commits:** `2490ed1` (dashboard) · `74e0e9b` (revenue + GST aggregation) ·
-`c5ac865` (provider commission + agent payables phase 1)
+`c5ac865` (provider commission + agent payables phase 1) ·
+`befea48` + `ed64340` (stale copy found by the populated verification, §6)
 **Route:** `/staff/accounting/dashboard`
 
 ## 1. What this does
@@ -68,6 +69,12 @@ Every card now reads from real data or says plainly why it cannot. The only rema
 - `frontend/src/components/staff/accounting/AccountingDashboardClient.tsx` — the four
   cards in the Provider commission and Agents sections
 
+**Modified by the two follow-up fixes**
+- `frontend/src/components/staff/accounting/AccountingDashboardClient.tsx` — three KPI
+  cards read from data instead of asserting an absence; the money-out note; the greeting
+- `frontend/src/app/staff/accounting/dashboard/page.tsx` — stopped passing a name the
+  session cannot supply
+
 ## 3. Database
 
 **One additive migration**, in the agent-payables pass:
@@ -128,6 +135,35 @@ Payables : NZ$840 / NZ$510 / NZ$460 — exactly 10% of each, all PENDING
 Summary  : owed NZ$1,810.00, paid NZ$0.00, across 3 commissions
 ```
 
+### Verified against populated data — and what that caught
+
+Production could only ever exercise the empty branch: 0 commissions, 0 attributed leads.
+The populated branch was proven on demo with the fixture chain above, on the deployed
+demo frontend, and doing so found **six defects that an empty page hid completely**.
+
+They were all one bug: **a hardcoded string written when the feature did not exist,
+still asserting its absence after it shipped.** Against empty data such a string is
+indistinguishable from an honest empty state — it reads as correct, renders no error,
+and passes every test, because nothing in it is wrong until there is data to contradict
+it. Against populated data it sat directly above a chart proving it false.
+
+| Round | Found | Why the previous round missed it |
+|---|---|---|
+| 1 — production, empty | "Commission payable — agent payouts aren't tracked yet"; "nothing records them"; "approved amounts need a second person"; greeted every reader as *Leila*, "Good morning" at any hour | Only visible by reading the rendered page. Tests and `tsc` cannot know a true sentence became false. |
+| 2 — demo, populated | "Not totalled by month yet" above a populated revenue chart; "No commissions recorded yet" above a pipeline showing three; the greeting printed an **email** | Both KPIs looked like correct empty states while the data was empty. |
+| 3 — demo, populated | Nothing. All four KPI cards, both new sections and the greeting read true. | — |
+
+Two lessons worth keeping:
+
+- **"No console errors" is not "correct".** Every one of these rendered cleanly. The
+  check that found them was reading the words on the page against the numbers beside
+  them.
+- **A fix needs the same verification as a feature.** Round 1's greeting fix read the
+  name from the session; the JWT carries `sub`, `email`, `role` and `secondaryRoles` and
+  no name, so `getSession` falls back to the email. It replaced greeting the wrong person
+  with greeting them by their login — and only a populated screenshot showed it, while the
+  header two inches above had been correct all along by reading `/api/staff/me`.
+
 ## 7. Design decisions
 
 **Two kinds of empty state, and they are not interchangeable.** "Nothing yet" (amber) is
@@ -138,6 +174,19 @@ about the code. Agent payables were the clearest case: while `AffiliateAgent` ha
 no balance and no payout, the card said so instead of showing `NZ$0.00`. Building the
 feature is what changed it from grey to amber — the card now says "nothing yet", which is
 true, because the derivation runs and finds no attributed commissions.
+
+**A figure and the chart beside it are derived once, not twice.** Commission receivable is
+summed from the ageing buckets rather than recomputed from the pipeline: invoiced-and-not-
+yet-received is precisely what those buckets hold, and a second derivation is a second
+thing that can quietly drift out of step with the picture next to it. On the demo chain
+the KPI reads NZ$9,700 and the two unpaid buckets read NZ$4,600 and NZ$5,100 — they agree
+because they cannot disagree.
+
+**Copy that asserts an absence is a maintenance liability.** Every "isn't tracked yet"
+string is a claim that expires the moment someone builds the thing. Where a card can read
+its own emptiness from data — no rows, no currencies, a zero count — it says so from the
+data and cannot go stale. Where a string is unavoidable, it belongs next to the code that
+would make it false.
 
 **One endpoint, returning facts only.** The spec named five endpoints, none of which
 existed. They are one route now, because the page reads all of it together on one screen.
