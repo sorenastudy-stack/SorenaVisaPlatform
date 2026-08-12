@@ -1457,6 +1457,18 @@ export class ContractsService {
             amount:      new Prisma.Decimal(amountCents).div(100),
             currency,
             status:      'SENT',
+            // PR-GST-PERIOD — the date a GST return filters on.
+            //
+            // The column existed and nothing ever wrote it, so every invoice
+            // raised before now has a null here. A return needs to know WHEN an
+            // invoice was issued, not when its row happened to be inserted, and
+            // the two are the same moment for this path: the invoice is created
+            // already SENT.
+            //
+            // Existing nulls are deliberately not backfilled. A guessed issue
+            // date on a tax record is worse than an absent one — the period
+            // view counts them separately instead.
+            issuedAt:    new Date(),
             dueDate,
             // PR-PHASE40 — GST on every invoice, no exceptions.
             //

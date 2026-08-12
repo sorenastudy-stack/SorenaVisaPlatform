@@ -154,9 +154,33 @@ interface Overview {
   pendingPaymentCount: number;
   invoicesWithLockedRate: number;
   totalInvoices: number;
+  revenueByMonth: Array<{
+    month: string;
+    invoicedByCurrency: Record<string, number>;
+    receivedByCurrency: Record<string, number>;
+  }>;
+  gstByPeriod: {
+    periodStart: string;
+    periodEnd: string;
+    invoiceCount: number;
+    gstByCurrency: Record<string, number>;
+    exGstByCurrency: Record<string, number>;
+    unassignedCount: number;
+  };
 }
 interface RateEntry { id: string; rate: number; rateDate: string; source: string; enteredByName: string | null }
 interface FxView { base: string; quote: string; current: RateEntry | null; history: RateEntry[] }
+
+/** Money arrives in minor units from the API — one unit for every currency. */
+const money = (currency: string, minorUnits: number) =>
+  `${currency} ${(minorUnits / 100).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Currencies present anywhere in a month series, so a chart can plot each. */
+function currenciesIn(rows: Array<Record<string, any>>, key: string): string[] {
+  const set = new Set<string>();
+  for (const r of rows) for (const c of Object.keys(r[key] ?? {})) set.add(c);
+  return [...set].sort();
+}
 
 /** Below this many points a line implies a trend that isn't there yet. */
 const FX_MIN_POINTS = 3;
@@ -230,6 +254,23 @@ export function AccountingDashboardClient() {
   const students = (ov?.studentsByMonth ?? []).map((r) => ({ m: shortMonth(r.month), students: r.count }));
   const studentTotal = students.reduce((n, r) => n + r.students, 0);
 
+  // Two currencies stay two series. Blending them would need each invoice's
+  // locked rate, which is null on everything raised before that stamping — so a
+  // single figure could only be produced by re-rating history at today's number.
+  const revenue = (ov?.revenueByMonth ?? []).map((r) => ({
+    m: shortMonth(r.month),
+    ...Object.fromEntries(Object.entries(r.invoicedByCurrency).map(([c, v]) => [`inv_${c}`, v / 100])),
+    ...Object.fromEntries(Object.entries(r.receivedByCurrency).map(([c, v]) => [`rec_${c}`, v / 100])),
+  }));
+  const invoicedCurrencies = currenciesIn(ov?.revenueByMonth ?? [], 'invoicedByCurrency');
+  const receivedCurrencies = currenciesIn(ov?.revenueByMonth ?? [], 'receivedByCurrency');
+  const anyRevenue = invoicedCurrencies.length > 0 || receivedCurrencies.length > 0;
+
+  const gst = ov?.gstByPeriod ?? null;
+  const gstCurrencies = gst ? currenciesIn([gst], 'exGstByCurrency') : [];
+
+  const SERIES = [C.sky, C.teal, C.sun, C.grape, C.pink];
+
   const fxHistory = [...(fx?.history ?? [])].reverse();
   const fxPoints = fxHistory.map((r) => ({ m: shortMonth(r.rateDate), rate: r.rate }));
   const fxCurrent = fx?.current ?? null;
@@ -282,11 +323,45 @@ export function AccountingDashboardClient() {
         {/* ── Hero + goal ────────────────────────────────────────────────── */}
         <div className="ad-grid ad-g-hero">
           <section className="ad-hero ad-fade">
-            <span className="ad-eyebrow">Invoiced this month</span>
-            <Empty kind="unbuilt">
-              Revenue isn’t totalled by month yet. Once invoices are grouped into periods,
-              this becomes the figure you’d read first each morning — and the trend behind it.
-            </Empty>
+            <span className="ad-eyebrow">Invoiced and received</span>
+            {!anyRevenue ? (
+              <Empty kind="waiting">
+                Nothing invoiced or received in the last six months. Both lines appear here
+                as soon as money starts moving.
+              </Empty>
+            ) : (
+              <>
+                <div className="ad-hero-fig" style={{ fontSize: 30 }}>
+                  {invoicedCurrencies.length
+                    ? invoicedCurrencies
+                        .map((c) => money(c, ov!.revenueByMonth[ov!.revenueByMonth.length - 1].invoicedByCurrency[c] ?? 0))
+                        .join('  ·  ')
+                    : 'Nothing invoiced this month'}
+                </div>
+                <div className="ad-hero-chart">
+                  <Chart h={170} label="Invoiced and received by month and currency">
+                    <BarChart data={revenue} barGap={4} margin={{ top: 14, right: 10, bottom: 0, left: 0 }}>
+                      <CartesianGrid vertical={false} stroke={C.grid} />
+                      <XAxis dataKey="m" interval={0} {...axisProps} />
+                      <YAxis {...axisProps} width={46} domain={[0, 'auto']} />
+                      <Tooltip content={<Tip money={false} />} cursor={{ fill: 'rgba(43,36,64,.04)' }} />
+                      {invoicedCurrencies.map((c, i) => (
+                        <Bar key={`inv_${c}`} dataKey={`inv_${c}`} name={`Invoiced ${c}`}
+                             fill={SERIES[i % SERIES.length]} maxBarSize={22} radius={[8, 8, 0, 0]} />
+                      ))}
+                      {receivedCurrencies.map((c, i) => (
+                        <Bar key={`rec_${c}`} dataKey={`rec_${c}`} name={`Received ${c}`}
+                             fill={C.teal} maxBarSize={22} radius={[8, 8, 0, 0]} />
+                      ))}
+                    </BarChart>
+                  </Chart>
+                </div>
+                <p style={{ fontSize: 12, color: C.ink2, margin: '4px 0 0' }}>
+                  Currencies are shown separately — invoices in USD and payments in NZD can’t be
+                  added together without re-rating history.
+                </p>
+              </>
+            )}
           </section>
 
           <section className="ad-card ad-fade">
@@ -344,12 +419,30 @@ export function AccountingDashboardClient() {
         </div>
         <div className="ad-grid ad-g-2a">
           <section className="ad-card ad-fade">
-            <h3 className="ad-h3">Cash in vs cash out</h3>
-            <p className="ad-cap">Client fees and provider commission against agent payouts.</p>
-            <Empty kind="unbuilt">
-              Payments aren’t summed by month yet, and agent payouts aren’t recorded at all,
-              so neither side of this comparison exists to draw.
-            </Empty>
+            <h3 className="ad-h3">Money received</h3>
+            <p className="ad-cap">Payments that have actually landed, month by month.</p>
+            {receivedCurrencies.length === 0 ? (
+              <Empty kind="waiting">No payments received in the last six months.</Empty>
+            ) : (
+              <>
+                <Chart h={268} pullLeft label="Payments received by month and currency">
+                  <BarChart data={revenue} barGap={5} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid vertical={false} stroke={C.grid} />
+                    <XAxis dataKey="m" interval={0} {...axisProps} />
+                    <YAxis {...axisProps} width={46} domain={[0, 'auto']} />
+                    <Tooltip content={<Tip money={false} />} cursor={{ fill: 'rgba(43,36,64,.04)' }} />
+                    {receivedCurrencies.map((c, i) => (
+                      <Bar key={c} dataKey={`rec_${c}`} name={c} fill={SERIES[i % SERIES.length]}
+                           maxBarSize={26} radius={[8, 8, 0, 0]} />
+                    ))}
+                  </BarChart>
+                </Chart>
+                <div className="ad-note" style={{ marginTop: 12 }}>
+                  <b>Money out isn’t here yet.</b> Agent payouts are the other half of this
+                  picture, and nothing records them — see the agents section below.
+                </div>
+              </>
+            )}
           </section>
           <section className="ad-card ad-fade">
             <h3 className="ad-h3">What earns the money</h3>
@@ -566,18 +659,69 @@ export function AccountingDashboardClient() {
         <div className="ad-grid ad-g-2">
           <section className="ad-card ad-fade">
             <h3 className="ad-h3">GST collected</h3>
-            <p className="ad-cap">Split between standard-rated services and zero-rated offshore commission.</p>
-            <Empty kind="unbuilt">
-              GST isn’t totalled across invoices yet. Each invoice stores its own GST, so this
-              becomes a sum once the return period is defined.
-            </Empty>
+            <p className="ad-cap">
+              {gst ? `Two-monthly period, ${gst.periodStart} to ${gst.periodEnd}.` : 'Current return period.'}
+            </p>
+            {!gst || gst.invoiceCount === 0 ? (
+              <Empty kind="waiting">
+                No invoices issued in this period yet
+                {gst && gst.unassignedCount > 0
+                  ? `. ${gst.unassignedCount} older invoice${gst.unassignedCount === 1 ? '' : 's'} ${gst.unassignedCount === 1 ? 'carries' : 'carry'} no issue date, so ${gst.unassignedCount === 1 ? 'it belongs' : 'they belong'} to no period and ${gst.unassignedCount === 1 ? 'isn’t' : 'aren’t'} counted here.`
+                  : '. Each one appears here as it’s issued.'}
+              </Empty>
+            ) : (
+              <>
+                {gstCurrencies.map((c) => (
+                  <div className="ad-row" key={c}>
+                    <div>
+                      <div className="ad-row-name">{c}</div>
+                      <div className="ad-row-sub">{money(c, gst.exGstByCurrency[c] ?? 0)} excluding GST</div>
+                    </div>
+                    <span className="ad-row-amt" style={{ color: C.sun }}>
+                      {money(c, gst.gstByCurrency[c] ?? 0)}
+                    </span>
+                  </div>
+                ))}
+                <p style={{ fontSize: 12, color: C.ink2, marginTop: 10 }}>
+                  {gst.invoiceCount} invoice{gst.invoiceCount === 1 ? '' : 's'} issued in this period.
+                </p>
+              </>
+            )}
           </section>
           <section className="ad-card ad-fade">
             <h3 className="ad-h3">This return at a glance</h3>
-            <p className="ad-cap">Apr–Sep 2026 period, so far.</p>
-            <Empty kind="unbuilt">
-              No return period is configured, so there is nothing to total against one yet.
-            </Empty>
+            <p className="ad-cap">
+              {gst ? `${gst.periodStart} to ${gst.periodEnd}, so far.` : 'Current period.'}
+            </p>
+            {gst && (
+              <>
+                <div className="ad-row">
+                  <div>
+                    <div className="ad-row-name">Invoices issued</div>
+                    <div className="ad-row-sub">in this period</div>
+                  </div>
+                  <span className="ad-row-amt">{gst.invoiceCount}</span>
+                </div>
+                {gstCurrencies.map((c) => (
+                  <div className="ad-row" key={c}>
+                    <div>
+                      <div className="ad-row-name">GST collected · {c}</div>
+                      <div className="ad-row-sub">on {money(c, gst.exGstByCurrency[c] ?? 0)} excluding GST</div>
+                    </div>
+                    <span className="ad-row-amt" style={{ color: C.sun }}>{money(c, gst.gstByCurrency[c] ?? 0)}</span>
+                  </div>
+                ))}
+                {gst.unassignedCount > 0 && (
+                  <div className="ad-note" style={{ marginTop: 14 }}>
+                    <b>{gst.unassignedCount} invoice{gst.unassignedCount === 1 ? '' : 's'} with no issue date.</b>{' '}
+                    {gst.unassignedCount === 1 ? 'It predates' : 'They predate'} the issue date being recorded,
+                    so {gst.unassignedCount === 1 ? 'it belongs' : 'they belong'} to no return period.
+                    Nothing has been guessed — {gst.unassignedCount === 1 ? 'it is' : 'they are'} counted
+                    here instead of being folded into a period {gst.unassignedCount === 1 ? 'it was' : 'they were'} never assessed in.
+                  </div>
+                )}
+              </>
+            )}
           </section>
         </div>
 
