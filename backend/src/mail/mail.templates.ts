@@ -11,7 +11,9 @@
 // chrome 11 times.
 
 const NAVY      = '#1E3A5F';
-const GOLD      = '#E8B923';
+// One gold across the platform (#c9a961). The client portal moved to it in
+// phase 26; this is the transactional-email half of finishing that job.
+const GOLD      = '#c9a961';
 const OFF_WHITE = '#FAF8F3';
 const BODY      = '#4A4A4A';
 const MUTED     = '#8B8B8B';
@@ -397,7 +399,7 @@ export function bookingConfirmationBody(
     </p>
     <p style="margin:20px 0;">
       <a href="${esc(meetingLink)}"
-         style="display:inline-block;background:#F3CE49;color:${NAVY};font-weight:600;text-decoration:none;padding:12px 22px;border-radius:10px;">
+         style="display:inline-block;background:${GOLD};color:${NAVY};font-weight:600;text-decoration:none;padding:12px 22px;border-radius:10px;">
         Join your session
       </a>
     </p>
@@ -427,7 +429,7 @@ export function staffBookingNotificationBody(
     </p>
     <p style="margin:20px 0;">
       <a href="${esc(meetingLink)}"
-         style="display:inline-block;background:#F3CE49;color:${NAVY};font-weight:600;text-decoration:none;padding:12px 22px;border-radius:10px;">
+         style="display:inline-block;background:${GOLD};color:${NAVY};font-weight:600;text-decoration:none;padding:12px 22px;border-radius:10px;">
         Join the session
       </a>
     </p>

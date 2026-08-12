@@ -146,7 +146,9 @@ const DIGEST_SUBJECT = 'Your Sorena weekly update';
 const COL_NAVY   = '#1e3a5f';
 const COL_NAVY_2 = '#162d4a';
 const COL_GOLD   = '#c9a961';
-const COL_GOLD_2 = '#b8985a';
+// Brand dark-gold companion. Currently reserved (see the void below) — kept in
+// step with the palette so it is correct whenever something starts using it.
+const COL_GOLD_2 = '#b28f4e';
 const COL_CREAM  = '#faf8f3';
 const COL_INK    = '#1f2937';
 const COL_MUTED  = '#4b5563';
