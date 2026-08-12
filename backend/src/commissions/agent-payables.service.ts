@@ -1,15 +1,24 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { AgentPayableStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { hasRole } from '../auth/role.util';
 
-// PR-AGENT-PAYABLES (phase 1) — what Sorena owes the agents who introduce
-// clients, derived and visible. Approving and paying come next; nothing here
-// moves money or changes a status.
+// PR-AGENT-PAYABLES — what Sorena owes the agents who introduce clients:
+// derived (phase 1), then approved and released (phase 2).
 //
 // The payable is DERIVED, never asserted. There is no "submit" step because
 // there is nobody to submit it: the amount falls out of a commission Sorena has
 // already earned, so a human claiming it would only be retyping arithmetic.
+//
+// What a human does decide is whether it is really owed, and whether to pay it
+// — and those are deliberately two people. Finance moves PENDING → APPROVED;
+// the Owner moves APPROVED → PAID, and cannot do both on the same row.
 
 /**
  * The share of a provider commission an introducing agent receives.
@@ -26,6 +35,12 @@ export const AGENT_COMMISSION_RATE_PERCENT = 10;
 
 /** Who may see the money. Same tier as the commission ledger. */
 export const PAYABLE_VIEW_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'];
+
+/** Who agrees a share is owed. Finance decides debts. */
+export const PAYABLE_APPROVE_ROLES = ['FINANCE', 'SUPER_ADMIN', 'OWNER'];
+
+/** Who releases the money. Deliberately a different question from approving. */
+export const PAYABLE_RELEASE_ROLES = ['OWNER'];
 
 export interface PayableActor {
   id?: string | null;
@@ -56,8 +71,10 @@ export class AgentPayablesService {
   /**
    * Create payables that should exist and do not yet.
    *
-   * Idempotent, and safe to call on every read: `commissionId` is unique, so a
-   * second run creates nothing. It runs on read rather than from a cron because
+   * Idempotent, and safe to call on every read: a partial unique index allows
+   * only one non-rejected payable per commission, so a second run creates
+   * nothing. A REJECTED row does not block a fresh derivation — that is the
+   * whole reason the constraint is partial rather than outright. It runs on read rather than from a cron because
    * a nightly job would leave a window where a commission exists and its
    * payable does not, and would need backfilling whenever it missed.
    *
@@ -69,7 +86,17 @@ export class AgentPayablesService {
     const candidates = await this.prisma.commission.findMany({
       where: {
         status: { not: 'CANCELLED' },
-        agentPayable: null,
+        // Never seen before. A commission that has ANY payable — including a
+        // rejected one — is not derived again.
+        //
+        // This is deliberately narrower than the constraint underneath it. The
+        // partial unique index permits a replacement for a rejected payable, so
+        // raising one later needs no migration; what it must not do is happen
+        // BY ITSELF. Automatic re-derivation would put the refused row back in
+        // Finance's queue within a second of them refusing it, which makes a
+        // rejection unable to mean anything. Re-raising is a decision somebody
+        // takes, and the action for it is not built yet.
+        agentPayables: { none: {} },
         programmeChoice: {
           admissionApplication: { case: { lead: { attributedAgentId: { not: null } } } },
         },
@@ -106,8 +133,8 @@ export class AgentPayablesService {
         });
         created += 1;
       } catch (e: any) {
-        // Two readers racing on the same commission. The unique constraint did
-        // its job; the row exists either way.
+        // Two readers racing on the same commission. The partial unique index
+        // did its job; the live row exists either way.
         if (e?.code !== 'P2002') throw e;
       }
     }
@@ -179,6 +206,10 @@ export class AgentPayablesService {
     await this.syncFromCommissions().catch(() => undefined);
 
     const rows = await this.prisma.agentPayable.findMany({
+      // A refused share is not a balance. Left in, REJECTED rows would fall
+      // through to "owed" and the dashboard would report money the company has
+      // decided it does not owe.
+      where: { status: { not: AgentPayableStatus.REJECTED } },
       include: { agent: { select: { id: true, fullName: true } } },
     });
 
@@ -203,5 +234,298 @@ export class AgentPayablesService {
     }
 
     return [...byAgent.values()].sort((a, b) => b.owedMinorUnits - a.owedMinorUnits);
+  }
+
+  // ── Phase 2: approve, reject, release ──────────────────────────────────────
+
+  /**
+   * Write the decision to the audit log.
+   *
+   * The amount and currency go in the payload deliberately. The refund
+   * precedent records that an approval was executed but never what moved, so
+   * reconstructing how much left the company means joining back through rows
+   * that may since have changed. A money event should be legible on its own.
+   *
+   * Name and role are snapshotted for the same reason they are on the payable:
+   * a staff row can be hard-deleted, and an audit trail that turns into a bare
+   * id is not a trail.
+   */
+  private async writeAudit(
+    eventType: string,
+    payable: { id: string; amount: Prisma.Decimal | number; currency: string; agentId: string },
+    actor: PayableActor,
+    extra: Record<string, unknown> = {},
+  ) {
+    await this.prisma.auditLog.create({
+      data: {
+        userId: actor.id ?? null,
+        action: eventType,
+        eventType,
+        entityType: 'AGENT_PAYABLE',
+        entityId: payable.id,
+        newValue: {
+          amount: Number(payable.amount),
+          currency: payable.currency,
+          agentId: payable.agentId,
+          ...extra,
+        } as Prisma.InputJsonValue,
+        actorNameSnapshot: actor.name ?? null,
+        actorRoleSnapshot: actor.role ?? null,
+      },
+    });
+  }
+
+  /**
+   * The actor, with a name that actually exists.
+   *
+   * The JWT carries sub, email, role and secondaryRoles — and no name — so
+   * `req.user.name` is undefined and a snapshot taken from it would record
+   * null on every decision. The point of the snapshot is that it survives the
+   * staff row being deleted, which a null does not, so the name is read once
+   * from the database at decision time.
+   */
+  private async resolveActor(actor: PayableActor): Promise<PayableActor> {
+    if (actor.name || !actor.id) return actor;
+    const u = await this.prisma.user.findUnique({
+      where: { id: actor.id },
+      select: { name: true, email: true },
+    });
+    return { ...actor, name: u?.name ?? u?.email ?? null };
+  }
+
+  /** One payable, or a 404 that does not confirm what it is hiding. */
+  private async mustFind(id: string) {
+    const row = await this.prisma.agentPayable.findUnique({
+      where: { id },
+      include: { agent: { select: { fullName: true } } },
+    });
+    if (!row) throw new NotFoundException('That payable is not on record.');
+    return row;
+  }
+
+  /**
+   * Move a payable between states, or fail.
+   *
+   * A conditional UPDATE, never read-then-write. The status is part of the
+   * WHERE clause, so two callers racing on the same row cannot both succeed:
+   * the first changes the status, the second matches nothing and gets a count
+   * of zero. The owner-approval queue reads, checks, then writes, and is saved
+   * only by Stripe's idempotency key — a payout has no such backstop, so the
+   * database has to be the thing that says no.
+   */
+  private async transition(
+    id: string,
+    from: AgentPayableStatus,
+    data: Prisma.AgentPayableUpdateManyMutationInput,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.agentPayable.updateMany({
+      where: { id, status: from },
+      data,
+    });
+    return count === 1;
+  }
+
+  /** Payables waiting on Finance. */
+  async listPending(actor: PayableActor) {
+    if (!hasRole(actor, ...PAYABLE_APPROVE_ROLES)) {
+      throw new ForbiddenException('You are not allowed to decide agent payables.');
+    }
+    await this.syncFromCommissions().catch((e) =>
+      this.logger.error(`[agent-payables] sync failed: ${e?.message ?? e}`),
+    );
+    return this.listByStatus(AgentPayableStatus.PENDING);
+  }
+
+  /** Payables Finance has agreed, waiting on the Owner to release. */
+  async listAwaitingRelease(actor: PayableActor) {
+    if (!hasRole(actor, ...PAYABLE_VIEW_ROLES)) {
+      throw new ForbiddenException('You are not allowed to view agent payables.');
+    }
+    return this.listByStatus(AgentPayableStatus.APPROVED);
+  }
+
+  /**
+   * How many are waiting on the Owner.
+   *
+   * Its own method rather than `listAwaitingRelease().length` because the badge
+   * is read on every page load and does not need the rows — and because a
+   * payable, unlike a refund request, never expires. Nothing eventually clears
+   * an unnoticed one, so the count is the only thing that will say so.
+   */
+  async awaitingReleaseCount(actor: PayableActor): Promise<{ count: number }> {
+    if (!hasRole(actor, ...PAYABLE_VIEW_ROLES)) return { count: 0 };
+    return { count: await this.prisma.agentPayable.count({ where: { status: AgentPayableStatus.APPROVED } }) };
+  }
+
+  private async listByStatus(status: AgentPayableStatus) {
+    const rows = await this.prisma.agentPayable.findMany({
+      where: { status },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      include: {
+        agent: { select: { id: true, fullName: true, status: true } },
+        commission: {
+          select: {
+            id: true, currency: true, status: true,
+            provider: { select: { name: true } },
+            programme: { select: { name: true } },
+            programmeChoice: {
+              select: {
+                admissionApplication: {
+                  select: { case: { select: { lead: { select: { contact: { select: { fullName: true } } } } } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      agentId: r.agentId,
+      agentName: r.agent?.fullName ?? null,
+      studentName:
+        r.commission?.programmeChoice?.admissionApplication?.case?.lead?.contact?.fullName ?? null,
+      providerName: r.commission?.provider?.name ?? null,
+      programmeName: r.commission?.programme?.name ?? null,
+      amountMinorUnits: Math.round(Number(r.amount) * 100),
+      currency: r.currency,
+      ratePercent: r.ratePercent,
+      status: r.status,
+      approvedById: r.approvedById,
+      approvedByName: r.approvedByName,
+      approvedAt: r.approvedAt,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /** Finance agrees the share is owed. */
+  async approve(id: string, actor: PayableActor) {
+    if (!hasRole(actor, ...PAYABLE_APPROVE_ROLES)) {
+      throw new ForbiddenException('You are not allowed to approve agent payables.');
+    }
+    if (!actor.id) throw new ForbiddenException('An approval must be attributable to a person.');
+    const who = await this.resolveActor(actor);
+
+    const row = await this.mustFind(id);
+    if (row.status !== AgentPayableStatus.PENDING) {
+      await this.writeAudit('AGENT_PAYABLE_APPROVE_REFUSED', row, actor, {
+        refusedBecause: `status was ${row.status}, not PENDING`,
+      });
+      throw new BadRequestException(`This payable is already ${row.status.toLowerCase()}.`);
+    }
+
+    const moved = await this.transition(id, AgentPayableStatus.PENDING, {
+      status: AgentPayableStatus.APPROVED,
+      approvedById: who.id!,
+      approvedByName: who.name ?? null,
+      approvedAt: new Date(),
+    });
+    if (!moved) {
+      // Somebody else decided it between the read and the write.
+      await this.writeAudit('AGENT_PAYABLE_APPROVE_REFUSED', row, actor, {
+        refusedBecause: 'lost a race — the payable was decided by someone else first',
+      });
+      throw new BadRequestException('That payable was just decided by someone else.');
+    }
+
+    await this.writeAudit('AGENT_PAYABLE_APPROVED', row, who, { agentName: row.agent?.fullName ?? null });
+    return this.mustFind(id);
+  }
+
+  /** Finance refuses the share. Terminal, and the reason is not optional. */
+  async reject(id: string, reason: string, actor: PayableActor) {
+    if (!hasRole(actor, ...PAYABLE_APPROVE_ROLES)) {
+      throw new ForbiddenException('You are not allowed to decide agent payables.');
+    }
+    if (!actor.id) throw new ForbiddenException('A decision must be attributable to a person.');
+    const who = await this.resolveActor(actor);
+
+    const clean = (reason ?? '').trim();
+    if (clean.length < 3) {
+      throw new BadRequestException('Say why this is not owed — the reason is kept for reconciliation.');
+    }
+
+    const row = await this.mustFind(id);
+    if (row.status !== AgentPayableStatus.PENDING) {
+      await this.writeAudit('AGENT_PAYABLE_REJECT_REFUSED', row, actor, {
+        refusedBecause: `status was ${row.status}, not PENDING`,
+      });
+      throw new BadRequestException(`This payable is already ${row.status.toLowerCase()}.`);
+    }
+
+    const moved = await this.transition(id, AgentPayableStatus.PENDING, {
+      status: AgentPayableStatus.REJECTED,
+      rejectedById: who.id!,
+      rejectedByName: who.name ?? null,
+      rejectedAt: new Date(),
+      rejectionReason: clean,
+    });
+    if (!moved) {
+      await this.writeAudit('AGENT_PAYABLE_REJECT_REFUSED', row, actor, {
+        refusedBecause: 'lost a race — the payable was decided by someone else first',
+      });
+      throw new BadRequestException('That payable was just decided by someone else.');
+    }
+
+    await this.writeAudit('AGENT_PAYABLE_REJECTED', row, who, { reason: clean });
+    return this.mustFind(id);
+  }
+
+  /**
+   * The Owner releases the money.
+   *
+   * The rule this whole phase exists for: whoever approved the debt cannot be
+   * the one who pays it. Without this line the two states are paperwork — one
+   * person with the right role walks a payable from PENDING to PAID alone, and
+   * nothing on the way out disagrees.
+   */
+  async release(id: string, actor: PayableActor) {
+    if (!hasRole(actor, ...PAYABLE_RELEASE_ROLES)) {
+      throw new ForbiddenException('Only the Owner can release an agent payout.');
+    }
+    if (!actor.id) throw new ForbiddenException('A payout must be attributable to a person.');
+    const who = await this.resolveActor(actor);
+
+    const row = await this.mustFind(id);
+    if (row.status !== AgentPayableStatus.APPROVED) {
+      await this.writeAudit('AGENT_PAYABLE_RELEASE_REFUSED', row, actor, {
+        refusedBecause: `status was ${row.status}, not APPROVED`,
+      });
+      throw new BadRequestException(`This payable is ${row.status.toLowerCase()}, not approved for release.`);
+    }
+
+    if (row.approvedById && row.approvedById === actor.id) {
+      // Recorded, not merely refused: an attempt by one person to complete both
+      // halves is exactly the event this control exists to catch, and it must
+      // not be invisible.
+      await this.writeAudit('AGENT_PAYABLE_RELEASE_REFUSED', row, actor, {
+        refusedBecause: 'same person approved and attempted to release',
+        approvedById: row.approvedById,
+      });
+      throw new ForbiddenException(
+        'You approved this payable, so somebody else must release it — two people, always.',
+      );
+    }
+
+    const moved = await this.transition(id, AgentPayableStatus.APPROVED, {
+      status: AgentPayableStatus.PAID,
+      paidById: who.id!,
+      paidByName: who.name ?? null,
+      paidAt: new Date(),
+    });
+    if (!moved) {
+      await this.writeAudit('AGENT_PAYABLE_RELEASE_REFUSED', row, actor, {
+        refusedBecause: 'lost a race — the payable was released by someone else first',
+      });
+      throw new BadRequestException('That payable was just released by someone else.');
+    }
+
+    await this.writeAudit('AGENT_PAYABLE_PAID', row, who, {
+      approvedById: row.approvedById,
+      approvedByName: row.approvedByName,
+      agentName: row.agent?.fullName ?? null,
+    });
+    return this.mustFind(id);
   }
 }

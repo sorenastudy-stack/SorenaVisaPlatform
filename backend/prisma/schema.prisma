@@ -266,6 +266,10 @@ enum AgentPayableStatus {
   PENDING
   APPROVED
   PAID
+  /// Terminal. Finance decided this share is not owed. The row is never
+  /// resurrected — a fresh payable may be derived for the same commission if the
+  /// situation changes, and the refusal stays on record beside it.
+  REJECTED
 }
 
 enum CommissionTriggerStatus {
@@ -2350,7 +2354,11 @@ model Commission {
   programmeChoice AdmissionProgrammeChoice @relation(fields: [programmeChoiceId], references: [id])
   provider        EducationProvider        @relation(fields: [providerId], references: [id])
   programme       EducationProgramme       @relation(fields: [programmeId], references: [id])
-  agentPayable    AgentPayable?
+  // A list, not a single row, because a REJECTED payable stays on record while
+  // a fresh one may be derived for the same commission. At most ONE non-rejected
+  // payable can exist at a time — enforced by a partial unique index that Prisma
+  // cannot express (see the agent_payable_rejection migration).
+  agentPayables   AgentPayable[]
 
   @@index([status])
   @@index([providerId])
@@ -2424,7 +2432,10 @@ model CommissionTrigger {
 model AgentPayable {
   id           String             @id @default(cuid())
   agentId      String
-  commissionId String             @unique
+  /// NOT unique outright: a rejected payable stays, and a replacement may be
+  /// derived. The partial unique index in the migration allows at most one row
+  /// per commission whose status is not REJECTED.
+  commissionId String
   /// Share of the commission, in the commission's own currency.
   amount       Decimal            @db.Decimal(10, 2)
   currency     String
@@ -2442,6 +2453,14 @@ model AgentPayable {
   paidById       String?
   paidByName     String?
   paidAt         DateTime?
+  /// Finance refused the share. The reason is REQUIRED at the service boundary
+  /// — unlike the refund queue's optional decision note — because this is money
+  /// owed to somebody outside the company and "why not" is what reconciliation
+  /// needs months later.
+  rejectedById    String?
+  rejectedByName  String?
+  rejectedAt      DateTime?
+  rejectionReason String?
   notes          String?
 
   createdAt DateTime @default(now())

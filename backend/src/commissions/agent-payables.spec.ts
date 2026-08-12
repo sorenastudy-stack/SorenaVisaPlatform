@@ -120,8 +120,14 @@ describe('AgentPayablesService', () => {
     await prisma.$disconnect();
   });
 
+  // findFirst, not findUnique: phase 2 narrowed the constraint from "one
+  // payable per commission" to "one LIVE payable per commission", so a
+  // commission may hold a rejected row and its replacement.
   const forCommission = async (id: string) =>
-    prisma.agentPayable.findUnique({ where: { commissionId: id } });
+    prisma.agentPayable.findFirst({
+      where: { commissionId: id, status: { not: 'REJECTED' } },
+      orderBy: { createdAt: 'desc' },
+    });
 
   describe('derivation', () => {
     it('derives a payable at the flat rate for a commission on an introduced lead', async () => {

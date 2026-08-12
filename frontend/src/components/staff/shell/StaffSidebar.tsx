@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -8,6 +9,7 @@ import {
   ArrowLeftRight,
   Award,
   BadgeCheck,
+  Banknote,
   BookOpen,
   Briefcase,
   Calendar,
@@ -21,6 +23,7 @@ import {
   FileText,
   Globe2,
   GraduationCap,
+  Handshake,
   Inbox,
   KeyRound,
   LayoutDashboard,
@@ -35,6 +38,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
+import { api } from '@/lib/api';
 import { portalBrand } from '@/lib/portal-branding';
 
 // PR-CONSULT-2 — Staff sidebar (desktop).
@@ -58,6 +62,12 @@ interface NavItem {
   // exists on StaffContext yet.
   gate?:  'canManageStaff' | 'canApprove' | 'canViewApprovals';
   roleGate?: ReadonlyArray<string>;
+  // PR-AGENT-PAYABLES (phase 2): a count beside the label. There was no
+  // per-item badge before this — the only badge in the shell is the
+  // notification bell's, which is bound to notifications and could not carry
+  // a queue depth. Kept as a named key rather than a number so the nav table
+  // stays a static declaration.
+  badge?: 'agentPayoutRelease';
 }
 
 const MARKETING_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'] as const;
@@ -85,6 +95,8 @@ const KANBAN_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CON
 // PR-COMMISSIONS-UI — institutional/provider commission ledger. Money-managing
 // tier: OWNER + FINANCE (+ SUPER_ADMIN).
 const COMMISSIONS_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'] as const;
+// Same trio, as a plain array for the badge's own visibility check.
+const MONEY_TIER: readonly string[] = COMMISSIONS_ROLES;
 // PR-COMMISSION-TRIGGER — claiming a commission is the Admission Officer's job;
 // deciding on the claim is Finance's. Different people, so different nav.
 const COMMISSION_TRIGGER_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT'] as const;
@@ -161,6 +173,13 @@ const NAV: NavItem[] = [
   // earns from providers). OWNER + FINANCE.
   { label: 'Commissions',                  href: '/staff/commissions',        icon: <DollarSign size={18} />,  roleGate: COMMISSIONS_ROLES },
   { label: 'Commission triggers',          href: '/staff/commission-triggers', icon: <Send size={18} />,       roleGate: COMMISSION_TRIGGER_ROLES },
+  // PR-AGENT-PAYABLES (phase 2): what Sorena owes introducing agents. Two
+  // queues, because approving a debt and releasing the money are two people.
+  { label: 'Agent payouts',                href: '/staff/agent-payouts',      icon: <Handshake size={18} />,   roleGate: COMMISSIONS_ROLES },
+  // The badge is the only thing that will ever say a payout is waiting: unlike
+  // a refund request, a payable does not expire, so nothing else eventually
+  // notices it.
+  { label: 'Release payouts',              href: '/staff/agent-payouts/release', icon: <Banknote size={18} />, roleGate: COMMISSIONS_ROLES, badge: 'agentPayoutRelease' },
   { label: 'Universities',                 href: '/staff/universities',       icon: <GraduationCap size={18} />, roleGate: UNIVERSITIES_ROLES },
   // PR-CATALOG-1: cross-institution pending-programme approval queue.
   { label: 'Programme approvals',          href: '/staff/programme-approvals', icon: <CheckCircle2 size={18} />, roleGate: PROGRAMME_APPROVALS_ROLES },
@@ -205,6 +224,11 @@ const FINANCE_NAV: NavItem[] = [
   { label: 'Dashboard',        href: '/staff/finance',           icon: <LayoutDashboard size={18} /> },
   { label: 'Processing',       href: '/staff/payments',          icon: <Clock size={18} /> },
   { label: 'Finalised',        href: '/staff/finance/finalised', icon: <CheckCircle2 size={18} /> },
+  // PR-AGENT-PAYABLES (phase 2). FINANCE has its own fixed nav rather than the
+  // role-filtered one, so an entry added only to NAV would be invisible to the
+  // role that does the approving.
+  { label: 'Agent payouts',    href: '/staff/agent-payouts',     icon: <Handshake size={18} /> },
+  { label: 'Release payouts',  href: '/staff/agent-payouts/release', icon: <Banknote size={18} />, badge: 'agentPayoutRelease' },
   { label: 'HR',               href: '/staff/hr',                icon: <CalendarOff size={18} /> },
   { label: 'Training & News',  href: '/staff/finance/training',  icon: <BookOpen size={18} /> },
   { label: 'Account',          href: '/staff/account',           icon: <KeyRound size={18} /> },
@@ -216,6 +240,22 @@ export function StaffSidebar() {
   const { permissions, me } = useStaff();
 
   const isFinance = me?.role === 'FINANCE';
+
+  // How many payouts are waiting on somebody to release them. Only asked for by
+  // roles the endpoint admits — for anyone else it could only ever 403, and a
+  // failed request on every page load is noise where someone looks when
+  // something is actually wrong. Fails quiet: a missing badge must never take
+  // the navigation down.
+  const [payoutCount, setPayoutCount] = useState(0);
+  const canSeePayouts = MONEY_TIER.includes(me?.role ?? '');
+  useEffect(() => {
+    if (!canSeePayouts) { setPayoutCount(0); return; }
+    let alive = true;
+    api.get<{ count: number }>('/staff/agent-payables/awaiting-release/count')
+      .then((r) => { if (alive) setPayoutCount(r?.count ?? 0); })
+      .catch(() => { if (alive) setPayoutCount(0); });
+    return () => { alive = false; };
+  }, [canSeePayouts, pathname]);
   // Per-role portal name + icon (single source: lib/portal-branding).
   const { label: portalLabel, Icon: PortalIcon } = portalBrand(me?.role);
 
@@ -269,6 +309,14 @@ export function StaffSidebar() {
                   deliberately skip next-intl — running them through t() only
                   logged MISSING_MESSAGE and fell back to the same string. */}
               {item.label.includes('.') ? t(item.label) : item.label}
+              {item.badge === 'agentPayoutRelease' && payoutCount > 0 && (
+                <span
+                  className="ml-auto min-w-[20px] rounded-full bg-[#F3CE49] px-1.5 py-0.5 text-center text-[11px] font-bold text-sorena-navy"
+                  aria-label={`${payoutCount} awaiting release`}
+                >
+                  {payoutCount > 9 ? '9+' : payoutCount}
+                </span>
+              )}
             </Link>
           );
         })}
