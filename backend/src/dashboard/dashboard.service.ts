@@ -159,48 +159,6 @@ export class DashboardService {
     });
   }
 
-  async confirmCommencement(id: string, actorId: string | null) {
-    const commission = await this.prisma.commission.findUnique({
-      where: { id },
-      include: {
-        application: {
-          include: {
-            case: true,
-          },
-        },
-      },
-    });
-
-    if (!commission) {
-      throw new NotFoundException('Commission not found');
-    }
-
-    const renewalReminderDate = new Date();
-    renewalReminderDate.setFullYear(renewalReminderDate.getFullYear() + 1);
-
-    const updated = await this.prisma.commission.update({
-      where: { id },
-      data: {
-        status: CommissionStatus.CONFIRMED,
-        confirmedAt: new Date(),
-        renewalReminderDate,
-      },
-    });
-
-    const leadId = commission.application?.case?.leadId || null;
-    await this.eventsService.emit(
-      'COMMISSION_CONFIRMED',
-      'COMMISSION',
-      id,
-      leadId,
-      'SYSTEM',
-      actorId,
-      { commissionId: id },
-    );
-
-    return updated;
-  }
-
   async getProviders() {
     const providers = await this.prisma.educationProvider.findMany({
       orderBy: { name: 'asc' },

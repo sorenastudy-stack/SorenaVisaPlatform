@@ -2,9 +2,12 @@ import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-valida
 import { CommissionType } from '@prisma/client';
 
 export class CreateCommissionDto {
+  // PR-COMMISSION-ANCHOR — the AdmissionProgrammeChoice this commission is
+  // earned on. Was `applicationId`; `Application` is not part of the admission
+  // flow and never held a row.
   @IsString()
   @IsNotEmpty()
-  applicationId: string;
+  programmeChoiceId: string;
 
   @IsString()
   @IsNotEmpty()

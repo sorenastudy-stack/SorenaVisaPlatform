@@ -30,6 +30,8 @@ describe('Lead + commission access scoping', () => {
   const made = {
     commissions: [] as string[],
     applications: [] as string[],
+    admissionApplications: [] as string[],
+    programmeChoices: [] as string[],
     cases: [] as string[],
     leads: [] as string[],
     contacts: [] as string[],
@@ -87,13 +89,27 @@ describe('Lead + commission access scoping', () => {
       } as any,
     });
     made.programmes.push(prog.id);
-    const app = await prisma.application.create({
-      data: { caseId: kase.id, providerId: prov.id, programmeId: prog.id } as any,
+    // PR-COMMISSION-ANCHOR — a commission now hangs off the programme choice,
+    // so the fixture builds the real admission chain the scoping walks:
+    //   Commission → AdmissionProgrammeChoice → AdmissionApplication → Case → Lead
+    const contactForApp = await prisma.contact.create({
+      data: { fullName: `AppContact ${s}`, email: `app.${s}@t.local` },
     });
-    made.applications.push(app.id);
+    made.contacts.push(contactForApp.id);
+    const adm = await prisma.admissionApplication.create({
+      data: { caseId: kase.id, contactId: contactForApp.id } as any,
+    });
+    made.admissionApplications.push(adm.id);
+    const choice = await prisma.admissionProgrammeChoice.create({
+      data: {
+        admissionApplicationId: adm.id, programmeId: prog.id,
+        intakeMonth: 2, intakeYear: 2027, priority: 1,
+      } as any,
+    });
+    made.programmeChoices.push(choice.id);
     const com = await prisma.commission.create({
       data: {
-        applicationId: app.id, providerId: prov.id, programmeId: prog.id,
+        programmeChoiceId: choice.id, providerId: prov.id, programmeId: prog.id,
         commissionValue: 10,
       } as any,
     });
@@ -130,6 +146,8 @@ describe('Lead + commission access scoping', () => {
   afterAll(async () => {
     await prisma.auditLog.deleteMany({ where: { userId: { in: made.users } } }).catch(() => {});
     await prisma.commission.deleteMany({ where: { id: { in: made.commissions } } }).catch(() => {});
+    await prisma.admissionProgrammeChoice.deleteMany({ where: { id: { in: made.programmeChoices } } }).catch(() => {});
+    await prisma.admissionApplication.deleteMany({ where: { id: { in: made.admissionApplications } } }).catch(() => {});
     await prisma.application.deleteMany({ where: { id: { in: made.applications } } }).catch(() => {});
     await prisma.case.deleteMany({ where: { id: { in: made.cases } } }).catch(() => {});
     await prisma.lead.deleteMany({ where: { id: { in: made.leads } } }).catch(() => {});

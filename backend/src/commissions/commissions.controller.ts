@@ -37,6 +37,15 @@ export class CommissionsController {
     return this.commissionsService.createCommission(dto);
   }
 
+  // The picker behind "Record commission". Same gate as creating one: only the
+  // roles that can record a commission need to browse what is available to
+  // record against.
+  @Get('programme-choices/:caseId')
+  @Roles('OWNER', 'SUPER_ADMIN')
+  programmeChoices(@Param('caseId') caseId: string) {
+    return this.commissionsService.listProgrammeChoicesForCase(caseId);
+  }
+
   @Post(':id/confirm')
   @Roles('OWNER', 'SUPER_ADMIN', 'FINANCE')
   confirm(

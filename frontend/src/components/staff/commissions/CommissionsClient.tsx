@@ -27,7 +27,15 @@ interface Commission {
   reminderSent: boolean;
   provider: { id: string; name: string } | null;
   programme: { id: string; name: string } | null;
-  application: { case?: { lead?: { contact?: { fullName?: string | null } | null } | null } | null } | null;
+  // PR-COMMISSION-ANCHOR — the student is reached through the programme choice
+  // now. This used to read `application.case.lead.contact`; after the re-anchor
+  // that path is simply absent, and the optional chaining turned every student
+  // name into "—" without any error to notice.
+  programmeChoice: {
+    admissionApplication?: {
+      case?: { lead?: { contact?: { fullName?: string | null } | null } | null } | null;
+    } | null;
+  } | null;
 }
 
 const STATUSES: Status[] = ['ESTIMATED', 'CONFIRMED', 'INVOICED', 'PAID', 'CANCELLED'];
@@ -49,7 +57,8 @@ const NEXT_ACTIONS: Record<Status, Array<{ label: string; to?: Status; confirm?:
 };
 
 const money = (n: number | null, ccy = 'NZD') => (n == null ? '—' : `${ccy} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-const clientName = (c: Commission) => c.application?.case?.lead?.contact?.fullName ?? '—';
+const clientName = (c: Commission) =>
+  c.programmeChoice?.admissionApplication?.case?.lead?.contact?.fullName ?? '—';
 const fmtDate = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-GB').format(new Date(iso)) : '—');
 const isReminderDue = (c: Commission) =>
   !!c.renewalReminderDate && !c.reminderSent && c.status !== 'PAID' && c.status !== 'CANCELLED' && new Date(c.renewalReminderDate) <= new Date();
@@ -209,15 +218,33 @@ export function CommissionsClient({ role }: { role: string }) {
   );
 }
 
-// ── Record a commission: pick case → application → enter rate/estimate ───────
+const MONTH_SHORT = ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ── Record a commission: pick case → programme choice → enter rate/estimate ──
+//
+// PR-COMMISSION-ANCHOR — the picker used to list `Application` rows. Nothing in
+// the admission flow creates those, so it was always empty: a case could never
+// offer anything to record against. It lists the case's programme choices now,
+// which is what the client actually applied to.
 interface CaseRow { id: string; studentName: string; stage: string }
-interface AppRow { id: string; status: string; providerId: string; programmeId: string; provider: { name: string } | null; programme: { name: string } | null }
+interface ChoiceRow {
+  id: string;
+  programmeId: string;
+  programmeName: string | null;
+  providerId: string | null;
+  providerName: string | null;
+  intakeMonth: number;
+  intakeYear: number;
+  priority: number;
+  /** Already has a commission — one per choice is the rule. */
+  taken: boolean;
+}
 
 function RecordCommissionModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [caseId, setCaseId] = useState('');
-  const [apps, setApps] = useState<AppRow[]>([]);
-  const [appId, setAppId] = useState('');
+  const [choices, setChoices] = useState<ChoiceRow[]>([]);
+  const [choiceId, setChoiceId] = useState('');
   const [value, setValue] = useState('');
   const [type, setType] = useState<'PERCENTAGE' | 'FIXED'>('PERCENTAGE');
   const [year, setYear] = useState('1');
@@ -228,19 +255,20 @@ function RecordCommissionModal({ onClose, onDone }: { onClose: () => void; onDon
     api.get<{ items: CaseRow[] }>('/api/staff/cases?activeOnly=true&pageSize=200').then((d) => setCases(d.items)).catch(() => {});
   }, []);
   useEffect(() => {
-    setApps([]); setAppId('');
+    setChoices([]); setChoiceId('');
     if (!caseId) return;
-    api.get<AppRow[]>(`/applications/${caseId}`).then(setApps).catch(() => {});
+    api.get<ChoiceRow[]>(`/commissions/programme-choices/${caseId}`).then(setChoices).catch(() => {});
   }, [caseId]);
 
-  const app = apps.find((a) => a.id === appId);
+  const choice = choices.find((c) => c.id === choiceId);
 
   const submit = async () => {
-    if (!app || !value) { toast.error('Pick an application and enter a rate.'); return; }
+    if (!choice || !value) { toast.error('Pick a programme and enter a rate.'); return; }
+    if (!choice.providerId) { toast.error('That programme has no institution on record.'); return; }
     setBusy(true);
     try {
       await api.post('/commissions', {
-        applicationId: app.id, providerId: app.providerId, programmeId: app.programmeId,
+        programmeChoiceId: choice.id, providerId: choice.providerId, programmeId: choice.programmeId,
         commissionType: type, commissionValue: Number(value),
         commissionYear: Number(year) || 1,
         ...(estimated ? { estimatedAmountNZD: Number(estimated) } : {}),
@@ -259,7 +287,7 @@ function RecordCommissionModal({ onClose, onDone }: { onClose: () => void; onDon
           <h2 className="text-lg font-bold text-[#1e3a5f]">Record commission</h2>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
-        <p className="mb-4 text-xs text-gray-500">Provider revenue for an enrolment. Pick the student’s case and the specific programme application.</p>
+        <p className="mb-4 text-xs text-gray-500">Provider revenue for an enrolment. Pick the student’s case and the programme they applied to.</p>
 
         <label className="mb-1 block text-xs font-semibold text-gray-600">Case (student)</label>
         <select value={caseId} onChange={(e) => setCaseId(e.target.value)} className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
@@ -267,10 +295,17 @@ function RecordCommissionModal({ onClose, onDone }: { onClose: () => void; onDon
           {cases.map((c) => <option key={c.id} value={c.id}>{c.studentName || c.id} · {c.stage}</option>)}
         </select>
 
-        <label className="mb-1 block text-xs font-semibold text-gray-600">Application (programme)</label>
-        <select value={appId} onChange={(e) => setAppId(e.target.value)} disabled={!caseId} className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:bg-gray-50">
-          <option value="">{caseId ? (apps.length ? 'Select an application…' : 'No applications on this case') : 'Pick a case first'}</option>
-          {apps.map((a) => <option key={a.id} value={a.id}>{a.provider?.name ?? '—'} · {a.programme?.name ?? '—'} ({a.status})</option>)}
+        <label className="mb-1 block text-xs font-semibold text-gray-600">Programme applied to</label>
+        <select value={choiceId} onChange={(e) => setChoiceId(e.target.value)} disabled={!caseId} className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:bg-gray-50">
+          <option value="">{caseId ? (choices.length ? 'Select a programme…' : 'No programme choices on this case') : 'Pick a case first'}</option>
+          {choices.map((c) => (
+            // A choice that already has a commission stays visible but unselectable —
+            // "it is already recorded" reads better than the row simply not being there.
+            <option key={c.id} value={c.id} disabled={c.taken}>
+              {c.providerName ?? '—'} · {c.programmeName ?? '—'} ({MONTH_SHORT[c.intakeMonth] ?? c.intakeMonth} {c.intakeYear})
+              {c.taken ? ' — already recorded' : ''}
+            </option>
+          ))}
         </select>
 
         <div className="mb-3 grid grid-cols-2 gap-3">
@@ -297,7 +332,7 @@ function RecordCommissionModal({ onClose, onDone }: { onClose: () => void; onDon
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button type="button" onClick={submit} disabled={busy || !app || !value}
+          <button type="button" onClick={submit} disabled={busy || !choice || !value}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
             {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Record
           </button>

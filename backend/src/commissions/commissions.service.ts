@@ -15,24 +15,72 @@ export class CommissionsService {
     private eventsService: EventsService,
   ) {}
 
-  async createCommission(dto: CreateCommissionDto) {
-    // Validate application exists and doesn't already have commission
-    const application = await this.prisma.application.findUnique({
-      where: { id: dto.applicationId },
-      include: { commission: true },
+  /**
+   * The programme choices on a case, for the Record-commission picker.
+   *
+   * PR-COMMISSION-ANCHOR — replaces the old `GET /applications/:caseId`, which
+   * listed `Application` rows the admission flow never creates, so the picker
+   * was always empty by construction.
+   *
+   * A choice names a programme, and the institution hangs off the programme —
+   * so the provider is resolved here rather than asked of the caller. `taken`
+   * marks choices that already have a commission: one per choice is the rule,
+   * and showing them greyed out explains the absence better than hiding them.
+   */
+  async listProgrammeChoicesForCase(caseId: string) {
+    const choices = await this.prisma.admissionProgrammeChoice.findMany({
+      where: { admissionApplication: { caseId } },
+      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        commission: { select: { id: true } },
+        programme: {
+          select: {
+            id: true, name: true,
+            provider: { select: { id: true, name: true } },
+          },
+        },
+      },
     });
 
-    if (!application) {
-      throw new NotFoundException('Application not found');
+    return choices.map((c) => ({
+      id: c.id,
+      programmeId: c.programmeId,
+      programmeName: c.programme?.name ?? null,
+      providerId: c.programme?.provider?.id ?? null,
+      providerName: c.programme?.provider?.name ?? null,
+      intakeMonth: c.intakeMonth,
+      intakeYear: c.intakeYear,
+      priority: c.priority,
+      taken: c.commission !== null,
+    }));
+  }
+
+  async createCommission(dto: CreateCommissionDto) {
+    // PR-COMMISSION-ANCHOR — anchored on the programme choice.
+    //
+    // A programme choice names a programme but not a provider: the institution
+    // is a property of the programme. So the provider is READ from the
+    // programme rather than cross-checked against a second field the caller
+    // supplied, which is how the two could previously disagree.
+    const choice = await this.prisma.admissionProgrammeChoice.findUnique({
+      where: { id: dto.programmeChoiceId },
+      include: { commission: true, programme: { select: { providerId: true } } },
+    });
+
+    if (!choice) {
+      throw new NotFoundException('Programme choice not found');
     }
 
-    if (application.commission) {
-      throw new BadRequestException('Commission already exists for this application');
+    if (choice.commission) {
+      throw new BadRequestException('Commission already exists for this programme choice');
     }
 
-    // Validate provider and programme match application
-    if (application.providerId !== dto.providerId || application.programmeId !== dto.programmeId) {
-      throw new BadRequestException('Provider or programme does not match application');
+    if (choice.programmeId !== dto.programmeId) {
+      throw new BadRequestException('Programme does not match the programme choice');
+    }
+
+    if (choice.programme.providerId !== dto.providerId) {
+      throw new BadRequestException('Provider does not own the chosen programme');
     }
 
     return this.prisma.commission.create({
@@ -145,7 +193,7 @@ export class CommissionsService {
 
     if (!hasRole(actor, ...CommissionsService.LEDGER_OVERSIGHT_ROLES)) {
       // A commission belongs to a salesperson through the lead they own:
-      //   Commission → Application → Case → Lead → ownerId
+      //   Commission → AdmissionProgrammeChoice → AdmissionApplication → Case → Lead → ownerId
       // There is no direct salesperson column, so the relation is walked rather
       // than denormalised — no migration, and it cannot drift out of sync with
       // who actually owns the lead.
@@ -154,18 +202,24 @@ export class CommissionsService {
       if (!actor.id) {
         throw new ForbiddenException('You are not allowed to view commissions.');
       }
-      where.application = { case: { lead: { ownerId: actor.id } } };
+      where.programmeChoice = {
+        admissionApplication: { case: { lead: { ownerId: actor.id } } },
+      };
     }
 
     return this.prisma.commission.findMany({
       where,
       include: {
-        application: {
+        programmeChoice: {
           include: {
-            case: {
+            admissionApplication: {
               include: {
-                lead: {
-                  include: { contact: true },
+                case: {
+                  include: {
+                    lead: {
+                      include: { contact: true },
+                    },
+                  },
                 },
               },
             },

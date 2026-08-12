@@ -44,12 +44,6 @@ export class DashboardController {
     return this.dashboardService.getCommissionReminders();
   }
 
-  @Post('commissions/:id/confirm-commencement')
-  @Roles('OPERATIONS', 'SUPER_ADMIN')
-  confirmCommencement(@Param('id') id: string, @Req() req: any) {
-    return this.dashboardService.confirmCommencement(id, req.user?.id ?? null);
-  }
-
   @Get('providers')
   getProviders() {
     return this.dashboardService.getProviders();

@@ -2024,7 +2024,6 @@ model Application {
   provider   EducationProvider     @relation(fields: [providerId], references: [id])
   programme  EducationProgramme    @relation(fields: [programmeId], references: [id])
   documents  ApplicationDocument[]
-  commission Commission?
 
   @@index([caseId])
   @@index([status])
@@ -2307,7 +2306,17 @@ model CaseDocumentReview {
 
 model Commission {
   id                  String           @id @default(cuid())
-  applicationId       String           @unique
+  /// The programme this commission is earned on.
+  ///
+  /// PR-COMMISSION-ANCHOR — was `applicationId`, pointing at `Application`.
+  /// That model has never held a row and nothing in the admission flow writes
+  /// to it: the live pipeline is AdmissionApplication → AdmissionProgrammeChoice
+  /// → SubmissionRecord / OfferRecord. A commission is earned on one programme
+  /// at one institution, which is exactly what a programme choice is.
+  ///
+  /// Still @unique — one commission per programme choice, the same rule the
+  /// Application anchor enforced.
+  programmeChoiceId   String           @unique
   providerId          String
   programmeId         String
   commissionYear      Int              @default(1)
@@ -2326,9 +2335,9 @@ model Commission {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  application Application        @relation(fields: [applicationId], references: [id])
-  provider    EducationProvider  @relation(fields: [providerId], references: [id])
-  programme   EducationProgramme @relation(fields: [programmeId], references: [id])
+  programmeChoice AdmissionProgrammeChoice @relation(fields: [programmeChoiceId], references: [id])
+  provider        EducationProvider        @relation(fields: [providerId], references: [id])
+  programme       EducationProgramme       @relation(fields: [programmeId], references: [id])
 
   @@index([status])
   @@index([providerId])
@@ -3308,6 +3317,7 @@ model AdmissionProgrammeChoice {
   sopDocuments         SopDocument[]
   submissionRecords    SubmissionRecord[]
   offerRecords         OfferRecord[]
+  commission           Commission?
 
   @@index([admissionApplicationId])
   @@map("admission_programme_choices")

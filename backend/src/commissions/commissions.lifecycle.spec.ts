@@ -35,14 +35,27 @@ describe('CommissionsService (institutional/provider commissions)', () => {
     const contact = await prisma.contact.create({ data: { fullName: `Student ${s}`, email: `s.${s}@t.local` } });
     const lead = await prisma.lead.create({ data: { contactId: contact.id, leadStatus: 'EXECUTING' } as any });
     const kase = await prisma.case.create({ data: { leadId: lead.id } });
-    const app = await prisma.application.create({ data: { caseId: kase.id, providerId: provider.id, programmeId: programme.id } as any });
-    return { applicationId: app.id, providerId: provider.id, programmeId: programme.id, studentName: `Student ${s}` };
+    // PR-COMMISSION-ANCHOR — the anchor is the programme choice on the real
+    // admission application, not the unused `Application` model.
+    const appContact = await prisma.contact.create({
+      data: { fullName: `AppContact ${s}`, email: `appc.${s}@t.local` },
+    });
+    const adm = await prisma.admissionApplication.create({
+      data: { caseId: kase.id, contactId: appContact.id } as any,
+    });
+    const choice = await prisma.admissionProgrammeChoice.create({
+      data: {
+        admissionApplicationId: adm.id, programmeId: programme.id,
+        intakeMonth: 2, intakeYear: 2027, priority: 1,
+      } as any,
+    });
+    return { programmeChoiceId: choice.id, providerId: provider.id, programmeId: programme.id, studentName: `Student ${s}` };
   }
 
   async function recordEstimated() {
     const seed = await seedApplication();
     const c = await svc.createCommission({
-      applicationId: seed.applicationId, providerId: seed.providerId, programmeId: seed.programmeId,
+      programmeChoiceId: seed.programmeChoiceId, providerId: seed.providerId, programmeId: seed.programmeId,
       commissionType: 'PERCENTAGE' as any, commissionValue: 15, estimatedAmountNZD: 3000,
     } as any);
     return { ...seed, commission: c };
