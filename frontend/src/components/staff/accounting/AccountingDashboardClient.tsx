@@ -189,6 +189,19 @@ interface AgentSummaryRow {
 interface RateEntry { id: string; rate: number; rateDate: string; source: string; enteredByName: string | null }
 interface FxView { base: string; quote: string; current: RateEntry | null; history: RateEntry[] }
 
+/** Greeting by the reader's own clock. The spec said "Good morning" outright,
+ *  which is wrong for most of a working day.
+ *
+ *  Read after mount, never during render: the server runs in UTC and the reader
+ *  does not, so computing this on both sides would produce different HTML and a
+ *  hydration mismatch. "Hello" is what both sides agree on until then. */
+function greetingNow(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 /** Money arrives in minor units from the API — one unit for every currency. */
 const money = (currency: string, minorUnits: number) =>
   `${currency} ${(minorUnits / 100).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -237,11 +250,14 @@ const SECTIONS = [
   ['gst',        'GST'],
 ] as const;
 
-export function AccountingDashboardClient() {
+export function AccountingDashboardClient({ firstName }: { firstName?: string }) {
   const [ov, setOv] = useState<Overview | null>(null);
   const [fx, setFx] = useState<FxView | null>(null);
   const [agents, setAgents] = useState<AgentSummaryRow[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [hello, setHello] = useState('Hello');
+
+  useEffect(() => { setHello(greetingNow()); }, []);
 
   useEffect(() => {
     Promise.all([
@@ -323,6 +339,17 @@ export function AccountingDashboardClient() {
   const agentRows = agents ?? [];
   const anyAgentBalance = agentRows.length > 0;
 
+  // Company-wide agent balances, per currency. Summing across currencies would
+  // need a rate nobody locked, so the KPI shows each on its own line.
+  const owedByCurrency = new Map<string, number>();
+  const paidByCurrency = new Map<string, number>();
+  for (const r of agentRows) {
+    owedByCurrency.set(r.currency, (owedByCurrency.get(r.currency) ?? 0) + r.owedMinorUnits);
+    paidByCurrency.set(r.currency, (paidByCurrency.get(r.currency) ?? 0) + r.paidMinorUnits);
+  }
+  const owedTotals = [...owedByCurrency.entries()].filter(([, v]) => v > 0).sort();
+  const paidTotals = [...paidByCurrency.entries()].filter(([, v]) => v > 0).sort();
+
   const gst = ov?.gstByPeriod ?? null;
   const gstCurrencies = gst ? currenciesIn([gst], 'exGstByCurrency') : [];
 
@@ -352,7 +379,7 @@ export function AccountingDashboardClient() {
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <header className="ad-head">
           <div>
-            <h1 className="ad-h1">Good morning, Leila 🌱</h1>
+            <h1 className="ad-h1">{hello}{firstName ? `, ${firstName}` : ''} 🌱</h1>
             {/* The status line names what is actually waiting. When nothing is,
                 it says so — that is the point of it. */}
             <p>
@@ -460,7 +487,16 @@ export function AccountingDashboardClient() {
           </div>
           <div className="ad-kpi ad-fade">
             <div className="ad-kpi-top"><i className="ad-dot" style={{ background: C.pink }} /><span className="ad-label">Commission payable</span></div>
-            <p className="ad-kpi-none">Agent payouts aren’t tracked yet.</p>
+            {owedTotals.length === 0 ? (
+              <p className="ad-kpi-none">No agent has earned a share yet.</p>
+            ) : (
+              <>
+                <div className="ad-kpi-fig" style={{ color: C.pink, fontSize: owedTotals.length > 1 ? 20 : undefined }}>
+                  {owedTotals.map(([c, v]) => money(c, v)).join('  ·  ')}
+                </div>
+                <div className="ad-kpi-sub">owed to agents, not yet paid</div>
+              </>
+            )}
           </div>
           <div className="ad-kpi ad-fade">
             <div className="ad-kpi-top"><i className="ad-dot" style={{ background: C.coral }} /><span className="ad-label">Waiting on you</span></div>
@@ -495,8 +531,19 @@ export function AccountingDashboardClient() {
                   </BarChart>
                 </Chart>
                 <div className="ad-note" style={{ marginTop: 12 }}>
-                  <b>Money out isn’t here yet.</b> Agent payouts are the other half of this
-                  picture, and nothing records them — see the agents section below.
+                  {paidTotals.length === 0 ? (
+                    <>
+                      <b>Money out isn’t here yet.</b> Agent payouts are the other half of
+                      this picture. What is owed is now tracked — see the agents section
+                      below — but nothing has been paid out, so there is nothing to plot.
+                    </>
+                  ) : (
+                    <>
+                      <b>Paid out to agents: {paidTotals.map(([c, v]) => money(c, v)).join('  ·  ')}.</b>{' '}
+                      Not plotted alongside money in — a payout is dated when it was
+                      released, and this chart is dated by when payments landed.
+                    </>
+                  )}
                 </div>
               </>
             )}
@@ -687,7 +734,7 @@ export function AccountingDashboardClient() {
           </section>
           <section className="ad-card ad-fade">
             <h3 className="ad-h3">Who’s waiting</h3>
-            <p className="ad-cap">Approved amounts need a second person to release them.</p>
+            <p className="ad-cap">What each agent is owed, against what has already gone out.</p>
             {!anyAgentBalance ? (
               <Empty kind="waiting">
                 Nobody is waiting on a payout yet.

@@ -14,5 +14,8 @@ export default async function AccountingDashboardPage() {
   const session = await getSession();
   if (!session) redirect('/login?next=/staff/accounting/dashboard');
   if (!ALLOWED.has(session.role)) redirect('/staff');
-  return <AccountingDashboardClient />;
+  // The greeting names whoever is actually signed in. It was written against
+  // the Owner's name in the design spec, which greeted the accountant as
+  // somebody else.
+  return <AccountingDashboardClient firstName={session.name.trim().split(/\s+/)[0]} />;
 }
