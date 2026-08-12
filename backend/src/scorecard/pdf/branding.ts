@@ -3,7 +3,7 @@
 // All values come from the Sorena Visa brand book; the spec for this
 // PR pins them so they don't drift between the internal and client
 // reports. Colours are the same palette the rest of the platform
-// uses (#1E3A5F navy, #E8B923 gold, #FAF8F3 cream, #4A4A4A body).
+// uses (#1E3A5F navy, #c9a961 gold, #FAF8F3 cream, #4A4A4A body).
 //
 // The Python reference (Sorena_Scoring_Reference/score_pdf.py +
 // client_report.py) uses a slightly fuller palette including
@@ -15,7 +15,7 @@
 export const BRAND = {
   COLORS: {
     NAVY:      '#1E3A5F',
-    GOLD:      '#E8B923',
+    GOLD:      '#c9a961',
     OFF_WHITE: '#FAF8F3',
     BODY:      '#4A4A4A',
     MUTED:     '#8B8B8B',
