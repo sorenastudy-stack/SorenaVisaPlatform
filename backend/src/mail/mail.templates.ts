@@ -14,6 +14,11 @@ const NAVY      = '#1E3A5F';
 // One gold across the platform (#c9a961). The client portal moved to it in
 // phase 26; this is the transactional-email half of finishing that job.
 const GOLD      = '#c9a961';
+// Gold is a BACKGROUND and an accent here, not a text colour on light.
+// At 11px these section eyebrows need 4.5:1 (WCAG large-text starts at
+// 18.66px bold), and gold on white manages 2.25:1 — 3.03:1 even at the
+// darker companion. They are navy for that reason; gold keeps the header
+// band, the divider rule and the CTA, where it has the contrast to work.
 const OFF_WHITE = '#FAF8F3';
 const BODY      = '#4A4A4A';
 const MUTED     = '#8B8B8B';
@@ -540,13 +545,13 @@ export interface NewsletterData {
 export function newsletterBody(d: NewsletterData): string {
   const blog = d.blog
     ? `<div style="margin:0 0 20px;padding:16px;background:${OFF_WHITE};border-radius:10px;">
-         <div style="color:${GOLD};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Latest from the blog</div>
+         <div style="color:${NAVY};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Latest from the blog</div>
          <a href="${esc(d.blog.url)}" style="color:${NAVY};font-size:16px;font-weight:700;text-decoration:none;display:block;margin-top:6px;">${esc(d.blog.title)}</a>
        </div>`
     : '';
   const webinars = d.webinars && d.webinars.length
     ? `<div style="margin:0 0 20px;">
-         <div style="color:${GOLD};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Upcoming webinars</div>
+         <div style="color:${NAVY};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Upcoming webinars</div>
          ${d.webinars.map((w) => `<div style="margin:0 0 8px;color:${BODY};font-size:14px;">📅 <strong>${esc(w.dateLabel)}</strong> — ${w.url ? `<a href="${esc(w.url)}" style="color:${NAVY};">${esc(w.title)}</a>` : esc(w.title)}</div>`).join('')}
        </div>`
     : '';
