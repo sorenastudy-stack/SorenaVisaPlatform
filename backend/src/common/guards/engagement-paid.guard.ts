@@ -26,10 +26,28 @@ export class EngagementPaidGuard implements CanActivate {
     const caseId = await resolveOwnCaseId(this.prisma, userId);
     const { paid } = await getEngagementGateState(this.prisma, caseId);
     if (!paid) {
-      throw new ForbiddenException(
-        'Your full access opens once we confirm your payment.',
-      );
+      throw new ForbiddenException(this.message(req.user?.role));
     }
     return true;
+  }
+
+  /**
+   * What to say to the person actually reading it.
+   *
+   * These controllers are mounted for STUDENT *and* AGENT. The original wording
+   * — "once we confirm your payment" — is right for a client and meaningless to
+   * an agent, who has no engagement fee and never will: they reached a client
+   * surface that was never meant for them. Telling somebody to wait for a
+   * payment they cannot make sends them to support with a question nobody can
+   * answer.
+   *
+   * The distinction is cosmetic to the boundary — both answers are the same
+   * refusal — but a refusal is still something a person has to act on.
+   */
+  private message(role: unknown): string {
+    if (role === 'AGENT') {
+      return 'This is a client area. Your agent dashboard is at /agent.';
+    }
+    return 'Your full access opens once we confirm your payment.';
   }
 }
