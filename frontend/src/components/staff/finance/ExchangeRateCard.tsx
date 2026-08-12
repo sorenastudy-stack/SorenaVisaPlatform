@@ -155,17 +155,53 @@ function RateEditor({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Matches exchange_rates.rate — Decimal(12,6). More places than this are not
+  // stored, they are rounded away by Postgres, so the form refuses them here
+  // rather than reporting a save of a number the invoices would not carry.
+  const MAX_DECIMALS = 6;
+
   const parsed = Number(value);
-  const valid = value.trim() !== '' && Number.isFinite(parsed) && parsed >= 0.01 && parsed <= 1000;
+  const trimmed = value.trim();
+  const decimals = trimmed.includes('.') ? trimmed.split('.')[1].replace(/[^0-9]/g, '').length : 0;
+
+  // The reason the field is not valid, in the order a person meets them. Null
+  // when it is fine. Checked before the request so the answer is immediate and
+  // in our words — the backend enforces the same rules for callers that skip
+  // this form.
+  function problem(): string | null {
+    if (trimmed === '') return 'Enter a rate.';
+    if (!Number.isFinite(parsed)) return 'Enter a number — digits and a decimal point only.';
+    if (parsed <= 0) return 'The rate must be greater than zero.';
+    if (parsed < 0.01) return 'The rate must be at least 0.01.';
+    if (parsed > 1000) return 'The rate must be 1000 or less.';
+    if (decimals > MAX_DECIMALS) {
+      return `Enter a rate with up to ${MAX_DECIMALS} decimal places — ${trimmed} has ${decimals}.`;
+    }
+    return null;
+  }
+  const issue = problem();
+  const valid = issue === null;
+  // Shown as soon as the reader has typed something we cannot accept. Not
+  // gated behind pressing Save: the button is disabled while invalid, so
+  // waiting for a click would mean the field silently stops working and never
+  // says why — which is how the original error was found, one layer up.
+  const liveMessage = err ?? (value.trim() !== '' && issue ? issue : null);
 
   async function save() {
     setErr(null);
-    if (!valid) { setErr('Enter a rate between 0.01 and 1000.'); return; }
+    const p = problem();
+    if (p) { setErr(p); return; }
     setSaving(true);
     try {
       onSaved(await api.post<RateView>('/staff/finance/exchange-rate', { rate: parsed }));
     } catch (e: any) {
-      setErr(e?.message ?? 'Couldn’t save the rate.');
+      // Nest returns DTO failures as an ARRAY of messages, which stringifies to
+      // a comma-joined blob. Take the first — they are written as whole
+      // sentences — rather than showing the reader a joined list.
+      const raw = e?.body?.message ?? e?.message;
+      setErr(
+        (Array.isArray(raw) ? raw[0] : raw) || 'Couldn’t save the rate.',
+      );
       setSaving(false);
     }
   }
@@ -183,14 +219,15 @@ function RateEditor({
           min="0.01"
           max="1000"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => { setValue(e.target.value); setErr(null); }}
           className="w-48 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm tabular-nums focus:border-sorena-gold focus:outline-none focus:ring-1 focus:ring-sorena-gold"
         />
         <p className="mt-1 text-xs text-sorena-text/50">
-          This is added as a new entry — the previous rate stays on record.
+          Up to {MAX_DECIMALS} decimal places. This is added as a new entry — the
+          previous rate stays on record.
         </p>
       </div>
-      {err && <p className="text-xs text-red-600">{err}</p>}
+      {liveMessage && <p className="text-xs text-red-600">{liveMessage}</p>}
       <div className="flex items-center gap-2">
         <button
           type="button"
