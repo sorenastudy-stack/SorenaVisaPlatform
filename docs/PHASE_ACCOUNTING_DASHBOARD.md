@@ -1,7 +1,7 @@
 # Phase — Accounting Dashboard
 
 **Date:** 12 August 2026
-**Commits:** `2490ed1` (dashboard) · `41010d9` (revenue + GST aggregation)
+**Commits:** `2490ed1` (dashboard) · `74e0e9b` (revenue + GST aggregation)
 **Route:** `/staff/accounting/dashboard`
 
 ## 1. What this does
