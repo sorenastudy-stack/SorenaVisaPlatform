@@ -13,13 +13,14 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ImmigrationOfficersService } from './immigration-officers.service';
 import { LinkOfficerDto } from './dto/immigration-officers.dto';
+import { CaseAccessGuard } from '../cases/case-access.guard';
 
 // PR-LIA-10 — Case-side linkage endpoints. Mounted under /cases so
 // the routes co-locate with the existing case namespace, but the
 // controller + service live in the officers module for cohesion.
 
 @Controller('cases')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
 @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
 export class CaseOfficerLinkageController {
   constructor(private readonly service: ImmigrationOfficersService) {}

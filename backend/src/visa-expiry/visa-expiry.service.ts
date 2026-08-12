@@ -192,9 +192,33 @@ export class VisaExpiryService {
 
   // ─── Dashboard query ───────────────────────────────────────────────────
 
-  async getExpiringSoon(thresholdDays: number = 30) {
+  /**
+   * The expiring-visa queue.
+   *
+   * PR-LIA-RESTRICT — `viewer` scopes the queue for an LIA to their own cases.
+   * The rows carry applicant names and email addresses, so an unscoped queue was
+   * a cross-case client list for a role that can no longer open those cases.
+   * Admin tier still sees everything; the sweep itself passes no viewer, because
+   * it must reach every expiring visa to send the reminders.
+   */
+  async getExpiringSoon(
+    thresholdDays: number = 30,
+    viewer?: { userId?: string | null; role?: string | null } | null,
+  ) {
     const now = new Date();
     const end = new Date(now.getTime() + thresholdDays * 86_400_000);
+
+    // Scoped LAST and unconditionally for the role it applies to, so no caller
+    // argument can widen it.
+    //
+    // An LIA with no id is not a request to answer generously — it means the
+    // caller could not be identified, and the empty queue is the honest answer.
+    // A branch rather than an impossible-to-match sentinel value, which reads as
+    // a bug the next time someone sees it.
+    if (viewer?.role === 'LIA' && !viewer.userId) return [];
+
+    const scope =
+      viewer?.role === 'LIA' ? { case: { liaId: viewer.userId } } : {};
 
     const visas = await this.prisma.visa.findMany({
       where: {
@@ -203,6 +227,7 @@ export class VisaExpiryService {
         // also show expired-but-not-renewed cases. Clamp at the upper
         // end with `lte: end` so we don't blast back 10-year-old rows.
         visaEndDate: { lte: end },
+        ...scope,
       },
       include: {
         case: {

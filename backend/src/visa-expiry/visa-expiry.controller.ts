@@ -30,16 +30,20 @@ export class VisaExpiryController {
 
   // GET /staff/visa-expiry/expiring-soon
   //
-  // Returns the queue for the LIA dashboard + dedicated page. LIA
-  // included in the gate — every LIA needs to see "their" cases in
-  // the queue. Filtering is intentionally NOT scoped to viewer here;
-  // the frontend can render a "Mine" chip if/when needed.
+  // Returns the queue for the LIA dashboard + dedicated page.
+  //
+  // PR-LIA-RESTRICT — an LIA now gets their own cases only. The rows carry
+  // applicant names and emails, so the previously unscoped queue was a
+  // cross-case client list for a role that can no longer open those cases.
   @Get('expiring-soon')
   @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
-  async expiringSoon(@Query('thresholdDays') thresholdDays?: string) {
+  async expiringSoon(@Req() req: any, @Query('thresholdDays') thresholdDays?: string) {
     const t = thresholdDays ? parseInt(thresholdDays, 10) : 30;
     const clamped = Number.isFinite(t) && t > 0 && t <= 365 ? t : 30;
-    return this.service.getExpiringSoon(clamped);
+    return this.service.getExpiringSoon(clamped, {
+      userId: req.user?.userId ?? req.user?.id,
+      role: req.user?.role,
+    });
   }
 
   // POST /staff/visa-expiry/run-sweep-now

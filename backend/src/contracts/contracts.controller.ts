@@ -7,6 +7,9 @@ import { ContractsService } from './contracts.service';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { DocusignWebhookGuard } from './docusign-webhook.guard';
 import { DocusealWebhookGuard } from './docuseal-webhook.guard';
+import { CaseAccessGuard } from '../cases/case-access.guard';
+import { assertCaseReadable } from '../cases/assert-case-read';
+import { PrismaService } from '../prisma/prisma.service';
 
 // PR-DOCUSIGN-N (webhook signature) — guards are applied PER-ROUTE, not
 // class-wide. The two staff-facing routes keep JwtAuthGuard + RolesGuard
@@ -16,7 +19,10 @@ import { DocusealWebhookGuard } from './docuseal-webhook.guard';
 // would have 401'd every legitimate DocuSign delivery.
 @Controller('contracts')
 export class ContractsController {
-  constructor(private readonly contractsService: ContractsService) {}
+  constructor(
+    private readonly contractsService: ContractsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,7 +30,16 @@ export class ContractsController {
   // originate lead-based sends from the lead detail page (and read the case-side
   // status). Applies to both send + read; the Phase A gate is unchanged.
   @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CLIENT_CONSULTANT')
-  create(@Body() dto: CreateContractDto, @Req() req: any) {
+  async create(@Body() dto: CreateContractDto, @Req() req: any) {
+    // PR-LIA-RESTRICT — the case id arrives in the BODY here, not the path, so
+    // CaseAccessGuard (which reads route params) cannot cover this route. The
+    // same check, made explicitly. The leadId path has no case to check yet.
+    if (dto.caseId) {
+      await assertCaseReadable(this.prisma, dto.caseId, {
+        userId: req.user?.userId ?? req.user?.id,
+        role: req.user?.role,
+      });
+    }
     // JwtStrategy.validate returns { userId, email, role } — there is no
     // `req.user.id` and no guaranteed `name`. Build the actor object the
     // same way cases.controller.ts does so the send can be attributed.
@@ -47,7 +62,7 @@ export class ContractsController {
   // read any case's contract by id). Gated to the same staff set that may send
   // a contract (matches @Post above).
   @Get(':caseId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
   // PR-CONTRACT-LEAD (Phase B) — CLIENT_CONSULTANT (Client Officer) added: they
   // originate lead-based sends from the lead detail page (and read the case-side
   // status). Applies to both send + read; the Phase A gate is unchanged.

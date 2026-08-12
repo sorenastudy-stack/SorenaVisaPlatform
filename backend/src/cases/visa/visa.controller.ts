@@ -28,6 +28,7 @@ import {
   IssueVisaDto,
   RevertVisaDto,
 } from './dto/visa.dto';
+import { CaseAccessGuard, CaseParam } from '../case-access.guard';
 
 // PR-LIA-8 — Visa lifecycle endpoints.
 //
@@ -75,7 +76,8 @@ const multerOptions = {
 };
 
 @Controller('cases')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@CaseParam('id')
+@UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
 @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
 export class VisaController {
   constructor(private readonly service: VisaService) {}

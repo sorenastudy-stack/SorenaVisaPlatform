@@ -356,13 +356,17 @@ export class CaseDocumentsService {
     return role === 'OWNER' || role === 'SUPER_ADMIN' || role === 'ADMIN';
   }
 
-  // Cases the actor may see: read-all roles (OWNER/SUPER_ADMIN/ADMIN/LIA) → every
-  // case; anyone else → cases where they currently hold a slot (assigned cases),
-  // so a reassign-away drops the case on the next request.
+  // Cases the actor may see: admin tier → every case; anyone else → cases where
+  // they currently hold a slot (assigned cases), so a reassign-away drops the
+  // case on the next request.
+  //
+  // PR-LIA-RESTRICT — LIA removed from the read-all set. It already appears in
+  // the slot filter below as liaId, so an LIA now sees their own cases' documents
+  // and no one else's.
   private async resolveScopedCaseIds(actor: Actor): Promise<string[]> {
     const readAll =
       actor.role === 'OWNER' || actor.role === 'SUPER_ADMIN' ||
-      actor.role === 'ADMIN' || actor.role === 'LIA';
+      actor.role === 'ADMIN';
     const cases = await this.prisma.case.findMany({
       where: readAll
         ? {}

@@ -14,9 +14,10 @@ import { assertCaseReadable } from './assert-case-read';
  * decision made on what it returns; a mocked case would only prove the helper
  * calls a function, not that the boundary holds.
  *
- * The LIA clause is asserted here deliberately. "LIA sees all cases" is a
- * locked operational policy, not an accident, and a test that pins it means a
- * future change to it has to be a decision rather than a side effect.
+ * The LIA clause was originally pinned here as "sees all cases" — a locked
+ * operational policy at the time. It was restricted on 2026-08-12 to the same
+ * shape as the other working roles. The pin did its job: the change failed this
+ * test rather than passing silently.
  */
 
 jest.setTimeout(60000);
@@ -132,9 +133,19 @@ describe('assertCaseReadable', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('lets LIA read any case — the locked Operations-Manual read model', async () => {
+  it('refuses an LIA who is not the assigned adviser', async () => {
+    // This test previously asserted the opposite, pinning the blanket
+    // "LIA sees all cases" model so that changing it had to be a decision
+    // rather than a side effect. That decision was taken on 2026-08-12.
     await expect(
       assertCaseReadable(prisma as any, caseOfA, viewer(liaUser, 'LIA')),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('lets the assigned LIA read their own case', async () => {
+    const mine = await mkCase({ liaId: liaUser });
+    await expect(
+      assertCaseReadable(prisma as any, mine, viewer(liaUser, 'LIA')),
     ).resolves.toBeUndefined();
   });
 

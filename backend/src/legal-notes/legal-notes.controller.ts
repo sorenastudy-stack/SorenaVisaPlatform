@@ -15,6 +15,7 @@ import {
   CreateLegalNoteDto,
   RecordDecisionDto,
 } from './dto/legal-notes.dto';
+import { CaseAccessGuard } from '../cases/case-access.guard';
 
 // PR-LIA-1 — LIA-only endpoints for the case-detail action panel.
 //
@@ -25,7 +26,7 @@ import {
 //                                   the same legal_notes table.
 
 @Controller('cases')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
 @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
 export class LegalNotesController {
   constructor(private readonly service: LegalNotesService) {}

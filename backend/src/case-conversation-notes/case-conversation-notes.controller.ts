@@ -18,6 +18,7 @@ import {
   CreateConversationNoteDto,
   UpdateConversationNoteDto,
 } from './dto/conversation-note.dto';
+import { CaseAccessGuard } from '../cases/case-access.guard';
 
 // PR-LIA-CONVO-NOTES — case-attached LIA conversation notes.
 //
@@ -31,7 +32,7 @@ import {
 // No client route mounts this controller, so the client role never reaches it.
 
 @Controller('cases')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
 @Roles('LIA', 'OWNER', 'SUPER_ADMIN')
 export class CaseConversationNotesController {
   constructor(private readonly service: CaseConversationNotesService) {}

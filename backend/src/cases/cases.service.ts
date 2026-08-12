@@ -22,7 +22,11 @@ interface CaseViewer {
   userId: string;
   role: string;
 }
-const SEE_ALL_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN', 'LIA'];
+// PR-LIA-RESTRICT — LIA removed. This is the list counterpart of canReadCase,
+// and the two must agree: a role that cannot open a case must not be handed a
+// row for it here either. LIA now falls through to the slot filter below, which
+// already matches on liaId.
+const SEE_ALL_ROLES = ['OWNER', 'ADMIN', 'SUPER_ADMIN'];
 
 interface LiaActor {
   id: string;

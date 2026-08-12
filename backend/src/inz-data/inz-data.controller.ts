@@ -5,6 +5,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { InzDataService } from './inz-data.service';
+import { CaseAccessGuard } from '../cases/case-access.guard';
 
 // PR-LIA-6 — Consolidated INZ application data viewer (read-only).
 //
@@ -13,7 +14,7 @@ import { InzDataService } from './inz-data.service';
 // trail for who accessed what and when.
 
 @Controller('cases')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
 @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
 export class InzDataController {
   constructor(

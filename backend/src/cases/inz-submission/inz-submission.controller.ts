@@ -27,6 +27,7 @@ import {
   RevertInzSubmissionDto,
   SubmitToInzDto,
 } from './dto/inz-submission.dto';
+import { CaseAccessGuard, CaseParam } from '../case-access.guard';
 
 // PR-LIA-7 — INZ submission endpoints.
 //
@@ -76,7 +77,8 @@ const multerOptions = {
 };
 
 @Controller('cases')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@CaseParam('id')
+@UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
 @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
 export class InzSubmissionController {
   constructor(private readonly service: InzSubmissionService) {}

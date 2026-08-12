@@ -19,6 +19,7 @@ import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { RejectPaymentDto } from './dto/reject-payment.dto';
 import { Prisma } from '@prisma/client';
+import { CaseAccessGuard } from '../cases/case-access.guard';
 
 @Controller('payments')
 export class PaymentsController {
@@ -74,7 +75,7 @@ export class PaymentsController {
    * — other callers (lead-detail flows) keep using the leadId-keyed route.
    */
   @Post('case/:caseId/consultation-link')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
   @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
   async createCaseConsultationLink(
     @Param('caseId') caseId: string,
@@ -95,7 +96,7 @@ export class PaymentsController {
    * dollar-typed input via EPSILON-safe Math.round before sending.
    */
   @Post('case/:caseId/custom-link')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
   @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
   async createCaseCustomLink(
     @Param('caseId') caseId: string,
@@ -115,7 +116,7 @@ export class PaymentsController {
    * Staff-only.
    */
   @Get('case/:caseId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
   @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
   async listPaymentsForCase(@Param('caseId') caseId: string) {
     return this.paymentsService.listPaymentsForCase(caseId);
@@ -126,7 +127,7 @@ export class PaymentsController {
    * one Payment row + one AuditLog row in a single transaction. Staff-only.
    */
   @Post('case/:caseId/manual')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
   @Roles('OWNER', 'SUPER_ADMIN', 'ADMIN', 'LIA', 'CONSULTANT', 'SUPPORT', 'FINANCE')
   async recordManualPayment(
     @Param('caseId') caseId: string,

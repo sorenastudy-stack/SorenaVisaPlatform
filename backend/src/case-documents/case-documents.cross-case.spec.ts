@@ -36,7 +36,7 @@ describe('listAllDocumentsAcrossCases — access matrix + scoping + Other bucket
     const contact = await prisma.contact.create({ data: { fullName: `Client ${s}`, email: `client.${s}@t.local`, userId: clientUser.id } });
     const lead = await prisma.lead.create({ data: { contactId: contact.id, leadStatus: 'NEW' } });
     // Case assigned to the Admission Officer (ownerId) + Client Officer (consultantId).
-    const kase = await prisma.case.create({ data: { leadId: lead.id, ownerId: admOfficer, consultantId: clientOfficer } });
+    const kase = await prisma.case.create({ data: { leadId: lead.id, ownerId: admOfficer, consultantId: clientOfficer, liaId: lia } });
     caseId = kase.id;
 
     // ── ADMISSION source: one P1 (PASSPORT) + one P2 (VISA_POLICE_CERTIFICATE) ──
@@ -78,7 +78,11 @@ describe('listAllDocumentsAcrossCases — access matrix + scoping + Other bucket
     ]);
   });
 
-  it('LIA sees all structured incl. visa, but NOT the System-A Other bucket', async () => {
+  it('the ASSIGNED LIA sees all structured incl. visa, but NOT the System-A Other bucket', async () => {
+    // PR-LIA-RESTRICT — this case now carries liaId. Before the restriction the
+    // LIA was not assigned to it and saw these documents anyway; what that
+    // asserted was the blanket read-all, not the document-priority rules this
+    // suite is about. Assigning them keeps the assertion testing what it meant to.
     const rows = await onCase({ id: lia, role: 'LIA' });
     expect(sources(rows)).toEqual([
       'ADMISSION:PASSPORT',
@@ -86,6 +90,19 @@ describe('listAllDocumentsAcrossCases — access matrix + scoping + Other bucket
       'VISA_SUPPORTING:OFFER_OF_PLACE',
     ]);
     expect(rows.some((r) => r.bucket === 'OTHER')).toBe(false);
+  });
+
+  it('an LIA who is NOT the assigned adviser sees nothing on this case', async () => {
+    // The restriction itself: role alone is no longer enough.
+    const stranger = await prisma.user.create({
+      data: {
+        name: 'Stranger LIA', email: `stranger.lia.${Date.now()}@t.local`,
+        passwordHash: 'x', role: 'LIA', isActive: true,
+      },
+    });
+    const rows = await onCase({ id: stranger.id, role: 'LIA' });
+    expect(rows).toEqual([]);
+    await prisma.user.delete({ where: { id: stranger.id } }).catch(() => {});
   });
 
   it('Admission Officer (CONSULTANT, assigned) sees P1 non-visa ONLY', async () => {

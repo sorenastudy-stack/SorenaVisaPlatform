@@ -17,6 +17,7 @@ import {
   FulfilRequestDto,
   RequestDocumentDto,
 } from './dto/case-messages.dto';
+import { CaseAccessGuard } from '../cases/case-access.guard';
 
 // PR-LIA-4 — LIA-side routes for the case-thread.
 //
@@ -26,7 +27,7 @@ import {
 // this module so both sides share one service.
 
 @Controller('cases')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CaseAccessGuard)
 @Roles('LIA', 'ADMIN', 'SUPER_ADMIN', 'OWNER')
 export class CaseMessagesLiaController {
   constructor(private readonly service: CaseMessagesService) {}
