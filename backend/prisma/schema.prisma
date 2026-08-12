@@ -262,6 +262,12 @@ enum ApplicationStatus {
   WITHDRAWN
 }
 
+enum CommissionTriggerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum CommissionStatus {
   ESTIMATED
   CONFIRMED
@@ -2344,6 +2350,48 @@ model Commission {
   @@map("commissions")
 }
 
+/// PR-COMMISSION-TRIGGER — the Admission Officer's claim that a commission is
+/// now owed, and Finance's decision on it.
+///
+/// Separate from `Commission` rather than a state in front of ESTIMATED: the two
+/// answer different questions. A trigger asks "has this been claimed, and did
+/// Finance agree?"; a commission tracks "is the money estimated, invoiced, in?".
+/// Folding them together would have made CommissionStatus mean two lifecycles.
+///
+/// Approving a trigger is what CREATES the commission — so a commission row now
+/// implies someone claimed it and someone else agreed, which the free-form
+/// modal never did.
+///
+/// NOT unique on programmeChoiceId. A rejected claim must be re-submittable if
+/// circumstances change, and a plain unique constraint would make the first
+/// rejection permanent. Instead a PARTIAL unique index (see the migration)
+/// allows at most one trigger that is not REJECTED, so the rejection history is
+/// kept and only one live claim can exist at a time.
+///
+/// Actor fields are plain id snapshots with no relation, matching
+/// SubmissionRecord.submittedById and OfferRecord.createdById in this same
+/// admission cluster.
+model CommissionTrigger {
+  id                String                  @id @default(cuid())
+  programmeChoiceId String
+  submittedById     String
+  submittedAt       DateTime                @default(now())
+  status            CommissionTriggerStatus @default(PENDING)
+  decidedById       String?
+  decidedAt         DateTime?
+  /// Required when REJECTED — a refusal the Admission Officer cannot read is
+  /// one they cannot act on.
+  rejectionReason   String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  programmeChoice AdmissionProgrammeChoice @relation(fields: [programmeChoiceId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([programmeChoiceId])
+  @@map("commission_triggers")
+}
+
 // ─── EDUCATION PROVIDERS ─────────────────────────────────────────────────────
 
 model EducationProvider {
@@ -3310,6 +3358,18 @@ model AdmissionProgrammeChoice {
   intakeMonth            Int
   intakeYear             Int
   priority               Int
+  /// The day the student first attended class on THIS programme.
+  ///
+  /// PR-COMMISSION-TRIGGER — a student starts classes on a programme, not on a
+  /// case, so it sits here beside the commission and the trigger rather than on
+  /// the case. Null until someone confirms it happened; nothing infers it from
+  /// an intake month, because an intake is when a term starts and this is
+  /// whether a particular person turned up.
+  ///
+  /// Commission eligibility is computed from this on read — 14 days after this
+  /// date — so there is no stored "eligible" flag to fall out of date and no
+  /// job to keep it current.
+  firstClassAttendedAt   DateTime?
   createdAt              DateTime @default(now())
 
   admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
@@ -3318,6 +3378,7 @@ model AdmissionProgrammeChoice {
   submissionRecords    SubmissionRecord[]
   offerRecords         OfferRecord[]
   commission           Commission?
+  commissionTriggers   CommissionTrigger[]
 
   @@index([admissionApplicationId])
   @@map("admission_programme_choices")

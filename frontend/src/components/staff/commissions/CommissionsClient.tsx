@@ -104,6 +104,8 @@ export function CommissionsClient({ role }: { role: string }) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-10 space-y-6">
+      <PendingTriggers onDecided={() => load()} />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -341,3 +343,164 @@ function RecordCommissionModal({ onClose, onDone }: { onClose: () => void; onDon
     </div>
   );
 }
+
+
+// PR-COMMISSION-TRIGGER — Finance's decision queue.
+//
+// Sits above the ledger because it is work waiting on the reader, where the
+// ledger below is a record of work already done. Approving CREATES the
+// commission, which is why the rate is collected here: it is the same
+// information the Record modal asks for, gathered at the moment someone is
+// already looking at the claim.
+//
+// Renders nothing at all when the queue is empty, so the ledger looks exactly
+// as it did before for anyone with no decisions outstanding.
+interface TriggerRow {
+  id: string;
+  studentName: string | null;
+  clientId: string | null;
+  programmeName: string | null;
+  providerName: string | null;
+  submittedByName: string | null;
+  submittedAt: string;
+  firstClassAttendedAt: string | null;
+}
+
+function PendingTriggers({ onDecided }: { onDecided: () => void }) {
+  const [rows, setRows] = useState<TriggerRow[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [mode, setMode] = useState<'approve' | 'reject'>('approve');
+  const [value, setValue] = useState('');
+  const [type, setType] = useState<'PERCENTAGE' | 'FIXED'>('PERCENTAGE');
+  const [estimated, setEstimated] = useState('');
+  const [reason, setReason] = useState('');
+
+  const load = () => {
+    api.get<TriggerRow[]>('/staff/commission-triggers/pending')
+      .then(setRows)
+      .catch(() => setRows([]));
+  };
+  useEffect(load, []);
+
+  const close = () => {
+    setOpenId(null); setValue(''); setEstimated(''); setReason(''); setType('PERCENTAGE');
+  };
+
+  const decide = async (id: string) => {
+    setBusy(id);
+    try {
+      if (mode === 'approve') {
+        if (!value) { toast.error('Enter the commission rate or amount.'); setBusy(null); return; }
+        await api.patch('/staff/commission-triggers/' + id + '/approve', {
+          commissionType: type,
+          commissionValue: Number(value),
+          ...(estimated ? { estimatedAmountNZD: Number(estimated) } : {}),
+        });
+        toast.success('Approved - commission recorded.');
+      } else {
+        if (!reason.trim()) {
+          toast.error('Give a reason so the Admission Officer knows what to fix.');
+          setBusy(null); return;
+        }
+        await api.patch('/staff/commission-triggers/' + id + '/reject', { reason });
+        toast.success('Claim declined.');
+      }
+      close(); load(); onDecided();
+    } catch (e) {
+      const raw = (e as any)?.body?.message ?? (e as Error)?.message;
+      toast.error((Array.isArray(raw) ? raw[0] : raw) || 'Could not record that decision');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!rows || rows.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-amber-300/60 bg-amber-50/50 p-4 md:p-5">
+      <h2 className="mb-1 text-sm font-bold uppercase tracking-wide text-[#1e3a5f]">
+        Commission claims awaiting your decision ({rows.length})
+      </h2>
+      <p className="mb-3 text-xs text-gray-600">
+        Submitted by the Admission Officer once the student has been in class two weeks. Approving records the commission.
+      </p>
+      <ul className="space-y-2">
+        {rows.map((t) => (
+          <li key={t.id} className="rounded-xl border border-gray-200 bg-white p-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-[#1e3a5f]">
+                  {t.studentName ?? 'Unknown student'}
+                  {t.clientId && <code className="ml-2 font-mono text-[11px] text-gray-400">{t.clientId}</code>}
+                </p>
+                <p className="mt-0.5 text-sm text-gray-600">{t.providerName ?? '—'} · {t.programmeName ?? '—'}</p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Claimed by {t.submittedByName ?? 'an officer'} · first class{' '}
+                  {t.firstClassAttendedAt ? new Date(t.firstClassAttendedAt).toLocaleDateString('en-NZ') : '—'}
+                </p>
+              </div>
+              {openId !== t.id && (
+                <div className="flex shrink-0 gap-2">
+                  <button type="button" onClick={() => { setMode('approve'); setOpenId(t.id); }}
+                    className="rounded-lg bg-[#1e3a5f] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#162d4a]">
+                    Approve
+                  </button>
+                  <button type="button" onClick={() => { setMode('reject'); setOpenId(t.id); }}
+                    className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50">
+                    Decline
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {openId === t.id && (
+              <div className="mt-3 border-t border-gray-100 pt-3">
+                {mode === 'approve' ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-600">Type</label>
+                      <select value={type} onChange={(e) => setType(e.target.value as 'PERCENTAGE' | 'FIXED')}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                        <option value="PERCENTAGE">Percentage (%)</option>
+                        <option value="FIXED">Fixed (NZD)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-600">Rate / amount</label>
+                      <input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal"
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-gray-600">Estimated NZD (optional)</label>
+                      <input value={estimated} onChange={(e) => setEstimated(e.target.value)} inputMode="decimal"
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Why is this being declined?</label>
+                    <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
+                      placeholder="The Admission Officer sees this, and can re-submit once it is resolved."
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                  </div>
+                )}
+                <div className="mt-3 flex justify-end gap-2">
+                  <button type="button" onClick={close}
+                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                    Cancel
+                  </button>
+                  <button type="button" disabled={busy === t.id} onClick={() => decide(t.id)}
+                    className={'rounded-lg px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50 ' + (mode === 'approve' ? 'bg-[#1e3a5f] hover:bg-[#162d4a]' : 'bg-rose-600 hover:bg-rose-700')}>
+                    {busy === t.id ? 'Saving…' : mode === 'approve' ? 'Approve & record' : 'Decline claim'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+

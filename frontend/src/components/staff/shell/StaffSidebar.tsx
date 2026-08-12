@@ -4,10 +4,35 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  LayoutDashboard, Briefcase, Calendar, Inbox, Users, ShieldCheck, ShieldAlert, Megaphone,
-  Settings, BadgeCheck, CalendarClock, CalendarOff, FileText, CheckCircle2,
-  Clock, BookOpen, KeyRound, Award, ArrowLeftRight, PhoneCall, CalendarDays, DollarSign, LayoutGrid,
-  Timer, AlertTriangle, GraduationCap, Globe2, ClipboardList,
+  AlertTriangle,
+  ArrowLeftRight,
+  Award,
+  BadgeCheck,
+  BookOpen,
+  Briefcase,
+  Calendar,
+  CalendarClock,
+  CalendarDays,
+  CalendarOff,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  DollarSign,
+  FileText,
+  Globe2,
+  GraduationCap,
+  Inbox,
+  KeyRound,
+  LayoutDashboard,
+  LayoutGrid,
+  Megaphone,
+  PhoneCall,
+  Send,
+  Settings,
+  ShieldAlert,
+  ShieldCheck,
+  Timer,
+  Users,
 } from 'lucide-react';
 import { useStaff } from '@/contexts/StaffContext';
 import { portalBrand } from '@/lib/portal-branding';
@@ -60,6 +85,9 @@ const KANBAN_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT', 'CLIENT_CON
 // PR-COMMISSIONS-UI — institutional/provider commission ledger. Money-managing
 // tier: OWNER + FINANCE (+ SUPER_ADMIN).
 const COMMISSIONS_ROLES = ['OWNER', 'SUPER_ADMIN', 'FINANCE'] as const;
+// PR-COMMISSION-TRIGGER — claiming a commission is the Admission Officer's job;
+// deciding on the claim is Finance's. Different people, so different nav.
+const COMMISSION_TRIGGER_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'CONSULTANT'] as const;
 // PR-SLA — overdue-by-officer report (owner tier) + the editable SLA config screen.
 const SLA_REPORT_ROLES = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 const SLA_SETTINGS_ROLES = ['OWNER', 'SUPER_ADMIN'] as const;
@@ -132,6 +160,7 @@ const NAV: NavItem[] = [
   // PR-COMMISSIONS-UI: institutional/provider commission ledger (revenue Sorena
   // earns from providers). OWNER + FINANCE.
   { label: 'Commissions',                  href: '/staff/commissions',        icon: <DollarSign size={18} />,  roleGate: COMMISSIONS_ROLES },
+  { label: 'Commission triggers',          href: '/staff/commission-triggers', icon: <Send size={18} />,       roleGate: COMMISSION_TRIGGER_ROLES },
   { label: 'Universities',                 href: '/staff/universities',       icon: <GraduationCap size={18} />, roleGate: UNIVERSITIES_ROLES },
   // PR-CATALOG-1: cross-institution pending-programme approval queue.
   { label: 'Programme approvals',          href: '/staff/programme-approvals', icon: <CheckCircle2 size={18} />, roleGate: PROGRAMME_APPROVALS_ROLES },
