@@ -1,9 +1,17 @@
 # Phase — Accounting Dashboard
 
+> **This phase is COMPLETE. This is its final update.**
+> The Accounting Dashboard and the whole Agent Payables feature — derivation
+> (phase 1) and the approve/release workflow (phase 2) — are built, deployed
+> and verified end to end. Later work on agent payouts should start its own
+> phase document rather than extend this one. The open items in §9 are
+> deliberate exclusions, not unfinished business.
+
 **Date:** 12 August 2026
 **Commits:** `2490ed1` (dashboard) · `74e0e9b` (revenue + GST aggregation) ·
 `c5ac865` (provider commission + agent payables phase 1) ·
-`befea48` + `ed64340` (stale copy found by the populated verification, §6)
+`befea48` + `ed64340` (stale copy found by the populated verification, §6) ·
+`3bf879f` (agent payables phase 2 — approve, reject, release)
 **Route:** `/staff/accounting/dashboard`
 
 ## 1. What this does
@@ -27,6 +35,7 @@ Built in passes, each reviewed before the next:
 3. Revenue-by-month and GST-by-period aggregation.
 4. Provider commission wiring, and **Agent Payables phase 1** — a new feature, not a
    wiring gap: agents had no money fields at all until this pass.
+5. **Agent Payables phase 2** (§11) — approve, reject and release, under dual control.
 
 Every card now reads from real data or says plainly why it cannot. The only remaining
 "not tracked yet" is service mix (§9).
@@ -68,6 +77,22 @@ Every card now reads from real data or says plainly why it cannot. The only rema
 - `backend/src/staff/payments/accounting-overview.spec.ts` — 9 tests over pipeline + ageing
 - `frontend/src/components/staff/accounting/AccountingDashboardClient.tsx` — the four
   cards in the Provider commission and Agents sections
+
+**Added in phase 2** (`3bf879f`)
+- `backend/prisma/migrations/20260812210000_agent_payable_rejected_enum/` — the enum value
+- `backend/prisma/migrations/20260812210100_agent_payable_rejection/` — columns + the partial unique
+  index that replaces the outright one
+- `backend/src/commissions/dto/reject-payable.dto.ts` — the reason, required
+- `backend/src/commissions/agent-payables-decisions.spec.ts` — 19 tests over dual
+  control, concurrency, rejection and audit
+- `frontend/src/components/staff/commissions/AgentPayoutsClient.tsx` — both queues
+- `frontend/src/app/staff/agent-payouts/page.tsx` + `release/page.tsx` — the two routes
+
+**Modified in phase 2**
+- `backend/src/commissions/agent-payables.service.ts` — the four transitions
+- `backend/src/commissions/agent-payables.controller.ts` — six routes
+- `frontend/src/components/staff/shell/StaffSidebar.tsx` — nav entries in BOTH nav
+  tables, and the first per-item count badge
 
 **Modified by the two follow-up fixes**
 - `frontend/src/components/staff/accounting/AccountingDashboardClient.tsx` — three KPI
@@ -299,18 +324,25 @@ written against imagined data. Confirmed with the Owner before changing.
 **Done since the first pass:** revenue-by-month, GST-by-period, provider commission
 pipeline and ageing, and agent payables phase 1.
 
-**Agent payables phase 2 — approve and pay, not built.** Dual control, mirroring the
-card-refund pattern: FINANCE moves PENDING → APPROVED, OWNER moves APPROVED → PAID. The
-person who confirms a debt is not the person who releases the money. The columns those
-steps write (`approvedById`/`approvedByName`/`approvedAt`, and the same trio for paid)
-already exist on `AgentPayable` and are unused until then. Held deliberately: phase 1 is
-derivation and visibility only.
+**Agent payables phase 2 — built and shipped.** See §11.
 
-**⚠ Cleanup, now more urgent.** Production holds two `AffiliateAgent` rows: one named
-`jacki` with notes `"test"`, and one carrying the Owner's own email. They were harmless
-while agents were attribution-only. Once phase 2 ships they can appear in a real money
-ledger with a real balance and a real Pay button. Decide whether to remove or rename them
-before that, not after.
+**Cleanup — done.** Production held two placeholder `AffiliateAgent` rows: one named
+`jacki` with notes `"test"`, and one carrying the Owner's own email. Both were deleted on
+12 August 2026, before the payout workflow existed, so there was never a moment where a
+real Pay button sat beside a test record. Neither carried an attributed lead or a payable;
+`jacki`'s single tracking link had zero clicks and was removed with it. A full verified
+`pg_dump` and a row-level JSON snapshot were taken first, and the deletion is in the audit
+log as `AFFILIATE_AGENT_DELETED` — written afterwards, because the maintenance script that
+performed it bypassed the app's own delete path, which would have written it.
+
+**⚠ `FINANCE_TABS` says one thing and does another.** In
+`frontend/src/components/staff/shell/StaffBottomTabs.tsx` the comment states its labels
+are "rendered directly, not via t()" while the code calls `t(tab.label)` on them, so a
+FINANCE user gets four `MISSING_MESSAGE` console errors on every page load. Harmless but
+noisy, and it is the same stale-comment class as the copy bugs in §6 — a comment that was
+true when written and silently became false. A five-minute fix: mirror the sidebar's
+`label.includes('.') ? t(label) : label`. Left out of the phase-2 push on purpose, to keep
+that change to one subject.
 
 Still deliberately not built. Each is its own piece of work, not unfinished business here.
 
@@ -339,11 +371,162 @@ Still deliberately not built. Each is its own piece of work, not unfinished busi
    consultation / unknown, which is the nearest available field, not Stripe / link /
    transfer as the spec intended.
 
+## 11. Agent Payables phase 2 — approve, reject, release
+
+Shipped in `3bf879f`. Phase 1 worked out what is owed; this decides whether to pay it,
+and records who said so.
+
+### The control, and why it is the whole point
+
+```
+PENDING  --approve--> APPROVED  --release--> PAID     FINANCE approves, OWNER releases
+   |
+   +-----reject-----> REJECTED  (terminal, reason required)
+```
+
+`release()` refuses when `approvedById === actor.id`. **That single check is the
+feature.** Without it the two states are paperwork: one person holding the right role
+walks a payable from PENDING to PAID alone, and nothing on the way out disagrees. It is
+copied from the one place in this codebase that already enforces separation of duties —
+`OwnerApprovalService.approve()` — but the question is different there. A refund has a
+requester; a payable has none, because it is derived precisely so that nobody claims it.
+So the pairing that matters is approver-versus-releaser, not requester-versus-approver.
+
+A refused self-release is **written to the audit log**, not merely rejected. One person
+attempting both halves is exactly the event the control exists to catch, and an attempt
+nobody can see afterwards is a control that only works while somebody is watching.
+
+### Endpoints
+
+| Route | Role | Transition |
+|---|---|---|
+| `GET /staff/agent-payables/pending` | FINANCE (+OWNER/SUPER_ADMIN) | — |
+| `GET /staff/agent-payables/awaiting-release` | money tier | — |
+| `GET /staff/agent-payables/awaiting-release/count` | money tier | — (the badge) |
+| `PATCH /staff/agent-payables/:id/approve` | FINANCE (+OWNER/SUPER_ADMIN) | PENDING → APPROVED |
+| `PATCH /staff/agent-payables/:id/reject` | FINANCE (+OWNER/SUPER_ADMIN) | PENDING → REJECTED |
+| `PATCH /staff/agent-payables/:id/release` | **OWNER only** | APPROVED → PAID |
+
+The role gate says who may ask; the service decides what happens. `release` is OWNER-only
+*and* refuses a self-release, and only the second of those is a rule about money.
+
+### Transitions are conditional updates
+
+`updateMany({ where: { id, status: from } })` with an asserted count of 1 — never
+read-then-check-then-write. The owner-approval queue reads, checks, then writes, and
+survives concurrency only because Stripe deduplicates on an idempotency key. **A payout
+has no such backstop**, so the database has to be the thing that says no. Proven with two
+simultaneous releases producing exactly one payment and one refusal — in tests, over local
+HTTP, and against production.
+
+### The bug that nearly shipped: a rejection that undid itself
+
+The constraint was narrowed from "one payable per commission" to "one LIVE payable per
+commission" (partial unique index, the same shape as
+`commission_triggers_one_live_per_choice`) so that a refusal stays on record without
+condemning the commission to never producing a payable again.
+
+But derivation runs on every read. The first build did exactly what the constraint now
+permitted:
+
+```
+REJECTED   510   reason=provider clawed the commission back
+PENDING    510   <- back in Finance's queue within one second
+```
+
+Finance would reject the same row forever. **A reject button that undoes itself is worse
+than no reject button.** The fix separates the constraint from the behaviour: the index
+still permits a replacement, so raising one later needs no migration, but the derivation
+skips any commission that has ever had a payable (`agentPayables: { none: {} }`). Raising
+a fresh payable after a refusal is a decision somebody takes — and **that action is not
+built**, so today a rejection is final in practice.
+
+Only a click-through found this. Every test passed, because the tests asserted the
+behaviour that had been asked for.
+
+### Two migration folders, on purpose
+
+`20260812210000_agent_payable_rejected_enum` adds `REJECTED`;
+`20260812210100_agent_payable_rejection` adds the four rejection columns and swaps the
+index. They cannot be one file: Postgres permits `ALTER TYPE ... ADD VALUE` inside a
+transaction but forbids *using* the new value in that same transaction, and the partial
+index's predicate names it. `prisma migrate deploy` wraps each file in a transaction, so a
+single migration fails with "unsafe use of new value of enum type". Confirmed applying in
+order on production — enum committed first, index second.
+
+### Rejection requires a reason
+
+Unlike the refund queue's optional `decisionNote`. This is money owed to somebody outside
+the company, and the question a reconciliation asks months later is "why was this not
+paid?" — a blank answer makes the row unexplainable rather than merely undocumented.
+Enforced in the DTO and re-checked, trimmed, in the service.
+
+### Audit trail
+
+`AGENT_PAYABLE_APPROVED` / `_REJECTED` / `_PAID`, plus `_APPROVE_REFUSED` /
+`_REJECT_REFUSED` / `_RELEASE_REFUSED` for attempts that failed. Every row carries the
+**amount and currency** in its payload — correcting the refund precedent, where
+`OWNER_APPROVAL_EXECUTED` records that something happened but not what moved, and where a
+failed execution writes no audit row at all.
+
+Actor names are read from the **database**, not the token. The JWT carries `sub`, `email`,
+`role` and `secondaryRoles` and no name, so a snapshot taken from `req.user.name` would
+have written null on every decision — and a null snapshot is worthless the moment the
+staff row it was supposed to outlive is deleted. Same root cause as the greeting bug in
+§6, caught the second time by remembering the first.
+
+### UI
+
+Two pages, one component (`AgentPayoutsClient`, `mode="approve" | "release"`), modelled on
+`CommissionTriggersClient`'s two-role queue rather than the refund queue's encrypted
+payload renderers. A payout the viewer approved themselves renders **greyed out with the
+reason in amber** — the server would refuse it anyway, but a button that fails when
+pressed teaches nothing.
+
+The count badge needed a new mechanism: the only badge in the shell belonged to the
+notification bell and could not carry a queue depth. `NavItem.badge` is a named key so the
+nav table stays a static declaration. **FINANCE has its own fixed nav** (`FINANCE_NAV`),
+not the role-filtered one, so an entry added only to `NAV` would have been invisible to
+the role that does the approving — both lists carry it.
+
+The badge matters more than it looks: unlike a refund request, **a payable never expires**.
+Nothing eventually notices an unnoticed one.
+
+### Verified
+
+- 1,145 tests / 95 suites, 21 new. Mutation-tested: removing the self-release check fails
+  2 tests; removing `status` from the conditional update fails both concurrency tests.
+- 36/36 over local HTTP against a running backend.
+- 23/23 against **production**, including the concurrency guard and the self-release block,
+  with fixtures torn down to a verified residual of zero.
+- Click-through on demo: both queues, the badge, and the greyed-out self-approved row,
+  with no console errors on either page.
+
+### ⚠ `nest build` can silently do nothing
+
+`tsconfig.json` sets `incremental: true` and `nest-cli.json` sets `deleteOutDir: true`.
+The tsbuildinfo file survives the deleted `dist/`, so tsc concludes the outputs are
+current and emits **nothing** — while `nest build` exits 0. A stale or absent `dist` then
+boots the *previous* code, which is how a "clean build" can be reported for a build that
+never ran.
+
+Trust `npx tsc --noEmit` for correctness, and when the compiled output matters (running
+`dist/main`, deploying), delete `tsconfig.build.tsbuildinfo` first and check that `dist/`
+actually has ~62 entries. Some "build clean" claims made earlier on 12 August 2026 were
+weaker than they sounded for this reason.
+
 ## 10. How to extend / rollback
 
 **Extend.** Add fields to `AccountingOverview` and its service; the page reads them and
 replaces an `<Empty>` with a chart. Keep the "facts only, no presentation" split. When a
 card gains real data, delete its `<Empty>` — do not leave both behind a flag.
+
+**Rollback (phase 2).** Reverting the code leaves the four rejection columns and the
+partial index in place, which is harmless — but note the index is the ONLY thing stopping
+two live payables per commission, since phase 2 replaced the outright unique constraint.
+Do not drop it without restoring `agent_payables_commissionId_key` in the same breath. Any
+payable already APPROVED or PAID carries a human decision and must never be discarded to
+simplify a rollback.
 
 **Rollback.** Revert per pass. The aggregation pass has no migration to unwind; its only
 lasting effect is that invoices issued after it carry an `issuedAt`, and reverting simply
