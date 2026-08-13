@@ -5,7 +5,9 @@ import { calculateFeeBreakdown, FeeBreakdown } from '../payments/fee-config';
 // server-side, in integer cents; never a client-sent total, never a float).
 //
 // PR-GST-SESSIONS — this module used to own its own arithmetic: no GST at all,
-// and a flat 10% card fee (SESSION_CARD_FEE_PERCENT). Both were wrong, and both
+// and a flat 10% card fee, tunable through a SESSION_CARD_FEE_PERCENT env var
+// that is now DELETED along with cardFeePercent() and computeCardFeeCents() —
+// it has no reader and is set in no Railway service or environment. Both were wrong, and both
 // were wrong in the same way the account-opening fee and the chatbot CTA were
 // wrong before they were corrected: a number derived by hand instead of read
 // from the place that owns it.

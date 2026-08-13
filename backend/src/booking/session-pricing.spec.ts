@@ -54,7 +54,10 @@ describe('session pricing — what the client is charged', () => {
     expect(lia.cardFeeCents).toBe(Math.round(6670 * 0.029) + 30);
   });
 
-  it('SESSION_CARD_FEE_PERCENT no longer influences anything', () => {
+  // Kept deliberately after the variable was retired: this is the guard that
+  // fails if anyone reintroduces env-driven fee logic. The name appearing here
+  // documents that it is dead, it does not keep it alive.
+  it('a stray SESSION_CARD_FEE_PERCENT cannot influence pricing', () => {
     const before = getSessionPricing('LIA');
     process.env.SESSION_CARD_FEE_PERCENT = '50';
     try {

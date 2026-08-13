@@ -1,5 +1,28 @@
 # PR-SESSION-PRICING-USD — single-sourced USD session pricing + disclosed 10% card fee
 
+> ## ⚠ SUPERSEDED — the card-fee model described here no longer exists
+>
+> Phase E priced sessions at the **base with no GST** and charged a **flat 10%**
+> card fee, configurable via `SESSION_CARD_FEE_PERCENT`. Both were wrong and both
+> were corrected on **13 Aug 2026** (`0de6a8a`):
+>
+> | | Phase E charged | Now charges |
+> |---|---|---|
+> | GAP_CLOSING | 20.00 wallet / 22.00 card | **23.00 / 23.97** |
+> | LIA | 58.00 wallet / 63.80 card | **66.70 / 68.93** |
+>
+> `session-pricing.ts` now derives everything from `fee-config`'s
+> `calculateFeeBreakdown` — GST on the base, then Stripe's real 2.9% + $0.30 on the
+> GST-inclusive amount. **`SESSION_CARD_FEE_PERCENT`, `cardFeePercent()` and
+> `computeCardFeeCents()` are deleted**; the env var has no reader and is not set in
+> any Railway service or environment.
+>
+> Sections 3, 7(j) and 8 below describe the removed model and are kept only as a
+> record of what Phase E did. **Do not follow section 8's instruction to set
+> `SESSION_CARD_FEE_PERCENT` — it does nothing.** See
+> `AUDIT_CLIENT_PORTAL_2026-08-13.md` finding #1.
+
+
 Session prices move to **USD** (GAP $20, LIA $58, FREE $0), single-sourced from
 `session-config`, with a **disclosed 10% card processing fee** (card only; wallet
 pays the base, no fee). Wallets migrate to USD with a currency-match guard.
