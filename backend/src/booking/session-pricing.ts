@@ -5,9 +5,13 @@ import { BookingSessionType, getSessionConfig } from './session-config';
 //
 // Card fee is a PERCENTAGE (default 10%), env-overridable via
 // SESSION_CARD_FEE_PERCENT. It is applied ONLY to card payments — wallet pays
-// the base price with no fee. NOTE: this is deliberately NOT the flat
-// CARD_SURCHARGE_CENTS used by the account-opening invoice (that stays a flat
-// $20 and is untouched) — a flat fee on a $20 session would be a ~67% fee.
+// the base price with no fee. It is deliberately NOT fee-config's
+// calculateCardSurcharge: sessions carry their own percentage, set here.
+//
+// (This note used to describe a flat CARD_SURCHARGE_CENTS on the
+// account-opening invoice. That constant is gone — PR-GST-CHARGE moved the
+// invoice onto fee-config's own 2.9% + $0.30, which is what Stripe actually
+// takes.)
 
 export interface SessionPricing {
   type: BookingSessionType;

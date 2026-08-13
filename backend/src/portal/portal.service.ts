@@ -8,6 +8,7 @@ import {
 import * as fs from 'fs';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { calculateFeeBreakdown } from '../payments/fee-config';
 import { PaymentsService } from '../payments/payments.service';
 import { ContractsService } from '../contracts/contracts.service';
 import { createSignedDownloadToken } from '../common/signed-url.util';
@@ -148,19 +149,25 @@ export class PortalService {
       throw new ConflictException('Invoice not payable');
     }
 
-    // Amount is authoritative from the Invoice. This endpoint is the CARD
-    // (Stripe) path, so a fixed card-processing surcharge (config
-    // CARD_SURCHARGE_CENTS, default 2000 = $20) is added SERVER-SIDE — the
-    // client never supplies an amount, so they cannot alter the charge. The
-    // stored Invoice amount is NOT mutated: only the Stripe charge is grossed
-    // up. Bank transfer / partner exchange pay the un-surcharged invoice
-    // amount (they don't hit this endpoint).
+    // Amount is authoritative from the Invoice, and the arithmetic on top of it
+    // comes from fee-config — the one place that defines what a client owes.
+    //
+    // PR-GST-CHARGE: this used to be `invoice.amount + a flat env surcharge`,
+    // which charged neither the GST the invoice had already stored nor the card
+    // fee fee-config declares. A $200 fee was billed as $200 by transfer (GST
+    // never collected, though a $30 GST figure sat on the row and fed the GST
+    // return) and $220 by card (a flat $20 rather than Stripe's actual cut).
+    //
+    // Invoice.amount stays the BASE — it is what the service is worth, and
+    // nothing here mutates it. GST and the card fee are computed per payment
+    // method, because a bank transfer must never carry a card fee.
     const invoiceCents = Math.round(invoice.amount.toNumber() * 100);
     if (invoiceCents <= 0) {
       throw new BadRequestException('Invoice amount is not payable');
     }
-    const surchargeCents = this.cardSurchargeCents();
-    const chargeCents = invoiceCents + surchargeCents;
+    const card = calculateFeeBreakdown(invoiceCents, 'card', invoice.currency);
+    const surchargeCents = card.cardFeeCents;
+    const chargeCents = card.totalCents;
 
     const { url } = await this.payments.createCustomLinkForCase(
       invoice.caseId,
@@ -177,19 +184,14 @@ export class PortalService {
         eventType:  'INVOICE_PAY_LINK_CREATED',
         entityType: 'Invoice',
         entityId:   invoiceId,
-        newValue:   { caseId: invoice.caseId, invoiceCents, surchargeCents, chargeCents } as Prisma.InputJsonValue,
+        newValue:   {
+          caseId: invoice.caseId, invoiceCents,
+          gstCents: card.gstCents, surchargeCents, chargeCents,
+        } as Prisma.InputJsonValue,
       },
     });
 
     return { url };
-  }
-
-  // Fixed card-processing surcharge (config; default 2000 = $20). Added to the
-  // Stripe charge only — never persisted onto the Invoice. Read in one place so
-  // the pay-link (charge) and pay-options (display) always agree.
-  private cardSurchargeCents(): number {
-    const raw = Number(process.env.CARD_SURCHARGE_CENTS ?? 2000);
-    return Number.isFinite(raw) && raw >= 0 ? Math.round(raw) : 2000;
   }
 
   // GET /portal/me/invoices/:invoiceId/pay-options — read-only display data for
@@ -224,8 +226,12 @@ export class PortalService {
       throw new ConflictException('Invoice not payable');
     }
 
+    // Same arithmetic the pay-link uses, from the same function — the screen a
+    // client reads and the charge Stripe raises cannot disagree.
     const baseCents = Math.round(invoice.amount.toNumber() * 100);
-    const surchargeCents = this.cardSurchargeCents();
+    const bankTotals = calculateFeeBreakdown(baseCents, 'bank', invoice.currency);
+    const card = calculateFeeBreakdown(baseCents, 'card', invoice.currency);
+    const surchargeCents = card.cardFeeCents;
     // PR-ACCESS-GATE (Phase C) — admin-configurable company bank details (falls
     // back to the previously-hardcoded values until an admin edits them).
     const bank = await this.settings.getBankDetails();
@@ -233,9 +239,14 @@ export class PortalService {
       invoiceId:     invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       currency:      invoice.currency.toUpperCase(),
-      baseCents,                                  // bank / partner-exchange amount
-      surchargeCents,
-      cardCents:     baseCents + surchargeCents,  // Stripe card total
+      // `baseCents` is kept meaning what it always meant — the pre-GST fee — so
+      // no existing reader silently changes meaning. The two TOTALS are new and
+      // explicit, and they are what the screen must show.
+      baseCents,
+      gstCents:      bankTotals.gstCents,
+      bankCents:     bankTotals.totalCents,        // base + GST — bank / partner exchange
+      surchargeCents,                             // Stripe's cut, card only
+      cardCents:     card.totalCents,             // base + GST + card fee
       clientName:    ownedCase.lead?.contact?.fullName ?? null,
       // Piece #3 — once confirmed/reconciled the screen shows "Payment received".
       paid:            isPaid,

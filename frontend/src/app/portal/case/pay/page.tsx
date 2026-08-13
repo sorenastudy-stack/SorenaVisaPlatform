@@ -18,9 +18,11 @@ interface PayOptions {
   invoiceId:      string;
   invoiceNumber:  string;
   currency:       string;
-  baseCents:      number;
-  surchargeCents: number;
-  cardCents:      number;
+  baseCents:      number;   // the fee before GST
+  gstCents:       number;
+  bankCents:      number;   // base + GST — what a bank transfer pays
+  surchargeCents: number;   // Stripe's cut, card only
+  cardCents:      number;   // base + GST + card fee
   clientName:     string | null;
   paid:           boolean;
   processing:     boolean;
@@ -94,7 +96,7 @@ export default async function PayPage({
           </div>
           <p className="mt-3 text-sm leading-relaxed text-[#4A4A4A]/80">{t('paidBody')}</p>
           <p className="mt-3 text-xs text-[#4A4A4A]/55">
-            {invoiceLabel} · {formatMoneyCents(opts.baseCents, opts.currency)}
+            {invoiceLabel} · {formatMoneyCents(opts.bankCents, opts.currency)}
           </p>
         </section>
       </div>
@@ -114,7 +116,7 @@ export default async function PayPage({
           </div>
           <p className="mt-3 text-sm leading-relaxed text-[#4A4A4A]/80">{t('processingBody')}</p>
           <p className="mt-3 text-xs text-[#4A4A4A]/55">
-            {invoiceLabel} · {formatMoneyCents(opts.baseCents, opts.currency)}
+            {invoiceLabel} · {formatMoneyCents(opts.bankCents, opts.currency)}
           </p>
         </section>
       </div>
@@ -149,7 +151,7 @@ export default async function PayPage({
           <h1 className="text-2xl font-bold leading-tight text-[#1e3a5f]">{t('title')}</h1>
           <p className="mt-1 text-sm leading-relaxed text-[#4A4A4A]/80">{t('secure')}</p>
           <p className="mt-2 text-xs text-[#4A4A4A]/55">
-            {invoiceLabel} · {formatMoneyCents(opts.baseCents, opts.currency)}
+            {invoiceLabel} · {formatMoneyCents(opts.bankCents, opts.currency)}
           </p>
         </div>
       </header>
@@ -190,7 +192,7 @@ export default async function PayPage({
           </span>
         </div>
         <p className="mt-4 text-3xl font-bold tracking-tight text-[#1e3a5f]">
-          {formatMoneyCents(opts.baseCents, opts.currency)}
+          {formatMoneyCents(opts.bankCents, opts.currency)}
         </p>
 
         <dl className="mt-5 overflow-hidden rounded-xl border border-[#c9a961]/20 bg-white divide-y divide-gray-100">
@@ -224,7 +226,7 @@ export default async function PayPage({
           <h2 className="text-base font-bold text-[#1e3a5f]">{t('cantPay')}</h2>
         </div>
         <p className="mt-4 text-3xl font-bold tracking-tight text-[#1e3a5f]">
-          {formatMoneyCents(opts.baseCents, opts.currency)}
+          {formatMoneyCents(opts.bankCents, opts.currency)}
         </p>
         <p className="mt-2.5 text-sm leading-relaxed text-[#4A4A4A]/75">{t('partnerIntro')}</p>
         <a
