@@ -6,9 +6,11 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
+import { calculateFeeBreakdown } from '../../payments/fee-config';
 
 // Piece #3 — accountant (FINANCE) "confirm payments" service.
 //
@@ -101,6 +103,11 @@ export class StaffPaymentsService {
         currency: true,
         receiptMethod: true,
         receiptUploadedAt: true,
+        // PR-AR-BANK-PAYMENT — Payment.leadId is required. The receipt-upload
+        // path refuses an invoice with no caseId and resolves ownership through
+        // case.lead.contact, so any invoice that can reach THIS method always
+        // has a case, and a case always has a leadId.
+        case: { select: { leadId: true } },
       },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
@@ -124,32 +131,118 @@ export class StaffPaymentsService {
       where: { id: userId },
       select: { name: true, role: true },
     });
+    // Invoice.amount is the PRE-GST base (Decimal dollars), as everywhere else.
     const amountCents = Math.round(Number(invoice.amount) * 100);
 
-    await this.prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { status: 'PAID', paidAt: new Date() },
+    // PR-AR-BANK-PAYMENT — the money record this path never wrote.
+    //
+    // Confirming a bank receipt flipped the invoice to PAID and stopped there.
+    // Everything downstream reads Payment rows, so everything downstream was
+    // blind to bank transfers — the payment method the platform RECOMMENDS:
+    //
+    //   • the client's Payments page showed "No payments yet" to somebody who
+    //     had paid, and offered them no tax invoice to download;
+    //   • the accounting dashboard counted the invoice as invoiced but never
+    //     as received, under-reporting cash.
+    //
+    // The card path already writes one (Stripe webhook) and the staff manual
+    // path already writes one. This closes the third door, in the same shape:
+    // a synthetic id, the GST-inclusive total from fee-config, and
+    // metadata.invoiceId — the soft link getMyPayments already resolves.
+    const breakdown = calculateFeeBreakdown(amountCents, 'bank', invoice.currency);
+    const leadId = invoice.case?.leadId ?? null;
+
+    // Duplicate guard: staff may have already recorded this transfer through
+    // the manual endpoint. Two rows for one transfer would double-count revenue.
+    const existing = leadId
+      ? await this.prisma.payment.findFirst({
+          where: { metadata: { path: ['invoiceId'], equals: invoiceId } },
+          select: { id: true },
+        })
+      : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { status: 'PAID', paidAt: new Date() },
+      });
+
+      // Same transaction as the status flip: an invoice must never be able to
+      // read PAID while its payment record is missing.
+      if (leadId && !existing) {
+        await tx.payment.create({
+          data: {
+            // `bank_` prefix, mirroring the manual path's `manual_` — cannot
+            // collide with a real Stripe id (`pi_…`), so webhook idempotency
+            // is untouched.
+            stripePaymentIntentId: `bank_${randomUUID()}`,
+            leadId,
+            caseId: invoice.caseId,
+            paymentType: invoice.receiptMethod === 'exchange' ? 'exchange' : 'bank_transfer',
+            // The TOTAL that moved — base + GST, matching what the Stripe path
+            // records (`amount_received`, likewise GST-inclusive).
+            amount: breakdown.totalCents,
+            currency: invoice.currency,
+            gstCents: breakdown.gstCents,
+            cardFeeCents: breakdown.cardFeeCents, // 0 — no card was processed
+            status: 'succeeded',
+            // CONFIRMED, not the PENDING default: finance is verifying at this
+            // exact moment. PENDING would re-queue work that was just done.
+            verificationStatus: 'CONFIRMED',
+            verifiedById: userId,
+            verifiedAt: new Date(),
+            metadata: {
+              invoiceId,
+              method: invoice.receiptMethod,
+              confirmedFromReceipt: true,
+              actorId: userId,
+              actorName: actor?.name ?? null,
+              actorRole: actor?.role ?? null,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'PAYMENT_CONFIRMED_BY_FINANCE',
+          eventType: 'PAYMENT_CONFIRMED_BY_FINANCE',
+          entityType: 'Invoice',
+          entityId: invoiceId,
+          newValue: {
+            status: 'PAID',
+            caseId: invoice.caseId,
+            amountCents,
+            currency: invoice.currency,
+            method: invoice.receiptMethod,
+            // What was actually recorded as received.
+            receivedCents: breakdown.totalCents,
+            gstCents: breakdown.gstCents,
+            paymentRecorded: !!(leadId && !existing),
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor?.name ?? 'FINANCE',
+          actorRoleSnapshot: actor?.role ?? 'FINANCE',
+        },
+      });
     });
-    await this.prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'PAYMENT_CONFIRMED_BY_FINANCE',
-        eventType: 'PAYMENT_CONFIRMED_BY_FINANCE',
-        entityType: 'Invoice',
-        entityId: invoiceId,
-        newValue: {
-          status: 'PAID',
-          caseId: invoice.caseId,
-          amountCents,
-          currency: invoice.currency,
-          method: invoice.receiptMethod,
-        } as Prisma.InputJsonValue,
-        actorNameSnapshot: actor?.name ?? 'FINANCE',
-        actorRoleSnapshot: actor?.role ?? 'FINANCE',
-      },
-    });
+
+    if (existing) {
+      this.logger.warn(
+        `Invoice ${invoiceId} already had a linked Payment (${existing.id}) — confirmed without writing a second one.`,
+      );
+    } else if (!leadId) {
+      // Unreachable through the supported flow (see the `case` select above);
+      // logged loudly rather than throwing, because refusing to confirm real
+      // money over a data-shape gap is the worse failure.
+      this.logger.error(
+        `Invoice ${invoiceId} confirmed but NO Payment row written — no lead could be resolved.`,
+      );
+    }
+
     this.logger.log(
-      `Invoice ${invoiceId} confirmed → PAID by finance user ${userId} (${amountCents} ${invoice.currency})`,
+      `Invoice ${invoiceId} confirmed → PAID by finance user ${userId} ` +
+      `(base ${amountCents}, received ${breakdown.totalCents} ${invoice.currency})`,
     );
     return { ok: true as const, status: 'PAID' as const, alreadyPaid: false };
   }
