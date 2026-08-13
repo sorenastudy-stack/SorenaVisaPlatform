@@ -13,7 +13,9 @@ Nothing below is inferred from phase docs.
 | 2 | Payments page can never show a paid invoice | **FIXED** — `b2ef3dc` |
 | 3 | Payment gate fails closed under a shared rate limit | **FIXED** — 14 Aug 2026 |
 | 4 | Raw database IDs on the dashboard | **FIXED** — this commit |
-| 5-14 | Everything else | open, unprioritised |
+| 5-14 | Unambiguous set (raw i18n key, assistant markdown, 2 shell strings, false "being processed") | **FIXED** — 14 Aug 2026 |
+| 5-14 | Ticket-count contradiction | **DOES NOT REPRODUCE** — see the two-ticket-models entry in `BACKLOG.md` |
+| 5-14 | Four judgment calls (assessment dead-end, `DRAFT` leak, orphan route, empty wallet card) | open — awaiting an Owner decision |
 
 ### Finding #3 — FIXED, 14 Aug 2026
 

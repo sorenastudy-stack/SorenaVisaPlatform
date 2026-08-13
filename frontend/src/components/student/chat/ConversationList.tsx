@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Plus, MessageSquare } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/format-relative-time';
+import { stripInlineMarkdown } from './ChatMessageBubble';
 
 // PR-DASH-4 — Left-rail conversation list.
 //
@@ -70,7 +71,9 @@ export function ConversationList({
                 </div>
                 {c.preview && (
                   <p className="line-clamp-1 w-full text-xs text-slate-500">
-                    {c.preview}
+                    {/* Markers stripped, not rendered: a clamped one-liner has no
+                        room for emphasis, and raw ** is what clients were seeing. */}
+                    {stripInlineMarkdown(c.preview)}
                   </p>
                 )}
                 <p className="text-[10px] uppercase tracking-wide text-slate-400">

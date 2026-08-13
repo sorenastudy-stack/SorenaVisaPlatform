@@ -76,10 +76,52 @@ See `AUDIT_CLIENT_PORTAL_2026-08-13.md` for the full inventory and status table.
   client's server-rendered calls hit the backend from the frontend service's own address and
   share one 60/60s bucket; the shell spends ~4 requests per page render. Fixing the symptom
   did not fix this. Worth doing before traffic grows.
-- **Findings 5–14 open and unprioritised** — dashboard states two untrue things, a raw
-  `tickets.department.null` badge, "My Assessment" dead-ends silently, the assistant
-  renders raw markdown and leaks the internal `DRAFT` stage name, `/student/meetings` is
-  an orphan route, and more.
+- **Findings 5–14, unambiguous set — DONE 14 Aug 2026.** Raw `tickets.department.null`
+  badge, the assistant's raw markdown (in two components), the two untranslated shell
+  strings, and the dashboard's false "is being processed" claim. Verified in a real browser
+  in both locales, asserting absence as well as presence.
+- **Finding: the dashboard's ticket count "contradiction" does NOT reproduce.** The two
+  surfaces agree; see the ticket-model entry below for what is actually going on.
+- **Findings still open — the four judgment calls.** "My Assessment" dead-ends silently;
+  the assistant leaks the internal `DRAFT` stage name; `/student/meetings` is an orphan
+  route; `/portal/case`'s "MY WALLET" card is empty. Held for an Owner decision because
+  each is a UX choice, and several share a theme (what an empty or incomplete state should
+  look like across the portal) worth settling once rather than piecemeal.
+- **Also open:** the dashboard's "never taken an assessment" state. The false claim is gone,
+  but distinguishing "never submitted" from "submitted, awaiting result" needs the empty-state
+  decision above.
+
+### Two ticket models, and the portal reads different ones — NEW, 14 Aug 2026
+
+Found while re-verifying audit finding 1b. **Not investigated further; recorded so it does
+not have to be rediscovered.**
+
+The schema carries two unrelated ticket systems:
+
+| | `Ticket` (schema ~3008) | `VisaSupportTicket` (schema ~4615) |
+|---|---|---|
+| rows in dev | **90** | 0 for the test client |
+| `subject` | plaintext `String` | `subjectEncrypted`, decrypted on read |
+| `department` | **nullable** | NOT NULL |
+| companion | `TicketMessage` | `VisaSupportTicketMessage` |
+
+What was observed, not inferred:
+
+- The dashboard card counts **`VisaSupportTicket`** (`TicketsService.getDashboardSummary`).
+- `/student/tickets` displayed *"English pre-course consultation requested"* — a row that
+  exists **only in `Ticket`**, for a client with **zero** `VisaSupportTicket` rows.
+- Creating a properly-encrypted `VisaSupportTicket` probe made the dashboard count **1**
+  while the page **kept showing the `Ticket` row instead**. Probe removed afterwards.
+- `Ticket.department` being nullable is exactly where the original
+  `tickets.department.null` badge came from — a null that the other model cannot produce.
+
+**Unresolved and worth starting from:** `/student/tickets` fetches `/students/me/tickets`,
+and that controller's service reads `visaSupportTicket` — so the code path that served a
+`Ticket` row to that page has not been identified. Either another route answers that path,
+or the page reaches something else. That is the first thread to pull.
+
+Questions for whoever picks it up: which model is the client-facing one, is the other legacy,
+and does anything still write to both?
 
 ### Persian / RTL
 Six-item queue in the audit doc: Explore (242 English words), Recommendations (61), the

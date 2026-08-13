@@ -127,10 +127,11 @@ export function ClientShell({ children, session, portalStage, navItems, backHref
         <img src="/brand/logo-mark-white.jpg" alt="Sorena" className="h-8 w-8 flex-shrink-0" />
         <div className="flex flex-col leading-tight">
           <span className="text-white font-extrabold text-sm tracking-tight">Sorena Visa</span>
-          {/* Unified sub-label — "CLIENT PORTAL" everywhere, styled like the
-              Finance Portal's "FINANCE PORTAL" (gold, uppercase, same placement). */}
+          {/* Unified sub-label, styled like the Finance Portal's "FINANCE
+              PORTAL" (gold, uppercase, same placement). Translated: it sat in
+              English on every page of the Persian portal. */}
           <span className="text-[#c9a961] text-[10px] font-bold uppercase tracking-wider">
-            Client Portal
+            {t('portal.nav.clientPortal')}
           </span>
         </div>
       </div>

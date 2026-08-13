@@ -16,8 +16,14 @@ const DEPARTMENT_TINT: Record<string, string> = {
   GENERAL_INQUIRY:   'bg-rose-100    text-rose-800',
 };
 
-export function TicketDepartmentBadge({ department }: { department: string }) {
+export function TicketDepartmentBadge({ department }: { department?: string | null }) {
   const t = useTranslations();
+  // A department the bundle doesn't know renders the KEY to the client —
+  // `tickets.department.null` shipped as a badge exactly that way. next-intl
+  // returns the path on a miss, so an unmapped or absent value has to be caught
+  // here rather than trusted. Nothing is better than a raw key.
+  const key = `tickets.department.${department}`;
+  if (!department || !t.has(key as Parameters<typeof t.has>[0])) return null;
   const cls = DEPARTMENT_TINT[department] ?? DEPARTMENT_TINT.GENERAL_INQUIRY;
   return (
     <span

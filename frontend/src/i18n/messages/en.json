@@ -370,7 +370,7 @@
     },
     "assessmentReport": {
       "title": "Your assessment result",
-      "placeholder": "Your assessment is being processed — results will appear here once ready.",
+      "placeholder": "Your assessment results will appear here once ready.",
       "score": "Score",
       "band": "Band",
       "route": "Recommended route",
@@ -2159,6 +2159,8 @@
     "signOut": "Sign out",
     "nav": {
       "myCase": "My Case",
+      "clientPortal": "Client portal",
+      "recommendations": "Recommendations",
       "documents": "Documents",
       "wallet": "Wallet",
       "messages": "Messages & support",
