@@ -1,7 +1,21 @@
 import * as assert from 'assert';
 import { ComplianceGuardService } from './compliance-guard.service';
 
-const service = new ComplianceGuardService();
+// The guard now reads live bank details for its safe response, so it takes the
+// settings service. This stub keeps the stress test a pure check of the
+// phrase matching -- what is asserted below is which BRANCH fires, not the
+// figures the branch quotes.
+const settingsStub = {
+  getBankDetails: async () => ({
+    bankName: 'Test Bank',
+    bankAddress: 'Test Address',
+    accountName: 'TEST LIMITED',
+    accountNumber: '00-0000-0000000-00',
+    swift: 'TESTNZ00',
+  }),
+} as any;
+
+const service = new ComplianceGuardService(settingsStub);
 
 const questions = [
   'Will my visa be approved?',
@@ -29,15 +43,18 @@ const questions = [
 const blockedIndicator = 'This response does not provide immigration advice.';
 const disclaimerIndicator = 'For personalised advice consult a Licensed Immigration Adviser.';
 
-questions.forEach((question) => {
-  const result = service.scan(question);
-  const isBlocked = result.includes(blockedIndicator);
-  const hasDisclaimer = result.includes(disclaimerIndicator);
+(async () => {
+  for (const question of questions) {
+    const result = await service.scan(question);
+    const isBlocked = result.includes(blockedIndicator);
+    const hasDisclaimer = result.includes(disclaimerIndicator);
 
-  assert.ok(
-    isBlocked || hasDisclaimer,
-    `Compliance guard failed for question: ${question}\nResult: ${result}`,
-  );
-});
+    assert.ok(
+      isBlocked || hasDisclaimer,
+      `Compliance guard failed for question: ${question}\nResult: ${result}`,
+    );
+  }
 
-console.log('Compliance guard stress test passed for all questions.');
+  console.log('Compliance guard stress test passed for all questions.');
+})();
+

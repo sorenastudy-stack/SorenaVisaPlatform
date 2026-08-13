@@ -11,7 +11,7 @@
       "nurtureTitle": "We have designed a learning pathway tailored to your profile",
       "nurtureBody": "Free resources to help you build readiness over the next 3-6 months. We will email you a personalised learning plan.",
       "malaysiaTitle": "You also qualify for Malaysia",
-      "malaysiaBody": "You are eligible for both New Zealand AND Malaysia. As a Sorena-certified agent for both countries, we charge no service fees — universities pay us a commission upon successful enrollment. You only pay the INZ visa fee + our one-time USD 200 account opening fee.",
+      "malaysiaBody": "You are eligible for both New Zealand AND Malaysia. As a Sorena-certified agent for both countries, we charge no service fees — universities pay us a commission upon successful enrollment. You only pay the INZ visa fee + our one-time USD 200 + GST account opening fee.",
       "categoryBreakdown": "Category breakdown",
       "hardStopsTitle": "Hard stops",
       "resolution": "Resolution:",
@@ -1945,8 +1945,8 @@
           "consultationType": {
             "gapClosing": "Gap Closing",
             "admission": "Admission Consultation ($50)",
-            "liaConsultation": "LIA Consultation ($150)",
-            "accountOpening": "Account Opening ($200)",
+            "liaConsultation": "LIA Consultation ($58 + GST)",
+            "accountOpening": "Account Opening ($200 + GST)",
             "freeSession": "Free Session"
           },
           "generate": "Generate",

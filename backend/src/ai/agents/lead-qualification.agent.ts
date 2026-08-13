@@ -33,7 +33,7 @@ export class LeadQualificationAgent {
     const userPrompt = `Evaluate the following lead:\n\n${leadData}`;
 
     const responseText = await this.claudeService.chat(systemPrompt, userPrompt);
-    const scanned = this.complianceGuard.scan(responseText);
+    const scanned = await this.complianceGuard.scan(responseText);
     const finalText = scanned === responseText
       ? this.complianceGuard.injectDisclaimer(responseText)
       : scanned;

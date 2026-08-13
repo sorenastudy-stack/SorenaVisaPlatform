@@ -67,7 +67,7 @@ export class AiController {
     const systemPrompt =
       'You are an assistant for Sorena Visa. Answer user questions clearly and helpfully without providing immigration advice or visa eligibility determinations.';
     const responseText = await this.claudeService.chat(systemPrompt, dto.message);
-    const scanned = this.complianceGuard.scan(responseText);
+    const scanned = await this.complianceGuard.scan(responseText);
     return scanned === responseText
       ? this.complianceGuard.injectDisclaimer(responseText)
       : scanned;

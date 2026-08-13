@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaModule } from '../prisma/prisma.module';
+import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
 import { EventsService } from '../events/events.service';
 import { AiController } from './ai.controller';
 import { ClaudeService } from './claude.service';
@@ -10,7 +11,9 @@ import { CvGenerationAgent } from './agents/cv-generation.agent';
 import { SopGenerationAgent } from './agents/sop-generation.agent';
 
 @Module({
-  imports: [PrismaModule],
+  // PlatformSettings: the compliance guard quotes live bank details rather
+  // than a hardcoded copy of them.
+  imports: [PrismaModule, PlatformSettingsModule],
   controllers: [AiController],
   providers: [
     ClaudeService,

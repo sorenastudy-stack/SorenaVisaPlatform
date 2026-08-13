@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { getFee, calculateFeeBreakdown } from '../payments/fee-config';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 @Injectable()
 export class ComplianceGuardService {
+  constructor(private readonly settings: PlatformSettingsService) {}
+
   private blockedPhrases = [
     'your visa will',
     'you are eligible',
@@ -19,7 +23,9 @@ export class ComplianceGuardService {
     'can you check if i am eligible',
   ];
 
-  scan(response: string): string {
+  // Async because the safe response quotes a live price and live bank details
+  // rather than a copy of them. Both callers already sit in async handlers.
+  async scan(response: string): Promise<string> {
     const text = response?.toLowerCase() || '';
 
     if (this.blockedPhrases.some((phrase) => text.includes(phrase))) {
@@ -43,13 +49,30 @@ export class ComplianceGuardService {
     return `${response.trim()}\n\n${disclaimer}`.trim();
   }
 
-  injectLiaCta(): string {
+  /**
+   * The "talk to an adviser" line an automated answer ends on.
+   *
+   * Every figure here is read, never written down. It used to say "please pay
+   * 200 NZD" with the bank account inline, and all of it was wrong: the LIA
+   * consultation is priced in USD, not NZD, and 200 was a third stale number —
+   * phase 40 had already found payments.service.ts claiming NZD 150 for this
+   * same session and settled it on session-config's figure, but this string was
+   * missed. A price quoted by a chatbot is a price a client will hold you to.
+   *
+   * The bank details come from platform settings, which an admin can edit; the
+   * copies that were hardcoded here would have gone stale the moment they did.
+   */
+  async injectLiaCta(): Promise<string> {
+    const fee = getFee('LIA_CONSULTATION');
+    const { totalCents } = calculateFeeBreakdown(fee.priceCents, 'bank', fee.currency);
+    const amount = `${fee.currency.toUpperCase()} ${(totalCents / 100).toFixed(2)}`;
+    const bank = await this.settings.getBankDetails();
     return [
-      'For a Licensed Immigration Adviser consultation, please pay 200 NZD by bank transfer.',
-      'Kiwibank',
-      'SORENASTUDY LIMITED',
-      '38-9022-0355698-06',
-      'SWIFT KIWINZ22',
+      `For a Licensed Immigration Adviser consultation (${amount} including GST), pay by bank transfer.`,
+      bank.bankName,
+      bank.accountName,
+      bank.accountNumber,
+      `SWIFT ${bank.swift}`,
     ].join(' ');
   }
 
@@ -113,12 +136,12 @@ export class ComplianceGuardService {
     return questionPatterns.some((pattern) => pattern.test(text));
   }
 
-  private buildSafeResponse(): string {
+  private async buildSafeResponse(): Promise<string> {
     const officialReference =
       'This response does not provide immigration advice. Refer to official guidance from Immigration New Zealand: https://www.immigration.govt.nz.';
     const disclaimer =
       'This information is based on official guidance from Immigration New Zealand. For personalised advice consult a Licensed Immigration Adviser.';
-    const cta = this.injectLiaCta();
+    const cta = await this.injectLiaCta();
 
     return `${officialReference}\n\n${disclaimer}\n\n${cta}`;
   }
