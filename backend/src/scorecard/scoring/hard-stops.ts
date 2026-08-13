@@ -1,9 +1,18 @@
 // PR-SCORECARD-1 — verbatim port of detect_hard_stops().
 //
 // Source: Sorena_Scoring_Reference/sorena_scoring.py lines 362-437.
+// PRICES ARE NEVER WRITTEN DOWN HERE. These resolutions reach clients — the
+// assessment result page and the scorecard PDF both print them — and they
+// used to say "NZD 50" and "NZD 150" for services priced in USD at 50 and
+// 58. The NZD 150 was the pre-phase-40 figure that phase settled at USD 58
+// and missed here. Quoting fee-config means a price change cannot leave a
+// stale number in front of a client.
+//
 // Six rules HS1..HS6 — same predicates, same code/name/reason/resolution
 // strings. Do NOT reorder the rules — the spec checks "the first hard
 // stop" for routing fallback, and the Python preserves declaration order.
+
+import { feeLabel } from './fee-label';
 
 export interface HardStop {
   code: 'HS1' | 'HS2' | 'HS3' | 'HS4' | 'HS5' | 'HS6';
@@ -38,7 +47,7 @@ export function detectHardStops(answers: Record<string, string>): HardStop[] {
       code: 'HS2',
       name: 'No Usable Academic Direction',
       reason: 'No defined study goal combined with minimal academic foundation.',
-      resolution: 'Specialist Admission Consultation (NZD 50). Roadmap session before any execution.',
+      resolution: `Specialist Admission Consultation (${feeLabel('ADMISSION_CONSULTATION')}). Roadmap session before any execution.`,
     });
   }
 
@@ -71,7 +80,7 @@ export function detectHardStops(answers: Record<string, string>): HardStop[] {
       code: 'HS4',
       name: 'Visa / Legal Complexity Requiring LIA',
       reason: 'Prior refusal pattern, recent refusal, breach, or identity issue detected.',
-      resolution: 'LIA Consultation (NZD 150). All progression blocked until LIA clears.',
+      resolution: `LIA Consultation (${feeLabel('LIA_CONSULTATION')}). All progression blocked until LIA clears.`,
     });
   }
 
