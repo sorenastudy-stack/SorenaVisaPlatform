@@ -28,6 +28,7 @@
 
 import type { BandEnum } from './bands';
 import { getSessionConfig } from '../../booking/session-config';
+import { feeLabel } from './fee-label';
 import { getFee } from '../../payments/fee-config';
 import type { HardStop } from './hard-stops';
 
@@ -115,10 +116,11 @@ export function determineRouting(
   return decision('BOOK_FREE_15MIN_SESSION', {
     heading: 'You qualify for a free 15-minute consultation with our team.',
     bullets: [
-      // PR-PHASE40 — was the literal "NZD 200". Read from fee-config now, the
-      // same way the Gap-Closing heading above already reads its price, so a
-      // price change cannot leave this line quietly stating the old one.
-      `After this mandatory session, you may proceed with the ${accountOpening.currency.toUpperCase()} ${accountOpening.priceCents / 100} account opening to activate full case management.`,
+      // PR-FEE-COPY-2 — reading fee-config was not enough. This rendered
+      // `priceCents / 100`, the PRE-GST base, so it said "USD 200" where the
+      // client is charged 230.00. Deriving from the right place is only half
+      // of it; the quantity has to be the one they actually pay.
+      `After this mandatory session, you may proceed with the ${feeLabel('ACCOUNT_OPENING')} account opening to activate full case management.`,
       'Your case advisor will confirm your pathway and walk you through the next steps.',
     ],
   });

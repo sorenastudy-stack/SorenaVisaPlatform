@@ -25,7 +25,10 @@ export interface PaymentRow {
 }
 export interface InvoiceRow {
   id: string; invoiceNumber: string; description: string | null;
+  /** PRE-GST base. Never render this as the price — see totalCents. */
   amount: string | number; currency: string; status: string; dueDate: string | null;
+  /** base + GST — what the client owes. Optional so an older payload still renders. */
+  gstCents?: number; totalCents?: number;
 }
 
 // Moved to lib/invoice-status so SERVER components can read the real array —
@@ -78,7 +81,11 @@ export function PaymentsView({
                   {inv.invoiceNumber?.startsWith('ENG-') ? t('accountOpeningFee') : inv.description || t('invoiceFallback', { number: inv.invoiceNumber })}
                 </p>
                 <p className="mt-0.5 text-xs text-[#4A4A4A]/70">
-                  {formatMoney(typeof inv.amount === 'string' ? parseFloat(inv.amount) : inv.amount, inv.currency)}
+                  {/* The amount owed, not the pre-GST base: this line read
+                      "USD 200.00" beside a USD 230.00 invoice. */}
+                  {inv.totalCents != null
+                    ? formatMoneyCents(inv.totalCents, inv.currency)
+                    : formatMoney(typeof inv.amount === 'string' ? parseFloat(inv.amount) : inv.amount, inv.currency)}
                   {inv.dueDate ? ` · ${t('due', { date: formatDate(inv.dueDate, locale) })}` : ''}
                 </p>
               </div>

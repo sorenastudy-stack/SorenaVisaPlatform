@@ -17,7 +17,6 @@ export interface BandInfo {
   range: string;
   route: string;
   service: string;
-  revenue: string;
 }
 
 interface BandRow {
@@ -27,7 +26,6 @@ interface BandRow {
   name: string;
   route: string;
   service: string;
-  revenue: string;
 }
 
 export const BANDS: BandRow[] = [
@@ -36,42 +34,36 @@ export const BANDS: BandRow[] = [
     name: 'Cold / Unready',
     route: 'Content Nurture',
     service: 'Free content & webinars',
-    revenue: 'No immediate revenue',
   },
   {
     lo: 25, hi: 39, number: '2',
     name: 'Early Stage / Fragile',
     route: 'Webinar First',
     service: 'Webinar + readiness content',
-    revenue: 'No immediate revenue',
   },
   {
     lo: 40, hi: 54, number: '3',
     name: 'Developing / Consultable',
     route: 'Gap-Closing Session + Admission Consultation',
     service: 'Gap-Closing Session + Admission Consultation',
-    revenue: 'NZD 30 + NZD 50',
   },
   {
     lo: 55, hi: 69, number: '4',
     name: 'Viable / Structured Opportunity',
     route: 'Free 15-Min Session + Account Opening',
     service: 'Free 15-min then Account Opening',
-    revenue: 'USD 200',
   },
   {
     lo: 70, hi: 84, number: '5',
     name: 'Strong / Near Execution Ready',
     route: 'Free 15-Min Session + Fast-Track Account Opening',
     service: 'Free 15-min (mandatory) then fast-track',
-    revenue: 'USD 200 + priority',
   },
   {
     lo: 85, hi: 100, number: '6',
     name: 'Premium / Execution Ready',
     route: 'Free 15-Min Session + Immediate Activation',
     service: 'Free 15-min (mandatory) then immediate activation',
-    revenue: 'USD 200 + priority',
   },
 ];
 
@@ -85,7 +77,6 @@ export function bandFor(total: number): BandInfo {
         range: `${b.lo}-${b.hi}`,
         route: b.route,
         service: b.service,
-        revenue: b.revenue,
       };
     }
   }
@@ -98,6 +89,5 @@ export function bandFor(total: number): BandInfo {
     range: `${b.lo}-${b.hi}`,
     route: b.route,
     service: b.service,
-    revenue: b.revenue,
   };
 }

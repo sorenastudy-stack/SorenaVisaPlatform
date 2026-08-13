@@ -17,6 +17,7 @@ import {
   uploadCaseDocument,
 } from '@/lib/case-documents';
 import { useStaff } from '@/contexts/StaffContext';
+import { FEES } from '@/lib/fees.generated';
 
 // Phase 6 + 6.5 — staff Payments tab.
 //
@@ -566,7 +567,11 @@ export function CasePaymentsPanel({ caseId }: { caseId: string }) {
                 >
                   {CONSULTATION_TYPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
-                      {t(`staff.cases.detail.payments.consultationType.${opt.labelKey}`)}
+                      {t(`staff.cases.detail.payments.consultationType.${opt.labelKey}`,
+                        // The figure is a placeholder in the bundle, filled from the
+                        // generated fee table — so a translated string can never carry
+                        // a stale price. Types without a price ignore the param.
+                        { price: opt.value in FEES ? FEES[opt.value as keyof typeof FEES].plusGst : '' })}
                     </option>
                   ))}
                 </select>

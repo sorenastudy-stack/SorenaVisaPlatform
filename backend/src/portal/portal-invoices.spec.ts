@@ -50,7 +50,15 @@ describe('PortalService.getMyInvoices (own-data isolation)', () => {
     const row = aInvoices[0] as any;
     expect(typeof row.amount).toBe('string');
     expect(row.receiptFileUrl).toBeUndefined();
-    expect(Object.keys(row).sort()).toEqual(['amount', 'currency', 'description', 'dueDate', 'id', 'invoiceNumber', 'status']);
+    // PR-FEE-COPY-2 — gstCents/totalCents added deliberately. Both are derived
+    // from this client's OWN invoice amount via fee-config, so they expose
+    // nothing new; the page needs them because rendering `amount` (the pre-GST
+    // base) showed "USD 200.00" beside a USD 230.00 invoice.
+    expect(Object.keys(row).sort()).toEqual(
+      ['amount', 'currency', 'description', 'dueDate', 'gstCents', 'id', 'invoiceNumber', 'status', 'totalCents'],
+    );
+    // ...and they are the amount OWED, not the base.
+    expect(row.totalCents).toBe(Math.round(Number(row.amount) * 100) + row.gstCents);
   });
 
   it('a userId with no contact gets an empty list (no leak, no throw)', async () => {

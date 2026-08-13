@@ -15,6 +15,8 @@
 // Kept as an alias for any future re-introduction of bilingual labels.
 // Today, "label" is a plain string and the T() / b() helpers are
 // no-ops that pass strings through verbatim.
+import { FEES } from '@/lib/fees.generated';
+
 export interface LegacyBilingual {
   en: string;
   fa?: string;
@@ -119,13 +121,13 @@ export const RESULT_STRINGS = {
   categoryBreakdown:    'Category breakdown',
   nextActionTitle:      'Your next best action',
   malaysiaCalloutTitle: 'You also qualify for Malaysia',
-  malaysiaCalloutBody:  'You are eligible for both New Zealand AND Malaysia. As a Sorena-certified agent for both countries, we charge no service fees — universities pay us a commission upon successful enrollment. You only pay the INZ visa fee + our one-time USD 200 account opening fee.',
+  malaysiaCalloutBody:  `You are eligible for both New Zealand AND Malaysia. As a Sorena-certified agent for both countries, we charge no service fees — universities pay us a commission upon successful enrollment. You only pay the INZ visa fee + our one-time ${FEES.ACCOUNT_OPENING.plusGst} account opening fee.`,
   bookFreeCta:          'Book your free 15-minute consultation →',
   bookFreeSubtitle:     "Opens our booking calendar. You'll select a time that works for you.",
   bookFreeRecorded:     'Booking link opened. Your case advisor has been notified.',
   payGapTitle:          'Your next step: Gap-Closing Roadmap Session',
   payGapBody:           'Once payment is received, you will receive a personalised AI-generated improvement plan and a booking link with a language-matched specialist.',
-  payGapCta:            'Pay NZD 30 and book your Gap-Closing Session →',
+  payGapCta:            `Pay ${FEES.GAP_CLOSING.inclGst} and book your Gap-Closing Session →`,
   payGapSubtitle:       "After payment, you'll receive a personalised improvement plan and your booking link.",
   payGapRecorded:       'Payment link opened. Your case advisor has been notified.',
   nurtureTitle:         'We have designed a learning pathway tailored to your profile',

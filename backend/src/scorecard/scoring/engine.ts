@@ -108,7 +108,12 @@ export function score(answers: Record<string, string>): ScoreResult {
   } else if (execution.eligible) {
     nextAction = `Book free 15-minute session, then Account Opening (${feeLabel('ACCOUNT_OPENING')}).`;
   } else if (band.number === '3') {
-    nextAction = `Offer Gap-Closing Session (${getSessionConfig('GAP_CLOSING').currency} ${getSessionConfig('GAP_CLOSING').price}) + Admission Consultation (NZD 50).`;
+    // Both fees via feeLabel. This line previously printed the Gap-Closing
+    // BASE ("USD 20", where the client pays 23.00) and a hardcoded "NZD 50"
+    // for a service priced in USD — the currency was wrong as well as the
+    // amount. It reaches clients through the legacy nextActionTextEn fallback
+    // in the client PDF.
+    nextAction = `Offer Gap-Closing Session (${feeLabel('GAP_CLOSING')}) + Admission Consultation (${feeLabel('ADMISSION_CONSULTATION')}).`;
   } else if (band.number === '4') {
     nextAction = 'Offer free 15-minute session to qualify for Account Opening.';
   } else if (band.number === '1' || band.number === '2') {

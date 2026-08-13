@@ -1,4 +1,4 @@
-import { FeeType, getFee, calculateFeeBreakdown } from '../../payments/fee-config';
+import { FeeType, getFee, calculateFeeBreakdown, formatFeeAmount } from '../../payments/fee-config';
 
 // PR-FEE-COPY — how a price is written when a client will read it.
 //
@@ -16,9 +16,9 @@ import { FeeType, getFee, calculateFeeBreakdown } from '../../payments/fee-confi
 // is deliberately excluded: it depends on how they choose to pay, and quoting it
 // in prose would overstate the cost of a bank transfer.
 
-/** e.g. "USD 66.70 incl. GST" — what a bank transfer pays, spelled out. */
+/** e.g. "USD 66.70 incl. GST" / "USD 230 incl. GST" — what a bank transfer pays. */
 export function feeLabel(type: FeeType): string {
   const fee = getFee(type);
   const { totalCents } = calculateFeeBreakdown(fee.priceCents, 'bank', fee.currency);
-  return `${fee.currency.toUpperCase()} ${(totalCents / 100).toFixed(2)} incl. GST`;
+  return `${formatFeeAmount(totalCents, fee.currency)} incl. GST`;
 }

@@ -482,6 +482,12 @@ export class PortalService {
       invoiceNumber: i.invoiceNumber,
       description: i.description,
       amount: i.amount.toString(),
+      // PR-FEE-COPY-2 — `amount` is the PRE-GST base (unchanged, so no existing
+      // reader shifts meaning). These are what the client actually owes, added
+      // because the Payments page was rendering the base beside a GST-inclusive
+      // invoice: "USD 200.00" for a 230.00 charge.
+      gstCents: calculateFeeBreakdown(Math.round(Number(i.amount) * 100), 'bank', i.currency).gstCents,
+      totalCents: calculateFeeBreakdown(Math.round(Number(i.amount) * 100), 'bank', i.currency).totalCents,
       currency: i.currency,
       status: i.status,
       dueDate: i.dueDate ? i.dueDate.toISOString() : null,

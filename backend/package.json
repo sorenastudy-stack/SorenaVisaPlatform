@@ -24,7 +24,9 @@
     "seed:test-ticket": "ts-node scripts/seed-test-ticket.ts",
     "test:mail": "ts-node scripts/test-mail.ts",
     "reset:user-password": "ts-node scripts/reset-user-password.ts",
-    "seed:study-fields": "ts-node scripts/seed-study-fields.ts"
+    "seed:study-fields": "ts-node scripts/seed-study-fields.ts",
+    "gen:fees": "ts-node scripts/generate-fee-constants.ts",
+    "gen:fees:check": "ts-node scripts/generate-fee-constants.ts --check"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

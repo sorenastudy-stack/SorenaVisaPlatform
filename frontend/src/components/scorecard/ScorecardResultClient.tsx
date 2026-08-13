@@ -21,6 +21,7 @@ import {
 } from '@/lib/booking/eligibility';
 import { downloadPdf } from '@/lib/scorecard/pdf-download';
 import type { ScorecardResultPayload } from '@/app/scorecard/result/page';
+import { FEES } from '@/lib/fees.generated';
 
 // Booking CTAs are driven by GET /booking/eligibility (BookingEligibilityService)
 // — the single, LIVE source of truth shared with the standing booking page.
@@ -304,7 +305,7 @@ export function ScorecardResultClient({ data }: { data: ScorecardResultPayload }
               {t('result.malaysiaTitle')}
             </h2>
             <p className="text-sm text-emerald-900 leading-relaxed">
-              {t('result.malaysiaBody')}
+              {t('result.malaysiaBody', { price: FEES.ACCOUNT_OPENING.plusGst })}
             </p>
           </div>
         )}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { FEES } from '@/lib/fees.generated';
 
 // Consultation payment-link generator — relocated verbatim from the retired
 // legacy /admin dashboard to the Sales lead-detail page (its intended home;
@@ -75,15 +76,15 @@ export function ConsultationLinkGenerator({
   let body: React.ReactNode;
   switch (recommendedRoute) {
     case 'ROADMAP':
-      body = <Btn variant="green" label="Generate Gap-Closing Session Link (USD 20 + GST + card fee = USD 23.97)" consultationType="GAP_CLOSING" />;
+      body = <Btn variant="green" label={`Generate Gap-Closing Session Link (${FEES.GAP_CLOSING.plusGst} + card fee = ${FEES.GAP_CLOSING.cardTotal})`} consultationType="GAP_CLOSING" />;
       break;
     case 'ADMISSION_CONSULTATION':
-      body = <Btn variant="green" label="Generate Admission Consultation Link (USD 50 + GST + card fee = USD 59.47)" consultationType="ADMISSION_CONSULTATION" />;
+      body = <Btn variant="green" label={`Generate Admission Consultation Link (${FEES.ADMISSION_CONSULTATION.plusGst} + card fee = ${FEES.ADMISSION_CONSULTATION.cardTotal})`} consultationType="ADMISSION_CONSULTATION" />;
       break;
     case 'LIA_CONSULTATION':
       body = (
         <div className="space-y-2">
-          <Btn variant="red" label="Generate LIA Consultation Link (USD 58 + GST + card fee = USD 68.93)" consultationType="LIA_CONSULTATION" />
+          <Btn variant="red" label={`Generate LIA Consultation Link (${FEES.LIA_CONSULTATION.plusGst} + card fee = ${FEES.LIA_CONSULTATION.cardTotal})`} consultationType="LIA_CONSULTATION" />
           <p className="text-center text-xs font-bold text-[#991b1b]">⚠️ Do not proceed without LIA clearance</p>
         </div>
       );
@@ -92,7 +93,7 @@ export function ConsultationLinkGenerator({
       body = (
         <div className="space-y-2">
           <Btn variant="green" label="Book Free 15-Min Session" consultationType="FREE_SESSION" />
-          <Btn variant="grey" label="Generate Account Opening Link (USD 200 + GST + card fee = USD 236.97)" consultationType="ACCOUNT_OPENING" />
+          <Btn variant="grey" label={`Generate Account Opening Link (${FEES.ACCOUNT_OPENING.plusGst} + card fee = ${FEES.ACCOUNT_OPENING.cardTotal})`} consultationType="ACCOUNT_OPENING" />
         </div>
       );
       break;

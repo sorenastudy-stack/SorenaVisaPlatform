@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { FEES } from '@/lib/fees.generated';
 
 // Demo-only override: when NEXT_PUBLIC_ASSESSMENT_LIVE=true (set ONLY on the demo
 // Railway env), the funnel entry points at the v2 (31-question) assessment. Prod
@@ -52,7 +53,7 @@ export default function Home() {
             className="mt-10 max-w-2xl text-base leading-loose text-sorena-text/85 sm:text-lg"
           >
             We&apos;re an Education and Immigration Agent. University admission and student visa filing for New Zealand
-            and Malaysia are free. The only cost is a $200 account activation after your pathway is confirmed.
+            and Malaysia are free. The only cost is a {FEES.ACCOUNT_OPENING.total} (incl. GST) account activation after your pathway is confirmed.
           </motion.p>
 
           <motion.div variants={itemVariants} className="mt-12 w-full sm:w-auto">

@@ -123,6 +123,23 @@ export function calculateCardSurcharge(baseAmountCents: number): number {
   return Math.round(gstInclusive * CARD_FEE_PERCENT) + CARD_FEE_FIXED_CENTS;
 }
 
+/**
+ * A fee amount as it appears in PROSE — "USD 230", "USD 66.70".
+ *
+ * Trailing ".00" is dropped because every piece of correct copy already on the
+ * platform writes it that way ("USD 200 + GST", "$58 + GST"), and the frontend's
+ * generated constants render from this same function. One formatter, so a
+ * backend sentence and a frontend sentence can never disagree about a price
+ * they both derive from fee-config.
+ *
+ * NOT for tables, invoices or anything columnar — those want fixed decimals.
+ */
+export function formatFeeAmount(cents: number, currency: string): string {
+  const whole = cents % 100 === 0;
+  const amount = whole ? String(cents / 100) : (cents / 100).toFixed(2);
+  return `${currency.toUpperCase()} ${amount}`;
+}
+
 export interface FeeBreakdown {
   baseCents: number;
   gstCents: number;
