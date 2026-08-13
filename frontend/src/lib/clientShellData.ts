@@ -138,6 +138,12 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
     { labelKey: 'portal.nav.documents', href: '/portal/case/documents', iconName: 'fileText',      lockedUntilPaid: true },
     // Keyed via next-intl (PR-I18N-2: portal.nav.myAssessment / booking).
     { labelKey: 'portal.nav.booking',              href: '/portal/booking',        iconName: 'calendar' },
+    // PR-PORTAL-EMPTY-STATES — Meetings was reachable only from a dashboard
+    // card, so a client could not discover it existed. A hidden feature is the
+    // same failure as a silent redirect: it removes the ability to see what is
+    // there. (Whether it should eventually live inside Booking is an IA
+    // question flagged for the Owner, not settled here.)
+    { labelKey: 'portal.nav.meetings',  href: '/student/meetings',      iconName: 'video' },
     { labelKey: 'portal.nav.visa',      href: '/student/documents',     iconName: 'visa',          lockedUntilPaid: true },
     ...(hasCase
       ? [{ labelKey: 'portal.nav.apply', href: '/student/admission', iconName: 'clipboard' as const, lockedUntilPaid: true }]

@@ -11,6 +11,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { AnthropicClient } from './anthropic.client';
 import { TicketsService } from '../tickets/tickets.service';
 import { buildSystemPrompt, ESCALATION_TOKEN_VALUE } from './system-prompt';
+import { caseStageLabel, meetingStatusLabel } from './client-facing-labels';
 
 // PR-DASH-4 — Chatbot service.
 //
@@ -198,15 +199,22 @@ export class ChatbotService {
       }),
     ]);
     const firstName = (user?.name ?? '').trim().split(/\s+/)[0] || '';
+    // PR-PORTAL-EMPTY-STATES — the model never sees a raw enum.
+    //
+    // Both of these were column values: caseStage was the VisaCaseStatus
+    // itself, which the assistant duly repeated ("your case is currently in
+    // **DRAFT** stage"), and meetingCounts was keyed by raw VisaMeetingStatus.
+    // Translated here rather than asked-not-to-say in the prompt, so no
+    // rephrasing of a question can bring the enum back.
     const meetingCounts: Record<string, number> = {};
     for (const row of meetings) {
-      meetingCounts[row.status] = row._count._all;
+      meetingCounts[meetingStatusLabel(row.status)] = row._count._all;
     }
     return {
       firstName,
       locale,
       meetingCounts,
-      caseStage: visaCase?.status ?? null,
+      caseStage: caseStageLabel(visaCase?.status),
     };
   }
 

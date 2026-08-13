@@ -82,14 +82,16 @@ See `AUDIT_CLIENT_PORTAL_2026-08-13.md` for the full inventory and status table.
   in both locales, asserting absence as well as presence.
 - **Finding: the dashboard's ticket count "contradiction" does NOT reproduce.** The two
   surfaces agree; see the ticket-model entry below for what is actually going on.
-- **Findings still open — the four judgment calls.** "My Assessment" dead-ends silently;
-  the assistant leaks the internal `DRAFT` stage name; `/student/meetings` is an orphan
-  route; `/portal/case`'s "MY WALLET" card is empty. Held for an Owner decision because
-  each is a UX choice, and several share a theme (what an empty or incomplete state should
-  look like across the portal) worth settling once rather than piecemeal.
-- **Also open:** the dashboard's "never taken an assessment" state. The false claim is gone,
-  but distinguishing "never submitted" from "submitted, awaiting result" needs the empty-state
-  decision above.
+- **The four judgment calls — DONE 14 Aug 2026.** Settled by a standing rule from the Owner:
+  **when a portal section has no data, show an empty state with a clear next action — never a
+  silent redirect, never a hidden nav item.** Applied to all four: `/portal/report` now
+  explains and offers the assessment instead of redirecting; the assistant is handed
+  translated stage wording instead of raw enums; Meetings is in the sidebar; the wallet card
+  shows its balance.
+- **Follow-up question for the Owner (not blocking):** should `/student/meetings` eventually
+  be merged into Booking rather than living as a separate destination? Adding it to the
+  sidebar was the safe default under the new rule; whether it deserves standalone billing is
+  an information-architecture decision.
 
 ### Two ticket models, and the portal reads different ones — NEW, 14 Aug 2026
 

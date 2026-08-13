@@ -2155,10 +2155,16 @@
     }
   },
   "portal": {
+    "report": {
+      "emptyTitle": "You haven't taken the assessment yet",
+      "emptyBody": "The readiness assessment takes about five minutes and shows where you stand, what to fix, and which consultation fits.",
+      "emptyCta": "Start my assessment"
+    },
     "headerTitle": "My Case",
     "signOut": "Sign out",
     "nav": {
       "myCase": "My Case",
+      "meetings": "Meetings",
       "clientPortal": "Client portal",
       "recommendations": "Recommendations",
       "documents": "Documents",

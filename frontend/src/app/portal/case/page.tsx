@@ -8,6 +8,7 @@ import { ReloginBanner } from '@/components/portal/ReloginBanner';
 import { AssessmentPdfButton } from '@/components/portal/AssessmentPdfButton';
 import { RequestContractButton } from '@/components/portal/RequestContractButton';
 import { formatDate as fmtDate } from '@/lib/date';
+import { formatMoneyCents } from '@/lib/money';
 
 // Client portal step 3 — the client's case overview.
 //
@@ -51,6 +52,18 @@ export default async function MyCasePage() {
   let caseData: MyCase | null = null;
   let notFound = false;
   let loadError = false;
+
+  // PR-PORTAL-EMPTY-STATES — the wallet card previewed nothing: a heading and a
+  // chevron beside cards that showed real content. A card that carries no
+  // information is not earning its place, so it now shows the balance it links
+  // to. Non-fatal: a failure hides the figure, never the card.
+  let walletCents: number | null = null;
+  try {
+    const w = await apiServer.get<{ balanceCents: number; currency?: string }>('/wallet');
+    walletCents = typeof w?.balanceCents === 'number' ? w.balanceCents : null;
+  } catch {
+    /* leave the figure off rather than block the page */
+  }
 
   try {
     caseData = await apiServer.get<MyCase>('/portal/me/case');
@@ -285,7 +298,14 @@ export default async function MyCasePage() {
           <Wallet size={16} className="text-[#b28f4e]" />
           <span className="text-sm font-bold uppercase tracking-wide text-gray-500">My wallet</span>
         </div>
-        <ArrowRight size={16} className="text-gray-300 rtl:rotate-180" />
+        <div className="flex items-center gap-2">
+          {walletCents !== null && (
+            <span className="text-sm font-bold text-[#1e3a5f]">
+              {formatMoneyCents(walletCents, 'USD')}
+            </span>
+          )}
+          <ArrowRight size={16} className="text-gray-300 rtl:rotate-180" />
+        </div>
       </Link>
 
       {/* ── Readiness assessment (if the client has a result) ────────── */}
