@@ -2,7 +2,7 @@
 
 **Date:** 13 August 2026
 **Commits:** `2b9d3b5` (charging logic) · `2f0c6f8` (chatbot + staff labels) ·
-`SHA3` (client-facing hard-stop prices)
+`bf3e73e` (client-facing hard-stop prices)
 
 ## 1. What this phase does
 
