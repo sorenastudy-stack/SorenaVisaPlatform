@@ -47,19 +47,13 @@ nobody re-checks.
 ## Money & billing
 
 ### Group 2/3 fee-string cleanup — derive ALL fee copy from `fee-config`
-The structural cure for the bug class that appeared **four times in one day** (account
-opening, chatbot CTA, hard-stop resolutions, consultation pricing). Every remaining
-hand-written price should come from `feeLabel()` / `calculateFeeBreakdown`.
-
-Known instances:
-- `bands.ts` revenue labels — `'NZD 30 + NZD 50'` (should be USD 20 + USD 50) and three
-  `'USD 200'` missing GST. Internal/planning labels; no client render found.
-- `ConsultationLinkGenerator.tsx` — four hand-computed totals, correct today, will rot.
-- `en.json` — `"Admission Consultation ($50)"`.
-- **Booking cards say "USD 66.70" where the chatbot says "USD 66.70 including GST".**
-  The numbers agree, so no client is misled; fold the wording into the same pass.
-
-Context: `PHASE_GST_PRICING_CORRECTION.md` §7.
+**DONE — 14 Aug 2026 (`c7d337d`).** Seven live wrong prices corrected, including a
+"Pay NZD 30" CTA for a USD 23.00 session. The structural cure:
+`backend/scripts/generate-fee-constants.ts` emits `frontend/src/lib/fees.generated.ts`, with
+`npm run gen:fees:check` failing the build if the two diverge (proven by breaking it). Every
+quantity is named explicitly — `base` / `total` / `inclGst` / `plusGst` / `cardTotal` —
+because `routing.ts` proved that reading from the right *place* is not enough if you render
+the wrong *quantity*. i18n now carries `{price}` placeholders. `bands.ts.revenue` deleted.
 
 ### AR redesign — link `Payment` to `Invoice` properly
 `Payment` has no `invoiceId` column; the link is a soft `metadata.invoiceId`. All three
@@ -75,9 +69,13 @@ this redesign.
 
 See `AUDIT_CLIENT_PORTAL_2026-08-13.md` for the full inventory and status table.
 
-- **Known issue #3 — payment gate fails closed.** Accepted for later. Reproduction and
-  the cheap mitigation (treat an errored access check as *unknown*, not *unpaid*) are in
-  the audit doc.
+- **Finding #3 — payment gate fails closed. FIXED 14 Aug 2026.** An errored access check now
+  means *unknown*, not *unpaid*, with the last definitive answer kept as a fallback.
+  Verified by recreating the rate-limit condition, 11/11.
+- **Still open — the shared rate-limit bucket.** `apiServer` forwards no client IP, so every
+  client's server-rendered calls hit the backend from the frontend service's own address and
+  share one 60/60s bucket; the shell spends ~4 requests per page render. Fixing the symptom
+  did not fix this. Worth doing before traffic grows.
 - **Findings 5–14 open and unprioritised** — dashboard states two untrue things, a raw
   `tickets.department.null` badge, "My Assessment" dead-ends silently, the assistant
   renders raw markdown and leaks the internal `DRAFT` stage name, `/student/meetings` is

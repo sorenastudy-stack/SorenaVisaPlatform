@@ -11,23 +11,41 @@ Nothing below is inferred from phase docs.
 |---|---|---|
 | 1 | Consultations charged without GST + flat 10% card fee | **FIXED** — `0de6a8a` |
 | 2 | Payments page can never show a paid invoice | **FIXED** — `b2ef3dc` |
-| 3 | Payment gate fails closed under a shared rate limit | **KNOWN ISSUE — accepted for later** (see below) |
+| 3 | Payment gate fails closed under a shared rate limit | **FIXED** — 14 Aug 2026 |
 | 4 | Raw database IDs on the dashboard | **FIXED** — this commit |
 | 5-14 | Everything else | open, unprioritised |
 
-### Known issue #3 — deliberately not fixed today
+### Finding #3 — FIXED, 14 Aug 2026
 
-The shell defaults `paymentUnlocked = false` on any error from `/portal/me/access`, so a
-transient failure shows a paying client locks on features they own. Proven reproducible
-(0 locks → 5 locks once the throttle trips) but **only under aggregate load** — 31 sequential
-page loads by a single client did not trigger it. Judged a fragility rather than a daily
-failure, and parked in favour of the money bugs.
+The shell defaulted `paymentUnlocked = false` on any error from `/portal/me/access`, so a
+transient failure showed a paying client locks on features they own (0 locks -> 5 once the
+shared rate limit tripped).
 
-When it is picked up, the cheap mitigation is to treat an errored access check as *unknown*
-rather than *unpaid* — keep the last known-good answer for the session instead of
-re-locking. The deeper fix is that server-rendered calls reach the backend from the frontend
-service's own IP (`apiServer` forwards no client IP), so all clients share one rate-limit
-bucket.
+Failing closed read as caution but bought nothing: the flag is **presentation only** —
+`EngagementPaidGuard` re-reads the engagement invoice from the database on every gated
+request and 403s regardless. Verified before relying on it, rather than trusting the note.
+
+An error now means **unknown, not unpaid**. The last definitive answer per user is kept as a
+fallback (10-minute TTL, consulted only on failure so a client who has just paid still sees
+the gate open on their very next render). With no answer at all, the shell declines to
+assert a lock — claiming somebody has not paid is a statement about their money, and not
+something to guess at when the network is unhappy. The page itself is still refused
+server-side.
+
+Verified by recreating the original condition, not a stand-in — 11/11:
+
+```
+baseline          paid 0 locks   unpaid 5 locks   access 200
+throttle tripped after 58 calls -> access 429
+WHILE THROTTLED   paid 0 locks (was 5)            unpaid 5 locks (last known answer)
+                  unpaid still 403 on the gated endpoint
+after recovery    paid 0 locks   unpaid 5 locks
+```
+
+**Still open — the deeper cause.** Server-rendered calls reach the backend from the frontend
+service's own IP (`apiServer` forwards no client IP), so every client shares one rate-limit
+bucket and the shell spends ~4 requests per page render. The fix above stops the *symptom*
+being wrong; it does not stop the bucket being shared. Tracked in `BACKLOG.md`.
 
 ## Method
 

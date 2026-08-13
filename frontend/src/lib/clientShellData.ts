@@ -20,6 +20,35 @@ export interface ClientShellData {
   paymentUnlocked: boolean;
 }
 
+
+// Last DEFINITIVE answer per user, used only when a later check fails.
+//
+// Deliberately not consulted on the happy path: a client who has just paid
+// should see the gate open on their very next render, not after a TTL.
+const ACCESS_CACHE = new Map<string, { paid: boolean; at: number }>();
+const ACCESS_CACHE_TTL_MS = 10 * 60 * 1000;
+const ACCESS_CACHE_MAX = 5_000;
+
+async function resolvePaymentUnlocked(session: Session): Promise<boolean> {
+  const key = session.userId ?? session.email ?? '';
+  try {
+    const a = await apiServer.get<{ paid: boolean }>('/portal/me/access');
+    const paid = a.paid === true;
+    if (key) {
+      // Cheap bound: this is a fallback cache, not a store worth evicting well.
+      if (ACCESS_CACHE.size >= ACCESS_CACHE_MAX) ACCESS_CACHE.clear();
+      ACCESS_CACHE.set(key, { paid, at: Date.now() });
+    }
+    return paid;
+  } catch {
+    const cached = key ? ACCESS_CACHE.get(key) : undefined;
+    if (cached && Date.now() - cached.at < ACCESS_CACHE_TTL_MS) return cached.paid;
+    // Unknown. Render no locks rather than assert one we cannot substantiate;
+    // the server-side guard still refuses the actual page.
+    return true;
+  }
+}
+
 export async function getClientShellData(session: Session): Promise<ClientShellData> {
   const isStudent = session.role === 'STUDENT';
 
@@ -32,14 +61,21 @@ export async function getClientShellData(session: Session): Promise<ClientShellD
     /* default STAGE_1 — never over-expose */
   }
 
-  // Piece #4 payment gate. Fail-safe: locked (so nav never hides the lock).
-  let paymentUnlocked = false;
-  try {
-    const a = await apiServer.get<{ paid: boolean }>('/portal/me/access');
-    paymentUnlocked = a.paid === true;
-  } catch {
-    /* default locked */
-  }
+  // Piece #4 payment gate — an ERROR now means "unknown", not "unpaid".
+  //
+  // This defaulted to locked on any failure. That reads like caution, but the
+  // flag is PRESENTATION ONLY: EngagementPaidGuard re-checks the engagement
+  // invoice from the database on every gated request and 403s independently of
+  // anything decided here. So failing closed bought no security and cost real
+  // harm — a transient error showed a client who HAD paid a row of padlocks on
+  // features they own. Verified reproducible: once the shared rate limit
+  // tripped, a paid client's nav rendered 5 locked items.
+  //
+  // On failure we therefore prefer the last definitive answer for this user,
+  // and if there is none we decline to assert a lock at all. Claiming somebody
+  // has not paid is a statement about their money; it should not be the thing
+  // we guess when the network is unhappy.
+  const paymentUnlocked = await resolvePaymentUnlocked(session);
 
   // LEAD (pre-promotion) — the reachable /portal subset. No /student links
   // (those are STUDENT-only in middleware and would dead-end for a LEAD).
