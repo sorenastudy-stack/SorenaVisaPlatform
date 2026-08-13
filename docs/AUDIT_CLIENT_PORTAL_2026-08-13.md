@@ -198,6 +198,24 @@ Prior flags: **wallet** and the **payment-gate panel** are now fully translated 
 **stale**. The **14-step forms** flag is **confirmed still true**. The **assessment/report view**
 could not be checked for lack of data.
 
+### Persian/RTL backlog
+
+Carried forward as one queue rather than fixed piecemeal:
+
+1. **`/student/explore`** — 242 English words; effectively untranslated.
+2. **`/student/recommendations`** — 61 English words.
+3. **`/student/admission`** — the 14-step forms, 52 English words.
+4. **Shell strings on every page** — "CLIENT PORTAL", and "Recommendations", which is a
+   hardcoded literal (`{ labelKey: 'Recommendations' }`) rather than a key.
+5. **Dates and relative times are not localised.** `formatRelativeTime` renders "57m ago" in
+   English on the Persian dashboard, and absolute dates render as ISO `2026-07-31` in *both*
+   languages where the rest of the portal localises them. Noticed while fixing the activity
+   feed (`bd836af`) and deliberately not folded in — same card, different mechanism.
+6. **`/portal/case`** — the "What to do next" block, 13 English words.
+
+⚠ All Persian copy added this session is **unverified by a native speaker**, consistent with
+the flag raised in `PHASE_GST_PRICING_CORRECTION.md`. Treat as pending translation review.
+
 ## What is solid
 
 - **Access control holds.** A LEAD is redirected to `/unauthorized` on all 20 `/student` routes. The
