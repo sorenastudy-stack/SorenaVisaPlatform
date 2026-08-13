@@ -422,11 +422,20 @@
       "title": "فعالیت‌های اخیر",
       "empty": "هنوز چیزی نیست — با کار روی درخواست، فعالیت‌های شما اینجا نمایش داده می‌شود.",
       "event": {
-        "STEP_STARTED": "شما {step} را شروع کردید",
-        "STEP_SAVED": "شما {step} را ذخیره کردید",
-        "DOCUMENT_RECORDED": "شما {documentType} را ثبت کردید",
-        "DOCUMENT_REMOVED": "شما {documentType} را حذف کردید",
+        "STEP_STARTED": "شما {subject} را شروع کردید",
+        "STEP_SAVED": "شما {subject} را ذخیره کردید",
+        "DOCUMENT_RECORDED": "شما {subject} را بارگذاری کردید",
+        "DOCUMENT_REMOVED": "شما {subject} را حذف کردید",
         "STATUS_CHANGED": "وضعیت پرونده به {status} تغییر کرد"
+      },
+      "subject": {
+        "application": "درخواست‌تان",
+        "document": "یک مدرک",
+        "visaApplication": "درخواست ویزای‌تان",
+        "case": "پرونده‌تان",
+        "conversation": "یک گفت‌وگو با دستیار",
+        "ticket": "یک تیکت پشتیبانی",
+        "record": "اطلاعات‌تان"
       }
     },
     "tickets": {

@@ -287,8 +287,21 @@ export class DashboardService {
       message: {
         key:  `dashboard.activity.event.${eventType}`,
         args: {
-          step:         row.entityType ?? '',
-          documentType: row.entityId ?? '',
+          // PR-ACTIVITY-LABELS — a STABLE KEY, never a raw value.
+          //
+          // This was `step: row.entityType` and `documentType: row.entityId`,
+          // which put a Prisma class name and a database cuid on the client's
+          // own dashboard: "You saved AdmissionApplication", "You recorded
+          // cms9kh223001tudhw96f998fu". Sending a key means the feed cannot
+          // leak an internal value even for an entity type nobody has mapped
+          // yet — an unknown type becomes `record`, not its class name.
+          //
+          // Deliberately NOT the document's filename: real rows hold things
+          // like "<person's name>_Contract Dependent Child Student Visas.pdf",
+          // and an activity feed is not where that belongs.
+          subject: DashboardService.subjectKey(row.entityType),
+          // Raw status; the frontend resolves it through the caseStatus label
+          // map it already owns.
           status:       typeof row.newValue === 'object' && row.newValue !== null && 'status' in row.newValue
             ? String((row.newValue as Record<string, unknown>).status)
             : '',
@@ -296,6 +309,28 @@ export class DashboardService {
       },
       entityRef: row.entityId ?? undefined,
     };
+  }
+
+  /**
+   * Entity type → the plain-language thing a client recognises.
+   *
+   * Keys only; the words live in the i18n bundles so Persian gets them too.
+   * Anything unmapped becomes `record` rather than exposing the class name.
+   */
+  private static subjectKey(entityType: string | null): string {
+    switch (entityType) {
+      case 'AdmissionApplication': return 'application';
+      case 'AdmissionDocument':
+      case 'Document':             return 'document';
+      case 'VisaApplication':      return 'visaApplication';
+      case 'VisaCase':
+      case 'Case':
+      case 'CASE':                 return 'case';
+      case 'VisaChat':             return 'conversation';
+      case 'Ticket':
+      case 'TICKET':               return 'ticket';
+      default:                     return 'record';
+    }
   }
 
   // ── Public API ────────────────────────────────────────────────────

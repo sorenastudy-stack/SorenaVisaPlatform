@@ -422,11 +422,20 @@
       "title": "Recent activity",
       "empty": "Nothing yet — your activity will appear here as you work on your application.",
       "event": {
-        "STEP_STARTED": "You started {step}",
-        "STEP_SAVED": "You saved {step}",
-        "DOCUMENT_RECORDED": "You recorded {documentType}",
-        "DOCUMENT_REMOVED": "You removed {documentType}",
+        "STEP_STARTED": "You started {subject}",
+        "STEP_SAVED": "You saved {subject}",
+        "DOCUMENT_RECORDED": "You uploaded {subject}",
+        "DOCUMENT_REMOVED": "You removed {subject}",
         "STATUS_CHANGED": "Case status changed to {status}"
+      },
+      "subject": {
+        "application": "your application",
+        "document": "a document",
+        "visaApplication": "your visa application",
+        "case": "your case",
+        "conversation": "a conversation with the assistant",
+        "ticket": "a support ticket",
+        "record": "your details"
       }
     },
     "tickets": {
