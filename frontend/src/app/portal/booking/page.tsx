@@ -439,6 +439,10 @@ function EmptyCalendarScaffold() {
 // ── Paid flow: GAP_CLOSING + LIA ──────────────────────────────────────
 interface Hold {
   consultationId: string; holdExpiresAt: string; amountNZD: number;
+  // PR-GST-SESSIONS — walletCents is base + GST, computed server-side. amountNZD
+  // remains the PRE-GST base (the stored column), so it must never be used as a
+  // price on screen: doing so is what showed "Pay USD 20.00" for a 23.00 debit.
+  gstCents?: number; walletCents?: number;
   currency: string; cardFeeCents: number; cardTotalCents: number;
   type: string; slotStartUtc: string; staffName: string; timezone: string;
 }
@@ -606,11 +610,14 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
   if (step === 'hold' && hold) {
     const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
     const ss = String(secondsLeft % 60).padStart(2, '0');
+    // What the wallet is actually debited. Falls back to the base only if an
+    // older server build omits the field, so this can never render NaN.
+    const walletDue = hold.walletCents ?? Math.round(hold.amountNZD * 100);
     return (
       <Shell>
         <h1 className="text-xl font-bold text-sorena-navy text-center">{t('confirmPay')}</h1>
         <div className="mt-6 rounded-2xl bg-sorena-cream border border-sorena-navy/10 p-5 text-center">
-          <p className="text-xs uppercase tracking-wide text-sorena-text/50 font-semibold">{cfgLabel} · {formatMoneyCents(Math.round(hold.amountNZD * 100), hold.currency)}</p>
+          <p className="text-xs uppercase tracking-wide text-sorena-text/50 font-semibold">{cfgLabel} · {formatMoneyCents(walletDue, hold.currency)}</p>
           <p className="mt-2 text-lg font-bold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { weekday: 'long', day: 'numeric', month: 'long' }, locale)}</p>
           <p className="text-lg font-semibold text-sorena-navy">{fmt(hold.slotStartUtc, tz, { hour: 'numeric', minute: '2-digit', hour12: true }, locale)} NZ</p>
           <p className="mt-1 text-xs text-sorena-text/50">{t('withStaff', { name: hold.staffName })}</p>
@@ -636,13 +643,13 @@ function PaidBookingFlow({ sessionType }: { sessionType: 'GAP_CLOSING' | 'LIA' }
         </div>
 
         <div className="mt-6 space-y-3">
-          {walletCents != null && walletCents >= Math.round(hold.amountNZD * 100) && (
+          {walletCents != null && walletCents >= walletDue && (
             <>
               <button onClick={payWithWallet} disabled={payingWallet || paying || !accepted} className="flex min-h-[3rem] w-full items-center justify-center gap-2 rounded-xl bg-sorena-navy px-6 py-3.5 font-semibold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-sorena-navy/90 disabled:opacity-60 disabled:hover:translate-y-0">
-                {payingWallet ? <><Loader2 size={18} className="animate-spin" /> {t('paying')}</> : t('payWallet', { amount: formatMoneyCents(Math.round(hold.amountNZD * 100), hold.currency) })}
+                {payingWallet ? <><Loader2 size={18} className="animate-spin" /> {t('paying')}</> : t('payWallet', { amount: formatMoneyCents(walletDue, hold.currency) })}
               </button>
               <p className="text-center text-xs text-sorena-text/50">
-                {t('walletBalanceNote', { balance: formatMoneyCents(walletCents, hold.currency), after: formatMoneyCents(walletCents - Math.round(hold.amountNZD * 100), hold.currency) })}
+                {t('walletBalanceNote', { balance: formatMoneyCents(walletCents, hold.currency), after: formatMoneyCents(walletCents - walletDue, hold.currency) })}
               </p>
               <div className="flex items-center gap-3 py-1 text-xs text-sorena-text/40">
                 <span className="h-px flex-1 bg-sorena-navy/10" /> {t('orPayCard')} <span className="h-px flex-1 bg-sorena-navy/10" />

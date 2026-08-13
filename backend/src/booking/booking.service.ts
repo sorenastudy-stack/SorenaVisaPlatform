@@ -320,6 +320,7 @@ export class BookingService {
     now?: Date;
   }): Promise<{
     consultationId: string; holdExpiresAt: Date; amountNZD: number;
+    gstCents?: number; walletCents?: number;
     currency: string; cardFeeCents: number; cardTotalCents: number;
     type: BookingSessionType; slotStartUtc: string; staffName: string; timezone: string;
   }> {
@@ -403,12 +404,16 @@ export class BookingService {
         });
 
         const adviser = await this.prisma.user.findUnique({ where: { id: staffId }, select: { name: true } });
-        const holdCharge = cardChargeForHeld(Math.round(cfg.price * 100));
+        const holdCharge = cardChargeForHeld(Math.round(cfg.price * 100), cfg.currency);
         return {
           consultationId: consult.id,
           holdExpiresAt,
+          // amountNZD stays the PRE-GST base, matching the stored column.
           amountNZD: cfg.price,
           currency: cfg.currency,
+          gstCents: holdCharge.gstCents,
+          // What wallet pays — base + GST.
+          walletCents: holdCharge.walletCents,
           cardFeeCents: holdCharge.cardFeeCents,
           cardTotalCents: holdCharge.cardTotalCents,
           type: sessionType,
@@ -469,9 +474,14 @@ export class BookingService {
   ): Promise<{ status: 'CONFIRMED'; paidWith: 'WALLET'; newBalanceCents: number }> {
     // Ownership + still-payable checks BEFORE touching money (404 / 409 / 400).
     const hold = await this.getHoldForCheckout(userId, consultationId, now);
-    // Wallet pays the BASE (no card fee), in the HOLD's currency — never a
-    // re-read of config, so an in-flight hold settles at what it was quoted.
-    const priceCents = Math.round(hold.amountNZD * 100);
+    // Wallet pays base + GST and no card fee, in the HOLD's currency — derived
+    // from the hold's own base, never a re-read of config, so an in-flight hold
+    // settles at exactly what the pay screen shows it.
+    //
+    // PR-GST-SESSIONS: this used to debit the pre-GST base, which is how a
+    // Gap-Closing session cost a client 20.00 instead of 23.00.
+    const { walletCents: priceCents } = cardChargeForHeld(
+      Math.round(hold.amountNZD * 100), hold.currency);
     if (priceCents <= 0) throw new BadRequestException('This booking is not payable.');
 
     // Option-A currency guard: refuse to debit a wallet whose currency differs

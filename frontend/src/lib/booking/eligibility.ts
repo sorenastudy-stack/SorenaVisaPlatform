@@ -31,7 +31,12 @@ export interface TypeEligibility {
   reasonParams?: Record<string, string>;
   paid: boolean;
   currency: string;       // ISO 4217, e.g. 'USD'
-  priceCents: number;     // base — the WALLET amount (no fee)
+  // PR-GST-SESSIONS — priceCents is now GST-INCLUSIVE: it is what the client
+  // owes and what the wallet is debited. baseCents/gstCents are the disclosure
+  // parts. Before this the server sent the pre-GST base here and charged it.
+  baseCents?: number;     // pre-GST list price (disclosure only)
+  gstCents?: number;
+  priceCents: number;     // base + GST — the WALLET amount (no card fee)
   cardFeeCents: number;   // disclosed card processing fee (0 when free)
   cardTotalCents: number; // priceCents + cardFeeCents — the CARD amount
 }

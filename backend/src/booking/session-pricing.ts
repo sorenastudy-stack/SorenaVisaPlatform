@@ -1,66 +1,93 @@
 import { BookingSessionType, getSessionConfig } from './session-config';
+import { calculateFeeBreakdown, FeeBreakdown } from '../payments/fee-config';
 
 // Phase E — the SINGLE source of session pricing math (money is computed here,
 // server-side, in integer cents; never a client-sent total, never a float).
 //
-// Card fee is a PERCENTAGE (default 10%), env-overridable via
-// SESSION_CARD_FEE_PERCENT. It is applied ONLY to card payments — wallet pays
-// the base price with no fee. It is deliberately NOT fee-config's
-// calculateCardSurcharge: sessions carry their own percentage, set here.
+// PR-GST-SESSIONS — this module used to own its own arithmetic: no GST at all,
+// and a flat 10% card fee (SESSION_CARD_FEE_PERCENT). Both were wrong, and both
+// were wrong in the same way the account-opening fee and the chatbot CTA were
+// wrong before they were corrected: a number derived by hand instead of read
+// from the place that owns it.
 //
-// (This note used to describe a flat CARD_SURCHARGE_CENTS on the
-// account-opening invoice. That constant is gone — PR-GST-CHARGE moved the
-// invoice onto fee-config's own 2.9% + $0.30, which is what Stripe actually
-// takes.)
+//   GAP_CLOSING  charged  20.00 wallet / 22.00 card   should be 23.00 / 23.97
+//   LIA          charged  58.00 wallet / 63.80 card   should be 66.70 / 68.93
+//
+// It now derives everything from fee-config's calculateFeeBreakdown, which is
+// the same function the account-opening invoice, the pay screen, the tax invoice
+// and the chatbot CTA use. That is the point: the booking page, the assessment
+// report's "Book LIA" button and any consultation type added later now agree
+// with the rest of the platform BY CONSTRUCTION, not by being fixed in parallel
+// a fourth time.
+//
+// Order is fixed by fee-config and must not be re-derived here: GST on the base,
+// then Stripe's 2.9% + $0.30 on the GST-inclusive amount. Wallet pays base + GST
+// and no card fee — there is no card to process.
 
 export interface SessionPricing {
   type: BookingSessionType;
-  currency: string;      // ISO 4217, e.g. 'USD'
-  paid: boolean;         // requiresPayment
-  priceCents: number;    // base — the WALLET amount and the pre-fee card amount
-  cardFeeCents: number;  // the disclosed card processing fee (0 when free)
-  cardTotalCents: number; // priceCents + cardFeeCents — the CARD amount charged
-  cardFeePercent: number; // the percent used (for disclosure)
+  currency: string;       // ISO 4217, e.g. 'USD'
+  paid: boolean;          // requiresPayment
+  /** Pre-GST list price. Disclosure only — nobody is charged this. */
+  baseCents: number;
+  gstCents: number;
+  /** base + GST — what is owed, and the WALLET amount. */
+  priceCents: number;
+  cardFeeCents: number;   // Stripe's cut (0 when free)
+  /** priceCents + cardFeeCents — the CARD amount charged. */
+  cardTotalCents: number;
 }
 
-/** Card fee percent. Env-overridable; safe default 10 (prod runs on the default
- *  — SESSION_CARD_FEE_PERCENT is unset in prod). Negative/NaN → 10. */
-export function cardFeePercent(): number {
-  const raw = Number(process.env.SESSION_CARD_FEE_PERCENT ?? 10);
-  return Number.isFinite(raw) && raw >= 0 ? raw : 10;
+/** The breakdown for a session type, straight from fee-config. */
+function breakdownFor(type: BookingSessionType, method: 'card' | 'bank'): FeeBreakdown {
+  const cfg = getSessionConfig(type);
+  // Whole-dollar config prices × 100 → exact integer cents.
+  return calculateFeeBreakdown(Math.round(cfg.price * 100), method, cfg.currency);
 }
 
-/** Fee on a base amount, computed in INTEGER cents (round half-up on the cents,
- *  never a float-dollar multiply). A zero base → zero fee (free sessions can
- *  never accrue a charge). */
-export function computeCardFeeCents(priceCents: number, percent = cardFeePercent()): number {
-  if (priceCents <= 0) return 0;
-  return Math.round((priceCents * percent) / 100);
-}
-
-/** Authoritative pricing for a session type, from config. `priceCents` derives
- *  from whole-dollar config prices (× 100 → exact integer). */
+/** Authoritative pricing for a session type. */
 export function getSessionPricing(type: BookingSessionType): SessionPricing {
   const cfg = getSessionConfig(type);
-  const percent = cardFeePercent();
-  const priceCents = Math.round(cfg.price * 100);
-  const cardFeeCents = computeCardFeeCents(priceCents, percent);
+  // A free session has a zero base; fee-config already returns zeros for that,
+  // so a free slot can never accrue GST or a card fee.
+  const bank = breakdownFor(type, 'bank');
+  const card = breakdownFor(type, 'card');
   return {
     type,
     currency: cfg.currency,
     paid: cfg.requiresPayment,
-    priceCents,
-    cardFeeCents,
-    cardTotalCents: priceCents + cardFeeCents,
-    cardFeePercent: percent,
+    baseCents: bank.baseCents,
+    gstCents: bank.gstCents,
+    priceCents: bank.totalCents,
+    cardFeeCents: card.cardFeeCents,
+    cardTotalCents: card.totalCents,
   };
 }
 
-/** Fee + total for an ALREADY-HELD base amount (server-side, off the hold — the
- *  charge honours the held price/currency, not a re-read of config). Used at
- *  checkout so an in-flight hold pays exactly what it was quoted. */
-export function cardChargeForHeld(baseCents: number): { cardFeeCents: number; cardTotalCents: number; cardFeePercent: number } {
-  const percent = cardFeePercent();
-  const cardFeeCents = computeCardFeeCents(baseCents, percent);
-  return { cardFeeCents, cardTotalCents: baseCents + cardFeeCents, cardFeePercent: percent };
+/**
+ * The charge for an ALREADY-HELD base amount.
+ *
+ * `baseCents` is the hold's stored pre-GST base — the meaning of the persisted
+ * `amountNZD` column is deliberately UNCHANGED by this fix, so no existing row
+ * silently means something new. GST and the card fee are derived here on every
+ * read instead.
+ *
+ * Used at checkout and on the pay screen so an in-flight hold is charged exactly
+ * what that screen shows it at the moment of payment.
+ */
+export function cardChargeForHeld(baseCents: number, currency?: string): {
+  gstCents: number;
+  /** base + GST — the wallet amount. */
+  walletCents: number;
+  cardFeeCents: number;
+  cardTotalCents: number;
+} {
+  const bank = calculateFeeBreakdown(baseCents, 'bank', currency);
+  const card = calculateFeeBreakdown(baseCents, 'card', currency);
+  return {
+    gstCents: bank.gstCents,
+    walletCents: bank.totalCents,
+    cardFeeCents: card.cardFeeCents,
+    cardTotalCents: card.totalCents,
+  };
 }

@@ -127,15 +127,19 @@ export class BookingController {
       userAgent: req.headers?.['user-agent'] ?? null,
     });
     const cfg = getSessionConfig(hold.type);
-    // Fee computed SERVER-SIDE off the hold's base — never a client-sent total.
+    // Money computed SERVER-SIDE off the hold's base — never a client-sent
+    // total. PR-GST-SESSIONS: GST is now charged and itemised, matching the
+    // account-opening flow; before this the client paid the base plus a flat
+    // 10% and no GST at all.
     const baseCents = Math.round(hold.amountNZD * 100);
-    const { cardFeeCents } = cardChargeForHeld(baseCents);
+    const { gstCents, cardFeeCents } = cardChargeForHeld(baseCents, hold.currency);
     const session = await this.stripe.createBookingCheckoutSession({
       consultationId: hold.id,
       leadId: hold.leadId,
       bookingType: hold.type,
       currency: hold.currency,
       baseCents,
+      gstCents,
       cardFeeCents,
       productName: `Sorena Visa — ${cfg.label}`,
     });

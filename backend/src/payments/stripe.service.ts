@@ -226,8 +226,9 @@ export class StripeService {
     leadId: string;
     bookingType: string; // e.g. 'GAP_CLOSING'
     currency: string;    // from the hold / session-config (e.g. 'USD')
-    baseCents: number;   // session base (server-computed)
-    cardFeeCents: number; // disclosed card processing fee (0 → single line item)
+    baseCents: number;   // session base, PRE-GST (server-computed)
+    gstCents: number;    // GST on the base (0 → no GST line)
+    cardFeeCents: number; // disclosed card processing fee (0 → no fee line)
     productName: string;
   }) {
     this.assertConfigured();
@@ -241,15 +242,23 @@ export class StripeService {
     // Return the user to the right booking page on cancel (gap / lia).
     const cancelType = params.bookingType === 'LIA' ? 'lia' : 'gap';
     const ccy = params.currency.toLowerCase();
-    // Currency driven by config (never a hardcoded default). The fee is a SEPARATE
-    // disclosed line item so it also shows on the Stripe page (mirrors the
-    // account-opening pay screen's disclosed fee). Stripe's amount_total = base
-    // + fee, which the webhook trusts as the captured amount.
+    // Currency driven by config (never a hardcoded default). GST and the card
+    // fee are SEPARATE disclosed line items, mirroring createConsultationPaymentLink
+    // — a single grossed-up figure shows the client a number they cannot
+    // reconcile against the fee table, and GST has to be itemised anyway.
+    // Stripe's amount_total = base + GST + fee, which the webhook trusts as the
+    // captured amount.
     const line_items = [
       {
         price_data: { currency: ccy, product_data: { name: params.productName }, unit_amount: params.baseCents },
         quantity: 1,
       },
+      ...(params.gstCents > 0
+        ? [{
+            price_data: { currency: ccy, product_data: { name: 'GST 15%' }, unit_amount: params.gstCents },
+            quantity: 1,
+          }]
+        : []),
       ...(params.cardFeeCents > 0
         ? [{
             price_data: { currency: ccy, product_data: { name: 'Card processing fee' }, unit_amount: params.cardFeeCents },
