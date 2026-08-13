@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import { apiServer } from '@/lib/apiServer';
-import { PaymentsView, PAYABLE_STATUSES, type PaymentRow, type InvoiceRow } from '@/components/portal/PaymentsView';
+import { PaymentsView, type PaymentRow, type InvoiceRow } from '@/components/portal/PaymentsView';
+import { PAYABLE_STATUSES } from '@/lib/invoice-status';
 
 // PR-PORTAL-PAYMENTS — client Payments page inside /portal/* (reachable by LEAD
 // and STUDENT). Read-only: history via GET /portal/me/payments + outstanding
@@ -18,8 +19,10 @@ export default async function PortalPaymentsPage() {
   }
 
   let outstanding: InvoiceRow[] = [];
+  let allInvoices: InvoiceRow[] = [];
   try {
     const invoices = await apiServer.get<InvoiceRow[]>('/portal/me/invoices');
+    allInvoices = invoices;
     outstanding = invoices.filter((inv) => PAYABLE_STATUSES.includes(inv.status));
   } catch {
     /* non-fatal — hide the outstanding section, keep history */
@@ -29,7 +32,7 @@ export default async function PortalPaymentsPage() {
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-10">
       <h1 className="mb-1 text-2xl font-bold text-[#1e3a5f]">{t('pageTitle')}</h1>
       <p className="mb-6 text-sm text-gray-500">{t('pageSubtitle')}</p>
-      <PaymentsView payments={payments} outstanding={outstanding} loadError={loadError} />
+      <PaymentsView payments={payments} outstanding={outstanding} invoices={allInvoices} loadError={loadError} />
     </div>
   );
 }

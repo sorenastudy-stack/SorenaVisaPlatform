@@ -4,6 +4,7 @@ import { ArrowLeft, CreditCard, Landmark, Globe, ExternalLink, ShieldCheck, Chec
 import { apiServer } from '@/lib/apiServer';
 import { formatMoneyCents } from '@/lib/money';
 import { PayInvoiceButton } from '@/components/portal/PayInvoiceButton';
+import { InvoicePdfButton } from '@/components/portal/InvoicePdfButton';
 import { CopyButton } from '@/components/portal/CopyButton';
 import { ReceiptUpload } from '@/components/portal/ReceiptUpload';
 
@@ -98,6 +99,14 @@ export default async function PayPage({
           <p className="mt-3 text-xs text-[#4A4A4A]/55">
             {invoiceLabel} · {formatMoneyCents(opts.bankCents, opts.currency)}
           </p>
+          {/* PR-TAX-INVOICE — the settled document, which prints PAID on its face. */}
+          <div className="mt-4">
+            <InvoicePdfButton
+              invoiceId={opts.invoiceId}
+              invoiceNumber={opts.invoiceNumber}
+              label={t('taxInvoice')}
+            />
+          </div>
         </section>
       </div>
     );
@@ -153,6 +162,16 @@ export default async function PayPage({
           <p className="mt-2 text-xs text-[#4A4A4A]/55">
             {invoiceLabel} · {formatMoneyCents(opts.bankCents, opts.currency)}
           </p>
+          {/* PR-TAX-INVOICE — same document, stating what is still owed. Useful to
+              a client who has to forward it to whoever is actually paying. */}
+          <div className="mt-3">
+            <InvoicePdfButton
+              invoiceId={opts.invoiceId}
+              invoiceNumber={opts.invoiceNumber}
+              label={t('taxInvoice')}
+              variant="subtle"
+            />
+          </div>
         </div>
       </header>
 

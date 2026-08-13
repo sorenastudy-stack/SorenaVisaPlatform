@@ -91,6 +91,7 @@
     "emptyTitle": "No payments yet",
     "emptyBody": "Your payments and receipts will appear here once you've made one.",
     "emptyCompleted": "No completed payments yet.",
+    "taxInvoice": "Tax invoice",
     "status": {
       "paid": "Paid",
       "pending": "Pending",
@@ -219,6 +220,7 @@
     "engagementFee": "Account opening fee",
     "engagementInvoice": "Account opening invoice {number}",
     "paidTitle": "Payment received",
+    "taxInvoice": "Tax invoice",
     "paidBody": "Thanks — your payment is confirmed. Your full access is open. There's nothing more to do here.",
     "processingTitle": "Payment received — we're confirming it",
     "processingBody": "Thanks — we've got your receipt. We'll confirm once the funds land, usually within a few business days. Your full access opens then.",

@@ -1,7 +1,8 @@
 import { getTranslations } from 'next-intl/server';
 import { apiServer } from '@/lib/apiServer';
 import { StudentHeader } from '@/components/student/StudentHeader';
-import { PaymentsView, PAYABLE_STATUSES, type PaymentRow, type InvoiceRow } from '@/components/portal/PaymentsView';
+import { PaymentsView, type PaymentRow, type InvoiceRow } from '@/components/portal/PaymentsView';
+import { PAYABLE_STATUSES } from '@/lib/invoice-status';
 
 // Client payment history & receipts (STUDENT). Same read-only view as the
 // /portal Payments page — shared <PaymentsView>, same own-data endpoints
@@ -27,8 +28,10 @@ export default async function StudentPaymentsPage() {
   }
 
   let outstanding: InvoiceRow[] = [];
+  let allInvoices: InvoiceRow[] = [];
   try {
     const invoices = await apiServer.get<InvoiceRow[]>('/portal/me/invoices');
+    allInvoices = invoices;
     outstanding = invoices.filter((inv) => PAYABLE_STATUSES.includes(inv.status));
   } catch {
     /* non-fatal */
@@ -37,7 +40,7 @@ export default async function StudentPaymentsPage() {
   return (
     <div>
       <StudentHeader name={me.fullName} photoUrl={me.photoUrl} subtitle={t('studentSubtitle')} showBack />
-      <PaymentsView payments={payments} outstanding={outstanding} loadError={loadError} />
+      <PaymentsView payments={payments} outstanding={outstanding} invoices={allInvoices} loadError={loadError} />
     </div>
   );
 }

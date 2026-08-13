@@ -3,6 +3,7 @@
 import { CreditCard } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { PayInvoiceButton } from '@/components/portal/PayInvoiceButton';
+import { InvoicePdfButton } from '@/components/portal/InvoicePdfButton';
 import { formatMoney, formatMoneyCents } from '@/lib/money';
 import { formatDate } from '@/lib/date';
 import { useLocaleStore } from '@/lib/stores/localeStore';
@@ -27,18 +28,31 @@ export interface InvoiceRow {
   amount: string | number; currency: string; status: string; dueDate: string | null;
 }
 
-// Invoice states the client can still pay (mirrors the pay-link endpoint's guard).
-export const PAYABLE_STATUSES = ['SENT', 'OVERDUE'];
+// Moved to lib/invoice-status so SERVER components can read the real array —
+// a 'use client' export reaches the server as a client reference, not a value.
+export { PAYABLE_STATUSES } from '@/lib/invoice-status';
 
 export function PaymentsView({
-  payments, outstanding, loadError = false,
+  payments, outstanding, invoices = [], loadError = false,
 }: {
   payments: PaymentRow[];
   outstanding: InvoiceRow[];
+  /**
+   * PR-TAX-INVOICE — every invoice, including settled ones. `outstanding` is a
+   * filtered subset, and a PAID invoice is precisely the document a client wants
+   * to keep, so the download needs the unfiltered list. Optional so a caller
+   * that has not been updated still renders exactly as before.
+   */
+  invoices?: InvoiceRow[];
   loadError?: boolean;
 }) {
   const t = useTranslations('paymentsView');
   const locale = useLocaleStore((s) => s.locale);
+
+  // A payment row knows its invoice NUMBER, not its id, and the PDF route is
+  // keyed by id. Resolve one to the other; a charge with no matching invoice
+  // (older data) simply shows no download rather than a broken button.
+  const invoiceByNumber = new Map(invoices.map((inv) => [inv.invoiceNumber, inv]));
 
   // Stripe status → human. Payment rows are succeeded charges; a bank/exchange
   // receipt awaiting Finance shows on the invoice as still-outstanding (below).
@@ -68,7 +82,15 @@ export function PaymentsView({
                   {inv.dueDate ? ` · ${t('due', { date: formatDate(inv.dueDate, locale) })}` : ''}
                 </p>
               </div>
-              <PayInvoiceButton invoiceId={inv.id} />
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <InvoicePdfButton
+                  invoiceId={inv.id}
+                  invoiceNumber={inv.invoiceNumber}
+                  label={t('taxInvoice')}
+                  variant="subtle"
+                />
+                <PayInvoiceButton invoiceId={inv.id} />
+              </div>
             </div>
           ))}
         </section>
@@ -86,9 +108,19 @@ export function PaymentsView({
                 <p className="truncate text-sm font-semibold text-[#1e3a5f]">{p.label}</p>
                 <p className="mt-0.5 text-xs text-[#4A4A4A]/60">{formatDate(p.createdAt, locale)}</p>
               </div>
-              <div className="flex-shrink-0 text-right">
-                <p className="text-sm font-bold text-[#1e3a5f]">{formatMoneyCents(p.amountCents, p.currency)}</p>
-                <span className="mt-1 inline-block rounded-full bg-[#c9a961]/15 px-2 py-0.5 text-[11px] font-semibold text-[#8a6d10]">{humanStatus(p.status)}</span>
+              <div className="flex flex-shrink-0 items-center gap-3">
+                <div className="text-right">
+                  <p className="text-sm font-bold text-[#1e3a5f]">{formatMoneyCents(p.amountCents, p.currency)}</p>
+                  <span className="mt-1 inline-block rounded-full bg-[#c9a961]/15 px-2 py-0.5 text-[11px] font-semibold text-[#8a6d10]">{humanStatus(p.status)}</span>
+                </div>
+                {p.invoiceNumber && invoiceByNumber.has(p.invoiceNumber) && (
+                  <InvoicePdfButton
+                    invoiceId={invoiceByNumber.get(p.invoiceNumber)!.id}
+                    invoiceNumber={p.invoiceNumber}
+                    label={t('taxInvoice')}
+                    variant="subtle"
+                  />
+                )}
               </div>
             </li>
           ))}
