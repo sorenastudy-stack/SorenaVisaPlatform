@@ -5,6 +5,19 @@ dotenv.config();
 import { PrismaClient } from '@prisma/client';
 import { BookingService } from '../src/booking/booking.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { getSessionConfig } from '../src/booking/session-config';
+
+// The seeded consultation amount, read from config rather than written down.
+//
+// This used to be a literal 150 — the NZD price from before Phase E moved
+// sessions to USD, so the fixture had been seeding a price that no longer
+// existed. Deriving it means the same drift cannot happen again.
+//
+// NOTE: Consultation.amountNZD holds the PRE-GST BASE in `currency` (the column
+// name is legacy). GST and the card fee are derived from it on read by
+// cardChargeForHeld, so storing a GST-INCLUSIVE figure here would tax it twice
+// (58.00 -> 66.70 correct; 66.70 -> 76.71 wrong).
+const LIA_BASE = getSessionConfig('LIA').price;
 
 // PR-BOOKING-1 — local-only slot-engine test/seed. Seeds one verified LIA
 // adviser with weekly availability + a test lead, then exercises the slot
@@ -12,7 +25,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 // bookings it creates. Run: npx ts-node scripts/test-slot-engine.ts
 
 const prisma = new PrismaClient();
-const booking = new BookingService(prisma as unknown as PrismaService);
+// BookingService(prisma, bookingConfirmation, wallet, eligibility) — the slot engine
+// only touches prisma; the rest are injected but unused on this path.
+const booking = new BookingService(prisma as unknown as PrismaService, {} as any, {} as any, {} as any);
 
 const TZ = 'Pacific/Auckland';
 const ADVISER_EMAIL = 'adviser.lia@booking.test';
@@ -89,7 +104,7 @@ async function main() {
   const target = res.slots[0];
   const c1 = await prisma.consultation.create({
     data: {
-      leadId: lead.id, type: 'LIA', amountNZD: 150, assignedToId: adviser.id,
+      leadId: lead.id, type: 'LIA', amountNZD: LIA_BASE, assignedToId: adviser.id,
       status: 'BOOKED', scheduledAt: target.start, scheduledEndAt: target.end, durationMinutes: 45,
     },
     select: { id: true },
@@ -105,10 +120,10 @@ async function main() {
   // ── 3. Commit guard / double-booking 409 ────────────────────────────
   const freeSlot = res2.slots[0];
   const pendingA = await prisma.consultation.create({
-    data: { leadId: lead.id, type: 'LIA', amountNZD: 150, status: 'PENDING' }, select: { id: true },
+    data: { leadId: lead.id, type: 'LIA', amountNZD: LIA_BASE, status: 'PENDING' }, select: { id: true },
   });
   const pendingB = await prisma.consultation.create({
-    data: { leadId: lead.id, type: 'LIA', amountNZD: 150, status: 'PENDING' }, select: { id: true },
+    data: { leadId: lead.id, type: 'LIA', amountNZD: LIA_BASE, status: 'PENDING' }, select: { id: true },
   });
   createdConsultationIds.push(pendingA.id, pendingB.id);
 

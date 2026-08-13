@@ -3,35 +3,40 @@
 Open items carried between sessions. Not a roadmap — just the things that were
 deliberately deferred, with enough context to pick each one up cold.
 
-Last updated: 13 August 2026.
+Last updated: 14 August 2026.
 
 ---
 
 ## Small / quick
 
 ### Audit untracked `scripts/` files for stale references
-Same failure mode as `SESSION_CARD_FEE_PERCENT`, found while cleaning that up.
-`backend/scripts/` holds local harnesses that are gitignored, ship nowhere, and have
-rotted against the code they test — they import deleted exports and assert figures that
-are no longer correct. A "verification suite" asserting the old numbers is worse than no
-suite: someone runs it, sees red, and "fixes" the code backwards.
+**DONE — 14 Aug 2026.** Full sweep of all 54 files in `backend/scripts/`.
 
-Known rotted (as of 13 Aug 2026):
-- `e2e-onboarding-smoke.ts` — references `priceNZD`, renamed in Phase E
-- `test-client-contract-onramp.ts` — calls with wrong arities
-- `test-contract-capture.ts` — same
+Five were rotted, all the same root cause: **service-constructor arity drift** (services
+gained dependencies, the scripts still built them with the old argument count), so none had
+run since those services changed. Four were fixed by supplying the missing arguments;
+`e2e-onboarding-smoke.ts` was deleted with the Owner's per-file confirmation — broken *and*
+asserting `liaPrice === 150`, a price disproved the day before.
 
-`test-session-pricing-usd.ts` was the fourth and was deleted (it asserted the pre-GST
-prices). The fix is the same shape each time: check whether the script is still
-referenced, then delete or update. Quick when picked up.
+`test-slot-engine.ts` (tracked) also seeded a literal `amountNZD: 150` — the pre-Phase-E NZD
+price. Now derived from `getSessionConfig('LIA').price`, so it cannot drift again. Note for
+whoever touches it: that column holds the **pre-GST base**, so a GST-inclusive figure would
+be taxed twice (58.00 -> 66.70 correct; 66.70 -> 76.71 wrong).
 
-⚠ These are **untracked** — deleting one is irreversible, so confirm with the Owner
-before removing rather than assuming.
+The remaining 49 were checked beyond typecheck — DocuSign is still live (24 src files), the
+`SALES` role is still a valid enum kept for legacy rows, and every HTTP path referenced still
+exists — and found healthy. **The whole backend now typechecks clean including `scripts/`,
+which it did not before.**
+
+⚠ **Caveat for the next sweep:** 26 of these scripts use `as any`, often casting entire
+services. A clean typecheck does **not** prove a script is healthy — `test-slot-engine.ts`
+compiled perfectly while seeding a price that no longer existed. None were executed: several
+are unsafe to run blind (`send-real-onboarding.ts` fires a real email,
+`catalogue-import-prod.ts` runs against production, `purge-test-fixtures-local.ts` deletes
+rows).
 
 ### Stale `.gitignore` line
-`backend/.gitignore:15` still ignores `scripts/test-session-pricing-usd.ts`, deleted
-13 Aug 2026. Harmless. Sweep it opportunistically next time that area is touched — not
-worth a solo commit.
+**DONE — 14 Aug 2026.** Removed alongside the sweep, as its own note suggested.
 
 ### Delete `SESSION_CARD_FEE_PERCENT` from Railway
 **Done / not needed** — it was never set in any service or environment. Kept here only so
