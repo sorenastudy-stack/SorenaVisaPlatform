@@ -93,37 +93,59 @@ See `AUDIT_CLIENT_PORTAL_2026-08-13.md` for the full inventory and status table.
   sidebar was the safe default under the new rule; whether it deserves standalone billing is
   an information-architecture decision.
 
-### Two ticket models, and the portal reads different ones — NEW, 14 Aug 2026
+### Two ticket models — INVESTIGATED 14 Aug 2026; consolidation onto `VisaSupportTicket` DECIDED, plan pending review
 
-Found while re-verifying audit finding 1b. **Not investigated further; recorded so it does
-not have to be rediscovered.**
+**Root cause: a route collision, not a data-model mystery.** Two controllers register the
+same four paths, and Express serves whichever registered first:
 
-The schema carries two unrelated ticket systems:
+| Controller | Path | Model | Wins? |
+|---|---|---|---|
+| `StudentsController` (`@Controller('students')` + `@Get('me/tickets')`) | `/students/me/tickets` | `Ticket` | **yes** — resolves 1st |
+| `TicketsController` (`@Controller('students/me/tickets')`) | `/students/me/tickets` | `VisaSupportTicket` | no — shadowed |
 
-| | `Ticket` (schema ~3008) | `VisaSupportTicket` (schema ~4615) |
-|---|---|---|
-| rows in dev | **90** | 0 for the test client |
-| `subject` | plaintext `String` | `subjectEncrypted`, decrypted on read |
-| `department` | **nullable** | NOT NULL |
-| companion | `TicketMessage` | `VisaSupportTicketMessage` |
+Nest's boot log settles it: `StudentsController` resolves at position 32, `TicketsController`
+at 36. `TicketsController`'s `GET`, `GET :id`, `POST` and `POST :id/messages` are
+**unreachable dead code**. Only `PATCH :id/close` reaches it.
 
-What was observed, not inferred:
+**Live bug this causes: a client cannot close a ticket.** The list/detail come from `Ticket`,
+but close is the one route reaching `TicketsController`, which looks the id up in
+`VisaSupportTicket`:
 
-- The dashboard card counts **`VisaSupportTicket`** (`TicketsService.getDashboardSummary`).
-- `/student/tickets` displayed *"English pre-course consultation requested"* — a row that
-  exists **only in `Ticket`**, for a client with **zero** `VisaSupportTicket` rows.
-- Creating a properly-encrypted `VisaSupportTicket` probe made the dashboard count **1**
-  while the page **kept showing the `Ticket` row instead**. Probe removed afterwards.
-- `Ticket.department` being nullable is exactly where the original
-  `tickets.department.null` badge came from — a null that the other model cannot produce.
+```
+PATCH /students/me/tickets/<id>/close  ->  404 "Ticket not found"
+Ticket status after: OPEN (UNCHANGED)
+```
 
-**Unresolved and worth starting from:** `/student/tickets` fetches `/students/me/tickets`,
-and that controller's service reads `visaSupportTicket` — so the code path that served a
-`Ticket` row to that page has not been identified. Either another route answers that path,
-or the page reaches something else. That is the first thread to pull.
+It also explains two audit findings: `tickets.department.null` (only `Ticket.department` is
+nullable) and the empty "Reply:" label (`TicketListItem` expects `messageCount`, which the
+`Ticket` shape does not have).
 
-Questions for whoever picks it up: which model is the client-facing one, is the other legacy,
-and does anything still write to both?
+**Row counts — the decisive fact.** The legacy table is empty everywhere that matters:
+
+| | dev | production | demo |
+|---|---|---|---|
+| `Ticket` | 100 | **0** | **0** |
+| `TicketMessage` | 1 | **0** | **0** |
+| `VisaSupportTicket` | 0 | **1** | **1** |
+| `VisaSupportTicketMessage` | 0 | **1** | **1** |
+
+So there is **no production data to migrate**. Of the 100 dev rows, 99 are test residue —
+accumulating daily (5, 17, 25, 23, 29) with distinct `co.ck…@t.local` creators from the
+kanban spec writing into the shared dev database. Today's per-worker schema isolation stops
+that accumulation at source.
+
+**History.** `Ticket` — `855fda5`, 1 May 2026 ("scaffold Student portal"). `VisaSupportTicket`
+— `e7cf818`, 20 May 2026 ("PR-DASH-2 Support tickets"). No commit, comment or TODO says one
+replaces the other, but `VisaSupportTicket` carries the design rationale (encrypted subject,
+null-on-staff-deletion), owns the entire staff workflow, and received the later feature work
+(`PHASE_R_TICKETS_RICH_ATTACHMENTS.md`). The evidence reads as: PR-DASH-2 built a complete
+replacement, nobody removed the old routes, and the new controller was silently shadowed at
+boot — which is exactly why its table stayed empty.
+
+**DECIDED (Owner, 14 Aug 2026): `VisaSupportTicket` is canonical. `Ticket`/`TicketMessage`
+are retired — left in the database, but nothing writes to them.** Full migration plan
+prepared and awaiting review; the one judgment call in it is the default department for rows
+whose `department` is null.
 
 ### Persian / RTL
 Six-item queue in the audit doc: Explore (242 English words), Recommendations (61), the
