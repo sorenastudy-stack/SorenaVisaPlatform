@@ -156,19 +156,40 @@ Measured rather than assumed: parallel `db push` **7.9s**, sequential `migrate d
 **43.2s — worse than rebuilding**, because `TRUNCATE CASCADE` takes an ACCESS EXCLUSIVE lock
 on each of 127 tables.
 
-**Two things `db push` does not reproduce, both discovered by tests failing:**
-- **7 partial unique indexes** (`commission_triggers_one_live_per_choice` and siblings).
-  Prisma cannot express a `WHERE` on an index, so they exist only in migration SQL. Now
-  copied from the source schema using Postgres's own `indexdef`, executed with `search_path`
-  set to the target so enum casts resolve locally.
-- **Migration-seeded reference rows** (`sla_configs`, `platform_settings`). Copied with enum
-  columns cast through text, because each schema owns a distinct copy of every enum type.
+Isolation also uncovered a **second, separate finding** — that `prisma db push` does not
+reproduce the real schema. It is worth knowing on its own; see the entry below.
 
 Result: **four consecutive parallel runs, 1252/1252, zero failures**, ~31s including setup
 versus 54s serial. `--runInBand` still passes. Dev `public` untouched; no schemas leak.
 
 ⚠ If a future migration adds a raw-SQL object or seeded table, a test will fail loudly the
 way `sla.spec` did — extend `MIGRATION_SEEDED_TABLES` in `test/db-schema.ts`.
+
+### `prisma db push` is silently incomplete against the migration history — KNOWN, 14 Aug 2026
+
+Surfaced by the test-isolation work, but true independently of it and worth stating plainly:
+**a schema built by `db push` is not the schema production runs.** `db push` applies
+`schema.prisma`; anything a migration did in raw SQL simply is not there, and nothing warns
+you.
+
+Two categories found so far, both of which had been masked because the suite ran against a
+long-lived migrated dev database:
+
+| Missing | Why Prisma cannot know | What it broke |
+|---|---|---|
+| **7 partial unique indexes** — `commission_triggers_one_live_per_choice`, `agent_payables_one_live_per_commission`, `consultations_adviser_slot_active_unique`, `wallet_transaction_spend_once_idx`, `wallet_transaction_refund_once_idx`, `refunds_payment_live_once_idx`, `contracts_leadId_active_key` | Prisma has no way to express a `WHERE` clause on an index, so these are hand-written SQL | A test asserting *"a second submission on the same choice is refused"* passed against production and failed against a pushed schema — the constraint doing the refusing did not exist |
+| **Migration-seeded reference rows** — `sla_configs` (9 rows), `platform_settings` | `db push` runs no migrations, so their `INSERT`s never execute | `No SLA config for that institution type + stage` |
+
+`test/db-schema.ts` now reconstructs both when provisioning a worker schema. **Why this
+matters beyond tests:** anyone using `db push` to stand up an environment — a scratch
+database, a demo reset, a new developer's machine — gets a schema missing seven uniqueness
+constraints that the application relies on to prevent double-submission and double-payment.
+It will look fine until it silently accepts a duplicate.
+
+⚠ **If a future migration adds a raw-SQL object or a seeded table**, the partial-index copy
+picks it up automatically (it reads Postgres's own `indexdef`), but a newly seeded table
+needs one line added to `MIGRATION_SEEDED_TABLES` in `test/db-schema.ts`. A test will fail
+loudly the way `sla.spec` did rather than diverge quietly — that was the deliberate choice.
 
 ### Values shared across the server/client boundary
 `PAYABLE_STATUSES` was defined in a `'use client'` module and imported by Server
