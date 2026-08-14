@@ -137,10 +137,38 @@ and ISO dates, and the "What to do next" block.
 ## Engineering health
 
 ### Backend test suite is flaky in parallel
-5–8 integration suites fail on shared-database contention; the failing set varies run to
-run; each passes in isolation. **Green at 103/103 with `--runInBand`.** Pre-existing, not
-caused by any recent change. Means "the suite is green" is currently only true serially.
-Real fix is test isolation (per-worker database).
+**FIXED — 14 Aug 2026.** One Postgres schema per Jest worker.
+
+The failures were not badly-written tests. Teardown was already scoped to each suite's own
+ids, and the flakiest assertion was already a correct before/after delta. The problem was on
+the READ side: a test asserting *"OWNER sees the whole funnel"* legitimately queries every
+row, including fixtures another of the 19 workers was mid-way through creating and deleting.
+That produced hard failures (`Field contact is required to return data, got null` — a
+required relation whose row vanished between the parent read and the relation resolution)
+and drifting aggregates (expected 303, received 288). Neither is fixable in a test.
+
+`globalSetup` provisions `test_w<JEST_WORKER_ID>` per worker; `setupFiles` (not
+`setupFilesAfterEnv` — specs construct a PrismaClient at module load) points each worker's
+`DATABASE_URL` at its own schema; `globalTeardown` drops them.
+
+Measured rather than assumed: parallel `db push` **7.9s**, sequential `migrate deploy` ~51s
+(and the 130-migration history will not replay into a fresh schema), reuse-via-TRUNCATE
+**43.2s — worse than rebuilding**, because `TRUNCATE CASCADE` takes an ACCESS EXCLUSIVE lock
+on each of 127 tables.
+
+**Two things `db push` does not reproduce, both discovered by tests failing:**
+- **7 partial unique indexes** (`commission_triggers_one_live_per_choice` and siblings).
+  Prisma cannot express a `WHERE` on an index, so they exist only in migration SQL. Now
+  copied from the source schema using Postgres's own `indexdef`, executed with `search_path`
+  set to the target so enum casts resolve locally.
+- **Migration-seeded reference rows** (`sla_configs`, `platform_settings`). Copied with enum
+  columns cast through text, because each schema owns a distinct copy of every enum type.
+
+Result: **four consecutive parallel runs, 1252/1252, zero failures**, ~31s including setup
+versus 54s serial. `--runInBand` still passes. Dev `public` untouched; no schemas leak.
+
+⚠ If a future migration adds a raw-SQL object or seeded table, a test will fail loudly the
+way `sla.spec` did — extend `MIGRATION_SEEDED_TABLES` in `test/db-schema.ts`.
 
 ### Values shared across the server/client boundary
 `PAYABLE_STATUSES` was defined in a `'use client'` module and imported by Server
