@@ -93,59 +93,25 @@ See `AUDIT_CLIENT_PORTAL_2026-08-13.md` for the full inventory and status table.
   sidebar was the safe default under the new rule; whether it deserves standalone billing is
   an information-architecture decision.
 
-### Two ticket models — INVESTIGATED 14 Aug 2026; consolidation onto `VisaSupportTicket` DECIDED, plan pending review
+### Two ticket models — RESOLVED 14 Aug 2026
 
-**Root cause: a route collision, not a data-model mystery.** Two controllers register the
-same four paths, and Express serves whichever registered first:
+`VisaSupportTicket` is canonical; the client portal now reads it. The cause was a **route
+collision**: `StudentsController` and `TicketsController` registered the same four paths, and
+Express served the older one, so the controller written against the canonical model never
+received traffic. Fixing it also fixed the close-ticket 404, the `tickets.department.null`
+badge and the empty "Reply:" label. No migration was needed — production and demo both held
+**zero** legacy rows.
 
-| Controller | Path | Model | Wins? |
-|---|---|---|---|
-| `StudentsController` (`@Controller('students')` + `@Get('me/tickets')`) | `/students/me/tickets` | `Ticket` | **yes** — resolves 1st |
-| `TicketsController` (`@Controller('students/me/tickets')`) | `/students/me/tickets` | `VisaSupportTicket` | no — shadowed |
+Full detail, verification and rollback: `PHASE_TICKET_MODEL_CONSOLIDATION.md`.
 
-Nest's boot log settles it: `StudentsController` resolves at position 32, `TicketsController`
-at 36. `TicketsController`'s `GET`, `GET :id`, `POST` and `POST :id/messages` are
-**unreachable dead code**. Only `PATCH :id/close` reaches it.
-
-**Live bug this causes: a client cannot close a ticket.** The list/detail come from `Ticket`,
-but close is the one route reaching `TicketsController`, which looks the id up in
-`VisaSupportTicket`:
-
-```
-PATCH /students/me/tickets/<id>/close  ->  404 "Ticket not found"
-Ticket status after: OPEN (UNCHANGED)
-```
-
-It also explains two audit findings: `tickets.department.null` (only `Ticket.department` is
-nullable) and the empty "Reply:" label (`TicketListItem` expects `messageCount`, which the
-`Ticket` shape does not have).
-
-**Row counts — the decisive fact.** The legacy table is empty everywhere that matters:
-
-| | dev | production | demo |
-|---|---|---|---|
-| `Ticket` | 100 | **0** | **0** |
-| `TicketMessage` | 1 | **0** | **0** |
-| `VisaSupportTicket` | 0 | **1** | **1** |
-| `VisaSupportTicketMessage` | 0 | **1** | **1** |
-
-So there is **no production data to migrate**. Of the 100 dev rows, 99 are test residue —
-accumulating daily (5, 17, 25, 23, 29) with distinct `co.ck…@t.local` creators from the
-kanban spec writing into the shared dev database. Today's per-worker schema isolation stops
-that accumulation at source.
-
-**History.** `Ticket` — `855fda5`, 1 May 2026 ("scaffold Student portal"). `VisaSupportTicket`
-— `e7cf818`, 20 May 2026 ("PR-DASH-2 Support tickets"). No commit, comment or TODO says one
-replaces the other, but `VisaSupportTicket` carries the design rationale (encrypted subject,
-null-on-staff-deletion), owns the entire staff workflow, and received the later feature work
-(`PHASE_R_TICKETS_RICH_ATTACHMENTS.md`). The evidence reads as: PR-DASH-2 built a complete
-replacement, nobody removed the old routes, and the new controller was silently shadowed at
-boot — which is exactly why its table stayed empty.
-
-**DECIDED (Owner, 14 Aug 2026): `VisaSupportTicket` is canonical. `Ticket`/`TicketMessage`
-are retired — left in the database, but nothing writes to them.** Full migration plan
-prepared and awaiting review; the one judgment call in it is the default department for rows
-whose `department` is null.
+⚠ **One decision still open — `kanban.service.ts` still writes the legacy `Ticket`.** It is
+the CRM surface for raising a ticket against a **pre-contract lead**, who has neither the
+`User` nor the `VisaCase` that `VisaSupportTicket` requires. Porting it as originally planned
+would have removed that capability or fabricated a VisaCase for an unsigned lead. Note the
+surface is already half-broken independently: kanban-raised tickets never appeared in the
+staff queue, and after this change nothing reads them. Options are set out in §7 of the phase
+doc — relax the model, keep `Ticket` for the CRM surface with a documented split, or drop the
+feature.
 
 ### Persian / RTL
 Six-item queue in the audit doc: Explore (242 English words), Recommendations (61), the

@@ -345,6 +345,7 @@
     "allPaidUp": "All paid up",
     "noPending": "No pending payments",
     "latestMessage": "Latest Message",
+    "messageCount": "{count} messages in this thread",
     "sorenaTeam": "Sorena Team",
     "viewAll": "View all",
     "noMessagesYet": "No messages yet.",

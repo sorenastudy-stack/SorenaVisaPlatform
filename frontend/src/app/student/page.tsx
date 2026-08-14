@@ -37,18 +37,22 @@ interface CaseData {
   };
 }
 
-interface TicketMessage {
-  body: string;
-  createdAt: string;
-  sender?: { name: string | null; email: string };
-}
-
+// PR-TICKET-CONSOLIDATION — the real /students/me/tickets payload.
+//
+// This described the LEGACY Ticket shape, which the route used to serve by
+// accident. The canonical route returns no message bodies — only a count and
+// the two "last activity" timestamps — so the card below shows what the list
+// actually knows rather than a preview that was never in the payload.
 interface Ticket {
   id: string;
   subject: string;
   status: string;
+  department: string;
+  messageCount: number;
+  lastStaffMessageAt: string | null;
+  lastClientMessageAt: string | null;
+  createdAt: string;
   updatedAt: string;
-  messages?: TicketMessage[];
 }
 
 interface Payment {
@@ -132,8 +136,16 @@ export default async function StudentDashboard() {
   const outstandingInvoice =
     invoices.find((inv) => ['SENT', 'OVERDUE'].includes(inv.status)) ?? null;
   const latestTicket = tickets[0] ?? null;
-  const latestMessage = latestTicket?.messages?.[0] ?? null;
-  const newMessages = tickets.filter((t) => t.status === 'AWAITING_CLIENT').length;
+  // "Awaiting you" = staff replied more recently than you did. The old test was
+  // `status === 'AWAITING_CLIENT'`, a value in the LEGACY TicketStatus enum;
+  // VisaTicketStatus has no such member, so that count would have been silently
+  // and permanently zero.
+  const newMessages = tickets.filter(
+    (t) => t.lastStaffMessageAt && (!t.lastClientMessageAt || t.lastStaffMessageAt > t.lastClientMessageAt),
+  ).length;
+  const latestActivity = latestTicket
+    ? (latestTicket.lastStaffMessageAt ?? latestTicket.lastClientMessageAt ?? latestTicket.createdAt)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -284,13 +296,18 @@ export default async function StudentDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {latestTicket && latestMessage ? (
+            {latestTicket ? (
               <div>
                 <p className="text-xs text-[#4A4A4A]/60 mb-1">{latestTicket.subject}</p>
-                <p className="text-sm text-[#4A4A4A] line-clamp-3">{latestMessage.body.slice(0, 160)}{latestMessage.body.length > 160 ? '…' : ''}</p>
+                {/* The list payload carries no message bodies, so this shows the
+                    thread and its activity rather than a preview. Fetching every
+                    thread's messages to render one line would be the wrong trade. */}
+                <p className="text-sm text-[#4A4A4A]">
+                  {t('messageCount', { count: latestTicket.messageCount })}
+                </p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs text-[#4A4A4A]/50">
-                    {latestMessage.sender?.name ?? t('sorenaTeam')} · {relativeTime(latestMessage.createdAt, locale)}
+                    {latestActivity ? relativeTime(latestActivity, locale) : ''}
                   </span>
                   <Link
                     href="/student/case/messages"

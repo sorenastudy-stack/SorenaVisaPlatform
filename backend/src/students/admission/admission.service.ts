@@ -739,51 +739,25 @@ export class AdmissionService {
       }
 
       // Auto-ticket: trigger when englishPreCourse is set to true in this PATCH.
-      // Idempotency guarded inside the helper.
+      //
+      // PR-TICKET-CONSOLIDATION — this used to call a private helper that wrote
+      // the legacy Ticket model. notifyAdmissionTicket does the same job against
+      // VisaSupportTicket: find-or-create the case's ADMISSIONS thread and append
+      // a message, creating the VisaCase if one does not exist yet. The helper
+      // was redundant once both wrote to the same place, so it is gone rather
+      // than ported. Idempotency now comes from the thread lookup inside the
+      // util; a repeated PATCH appends to the existing thread instead of opening
+      // a second one.
       if (data.englishPreCourse === true) {
-        await this.maybeCreateEnglishPreCourseTicket(userId, caseRecord.id, contact.id);
+        await notifyAdmissionTicket(this.prisma, this.crypto, {
+          caseId: caseRecord.id,
+          message: ENGLISH_PRECOURSE_TICKET_BODY,
+          authorId: userId,
+        }).catch(() => { /* a notice must never fail the update */ });
       }
     }
 
     return this.loadFullApplication(caseRecord.id);
-  }
-
-  private async maybeCreateEnglishPreCourseTicket(
-    userId: string,
-    caseId: string,
-    contactId: string,
-  ): Promise<void> {
-    try {
-      const existing = await this.prisma.ticket.findFirst({
-        where: {
-          caseId,
-          subject: ENGLISH_PRECOURSE_TICKET_SUBJECT,
-          status: { not: 'CLOSED' },
-        },
-      });
-      if (existing) return;
-
-      await this.prisma.ticket.create({
-        data: {
-          caseId,
-          contactId,
-          subject: ENGLISH_PRECOURSE_TICKET_SUBJECT,
-          createdById: userId,
-          messages: {
-            create: {
-              senderId: userId,
-              body: ENGLISH_PRECOURSE_TICKET_BODY,
-              attachments: [],
-              isInternal: false,
-            },
-          },
-        },
-      });
-
-      // TODO: in-app notification — Notification model not yet created (tracked in docs/known_issues.md)
-    } catch (err) {
-      console.warn('English pre-course auto-ticket creation failed (non-fatal):', err);
-    }
   }
 
   async addProgrammeChoice(

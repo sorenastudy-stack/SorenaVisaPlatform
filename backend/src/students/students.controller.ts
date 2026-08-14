@@ -33,36 +33,25 @@ export class StudentsController {
     return this.studentsService.getDocuments(req.user.userId);
   }
 
-  @Get('me/tickets')
-  getTickets(@Req() req: any) {
-    return this.studentsService.getTickets(req.user.userId);
-  }
-
-  @Get('me/tickets/:id')
-  getTicket(@Req() req: any, @Param('id') id: string) {
-    return this.studentsService.getTicket(req.user.userId, id);
-  }
-
-  @Post('me/tickets')
-  createTicket(
-    @Req() req: any,
-    @Body() body: { subject: string; body: string },
-  ) {
-    return this.studentsService.createTicket(
-      req.user.userId,
-      body.subject,
-      body.body,
-    );
-  }
-
-  @Post('me/tickets/:id/messages')
-  replyToTicket(
-    @Req() req: any,
-    @Param('id') id: string,
-    @Body() body: { body: string },
-  ) {
-    return this.studentsService.replyToTicket(req.user.userId, id, body.body);
-  }
+  // PR-TICKET-CONSOLIDATION — the four /students/me/tickets handlers that lived
+  // here are gone.
+  //
+  // They SHADOWED TicketsController, which is mounted on the same path and was
+  // written against VisaSupportTicket, the canonical model. Nest resolved this
+  // controller first (position 32 vs 36), so Express served these and the newer
+  // controller never received traffic — which is why visa_support_tickets stayed
+  // empty while this one accumulated rows.
+  //
+  // The damage was not only "wrong model". The client-side UI was already built
+  // for the VisaSupportTicket shape, so it rendered `tickets.department.null`
+  // (only the legacy model allows a null department) and an empty "Reply:" label
+  // (the legacy row has no messageCount). And PATCH :id/close — the ONE route
+  // that reached TicketsController — looked the id up in the other table and
+  // 404'd, so no client could close a ticket.
+  //
+  // Deleting these makes TicketsController reachable. Nothing else on this
+  // controller is affected: its remaining routes are me, me/case, me/documents
+  // and me/invoices, none of which overlap.
 
   @Get('me/invoices')
   getInvoices(@Req() req: any) {

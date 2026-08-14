@@ -345,6 +345,7 @@
     "allPaidUp": "همه پرداخت شده",
     "noPending": "پرداخت معوقی ندارید",
     "latestMessage": "آخرین پیام",
+    "messageCount": "{count} پیام در این گفت‌وگو",
     "sorenaTeam": "تیم سورنا",
     "viewAll": "مشاهده همه",
     "noMessagesYet": "هنوز پیامی نیست.",
