@@ -124,40 +124,15 @@ export class KanbanService {
     return { columns };
   }
 
-  // POST /staff/tickets — a staff/CO-raised, department-routed ticket about a
-  // client. Uses the CRM-keyed generic Ticket (contactId + optional CRM caseId) —
-  // NOT VisaSupportTicket, which is hard-locked to a VisaCase + student account and
-  // so can't serve a pre-contract lead card. The VisaTicketDepartment enum is reused
-  // for routing, so departments match the visa-support queue.
-  async createStaffTicket(
-    actor: StaffActor & { name?: string | null },
-    body: { contactId: string; caseId?: string | null; department: VisaTicketDepartment; subject: string },
-  ): Promise<{ id: string }> {
-    if (!body.subject?.trim()) throw new BadRequestException('A subject is required.');
-    const contact = await this.prisma.contact.findUnique({ where: { id: body.contactId }, select: { id: true } });
-    if (!contact) throw new NotFoundException('Client not found');
-
-    const ticket = await this.prisma.ticket.create({
-      data: {
-        contactId: body.contactId,
-        caseId: body.caseId ?? null,
-        subject: body.subject.trim(),
-        department: body.department,
-        status: 'OPEN',
-        priority: 'NORMAL',
-        createdById: actor.userId,
-      },
-      select: { id: true },
-    });
-
-    await this.prisma.auditLog.create({
-      data: {
-        userId: actor.userId ?? null, action: 'CREATE', eventType: 'TICKET_RAISED_BY_STAFF',
-        entityType: 'Ticket', entityId: ticket.id,
-        newValue: { department: body.department, caseId: body.caseId ?? null } as any,
-        actorNameSnapshot: actor.name ?? null, actorRoleSnapshot: actor.role ?? null,
-      },
-    });
-    return ticket;
-  }
+  // PR-TICKET-CONSOLIDATION — createStaffTicket removed.
+  //
+  // It wrote the legacy Ticket model on purpose, because VisaSupportTicket
+  // requires a User and a VisaCase and a pre-contract lead has neither. But the
+  // staff ticket queue reads VisaSupportTicket, so a ticket raised here was
+  // never seen by anyone — it was only ever visible in the CLIENT list, via the
+  // route collision that PR-TICKET-CONSOLIDATION fixed.
+  //
+  // Rather than relax the canonical model to accommodate a surface nobody could
+  // action, the workflow was dropped (Owner decision, 15 Aug 2026). The tickets
+  // table keeps its rows; nothing writes to it now.
 }

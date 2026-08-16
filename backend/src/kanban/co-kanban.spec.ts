@@ -106,16 +106,10 @@ describe('CO kanban — override, sweep-skip, tickets, scoping', () => {
     await expect(nurture.manualOverride(leadId, 'ADVANCE', 'go', null, { userId: co, role: 'CLIENT_CONSULTANT' })).rejects.toBeDefined();
   });
 
-  it('staff raise-ticket creates a department-routed ticket', async () => {
-    const co = await mkOfficer();
-    const { contactId } = await seedNurtureLead(co);
-    const { id } = await kanban.createStaffTicket({ userId: co, role: 'CLIENT_CONSULTANT', name: 'CO' },
-      { contactId, department: 'DOCUMENTS' as any, subject: 'Missing passport scan' });
-    const ticket = await prisma.ticket.findUnique({ where: { id } });
-    expect(ticket!.department).toBe('DOCUMENTS');
-    expect(ticket!.contactId).toBe(contactId);
-    expect(ticket!.status).toBe('OPEN');
-  });
+  // PR-TICKET-CONSOLIDATION — the staff raise-ticket test is gone with the
+  // feature. Incidentally this test is where the 99 "Missing passport scan"
+  // rows in the dev database came from: it wrote a real Ticket on every run,
+  // against the then-shared database, and nothing cleaned them up.
 
   it('kanban is scoped: a CO sees only their own clients; admin sees all; cases read-only', async () => {
     const coA = await mkOfficer();

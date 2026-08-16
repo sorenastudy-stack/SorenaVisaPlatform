@@ -93,25 +93,21 @@ See `AUDIT_CLIENT_PORTAL_2026-08-13.md` for the full inventory and status table.
   sidebar was the safe default under the new rule; whether it deserves standalone billing is
   an information-architecture decision.
 
-### Two ticket models — RESOLVED 14 Aug 2026
+### Two ticket models — CLOSED 15 Aug 2026
 
-`VisaSupportTicket` is canonical; the client portal now reads it. The cause was a **route
-collision**: `StudentsController` and `TicketsController` registered the same four paths, and
-Express served the older one, so the controller written against the canonical model never
-received traffic. Fixing it also fixed the close-ticket 404, the `tickets.department.null`
-badge and the empty "Reply:" label. No migration was needed — production and demo both held
-**zero** legacy rows.
+`VisaSupportTicket` is the only ticket model in use. The cause was a **route collision**:
+`StudentsController` and `TicketsController` registered the same four paths, Express served the
+older one, and the controller written against the canonical model never received traffic.
+Fixing it also fixed the close-ticket 404, the `tickets.department.null` badge and the empty
+"Reply:" label. No migration was needed — production and demo both held **zero** legacy rows.
+
+The last open sub-item is resolved: the kanban "raise a ticket" action has been **removed**
+rather than ported. It wrote a model no staff surface reads, so raised tickets reached nobody;
+raising a ticket against a pre-contract lead is not a supported workflow (Owner decision).
+Nothing in the backend now reads or writes `Ticket` / `TicketMessage`; both tables keep their
+rows, unreferenced.
 
 Full detail, verification and rollback: `PHASE_TICKET_MODEL_CONSOLIDATION.md`.
-
-⚠ **One decision still open — `kanban.service.ts` still writes the legacy `Ticket`.** It is
-the CRM surface for raising a ticket against a **pre-contract lead**, who has neither the
-`User` nor the `VisaCase` that `VisaSupportTicket` requires. Porting it as originally planned
-would have removed that capability or fabricated a VisaCase for an unsigned lead. Note the
-surface is already half-broken independently: kanban-raised tickets never appeared in the
-staff queue, and after this change nothing reads them. Options are set out in §7 of the phase
-doc — relax the model, keep `Ticket` for the CRM surface with a documented split, or drop the
-feature.
 
 ### Persian / RTL
 Six-item queue in the audit doc: Explore (242 English words), Recommendations (61), the

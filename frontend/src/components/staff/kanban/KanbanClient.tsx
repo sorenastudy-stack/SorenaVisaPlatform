@@ -2,14 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, ChevronDown, ExternalLink, Ticket as TicketIcon, PauseCircle, FastForward, Lock, X } from 'lucide-react';
+import { Loader2, ChevronDown, ExternalLink, PauseCircle, FastForward, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
 // PR-CO-KANBAN — the CO's journey board. Mostly read-only visibility; only the two
 // pre-contract lead columns are editable, via a per-card dropdown (Advance /
 // Postpone — no drag). Every card can open the client's file + raise a
-// department-routed ticket. Admin tier sees every officer's clients.
+// Admin tier sees every officer's clients.
+//
+// PR-TICKET-CONSOLIDATION — the "Raise ticket" action is gone. It wrote the
+// legacy Ticket model, which the staff ticket queue never read, so a raised
+// ticket reached nobody. Raising a ticket against a PRE-CONTRACT LEAD is not a
+// workflow the platform supports (Owner decision, 15 Aug 2026); client support
+// threads live on VisaSupportTicket and require a signed client with a case.
 
 interface Card {
   kind: 'LEAD' | 'CASE';
@@ -21,17 +27,11 @@ interface Card {
 }
 interface Column { key: string; label: string; editable: boolean; cards: Card[] }
 
-const DEPARTMENTS = [
-  ['ADMISSIONS', 'Admissions'], ['VISA_APPLICATION', 'Visa application'], ['DOCUMENTS', 'Documents'],
-  ['PAYMENTS_FINANCE', 'Payments / Finance'], ['TECHNICAL_SUPPORT', 'Technical support'], ['GENERAL_INQUIRY', 'General inquiry'],
-] as const;
-
 const fmtDate = (iso: string | null | undefined) => (iso ? new Intl.DateTimeFormat('en-GB').format(new Date(iso)) : null);
 
 export function KanbanClient() {
   const [columns, setColumns] = useState<Column[] | null>(null);
   const [error, setError] = useState(false);
-  const [ticketFor, setTicketFor] = useState<Card | null>(null);
 
   const load = () => {
     setColumns(null); setError(false);
@@ -65,7 +65,7 @@ export function KanbanClient() {
               <div className="space-y-2 rounded-xl bg-[#faf8f3] p-2 min-h-[80px]">
                 {col.cards.length === 0 && <p className="px-2 py-4 text-center text-xs text-gray-300">—</p>}
                 {col.cards.map((c) => (
-                  <CardView key={`${c.kind}-${c.id}`} card={c} onChanged={load} onRaiseTicket={() => setTicketFor(c)} />
+                  <CardView key={`${c.kind}-${c.id}`} card={c} onChanged={load} />
                 ))}
               </div>
             </div>
@@ -73,12 +73,11 @@ export function KanbanClient() {
         </div>
       )}
 
-      {ticketFor && <RaiseTicketModal card={ticketFor} onClose={() => setTicketFor(null)} />}
     </div>
   );
 }
 
-function CardView({ card, onChanged, onRaiseTicket }: { card: Card; onChanged: () => void; onRaiseTicket: () => void }) {
+function CardView({ card, onChanged }: { card: Card; onChanged: () => void }) {
   const [menu, setMenu] = useState(false);
   const held = card.nurtureHeldUntil && new Date(card.nurtureHeldUntil) > new Date();
 
@@ -121,9 +120,6 @@ function CardView({ card, onChanged, onRaiseTicket }: { card: Card; onChanged: (
         <Link href={card.href} className="inline-flex items-center gap-1 font-semibold text-[#1e3a5f] hover:underline">
           Open <ExternalLink size={11} />
         </Link>
-        <button type="button" onClick={onRaiseTicket} className="inline-flex items-center gap-1 font-semibold text-[#b28f4e] hover:underline">
-          <TicketIcon size={11} /> Raise ticket
-        </button>
       </div>
     </div>
   );
@@ -155,54 +151,5 @@ function OverrideItem({ leadId, direction, label, icon, onDone }: {
     <button type="button" onClick={submit} className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-gray-700 hover:bg-[#faf8f3]">
       {icon} {label}
     </button>
-  );
-}
-
-function RaiseTicketModal({ card, onClose }: { card: Card; onClose: () => void }) {
-  const [department, setDepartment] = useState<string>('ADMISSIONS');
-  const [subject, setSubject] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    if (!card.contactId) { toast.error('This card has no client contact.'); return; }
-    if (!subject.trim()) { toast.error('Enter a subject.'); return; }
-    setBusy(true);
-    try {
-      await api.post('/staff/tickets', {
-        contactId: card.contactId, ...(card.kind === 'CASE' ? { caseId: card.id } : {}),
-        department, subject: subject.trim(),
-      });
-      toast.success('Ticket raised.');
-      onClose();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not raise the ticket');
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-[#1e3a5f]">Raise a ticket</h2>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
-        </div>
-        <p className="mb-4 text-xs text-gray-500">About <strong>{card.clientName ?? 'this client'}</strong>. Routed to the chosen department.</p>
-
-        <label className="mb-1 block text-xs font-semibold text-gray-600">Department</label>
-        <select value={department} onChange={(e) => setDepartment(e.target.value)} className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm">
-          {DEPARTMENTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-
-        <label className="mb-1 block text-xs font-semibold text-gray-600">Subject</label>
-        <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Short summary of the concern" className="mb-4 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button type="button" onClick={submit} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1e3a5f] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <TicketIcon size={14} />} Raise ticket
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

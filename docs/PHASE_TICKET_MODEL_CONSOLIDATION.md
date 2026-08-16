@@ -40,7 +40,13 @@ The client UI was already built for `VisaSupportTicket`. Only the backend was mi
 - `src/app/student/page.tsx` — the home "latest message" widget reads the real payload
 - `src/i18n/messages/{en,fa}.json` — one key, `studentHome.messageCount`
 
-**Not changed, deliberately:** `src/kanban/kanban.service.ts` — see §7.
+**Removed — the kanban raise-ticket path** (follow-up, 15 Aug 2026; see §7)
+- `src/kanban/kanban.controller.ts` — `POST /staff/tickets`
+- `src/kanban/kanban.service.ts` — `createStaffTicket`
+- `src/kanban/dto/staff-ticket.dto.ts` — deleted, orphaned
+- `src/kanban/co-kanban.spec.ts` — the raise-ticket case
+- `frontend/src/components/staff/kanban/KanbanClient.tsx` — the button, its modal
+  and the `DEPARTMENTS` constant that fed it
 
 ## 3. Database tables/columns added
 
@@ -94,32 +100,40 @@ Verified, in this order:
 
 ## 7. Known limitations
 
-**⚠ `kanban.service.ts` still writes `Ticket`, deliberately — this needs an Owner decision.**
+**The kanban "raise a ticket" action was REMOVED — decided, not deferred.**
 
-The plan called for porting it. The code carries an explicit reason not to:
+The plan called for porting it to `VisaSupportTicket`. The code carried an explicit reason
+not to:
 
 > *"Uses the CRM-keyed generic Ticket (contactId + optional CRM caseId) — NOT
 > VisaSupportTicket, which is hard-locked to a VisaCase + student account and so can't serve a
 > pre-contract lead card."*
 
-`VisaSupportTicket` requires both `clientId` (a User) and `caseId` (a VisaCase). A
-pre-contract lead has neither. The dev data agrees: 99 of 100 legacy rows have **no case and
-no login**. Porting as specified would either remove staff's ability to raise a ticket against
-a pre-contract lead, or fabricate a VisaCase for someone who has not signed — which would
-pollute the case pipeline.
+`VisaSupportTicket` requires both a `User` and a `VisaCase`; a pre-contract lead has neither —
+and 99 of the 100 legacy rows had neither, confirming that was the real usage. Porting would
+have meant removing that capability anyway, or fabricating a VisaCase for an unsigned lead and
+polluting the case pipeline.
 
-**Note this surface is already half-broken independently.** Kanban-raised tickets never
-appeared in the staff ticket queue (that reads `VisaSupportTicket`); they were only ever
-visible in the client list, by way of the same collision. After this change they are written
-and read by nobody.
+**What settled it: the surface never worked.** Tickets raised from the kanban went into a table
+the staff queue does not read, so they reached nobody. They were visible only in the CLIENT
+list, and only by way of the route collision this phase fixed. There was no working workflow
+to preserve — so rather than relax the canonical model to accommodate it, the Owner decided
+(15 Aug 2026) that raising a ticket against a pre-contract lead is not a workflow the platform
+supports, and it was removed.
 
-Three ways forward, for the Owner:
-1. **Relax the model** — make `VisaSupportTicket.caseId` nullable and key the owner on Contact
-   rather than User. Migration; serves pre-contract leads properly.
-2. **Keep `Ticket` for the CRM surface** — accept two models with a documented split: leads vs
-   signed clients. Nothing to build, but the name "retired" stops being true.
-3. **Drop the feature** — if raising a ticket on a pre-contract lead is not a real workflow,
-   remove the endpoint and the kanban action.
+Removed: the "Raise ticket" button and its modal in `KanbanClient.tsx`, `POST /staff/tickets`
+in `kanban.controller.ts`, `createStaffTicket` in `kanban.service.ts`, the now-orphaned
+`dto/staff-ticket.dto.ts` and `DEPARTMENTS` constant, and the spec that covered it.
+
+That spec is incidentally where dev's 99 `"Missing passport scan"` rows came from: it wrote a
+real `Ticket` on every run against the then-shared database, and nothing cleaned them up.
+
+Verified after removal: `POST /staff/tickets` no longer appears in Nest's route map while the
+staff queue's own routes and `GET /staff/kanban` remain; the board renders with no "Raise
+ticket" action, no failed backend calls and no console errors; the staff ticket queue still
+loads. 1251 tests / 104 suites.
+
+**Nothing in the backend now reads or writes `Ticket` / `TicketMessage`.**
 
 **The legacy tables remain populated in dev** (100 rows), unreachable. Left alone on purpose:
 no `DROP`, no `DELETE`.
