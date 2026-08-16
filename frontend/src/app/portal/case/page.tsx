@@ -203,12 +203,12 @@ export default async function MyCasePage() {
       <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
         <div className="flex items-center gap-2 mb-4">
           <ListChecks size={16} className="text-[#b28f4e]" />
-          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">What to do next</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">{t('portal.case.nextSteps.heading')}</h2>
         </div>
         {caseData.nextSteps.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <CheckCircle2 size={18} className="text-sorena-jade" />
-            You’re all caught up — nothing needed from you right now.
+            {t('portal.case.nextSteps.allClear')}
           </div>
         ) : (
           <ul className="space-y-2">
@@ -220,7 +220,7 @@ export default async function MyCasePage() {
                 </div>
                 {s.kind === 'DOCUMENT' && (
                   <Link href="/portal/case/documents" className="shrink-0 text-xs font-semibold text-[#1e3a5f] underline underline-offset-4 hover:text-[#b28f4e]">
-                    Open
+                    {t('portal.case.nextSteps.open')}
                   </Link>
                 )}
                 {/* Signing is email-only (see the banner above). This step points
@@ -228,7 +228,7 @@ export default async function MyCasePage() {
                     page, which was a dead-end that funnelled them into the gate. */}
                 {s.kind === 'CONTRACT' && (
                   <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[#8a6d10]">
-                    <Mail size={13} /> Check your email
+                    <Mail size={13} /> {t('portal.case.nextSteps.checkEmail')}
                   </span>
                 )}
                 {/* Phase A — flagged for licensed-adviser review. Informational,
@@ -236,14 +236,14 @@ export default async function MyCasePage() {
                     for them to click. A calm "In review" indicator, not a to-do. */}
                 {s.kind === 'LIA_REVIEW' && (
                   <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[#8a6d10]">
-                    <ShieldCheck size={13} /> In review
+                    <ShieldCheck size={13} /> {t('portal.case.nextSteps.inReview')}
                   </span>
                 )}
                 {/* Phase B — the client has signed; the LIA/Director are still
                     counter-signing internally. Informational + reassuring, no action. */}
                 {s.kind === 'CONTRACT_PENDING_COUNTERSIGN' && (
                   <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-sorena-jade">
-                    <CheckCircle2 size={13} /> Signed
+                    <CheckCircle2 size={13} /> {t('portal.case.nextSteps.signed')}
                   </span>
                 )}
                 {/* PR-CLIENT-CONTRACT — self-service contract request. Only rendered
@@ -256,14 +256,14 @@ export default async function MyCasePage() {
                       href={`/portal/case/pay?invoiceId=${s.invoiceId}`}
                       className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-[#faf8f3] text-sm font-semibold min-h-[44px] hover:bg-[#162d4a] transition-colors"
                     >
-                      Pay now
+                      {t('portal.case.nextSteps.payNow')}
                     </Link>
                   ) : (
                     <Link
                       href={`/portal/case/pay?invoiceId=${s.invoiceId}`}
                       className="shrink-0 self-center text-xs font-semibold text-[#1e3a5f] underline underline-offset-4 hover:text-[#b28f4e]"
                     >
-                      Pay
+                      {t('portal.case.nextSteps.pay')}
                     </Link>
                   )
                 )}
@@ -296,7 +296,7 @@ export default async function MyCasePage() {
       <Link href="/portal/wallet" className="flex items-center justify-between rounded-2xl bg-white border border-gray-200 p-5 md:p-6 transition-all hover:border-sorena-navy/30 hover:shadow">
         <div className="flex items-center gap-2">
           <Wallet size={16} className="text-[#b28f4e]" />
-          <span className="text-sm font-bold uppercase tracking-wide text-gray-500">My wallet</span>
+          <span className="text-sm font-bold uppercase tracking-wide text-gray-500">{t('portal.case.walletHeading')}</span>
         </div>
         <div className="flex items-center gap-2">
           {walletCents !== null && (
@@ -323,7 +323,7 @@ export default async function MyCasePage() {
               href="/portal/report"
               className="inline-flex items-center gap-1.5 rounded-xl bg-[#1e3a5f] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#162d4a] transition-colors"
             >
-              View full report <ArrowRight size={14} className="rtl:rotate-180" />
+              {t('portal.case.viewFullReport')} <ArrowRight size={14} className="rtl:rotate-180" />
             </Link>
             <AssessmentPdfButton submissionId={assessment.submissionId} />
           </div>
@@ -353,10 +353,10 @@ export default async function MyCasePage() {
               href="/student/case/messages"
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1e3a5f] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#162d4a] transition-colors"
             >
-              <MessageSquare size={16} /> Message your case team
+              <MessageSquare size={16} /> {t('portal.case.team.message')}
             </Link>
           ) : (
-            <p className="mt-4 text-xs text-gray-500">Your team will reach out here as your application progresses.</p>
+            <p className="mt-4 text-xs text-gray-500">{t('portal.case.team.willReachOut')}</p>
           )}
         </section>
       )}
@@ -383,7 +383,7 @@ export default async function MyCasePage() {
         <section className="rounded-2xl bg-white border border-gray-200 p-5 md:p-6">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={16} className="text-[#b28f4e]" />
-            <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">Your case timeline</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">{t('portal.case.timelineHeading')}</h2>
           </div>
           <ol className="relative border-s border-gray-200 ps-5 space-y-4">
             {caseData.timeline.map((e, i) => (

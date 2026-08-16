@@ -109,12 +109,55 @@ rows, unreferenced.
 
 Full detail, verification and rollback: `PHASE_TICKET_MODEL_CONSOLIDATION.md`.
 
-### Persian / RTL
-Six-item queue in the audit doc: Explore (242 English words), Recommendations (61), the
-14-step admission forms (52), two shell strings on every page, un-localised relative times
-and ISO dates, and the "What to do next" block.
+### Persian / RTL — 21-item inventory, SCOPED 17 Aug 2026
 
-⚠ **All Persian copy added on 13 Aug 2026 is unverified by a native speaker.**
+A full read-only inventory replaced the old six-item note (which was stale — it still listed
+the wallet and payment gate, both already translated). **Owner decision, 17 Aug 2026: translate
+items 7 and 14 only. Everything else stays English — do not re-investigate or re-flag.**
+
+The translation catalogue itself is near-complete. The
+gap is hardcoded English, which needs a developer to extract each string *before* it can be
+translated. (Counts below are as at 17 Aug 2026: **2,011 English keys, 2,006 Persian** — the
+five absent are staff role labels.) Two structural categories:
+**(A) wired** = the slot exists, someone types Persian; **(B) hardcoded** = code change first.
+
+| # | Screen / area | Strings | Cat. | Status |
+|---|---|---|---|---|
+| 1 | Assessment / scorecard questionnaire (`app/scorecard`, `lib/scorecard/questions.ts`) | ~275 + 29 | B | **deferred — remains English** |
+| 2 | Assessment result + advice text (`ScorecardResultClient`, backend `routing.ts`) | 28 wired / advice from backend | mixed | **deferred — remains English** |
+| 3 | Wallet | 0 | — | already translated, nothing to do |
+| 4 | Payment-gate panel | 0 | — | already translated, nothing to do |
+| 5 | 14-step visa form (`components/student/visa/steps/`) | 47 | A | **deferred — remains English** |
+| 6 | 9-step admission form (`StepEmployment` + 8 declaration keys) | 21 + 8 | mixed | **deferred — remains English** |
+| 7 | **Client portal home / case page** (`app/portal/case/page.tsx`) | 13 | B | **DONE 17 Aug 2026** — `PHASE_PERSIAN_CASE_PAGE_AND_CLIENT_REPORT.md` |
+| 8 | Explore programmes + programme detail | 34 | B | **deferred — remains English** |
+| 9 | Programme recommendations | 14 | B | **deferred — remains English** |
+| 10 | Sign-in / password / email-verification (12 pages) | 98 | B | **deferred — remains English** |
+| 11 | Portal chrome + error states | ~14 | B | **deferred — remains English** |
+| 12 | Student meetings / tickets / chat leftovers | ~10 | mixed | **deferred — remains English** |
+| 13 | All outbound emails (26 types) | ~93 body + 21 subjects | B | **deferred — remains English** |
+| 14 | **Client readiness report PDF** (`scorecard/pdf/client-report.ts`) | 48 | B | **BLOCKED — awaiting owner font decision** (see below) |
+| 15 | Tax invoice PDF | 5 | B | **deferred — remains English** |
+| 16 | In-app notices + system ticket messages | ~127 | B | **deferred — remains English** |
+| 17 | Internal report PDF (staff-only) | 57 | B | **deferred — remains English** |
+| 18 | Staff portal | 940 | B | **deferred — remains English** |
+| 19 | LIA portal | 524 | B | **deferred — remains English** |
+| 20 | Admin / ops / sales | 91 | B | **deferred — remains English** |
+| 21 | Agent portal | 17 | B | **deferred — remains English** |
+
+**Item 14 is blocked, not deferred.** Calibri Regular and Bold carry full Persian coverage and
+shape correctly through pdfkit, but **Calibri Italic contains no Arabic glyphs at all** and the
+report uses italic in four places — they render as empty boxes. Two further findings: Latin
+runs inside a Persian string render **reversed** ("17 August 2026" → "6202 tsuguA 71") unless
+wrapped in U+200E, and Calibri is absent from the `node:22-alpine` production image, so shipping
+it means committing a Microsoft-licensed font to the repo. Awaiting an owner decision on the
+font before any Persian goes into this PDF.
+
+**Dates stay Gregorian everywhere** — `lib/date.ts` pins Persian to `fa-IR-u-ca-gregory` as a
+locked decision (clients cross-reference passport / INZ documents). No Jalali anywhere.
+
+⚠ **All Persian copy remains unverified by a native speaker**, including the 13 strings added
+for item 7.
 
 ---
 

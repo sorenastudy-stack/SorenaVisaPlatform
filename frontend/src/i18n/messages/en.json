@@ -2220,8 +2220,23 @@
         "lia": "Immigration Adviser",
         "consultant": "Admission Officer",
         "support": "Support",
-        "finance": "Finance"
+        "finance": "Finance",
+        "message": "Message your case team",
+        "willReachOut": "Your team will reach out here as your application progresses."
       },
+      "nextSteps": {
+        "heading": "What to do next",
+        "allClear": "You’re all caught up — nothing needed from you right now.",
+        "open": "Open",
+        "checkEmail": "Check your email",
+        "inReview": "In review",
+        "signed": "Signed",
+        "payNow": "Pay now",
+        "pay": "Pay"
+      },
+      "walletHeading": "My wallet",
+      "timelineHeading": "Your case timeline",
+      "viewFullReport": "View full report",
       "inz": {
         "heading": "Your INZ reference",
         "submittedOn": "Submitted {date}"
