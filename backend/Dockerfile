@@ -42,6 +42,19 @@ COPY --from=builder /app/dist ./dist
 # fixtures under assets/. Without this COPY the container starts
 # cleanly but every contract send crashes with ENOENT at first request.
 COPY assets ./assets/
+# Prove the fonts survived the COPY, at BUILD time — same reasoning as the
+# pg_dump check above. A missing or truncated TTF would otherwise start cleanly
+# and only surface when a Persian client downloads a readiness report, as an
+# ENOENT (or, worse, a PDF of empty boxes). This opens each face with the very
+# library pdfkit embeds fonts through and asserts real Persian coverage, so a
+# corrupted binary fails the image build and leaves the running deploy alone.
+RUN node -e "const fk=require('fontkit');\
+for (const f of ['regular','bold','light']) {\
+  const p='assets/fonts/vazirmatn-'+f+'.ttf';\
+  const n=fk.openSync(p).layout('گزارش آمادگی شما').glyphs.filter(g=>g.id===0).length;\
+  if(n) throw new Error(p+': '+n+' missing glyphs');\
+  console.log('ok '+p);\
+}"
 COPY start.sh ./start.sh
 RUN chmod +x ./start.sh
 CMD ["./start.sh"]

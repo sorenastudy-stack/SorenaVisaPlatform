@@ -39,8 +39,12 @@ tested and two rejected; §7 records the evidence.
   exactly the previous English behaviour, so the internal report is untouched
 - `backend/src/scorecard/scorecard.service.ts` — resolves the locale from the client's contact
 
-**No Dockerfile change was needed.** `COPY assets ./assets/` already ships the fonts directory
-(it was added for Caladea), and `.dockerignore` excludes nothing under `assets/`.
+**Dockerfile** — `COPY assets ./assets/` already shipped the fonts directory (it was added for
+Caladea) and `.dockerignore` excludes nothing there, so no copy step was needed. What was added
+is a **build-time assertion** that the fonts arrived intact, following the `RUN pg_dump --version`
+precedent ten lines above it: open each face with fontkit and shape a Persian sentence. A missing,
+truncated or Persian-less TTF now fails the image build — which leaves the running deploy
+untouched — instead of surfacing when a client downloads their report.
 
 **Not changed, deliberately:** every other file on the 21-item inventory, and the backend strings
 that still surface *on this very page* and inside the Persian PDF — see §7.
@@ -141,7 +145,12 @@ fault, and all worth knowing about before writing the next one:
    font, no Persian digits and no parentheses appear anywhere in the Persian copy, dates stay
    Gregorian with Latin numerals, and `padScriptBoundaries` pads only true boundaries. Two of
    them failed on first run and drove code fixes, so they are known to be capable of failing.
-5. **1265 tests / 105 suites.**
+5. **The production image proves it itself.** Docker is not installed on the build machine, so
+   rather than assert from the Dockerfile that the font would be present, the Dockerfile now
+   asserts it at build time (§2). Railway's own production build runs that check, so a green
+   deploy *is* the verification. The check was confirmed able to fail: a Persian-less font
+   reports 14 missing glyphs, and a truncated TTF throws outright.
+6. **1265 tests / 105 suites.**
 
 ## 7. Known limitations
 
