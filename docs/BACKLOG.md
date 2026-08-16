@@ -275,6 +275,43 @@ that its own resolver works.
 
 ---
 
+## University intelligence / pricing
+
+### Import templates + instructions — DONE 17 Aug 2026
+`docs/IMPORT_TEMPLATES_GUIDE.md` + `docs/import-templates/*.xlsx`. Plain-English column
+reference for all three importers, written from the code. Every sample row was dry-run through
+the real endpoints with **zero validation errors**, and each documented failure mode
+(`UNRECOGNISED_COUNTRY`, `PERCENTAGE_NOT_VALID_FOR_TUITION`, `MISSING_NAME`, `UNMAPPED_LEVEL`,
+`NO_COUNTRY_CONTEXT`, `MISSING_OR_INVALID_AMOUNT`) was verified to actually fire.
+
+Two gaps found and documented rather than assumed:
+- **`intakeMonths` is not importable.** The sheet's intake columns populate `ProgrammeIntake`
+  (text labels); the `intakeMonths` array the 5-month rule reads is never written by the
+  importer. 0% populated in production.
+- **`institutionType` has NO write path in the app at all** — no DTO field, no staff UI. Only
+  the CLI bulk import sets it, from which source file a provider arrived in. This is why
+  production has 0 UNIVERSITY / 1 ITP / 72 PTE / 23 unset, and it cannot be fixed by upload.
+
+### English-course commission split — DONE 17 Aug 2026
+`EducationProgramme.isEnglishLanguageCourse` (a separate flag, **not** a QualificationLevel
+value — that enum is an academic ladder used by tuition matching and the Q30 progression rule)
+plus nullable `commissionEnglishY1/Y2Type/Value` on `EducationProvider`. Null ≠ 0: null means
+"no separate English rate", a stored 0 is a real agreement.
+
+`resolveCommissionRate()` picks English → provider → none. Wired so an explicitly supplied rate
+still wins, which leaves both existing callers byte-identical. Verified with real commission
+rows: English 25%, non-English 15%, explicit override honoured, English course at an
+institution with no English rate falls back to 12%. Migration is purely additive and **does not
+touch `commissions`**, so existing snapshots cannot move — asserted by changing the institution
+rate and re-reading the row (25 → 25). 13 unit tests.
+
+### Recommendations in Apply/Study — PLAN ONLY
+`docs/PLAN_RECOMMENDATIONS_IN_APPLY_STUDY.md`. Four phases; phases 0–1 recommended for
+greenlight. Blocked on `institutionType` having no write path (phase 0). Slot rules must stay
+dormant until institutions are categorised.
+
+---
+
 ## Blocked / awaiting someone else
 
 - **Agent Portal Phase 3** — DocuSeal contract signing for agents. Plan approved; held for

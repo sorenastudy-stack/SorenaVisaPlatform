@@ -25,8 +25,13 @@ export class CreateCommissionDto {
   @IsOptional()
   commissionType?: CommissionType;
 
+  // PR-ENGLISH-COMMISSION — optional. Omit it and the server derives the rate
+  // from the institution (English-course rate when the programme is flagged,
+  // otherwise the normal rate). Supplying it still wins, so every existing
+  // caller behaves exactly as before.
   @IsNumber()
-  commissionValue: number;
+  @IsOptional()
+  commissionValue?: number;
 
   @IsNumber()
   @IsOptional()

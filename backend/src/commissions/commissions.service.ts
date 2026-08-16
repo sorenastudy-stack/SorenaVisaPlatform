@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { CommissionStatus } from '@prisma/client';
+import { CommissionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { hasRole } from '../auth/role.util';
 import { EventsService, EventSource } from '../events/events.service';
@@ -7,6 +7,7 @@ import { CreateCommissionDto } from './dto/create-commission.dto';
 import { UpdateCommissionStatusDto } from './dto/update-commission-status.dto';
 import { UpdateReminderDateDto } from './dto/update-reminder-date.dto';
 import { CommissionListQueryDto } from './dto/commission-list-filter.dto';
+import { resolveCommissionRate } from './commission-rate.logic';
 
 @Injectable()
 export class CommissionsService {
@@ -64,7 +65,25 @@ export class CommissionsService {
     // supplied, which is how the two could previously disagree.
     const choice = await this.prisma.admissionProgrammeChoice.findUnique({
       where: { id: dto.programmeChoiceId },
-      include: { commission: true, programme: { select: { providerId: true } } },
+      include: {
+        commission: true,
+        programme: {
+          select: {
+            providerId: true,
+            // PR-ENGLISH-COMMISSION — the flag and the institution's rates, so a
+            // caller that does not state a rate gets the right one derived.
+            isEnglishLanguageCourse: true,
+            provider: {
+              select: {
+                commissionY1Type: true, commissionY1Value: true,
+                commissionY2Type: true, commissionY2Value: true,
+                commissionEnglishY1Type: true, commissionEnglishY1Value: true,
+                commissionEnglishY2Type: true, commissionEnglishY2Value: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!choice) {
@@ -83,8 +102,40 @@ export class CommissionsService {
       throw new BadRequestException('Provider does not own the chosen programme');
     }
 
+    // PR-ENGLISH-COMMISSION — derive the rate ONLY when the caller did not state
+    // one. Both existing callers (the ledger's Record button and trigger
+    // approval) always send commissionValue, so their behaviour is unchanged to
+    // the byte; this adds a correct default for callers that omit it rather than
+    // overriding a human who typed a number.
+    //
+    // The stored row remains a SNAPSHOT: whatever is written here is frozen, and
+    // later edits to the institution's rates never restate it — the same rule
+    // Agent Payables follows.
+    const rate = resolveCommissionRate(
+      {
+        isEnglishLanguageCourse: choice.programme.isEnglishLanguageCourse,
+        year: dto.commissionYear ?? 1,
+      },
+      choice.programme.provider,
+    );
+
+    if (dto.commissionValue === undefined || dto.commissionValue === null) {
+      if (rate.commissionValue === null) {
+        throw new BadRequestException(
+          'No commission rate is on file for this institution. Enter the rate, or set it on the institution first.',
+        );
+      }
+      return this.prisma.commission.create({
+        data: {
+          ...dto,
+          commissionType: dto.commissionType ?? rate.commissionType ?? 'PERCENTAGE',
+          commissionValue: rate.commissionValue,
+        },
+      });
+    }
+
     return this.prisma.commission.create({
-      data: dto,
+      data: dto as Prisma.CommissionUncheckedCreateInput,
     });
   }
 

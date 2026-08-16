@@ -1613,6 +1613,8 @@ model Case {
   recommendationLists   RecommendationList[]
   // PR-INTAKE-1 (Slice 3) — auto-reassignment / manual-review tasks for this case.
   admissionTasks        AdmissionTask[]
+  // PR-HANDOFF — explicit stage-to-stage handoffs on this case.
+  handoffs              CaseHandoff[]
 
   @@index([leadId])
   @@index([stage])
@@ -1627,8 +1629,6 @@ model Case {
   // not data-corrupting, and we don't want a UNIQUE clash to crash a
   // submit transaction.
   @@index([inzApplicationNumber])
-  // PR-HANDOFF — explicit stage-to-stage handoffs on this case.
-  handoffs              CaseHandoff[]
   @@map("cases")
 }
 
@@ -1661,25 +1661,25 @@ enum HandoffState {
 /// that over AuditLog's JSON payload would mean scanning the audit table on
 /// every queue load.
 model CaseHandoff {
-  id       String       @id @default(cuid())
-  caseId   String
-  fromSlot CaseSlot
-  toSlot   CaseSlot
+  id            String       @id @default(cuid())
+  caseId        String
+  fromSlot      CaseSlot
+  toSlot        CaseSlot
   /// Nullable + name snapshots, so deleting a staff account leaves the history
   /// readable rather than taking a record of who did what with it.
-  fromUserId   String?
-  toUserId     String?
-  fromUserName String?
-  toUserName   String?
-  note     String?
+  fromUserId    String?
+  toUserId      String?
+  fromUserName  String?
+  toUserName    String?
+  note          String?
   /// Currently single-valued: handoffs are created ACCEPTED and nothing sets
   /// CANCELLED. Kept because dropping it would be a destructive migration and
   /// the enum is referenced elsewhere — and because cancelling a handoff is a
   /// plausible future feature, at which point this column is already here.
-  status   HandoffState @default(PENDING)
+  status        HandoffState @default(PENDING)
   /// Equal to createdAt: acceptance is automatic, so the two are the same
   /// instant by construction rather than by coincidence.
-  acceptedAt DateTime?
+  acceptedAt    DateTime?
   /// The first time the RECEIVING user of this handoff opened the case.
   ///
   /// NOT "the first time anyone viewed this case" — it is only ever set for the
@@ -1691,11 +1691,11 @@ model CaseHandoff {
   /// Set once and never overwritten (the update is conditional on it being
   /// null). Passive: nothing is gated on it.
   firstViewedAt DateTime?
-  createdAt  DateTime   @default(now())
+  createdAt     DateTime     @default(now())
 
   case Case  @relation(fields: [caseId], references: [id], onDelete: Cascade)
   from User? @relation("HandoffFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
-  to   User? @relation("HandoffTo",   fields: [toUserId],   references: [id], onDelete: SetNull)
+  to   User? @relation("HandoffTo", fields: [toUserId], references: [id], onDelete: SetNull)
 
   /// The queue read: open items addressed to one person.
   @@index([toUserId, status])
@@ -2044,10 +2044,10 @@ model Application {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  case       Case                  @relation(fields: [caseId], references: [id])
-  provider   EducationProvider     @relation(fields: [providerId], references: [id])
-  programme  EducationProgramme    @relation(fields: [programmeId], references: [id])
-  documents  ApplicationDocument[]
+  case      Case                  @relation(fields: [caseId], references: [id])
+  provider  EducationProvider     @relation(fields: [providerId], references: [id])
+  programme EducationProgramme    @relation(fields: [programmeId], references: [id])
+  documents ApplicationDocument[]
 
   @@index([caseId])
   @@index([status])
@@ -2453,14 +2453,14 @@ model AgentPayable {
   status       AgentPayableStatus @default(PENDING)
 
   /// Finance agreed the amount is owed.
-  approvedById   String?
-  approvedByName String?
-  approvedAt     DateTime?
+  approvedById    String?
+  approvedByName  String?
+  approvedAt      DateTime?
   /// The Owner released the money. Deliberately separate from approval — the
   /// person who confirms a debt is not the person who pays it.
-  paidById       String?
-  paidByName     String?
-  paidAt         DateTime?
+  paidById        String?
+  paidByName      String?
+  paidAt          DateTime?
   /// Finance refused the share. The reason is REQUIRED at the service boundary
   /// — unlike the refund queue's optional decision note — because this is money
   /// owed to somebody outside the company and "why not" is what reconciliation
@@ -2469,7 +2469,7 @@ model AgentPayable {
   rejectedByName  String?
   rejectedAt      DateTime?
   rejectionReason String?
-  notes          String?
+  notes           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2485,61 +2485,76 @@ model AgentPayable {
 // ─── EDUCATION PROVIDERS ─────────────────────────────────────────────────────
 
 model EducationProvider {
-  id                   String           @id @default(cuid())
-  name                 String
-  providerType         ProviderType
+  id                       String           @id @default(cuid())
+  name                     String
+  providerType             ProviderType
   // PR-PHASE34 — NZ regulatory type (authoritative; providerType kept for now,
   // flagged for later consolidation). legalEntityName = source "Provider Entity"
   // (the legal body) vs `name` = the recognisable brand.
-  institutionType      InstitutionType?
-  legalEntityName      String?
+  institutionType          InstitutionType?
+  legalEntityName          String?
   // PR-IMPORT — source "Brand": the short display name (e.g. "Ara" for "Ara
   // Institute of Canterbury"). ITP/PTE files only; universities publish one name.
-  brand                String?
-  country              String           @default("NZ")
-  city                 String?
+  brand                    String?
+  country                  String           @default("NZ")
+  city                     String?
   // PR-EXPLORE — map coordinates for the student Explore map.
   //
   // Nullable on purpose and NEVER guessed: an institution that cannot be
   // geocoded confidently keeps null and is listed without a pin, rather than
   // being dropped from results or pinned at an invented location. geocodedAt
   // records when the lookup ran so a later pass can re-try only the misses.
-  latitude             Float?
-  longitude            Float?
-  geocodedAt           DateTime?
-  geocodeSource        String? // e.g. "nominatim" — provenance for a re-check
-  websiteUrl           String?
+  latitude                 Float?
+  longitude                Float?
+  geocodedAt               DateTime?
+  geocodeSource            String? // e.g. "nominatim" — provenance for a re-check
+  websiteUrl               String?
   // PR-CATALOG-2 — programme-listing/index entry point for the monthly discovery
   // crawl (Pass B). Owner-supplied; discovery skips the institution when unset.
-  catalogueUrl         String?
+  catalogueUrl             String?
   // PR-SLOTRULES (Decision 2) — Owner-pinned "Featured" institution. ADDITIVE display
   // signal ONLY: surfaced alongside the normal ranked options in Apply/Study Step 1. NEVER
   // read by matching, slot-rule validation, or any ranking/assignment logic.
-  isFeatured           Boolean          @default(false)
-  status               ProviderStatus   @default(PENDING)
-  agreementUrl         String?
-  agreementStartDate   DateTime?
-  agreementEndDate     DateTime?
-  agreementRenewalDate DateTime?
-  commissionY1Type     CommissionType   @default(PERCENTAGE)
-  commissionY1Value    Float            @default(0)
-  commissionY2Type     CommissionType   @default(PERCENTAGE)
-  commissionY2Value    Float            @default(0)
-  volumeTarget         Float?
-  bonusType            CommissionType?
-  bonusValue           Float?
-  notes                String?
+  isFeatured               Boolean          @default(false)
+  status                   ProviderStatus   @default(PENDING)
+  agreementUrl             String?
+  agreementStartDate       DateTime?
+  agreementEndDate         DateTime?
+  agreementRenewalDate     DateTime?
+  commissionY1Type         CommissionType   @default(PERCENTAGE)
+  commissionY1Value        Float            @default(0)
+  commissionY2Type         CommissionType   @default(PERCENTAGE)
+  commissionY2Value        Float            @default(0)
+  // PR-ENGLISH-COMMISSION — the rate for ENGLISH-LANGUAGE courses at this
+  // institution, when it differs from the rate above.
+  //
+  // NULLABLE on purpose, and that is load-bearing: null means "no English-
+  // specific rate — use the normal one", which is NOT the same as an agreed rate
+  // of 0%. A @default(0) here would have quietly asserted that all 96
+  // institutions had negotiated a zero English commission.
+  //
+  // Held per PROVIDER rather than per programme because a commission agreement is
+  // negotiated with an institution, not course by course. The programme flag says
+  // WHICH courses it applies to; this says WHAT the rate is.
+  commissionEnglishY1Type  CommissionType?
+  commissionEnglishY1Value Float?
+  commissionEnglishY2Type  CommissionType?
+  commissionEnglishY2Value Float?
+  volumeTarget             Float?
+  bonusType                CommissionType?
+  bonusValue               Float?
+  notes                    String?
   // PR-PHASE32 — recommendation enrichment (v1 rich). Descriptions/aboutUrl are
   // AI-seeded → staff-approved; ranking* is STAFF-ENTERED ONLY (never AI-invented
   // — fabrication risk on a compliance-sensitive claim). Shown to applicants only
   // once the provider is APPROVED (status).
-  descriptionEn        String?
-  aboutUrl             String?
-  rankingTier          String?
-  rankingScore         Float?
-  rankingSource        String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  descriptionEn            String?
+  aboutUrl                 String?
+  rankingTier              String?
+  rankingScore             Float?
+  rankingSource            String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
   faculties    EducationFaculty[]
   programmes   EducationProgramme[]
@@ -2566,83 +2581,94 @@ model EducationFaculty {
 }
 
 model EducationProgramme {
-  id                    String              @id @default(cuid())
-  providerId            String
-  facultyId             String?
-  name                  String
-  level                 QualificationLevel
-  nzqfLevel             NZQFLevel
-  durationMonths        Int?
-  tuitionFeeNZD         Float?
-  currency              String              @default("NZD")
-  intakeMonths          Int[]
-  aiPopulated           Boolean             @default(false)
-  aiLastRunAt           DateTime?
-  reviewStatus          ReviewStatus        @default(PENDING)
-  isActive              Boolean             @default(false)
+  id                      String              @id @default(cuid())
+  providerId              String
+  facultyId               String?
+  name                    String
+  level                   QualificationLevel
+  nzqfLevel               NZQFLevel
+  durationMonths          Int?
+  tuitionFeeNZD           Float?
+  currency                String              @default("NZD")
+  intakeMonths            Int[]
+  aiPopulated             Boolean             @default(false)
+  aiLastRunAt             DateTime?
+  reviewStatus            ReviewStatus        @default(PENDING)
+  isActive                Boolean             @default(false)
   // PR-CATALOG-1 — provenance. Excel import → MANUAL_EXCEL; hand-added via API →
   // MANUAL_ENTRY; a future automated web check → AUTOMATED_WEB_CHECK. sourceRef =
   // the import batch id or the source URL.
-  source                ProgrammeSource     @default(MANUAL_ENTRY)
-  sourceRef             String?
+  source                  ProgrammeSource     @default(MANUAL_ENTRY)
+  sourceRef               String?
   // PR-PHASE32 — recommendation enrichment (AI-seeded → staff-approved).
-  descriptionEn         String?
-  descriptionFa         String?
-  careerOutcomes        String[]
-  highlights            String[]
+  descriptionEn           String?
+  descriptionFa           String?
+  careerOutcomes          String[]
+  highlights              String[]
   // PR-PHASE34 — imported source fields (NZ ITP/University/PTE programme data).
-  majorStrand           String?
-  qualificationType     String? // raw source label, e.g. "New Zealand Certificate", "Bachelor's Degree"
-  deliveryMode          String? // On-campus / Blended / Online
-  studentVisaSuitable   Boolean?
-  campusCity            String? // per-programme campus (may differ from provider.city)
-  durationText          String? // raw source, e.g. "1 year", "18 weeks"
-  feeBasis              String? // per year / whole programme / per credit
-  feeYear               Int? // the year the fee applies to (tracked separately from intake year)
-  fee2027Status         String? // confirmed / projected
-  scholarshipNote       String? // free-text (NOT the nationality-scoped ProviderScholarship)
+  majorStrand             String?
+  qualificationType       String? // raw source label, e.g. "New Zealand Certificate", "Bachelor's Degree"
+  deliveryMode            String? // On-campus / Blended / Online
+  studentVisaSuitable     Boolean?
+  // PR-ENGLISH-COMMISSION — is this an English-language course (ELICOS / EAP)?
+  //
+  // Deliberately a separate flag and NOT a new QualificationLevel value.
+  // QualificationLevel is an academic LADDER: qualLevel() maps NZQF levels onto
+  // it, ProviderTuition rows match on it, and the Q30 progression rule reasons
+  // about moving up it. An English course is not a rung on that ladder — adding
+  // one would silently change level-based tuition matching and progression for
+  // every caller, to express something that is a course TYPE.
+  //
+  // Default false: every existing row keeps exactly its current behaviour.
+  isEnglishLanguageCourse Boolean             @default(false)
+  campusCity              String? // per-programme campus (may differ from provider.city)
+  durationText            String? // raw source, e.g. "1 year", "18 weeks"
+  feeBasis                String? // per year / whole programme / per credit
+  feeYear                 Int? // the year the fee applies to (tracked separately from intake year)
+  fee2027Status           String? // confirmed / projected
+  scholarshipNote         String? // free-text (NOT the nationality-scoped ProviderScholarship)
   // PR-EXPLORE — Owner-uploaded cover image shown on the Explore map result cards
   // and the programme detail page. Stores the object key/URL produced by the normal
   // signed-upload path (image mime-types only, size-capped); never a raw client URL.
-  coverImageUrl         String?
+  coverImageUrl           String?
   // PR-IMPORT — verbatim source text. Kept ALONGSIDE the structured fields, never
   // instead of them: the source states fees conditionally often enough
   // ("$13,286 per 60 credits or $26,572 per 120 credits") that flattening to one
   // number would quote a price the institution never published. tuitionFeeNZD is
   // populated only when the source states one unambiguous, plausible figure;
   // tuitionParseNote records why it was left null otherwise.
-  tuitionFeeRaw         String?
-  tuitionParseNote      String?
+  tuitionFeeRaw           String?
+  tuitionParseNote        String?
   // Long free-text requirement columns. ProgrammeRequirement keeps the STRUCTURED
   // matching values (minGpa, englishOverallMin); these hold what the institution
   // actually published, which is richer than the matcher needs.
-  academicPrerequisites String?
-  englishRequirementRaw String?
-  otherRequirements     String?
+  academicPrerequisites   String?
+  englishRequirementRaw   String?
+  otherRequirements       String?
   // Intake columns as published. ProgrammeIntake holds the structured intakes.
-  remaining2026Intakes  String?
-  published2027Intakes  String?
+  remaining2026Intakes    String?
+  published2027Intakes    String?
   // ITP file only — extra 2027 planning columns absent from PTE/University.
-  projected2027Intakes  String?
-  intakeBasis2027       String?
-  intakes2027Planning   String?
+  projected2027Intakes    String?
+  intakeBasis2027         String?
+  intakes2027Planning     String?
   // PR-IMPORT — the institution's OWN Subject Area label, verbatim from its source
   // workbook ("Subject Area" / "Subject Area (Faculty)"). Per-institution, NOT a
   // shared taxonomy: the curation tabs are simply the distinct values a given
   // institution's own rows contain. Blank in the source → grouped as "Unspecified".
-  subjectAreaRaw        String?
+  subjectAreaRaw          String?
   // PR-EXPLORE — Staff/Owner manual override for the "Related videos" block. When
   // NON-EMPTY these replace the ContentMatchingAgent's picks entirely (never merged),
   // so a corrected match cannot have the agent's choices reappear beside it. Stores
   // bare YouTube video ids; staff may paste full URLs and the API normalises them.
-  manualVideoIds        String[]            @default([])
-  programmeUrl          String? // official programme page — RAG monitoring source #1
-  verificationSourceUrl String? // secondary verification source — RAG monitoring source #2
-  verifiedAt            DateTime?
-  verificationStatus    VerificationStatus? // data-verification state (≠ reviewStatus)
-  notes                 String?
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  manualVideoIds          String[]            @default([])
+  programmeUrl            String? // official programme page — RAG monitoring source #1
+  verificationSourceUrl   String? // secondary verification source — RAG monitoring source #2
+  verifiedAt              DateTime?
+  verificationStatus      VerificationStatus? // data-verification state (≠ reviewStatus)
+  notes                   String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 
   provider            EducationProvider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
   faculty             EducationFaculty?          @relation(fields: [facultyId], references: [id])
@@ -3062,19 +3088,19 @@ model TicketMessage {
 // Append-only in practice: one row per (base, quote, rateDate), never updated,
 // so the rate a historical invoice used stays exactly what it was.
 model ExchangeRate {
-  id        String   @id @default(cuid())
+  id            String   @id @default(cuid())
   /// ISO 4217, uppercase. USD for everything today.
   baseCurrency  String
   quoteCurrency String
   /// Units of quote per 1 base. 6 dp is well beyond FX quoting precision.
-  rate      Decimal  @db.Decimal(12, 6)
+  rate          Decimal  @db.Decimal(12, 6)
   /// The DAY this rate represents, not the moment it was entered.
-  rateDate  DateTime @db.Date
+  rateDate      DateTime @db.Date
   /// Where the number came from: 'manual-entry' for everything a Finance Admin
   /// types, 'open.er-api.com' for the one seeded row that predates manual entry.
-  source    String
-  fetchedAt DateTime @default(now())
-  createdAt DateTime @default(now())
+  source        String
+  fetchedAt     DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   /// Who typed it. Nullable because the seeded row has no author, and because a
   /// deleted staff account must not take an accounting record with it — hence a
@@ -3093,17 +3119,17 @@ model ExchangeRate {
 // ─── INVOICES & PAYMENTS ──────────────────────────────────────────────────────
 
 model Invoice {
-  id              String        @id @default(cuid())
-  caseId          String?
-  contactId       String
-  invoiceNumber   String        @unique
-  description     String
+  id            String        @id @default(cuid())
+  caseId        String?
+  contactId     String
+  invoiceNumber String        @unique
+  description   String
   /// The BASE price, before GST and before any card fee. Unchanged in meaning
   /// by PR-PHASE40 — the new columns sit alongside it rather than folding into
   /// it, so `amount` is still what the service is worth.
-  amount          Decimal       @db.Decimal(10, 2)
-  currency        String        @default("USD")
-  status          InvoiceStatus @default(DRAFT)
+  amount        Decimal       @db.Decimal(10, 2)
+  currency      String        @default("USD")
+  status        InvoiceStatus @default(DRAFT)
 
   // PR-PHASE40 — the parts of the total, stored separately because accounting
   // needs them apart: GST is tax collected for IRD, the card fee is a
@@ -3115,10 +3141,10 @@ model Invoice {
   // Nullable: rows written before this migration have no breakdown, and
   // back-filling a GST figure that was never charged would be inventing a tax
   // record.
-  gstAmount       Decimal?      @db.Decimal(10, 2)
+  gstAmount     Decimal? @db.Decimal(10, 2)
   /// NULL for bank transfer — an invoice paid by transfer must never carry a
   /// fee the client did not incur.
-  cardFeeAmount   Decimal?      @db.Decimal(10, 2)
+  cardFeeAmount Decimal? @db.Decimal(10, 2)
 
   // PR-PHASE40 — FX audit trail. NZ GST is assessed in NZD while these invoices
   // are denominated in USD, so the rate used to convert has to be recorded at
@@ -3127,13 +3153,13 @@ model Invoice {
   exchangeRateUsed      Decimal?  @db.Decimal(12, 6)
   exchangeRateSource    String?
   exchangeRateTimestamp DateTime?
-  dueDate         DateTime?
-  issuedAt        DateTime?
-  paidAt          DateTime?
-  stripeInvoiceId String?       @unique
-  notes           String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  dueDate               DateTime?
+  issuedAt              DateTime?
+  paidAt                DateTime?
+  stripeInvoiceId       String?   @unique
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   // Piece #2 — client payment-receipt upload (bank transfer / partner exchange).
   // Denormalised onto Invoice (mirrors Case.inzReceipt* — there's only ever one
@@ -3180,13 +3206,13 @@ model Invoice {
 // `metadata` snapshots the full Stripe-side metadata blob so we can
 // reconstruct what link produced the charge without going to Stripe.
 model Payment {
-  id                    String   @id @default(cuid())
-  stripePaymentIntentId String   @unique
+  id                    String  @id @default(cuid())
+  stripePaymentIntentId String  @unique
   leadId                String
   caseId                String?
   paymentType           String
   amount                Int
-  currency              String   @default("usd")
+  currency              String  @default("usd")
   status                String
 
   // PR-PHASE40 — the invoice arithmetic, stored in parts rather than as one
@@ -3197,10 +3223,10 @@ model Payment {
   // Nullable because every row written before this migration has no breakdown
   // to record, and inventing one retrospectively would be a fabricated tax
   // figure. `amount` keeps meaning exactly what it always meant.
-  gstCents              Int?
-  cardFeeCents          Int?
-  metadata              Json?
-  createdAt             DateTime @default(now())
+  gstCents     Int?
+  cardFeeCents Int?
+  metadata     Json?
+  createdAt    DateTime @default(now())
 
   // Phase 6.5 — finance verification workflow.
   //
@@ -3442,7 +3468,7 @@ model CvDocument {
 }
 
 model AdmissionProgrammeChoice {
-  id                     String   @id @default(cuid())
+  id                     String    @id @default(cuid())
   admissionApplicationId String
   programmeId            String
   intakeMonth            Int
@@ -3460,7 +3486,7 @@ model AdmissionProgrammeChoice {
   /// date — so there is no stored "eligible" flag to fall out of date and no
   /// job to keep it current.
   firstClassAttendedAt   DateTime?
-  createdAt              DateTime @default(now())
+  createdAt              DateTime  @default(now())
 
   admissionApplication AdmissionApplication @relation(fields: [admissionApplicationId], references: [id], onDelete: Cascade)
   programme            EducationProgramme   @relation(fields: [programmeId], references: [id])
@@ -5288,32 +5314,32 @@ model AffiliateAgent {
   // the key plus display metadata are stored. Nothing is served from disk.
 
   /// Passport or national ID.
-  idDocumentR2Key     String?
-  idDocumentName      String?
-  idDocumentMime      String?
-  idDocumentSizeBytes Int?
+  idDocumentR2Key      String?
+  idDocumentName       String?
+  idDocumentMime       String?
+  idDocumentSizeBytes  Int?
   idDocumentUploadedAt DateTime?
 
   /// Evidence of a real operating business — company registration, tax
   /// registration, a bank statement header, letterhead. Free text rather than
   /// an enum because the acceptable set will change with each country the
   /// company recruits from, and a human is reading it either way.
-  businessDocumentR2Key     String?
-  businessDocumentName      String?
-  businessDocumentMime      String?
-  businessDocumentSizeBytes Int?
-  businessDocumentType      String?  @db.VarChar(120)
+  businessDocumentR2Key      String?
+  businessDocumentName       String?
+  businessDocumentMime       String?
+  businessDocumentSizeBytes  Int?
+  businessDocumentType       String?   @db.VarChar(120)
   businessDocumentUploadedAt DateTime?
 
   /// The Owner's decision on the documents above. Verified means the documents
   /// were reviewed and accepted — it says nothing about the contract, which is
   /// the separate half of the gate.
-  verifiedAt      DateTime?
-  verifiedById    String?
-  verifiedBy      User?     @relation("AffiliateAgentVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt                  DateTime?
+  verifiedById                String?
+  verifiedBy                  User?     @relation("AffiliateAgentVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
   /// Why verification was refused. Kept so a resubmission can answer it.
-  verificationRejectedAt     DateTime?
-  verificationRejectionReason String?  @db.Text
+  verificationRejectedAt      DateTime?
+  verificationRejectionReason String?   @db.Text
 
   // ── PR-AGENT-PORTAL phase 1: the contract half of the gate ─────────────────
   // An agent may do nothing in the portal until they are BOTH verified and
@@ -5336,9 +5362,9 @@ model AffiliateAgent {
   /// none and because an audit trail that turns into a bare id is not a trail.
   /// The reason is required at the service boundary: "why is this agent live
   /// without a contract" is exactly the question asked months later.
-  contractClearedById    String?
-  contractClearedByName  String?
-  contractClearedReason  String?  @db.Text
+  contractClearedById   String?
+  contractClearedByName String?
+  contractClearedReason String? @db.Text
 
   createdBy       User           @relation("AffiliateAgentCreator", fields: [createdById], references: [id])
   trackingLinks   TrackingLink[]
