@@ -42,6 +42,16 @@ rows).
 **Done / not needed** — it was never set in any service or environment. Kept here only so
 nobody re-checks.
 
+### `FINANCE_TABS` console noise — DONE 17 Aug 2026
+`StaffBottomTabs.tsx` ran `t()` over the FINANCE tab labels, which are plain English, so
+every FINANCE user got four `MISSING_MESSAGE` errors per page load. Now mirrors the
+sidebar's `label.includes('.') ? t(label) : label`, and the comment that claimed the labels
+were "rendered directly" is true again.
+
+Verified in a real browser at mobile width, since the bar is `lg:hidden`: **4 errors before,
+0 after**, with all four labels still rendering — a fix that merely hid the tabs would have
+silenced the noise too.
+
 ---
 
 ## Money & billing
@@ -72,10 +82,24 @@ See `AUDIT_CLIENT_PORTAL_2026-08-13.md` for the full inventory and status table.
 - **Finding #3 — payment gate fails closed. FIXED 14 Aug 2026.** An errored access check now
   means *unknown*, not *unpaid*, with the last definitive answer kept as a fallback.
   Verified by recreating the rate-limit condition, 11/11.
-- **Still open — the shared rate-limit bucket.** `apiServer` forwards no client IP, so every
-  client's server-rendered calls hit the backend from the frontend service's own address and
-  share one 60/60s bucket; the shell spends ~4 requests per page render. Fixing the symptom
-  did not fix this. Worth doing before traffic grows.
+- **Shared rate-limit bucket — FIXED 17 Aug 2026.** Rate-limit buckets are now keyed by the
+  *verified* session subject, falling back to IP for anonymous callers
+  (`common/throttler/identity-throttler.guard.ts`). Server-rendered calls genuinely originate
+  from the Next.js container, so there was no client address being dropped and nothing for
+  `trust proxy` to recover — but `apiServer` already forwards the caller's session, so the
+  request carries an identity even while it carries a borrowed address.
+
+  Forwarding a client IP header instead was considered and rejected: on an auth-adjacent path
+  it would mean trusting a client-settable header, letting anyone mint unlimited fresh buckets
+  by varying it. Nothing was loosened — the token is verified rather than decoded, so a forged
+  `sub` falls back to the IP bucket; anonymous pre-auth routes keep exactly their previous
+  limits and keying; and a flood spread across many addresses by one account is now *more*
+  tightly held than before.
+
+  Verified end-to-end against both guards. Old: client B got 10/10 × 429 purely because client
+  A had spent the shared bucket. New: A is limited after its own 60 while B is untouched, a
+  forged token cannot escape the limit, and anonymous callers still share the address bucket.
+  11 unit tests on the key derivation.
 - **Findings 5–14, unambiguous set — DONE 14 Aug 2026.** Raw `tickets.department.null`
   badge, the assistant's raw markdown (in two components), the two untranslated shell
   strings, and the dashboard's false "is being processed" claim. Verified in a real browser
@@ -88,10 +112,10 @@ See `AUDIT_CLIENT_PORTAL_2026-08-13.md` for the full inventory and status table.
   explains and offers the assessment instead of redirecting; the assistant is handed
   translated stage wording instead of raw enums; Meetings is in the sidebar; the wallet card
   shows its balance.
-- **Follow-up question for the Owner (not blocking):** should `/student/meetings` eventually
-  be merged into Booking rather than living as a separate destination? Adding it to the
-  sidebar was the safe default under the new rule; whether it deserves standalone billing is
-  an information-architecture decision.
+- **`/student/meetings` information architecture — DECIDED 17 Aug 2026.** It stays a
+  standalone page rather than being folded into Booking. Owner decision; no code change, and
+  nothing was pending — the sidebar entry added under the empty-state rule is the final
+  shape. Recorded here so it is not re-opened as an unanswered question.
 
 ### Two ticket models — CLOSED 15 Aug 2026
 
@@ -226,12 +250,28 @@ picks it up automatically (it reads Postgres's own `indexdef`), but a newly seed
 needs one line added to `MIGRATION_SEEDED_TABLES` in `test/db-schema.ts`. A test will fail
 loudly the way `sla.spec` did rather than diverge quietly — that was the deliberate choice.
 
-### Values shared across the server/client boundary
+### Values shared across the server/client boundary — SWEPT 17 Aug 2026
 `PAYABLE_STATUSES` was defined in a `'use client'` module and imported by Server
 Components; in a production build it arrived as a client *reference*, `.includes()` threw,
 a silent catch swallowed it, and the "Outstanding" section never rendered. Fixed in
-`c933160`. **Other values may cross the same boundary the same way** — worth a sweep for
-server components importing non-type, non-component exports from `'use client'` files.
+`c933160`.
+
+**The sweep found no second live instance.** All 16 crossings in the frontend are React
+components, which is the supported case. The sweep was validated by running it against
+`1ac9eba` — the commit before the fix — where it reported both `PAYABLE_STATUSES` call
+sites, so a clean result means it looked and found nothing rather than failed to look.
+
+**One latent hazard was removed:** `PaymentsView.tsx` still re-exported `PAYABLE_STATUSES`
+for backwards compatibility. Nothing imported it that way, so it was not a live bug — but a
+re-export from a `'use client'` module is indistinguishable at the import site from the
+export that caused the original fault, so it was a loaded gun aimed at the same foot.
+
+The sweep is now a **standing test** (`frontend/src/lib/server-client-boundary.test.ts`) —
+this class of bug is invisible to `tsc`, invisible in dev, and swallowed by a nearby catch in
+production, so a one-off sweep would not have stayed true. It is proven to fail on the
+reintroduced pattern. Note for whoever touches it: its first version resolved *zero* imports
+because of a Windows path-separator mismatch and passed anyway, which is why it now asserts
+that its own resolver works.
 
 ---
 

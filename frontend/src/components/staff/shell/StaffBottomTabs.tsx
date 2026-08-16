@@ -32,7 +32,8 @@ const TABS: Tab[] = [
 
 // Finance portal (option a) — a role-filtered mobile tab bar for FINANCE, so
 // the four primary finance surfaces are reachable on small screens. Labels are
-// plain English (rendered directly, not via t()). Other roles use TABS above.
+// plain English and are rendered directly, not via t() — see the render below,
+// which now actually honours that. Other roles use TABS above.
 const FINANCE_TABS: Array<{ label: string; href: string; icon: React.ReactNode }> = [
   { label: 'Dashboard',  href: '/staff/finance',           icon: <LayoutDashboard size={20} /> },
   { label: 'Processing', href: '/staff/payments',          icon: <Clock size={20} /> },
@@ -64,7 +65,14 @@ export function StaffBottomTabs() {
             ].join(' ')}
           >
             {tab.icon}
-            <span>{t(tab.label)}</span>
+            {/* Dotted labels (`staff.nav.*`) are i18n keys; inline labels
+                (FINANCE_TABS) are already English and deliberately skip
+                next-intl. Same rule as StaffSidebar. Before this, t() ran on
+                the plain English ones too and logged four MISSING_MESSAGE
+                errors per page load for every FINANCE user — the comment on
+                FINANCE_TABS said the labels were rendered directly, and it had
+                quietly stopped being true. */}
+            <span>{tab.label.includes('.') ? t(tab.label) : tab.label}</span>
           </Link>
         );
       })}

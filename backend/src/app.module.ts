@@ -2,7 +2,8 @@ import { Module } from '@nestjs/common';
 import { RolesAccessModule } from './staff/roles-access/roles-access.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { IdentityThrottlerGuard } from './common/throttler/identity-throttler.guard';
 import { AcquisitionModule } from './acquisition/acquisition.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { EmailModule } from './email/email.module';
@@ -203,14 +204,19 @@ import { SlaModule } from './sla/sla.module';
     SlaModule,
   ],
   providers: [
-    // Apply the ThrottlerModule baseline (60/min/IP from `default`
+    // Apply the ThrottlerModule baseline (60/min from the `default`
     // throttler above) to every route in the app. Routes that need
     // a tighter limit override with `@Throttle({ default: { …} })`;
     // routes that must NOT be throttled (webhooks, healthchecks,
     // OAuth round-trips) opt out with `@SkipThrottle()`.
+    //
+    // PR-RATE-LIMIT-IDENTITY — keyed per authenticated user, falling back to IP
+    // for anonymous callers. The stock IP-only tracker put every
+    // server-rendered portal request into ONE bucket, because those calls come
+    // from the Next.js container rather than the client. See the guard.
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: IdentityThrottlerGuard,
     },
   ],
 })

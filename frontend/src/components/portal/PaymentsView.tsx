@@ -31,9 +31,15 @@ export interface InvoiceRow {
   gstCents?: number; totalCents?: number;
 }
 
-// Moved to lib/invoice-status so SERVER components can read the real array —
-// a 'use client' export reaches the server as a client reference, not a value.
-export { PAYABLE_STATUSES } from '@/lib/invoice-status';
+// PAYABLE_STATUSES lives in lib/invoice-status — import it from there.
+//
+// It is deliberately NOT re-exported here. A re-export from a 'use client'
+// module is indistinguishable, at the import site, from the original export
+// that caused the bug: a Server Component writing
+// `import { PaymentsView, PAYABLE_STATUSES } from './PaymentsView'` would
+// receive a client reference again, `.includes()` would throw, and the nearby
+// catch would swallow it exactly as before. The compatibility re-export that
+// used to sit here had no remaining callers and was removed to close that door.
 
 export function PaymentsView({
   payments, outstanding, invoices = [], loadError = false,
