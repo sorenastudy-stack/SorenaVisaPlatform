@@ -65,7 +65,44 @@ export class CountryConfigService {
     if (!execution && !ai) {
       throw new NotFoundException(`No config for country ${code}. Seed it first.`);
     }
-    return { countryCode: code, execution, ai };
+    return { countryCode: code, execution, ai, institutionReadiness: await this.institutionReadiness(code) };
+  }
+
+  // PR-RECS-PHASE0 — how many of this country's institutions are categorised as
+  // University / ITP / PTE.
+  //
+  // Deliberately INFORMATION, NOT AUTOMATION. The institution-type slot rule is
+  // gated by `slotRules.enabled`, and a human turns that on. An automatic gate
+  // that flipped a mandatory rule once some threshold was crossed would change
+  // what students are allowed to submit with nobody deciding. This just tells
+  // the person holding the switch whether it is safe to throw — today, with 0
+  // institutions typed UNIVERSITY, a mandatory-University slot would reject
+  // every valid list.
+  private async institutionReadiness(countryCode: string) {
+    const [total, byType] = await Promise.all([
+      this.prisma.educationProvider.count({ where: { country: countryCode } }),
+      this.prisma.educationProvider.groupBy({
+        by: ['institutionType'],
+        where: { country: countryCode },
+        _count: { _all: true },
+      }),
+    ]);
+    const counts: Record<string, number> = { UNIVERSITY: 0, ITP: 0, PTE: 0 };
+    let uncategorised = 0;
+    for (const row of byType) {
+      if (row.institutionType) counts[row.institutionType] = row._count._all;
+      else uncategorised += row._count._all;
+    }
+    const categorised = total - uncategorised;
+    return {
+      total,
+      categorised,
+      uncategorised,
+      byType: counts,
+      // The types with NO institutions at all — a mandatory slot for any of
+      // these is unsatisfiable, which is the specific failure worth naming.
+      typesWithNoInstitutions: Object.entries(counts).filter(([, n]) => n === 0).map(([t]) => t),
+    };
   }
 
   // ─── Mutations (OWNER only at the controller; audited here) ────────────────

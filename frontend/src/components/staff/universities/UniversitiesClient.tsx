@@ -20,6 +20,19 @@ import { ProgrammeCoversSection } from './ProgrammeCoversSection';
 // commissions context + future AI offer generation).
 
 const PROVIDER_TYPES = ['UNIVERSITY', 'POLYTECHNIC', 'COLLEGE', 'SCHOOL'] as const;
+// PR-RECS-PHASE0 — University / ITP / PTE. Had no way in from any screen; the
+// Apply/Study institution-type slot rule keys on it and cannot be switched on
+// until it is right (production: 0 University, 1 ITP, 72 PTE, 23 unset).
+const INSTITUTION_TYPES = ['UNIVERSITY', 'ITP', 'PTE'] as const;
+const INSTITUTION_TYPE_LABEL: Record<string, string> = {
+  UNIVERSITY: 'University', ITP: 'Institute of Technology / Polytechnic', PTE: 'Private Training Establishment',
+};
+// The two fields are two spellings of one fact and the importer always wrote
+// them together, so the form keeps them in step rather than letting a
+// University be saved as a College.
+const PROVIDER_TYPE_FOR: Record<string, string> = {
+  UNIVERSITY: 'UNIVERSITY', ITP: 'POLYTECHNIC', PTE: 'COLLEGE',
+};
 const STATUSES = ['ACTIVE', 'INACTIVE', 'PENDING'] as const;
 const AMOUNT_TYPES = ['PERCENTAGE', 'FIXED'] as const;
 const LEVELS = ['DIPLOMA', 'GRADUATE_CERTIFICATE', 'GRADUATE_DIPLOMA', 'BACHELOR', 'POSTGRADUATE_CERTIFICATE', 'POSTGRADUATE_DIPLOMA', 'MASTER', 'PHD'] as const;
@@ -180,8 +193,9 @@ function ProviderList({ onEdit }: { onEdit: (id: string) => void }) {
 
 // ── Create / Edit form ──────────────────────────────────────────────────────
 const emptyForm = {
-  name: '', providerType: 'UNIVERSITY', country: 'NZ', city: '', websiteUrl: '', catalogueUrl: '', isFeatured: false, status: 'PENDING',
+  name: '', providerType: 'UNIVERSITY', institutionType: '', country: 'NZ', city: '', websiteUrl: '', catalogueUrl: '', isFeatured: false, status: 'PENDING',
   commissionY1Type: 'PERCENTAGE', commissionY1Value: 0, commissionY2Type: 'PERCENTAGE', commissionY2Value: 0,
+  commissionEnglishY1Type: 'PERCENTAGE', commissionEnglishY1Value: '', commissionEnglishY2Type: 'PERCENTAGE', commissionEnglishY2Value: '',
   volumeTarget: '', bonusType: '', bonusValue: '', notes: '',
   agreementStartDate: '', agreementEndDate: '', agreementRenewalDate: '', agreementUrl: '',
 };
@@ -200,8 +214,12 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
     api.get<Provider>(`/providers/${providerId}`).then((p) => {
       const iso = (d: string | null) => (d ? d.slice(0, 10) : '');
       setForm({
-        name: p.name, providerType: p.providerType, country: p.country, city: p.city ?? '', websiteUrl: p.websiteUrl ?? '', catalogueUrl: p.catalogueUrl ?? '', isFeatured: p.isFeatured, status: p.status,
+        name: p.name, providerType: p.providerType, institutionType: (p as any).institutionType ?? '', country: p.country, city: p.city ?? '', websiteUrl: p.websiteUrl ?? '', catalogueUrl: p.catalogueUrl ?? '', isFeatured: p.isFeatured, status: p.status,
         commissionY1Type: p.commissionY1Type, commissionY1Value: p.commissionY1Value, commissionY2Type: p.commissionY2Type, commissionY2Value: p.commissionY2Value,
+        commissionEnglishY1Type: (p as any).commissionEnglishY1Type ?? 'PERCENTAGE',
+        commissionEnglishY1Value: (p as any).commissionEnglishY1Value ?? '',
+        commissionEnglishY2Type: (p as any).commissionEnglishY2Type ?? 'PERCENTAGE',
+        commissionEnglishY2Value: (p as any).commissionEnglishY2Value ?? '',
         volumeTarget: p.volumeTarget?.toString() ?? '', bonusType: p.bonusType ?? '', bonusValue: p.bonusValue?.toString() ?? '', notes: p.notes ?? '',
         agreementStartDate: iso(p.agreementStartDate), agreementEndDate: iso(p.agreementEndDate), agreementRenewalDate: iso(p.agreementRenewalDate), agreementUrl: p.agreementUrl ?? '',
       });
@@ -215,6 +233,13 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
     try {
       const core: any = {
         name: form.name.trim(), providerType: form.providerType, country: form.country,
+        ...(form.institutionType ? { institutionType: form.institutionType } : {}),
+        // '' means "no separate English rate" and must clear it, so send null
+        // rather than omitting — omitting would leave a stale rate in place.
+        commissionEnglishY1Type: form.commissionEnglishY1Value === '' ? null : form.commissionEnglishY1Type,
+        commissionEnglishY1Value: form.commissionEnglishY1Value === '' ? null : Number(form.commissionEnglishY1Value),
+        commissionEnglishY2Type: form.commissionEnglishY2Value === '' ? null : form.commissionEnglishY2Type,
+        commissionEnglishY2Value: form.commissionEnglishY2Value === '' ? null : Number(form.commissionEnglishY2Value),
         city: form.city.trim() || undefined, websiteUrl: form.websiteUrl.trim() || undefined,
         catalogueUrl: form.catalogueUrl.trim() || undefined, isFeatured: form.isFeatured,
         commissionY1Type: form.commissionY1Type, commissionY1Value: Number(form.commissionY1Value),
@@ -254,6 +279,22 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2"><label className={labelCls}>Name</label><input className={inputCls} value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. University of Auckland" /></div>
           <div><label className={labelCls}>Type</label><select className={inputCls} value={form.providerType} onChange={(e) => set('providerType', e.target.value)}>{PROVIDER_TYPES.map((t) => <option key={t} value={t}>{levelLabel(t)}</option>)}</select></div>
+          <div>
+            <label className={labelCls}>Institution type</label>
+            <select
+              className={inputCls}
+              value={form.institutionType}
+              onChange={(e) => {
+                const v = e.target.value;
+                // Keep providerType in step — see PROVIDER_TYPE_FOR.
+                setForm((f) => ({ ...f, institutionType: v, providerType: PROVIDER_TYPE_FOR[v] ?? f.providerType }));
+              }}
+            >
+              <option value="">Not set</option>
+              {INSTITUTION_TYPES.map((t) => <option key={t} value={t}>{INSTITUTION_TYPE_LABEL[t]}</option>)}
+            </select>
+            <p className="mt-1 text-[11px] text-gray-500">Used by the Apply/Study choice rules. Leave as “Not set” only if genuinely unknown.</p>
+          </div>
           <div><label className={labelCls}>Country</label><CountryPicker value={form.country} onChange={(c) => set('country', c)} /></div>
           <div><label className={labelCls}>City</label><input className={inputCls} value={form.city} onChange={(e) => set('city', e.target.value)} /></div>
           <div><label className={labelCls}>Website</label><input className={inputCls} value={form.websiteUrl} onChange={(e) => set('websiteUrl', e.target.value)} placeholder="https://" /></div>
@@ -273,6 +314,21 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <RateField label="Year 1" type={form.commissionY1Type} value={form.commissionY1Value} onType={(v) => set('commissionY1Type', v)} onValue={(v) => set('commissionY1Value', v)} />
             <RateField label="Year 2" type={form.commissionY2Type} value={form.commissionY2Value} onType={(v) => set('commissionY2Type', v)} onValue={(v) => set('commissionY2Value', v)} />
+            {/* PR-ENGLISH-COMMISSION — the rate for English-language courses at
+                this institution, when it differs. BLANK means "no separate
+                English rate — use the rates above", which is not the same as 0:
+                a stored 0 is a real agreement and is honoured. */}
+            <div className="sm:col-span-2 rounded-lg border border-dashed border-gray-200 p-3">
+              <p className="mb-1 text-xs font-semibold text-gray-600">English-language courses</p>
+              <p className="mb-3 text-[11px] text-gray-500">
+                Leave blank if English courses earn the same rate as everything else. Applies to
+                programmes ticked as English-language courses.
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <RateField label="Year 1 (English)" type={form.commissionEnglishY1Type} value={form.commissionEnglishY1Value} onType={(v) => set('commissionEnglishY1Type', v)} onValue={(v) => set('commissionEnglishY1Value', v)} />
+                <RateField label="Year 2 (English)" type={form.commissionEnglishY2Type} value={form.commissionEnglishY2Value} onType={(v) => set('commissionEnglishY2Type', v)} onValue={(v) => set('commissionEnglishY2Value', v)} />
+              </div>
+            </div>
             <div><label className={labelCls}>Volume target (enrolments)</label><input type="number" className={inputCls} value={form.volumeTarget} onChange={(e) => set('volumeTarget', e.target.value)} /></div>
             <div>
               <label className={labelCls}>Volume bonus</label>

@@ -305,10 +305,36 @@ institution with no English rate falls back to 12%. Migration is purely additive
 touch `commissions`**, so existing snapshots cannot move — asserted by changing the institution
 rate and re-reading the row (25 → 25). 13 unit tests.
 
-### Recommendations in Apply/Study — PLAN ONLY
-`docs/PLAN_RECOMMENDATIONS_IN_APPLY_STUDY.md`. Four phases; phases 0–1 recommended for
-greenlight. Blocked on `institutionType` having no write path (phase 0). Slot rules must stay
-dormant until institutions are categorised.
+### Recommendations in Apply/Study — PHASE 0 DONE 17 Aug 2026; phases 1–3 unscheduled
+`docs/PLAN_RECOMMENDATIONS_IN_APPLY_STUDY.md`. Plan approved as written.
+
+**Phase 0 shipped** — the three unblockers:
+- **`institutionType` write path.** Added to `UpdateProviderDto` and the institution edit
+  screen. `providerType` follows it (UNIVERSITY / ITP→POLYTECHNIC / PTE→COLLEGE) unless the
+  caller states it, so the two spellings of one fact cannot drift the way they could before.
+- **NZ `CountryExecutionConfig` seed** — `backend/scripts/seed-country-execution-config.ts`,
+  idempotent and report-only without `--apply`. Values are the code's own fallbacks (5 / 12 /
+  4, slotCount 5), so it is a **no-op by construction**. `slotRules.enabled` stays false and
+  `institutionTypeWeighting` is seeded **empty on purpose**: `softScore()` adds a sixth
+  scoring component only when a non-empty weighting exists, so a populated one would have
+  silently re-ranked every recommendation.
+- **Readiness indicator** on `GET /staff/settings/country-config/:code` —
+  total / categorised / uncategorised / byType / typesWithNoInstitutions. Information, not
+  automation: a human still decides when to enable the slot rule. Deliberately no
+  auto-activating gate.
+
+Verified in a real browser end to end: setting an institution's type through the staff screen
+persists it and keeps `providerType` in step; the readiness numbers match a direct database
+count; the seed's create path produces exactly the fallback values and re-running changes
+nothing. The test institution was restored to its original values.
+
+**Also closed a gap in the English-commission work:** `UpdateProviderDto` had no
+`commissionEnglishY1/Y2` fields, so the rate added earlier could not actually be set. DTO and
+edit screen now carry it — blank means "no separate English rate", and clearing it sends null
+rather than 0.
+
+**Phases 1–3 remain unscheduled**, per the Owner. Four open product questions must be answered
+before Phase 1 is scoped — see the end of the plan doc.
 
 ---
 

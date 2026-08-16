@@ -16,6 +16,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService, EventSource } from '../events/events.service';
 import { ProgrammeImportService } from './import/programme-import.service';
+import { providerTypeFor } from './import/programme-import.logic';
 import { R2Service } from '../common/r2/r2.service';
 import { CatalogSyncService } from './websync/catalog-sync.service';
 import { changeProposalToUpdate, type ChangedFields } from './websync/catalog-sync.logic';
@@ -340,9 +341,19 @@ export class ProvidersService {
     });
     if (!before) throw new NotFoundException('Provider not found.');
 
+    // PR-RECS-PHASE0 — institutionType and providerType are two spellings of the
+    // same fact (UNIVERSITY / ITP->POLYTECHNIC / PTE->COLLEGE), and the importer
+    // has always written them together. Setting one here without the other would
+    // create exactly the inconsistency the importer avoids, so providerType
+    // follows — UNLESS the caller stated it explicitly, in which case they win.
+    const data: UpdateProviderDto & { providerType?: ProviderType } = { ...dto };
+    if (dto.institutionType && dto.providerType === undefined) {
+      data.providerType = providerTypeFor(dto.institutionType);
+    }
+
     const updated = await this.prisma.educationProvider.update({
       where: { id },
-      data: dto,
+      data,
     });
 
     // PR-AUDIT — an institution's status is a CONTRACTUAL state, and it is the
