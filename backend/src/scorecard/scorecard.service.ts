@@ -24,6 +24,7 @@ import {
   renderInternalReport, renderClientReport,
   type InternalReportData, type ClientReportData,
 } from './pdf';
+import { resolveReportLocale } from './pdf/client-report.copy';
 
 // PR-SCORECARD-1 — Readiness Assessment service.
 //
@@ -565,7 +566,7 @@ export class ScorecardService {
       where: { id: submissionId },
       include: {
         user: { select: { id: true, name: true, email: true } },
-        lead: { select: { contact: { select: { fullName: true, email: true, phone: true, countryOfResidence: true } } } },
+        lead: { select: { contact: { select: { fullName: true, email: true, phone: true, countryOfResidence: true, preferredLanguage: true } } } },
       },
     });
     if (!row) throw new NotFoundException('Submission not found');
@@ -575,6 +576,12 @@ export class ScorecardService {
     if (!isStaff && row.userId !== requester.userId) {
       throw new ForbiddenException('You can only download your own report.');
     }
+
+    // PR-PERSIAN-CLIENT-REPORT — the report follows the CLIENT's language, not
+    // the downloader's, so a staff member fetching a Persian client's report
+    // gets the same document the client gets. Contact.preferredLanguage already
+    // stores ISO 639-1 codes; only 'fa' switches, everything else stays English.
+    const reportLocale = resolveReportLocale(row.lead?.contact?.preferredLanguage);
 
     const payload = this.hydrate({ ...row, answersEncrypted: row.answersEncrypted as Buffer });
     const applicantName = row.lead?.contact?.fullName ?? row.user?.name ?? 'Applicant';
@@ -593,6 +600,7 @@ export class ScorecardService {
       nextActionContent: payload.nextActionContent,
       nextActionTextEn: payload.nextActionTextEn,
       shouldShowMalaysiaCallout: payload.shouldShowMalaysiaCallout,
+      locale: reportLocale,
     };
 
     const buffer = await renderClientReport(clientData);

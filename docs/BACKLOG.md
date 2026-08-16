@@ -136,7 +136,7 @@ five absent are staff role labels.) Two structural categories:
 | 11 | Portal chrome + error states | ~14 | B | **deferred — remains English** |
 | 12 | Student meetings / tickets / chat leftovers | ~10 | mixed | **deferred — remains English** |
 | 13 | All outbound emails (26 types) | ~93 body + 21 subjects | B | **deferred — remains English** |
-| 14 | **Client readiness report PDF** (`scorecard/pdf/client-report.ts`) | 48 | B | **BLOCKED — awaiting owner font decision** (see below) |
+| 14 | **Client readiness report PDF** (`scorecard/pdf/client-report.ts`) | 48 | B | **DONE 17 Aug 2026** — Vazirmatn; `PHASE_PERSIAN_CASE_PAGE_AND_CLIENT_REPORT.md` |
 | 15 | Tax invoice PDF | 5 | B | **deferred — remains English** |
 | 16 | In-app notices + system ticket messages | ~127 | B | **deferred — remains English** |
 | 17 | Internal report PDF (staff-only) | 57 | B | **deferred — remains English** |
@@ -145,13 +145,21 @@ five absent are staff role labels.) Two structural categories:
 | 20 | Admin / ops / sales | 91 | B | **deferred — remains English** |
 | 21 | Agent portal | 17 | B | **deferred — remains English** |
 
-**Item 14 is blocked, not deferred.** Calibri Regular and Bold carry full Persian coverage and
-shape correctly through pdfkit, but **Calibri Italic contains no Arabic glyphs at all** and the
-report uses italic in four places — they render as empty boxes. Two further findings: Latin
-runs inside a Persian string render **reversed** ("17 August 2026" → "6202 tsuguA 71") unless
-wrapped in U+200E, and Calibri is absent from the `node:22-alpine` production image, so shipping
-it means committing a Microsoft-licensed font to the repo. Awaiting an owner decision on the
-font before any Persian goes into this PDF.
+**Item 14 shipped on Vazirmatn (SIL OFL), after two other fonts were ruled out by testing.**
+Calibri carries Persian in Regular and Bold but its **Italic has no Arabic glyphs at all**, and
+it is licensed with Windows/Office so it cannot be committed. Carlito — the metric-compatible
+libre stand-in, and the obvious parallel to the Caladea/Cambria precedent — has **no Persian in
+any weight** (1 of 11 codepoints). Metric compatibility turned out to be moot anyway: this
+report is set in Helvetica, not Calibri, so there was no Calibri layout to preserve. Vazirmatn
+covers Persian and Latin in every weight used, and is already the platform's Persian typeface.
+
+Persian has no italic, so the four passages the English sets in italic use the Vazirmatn **Light**
+weight — quieter than body text, where bold would have inverted a soft aside into emphasis.
+
+**The English report is unchanged, asserted byte-for-byte** against a build made before the
+refactor (identical apart from the generation timestamp). It stays on Helvetica and embeds no
+font. Numerals in the Persian report are deliberately **Latin**: Arabic-Indic digits reverse
+inside an RTL run and U+200E does not rescue them.
 
 **Dates stay Gregorian everywhere** — `lib/date.ts` pins Persian to `fa-IR-u-ca-gregory` as a
 locked decision (clients cross-reference passport / INZ documents). No Jalali anywhere.

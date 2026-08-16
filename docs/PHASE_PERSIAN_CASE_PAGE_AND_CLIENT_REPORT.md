@@ -1,7 +1,7 @@
 # Phase — Persian: client portal case page, and the client report PDF
 
 **Date:** 17 August 2026
-**Status:** item 1 built and verified; **item 2 blocked pending an owner decision on the font**
+**Status:** both items built and verified
 **Scope:** deliberately two items out of a 21-item inventory. Owner decision, 17 Aug 2026:
 everything else on that list stays English. See `BACKLOG.md` → *Persian / RTL* for the full
 table and the per-item "deferred" marks.
@@ -14,9 +14,11 @@ Persian everywhere except its most important column: the "what to do next" list,
 buttons, the wallet heading and the timeline heading. Those 13 strings now come from the
 message catalogue like the rest of the page.
 
-**Item 14 — the client readiness report PDF** was to be translated in the same phase. It is
-**not built**: the font check that gates it failed, and the instruction was to stop and report
-rather than substitute a font. §7 records exactly what was found.
+**Item 14 — the client readiness report PDF** now renders in Persian for a Persian client. The
+document is chosen per client from `Contact.preferredLanguage`, embeds Vazirmatn (Helvetica, the
+previous font, has no Persian glyphs at all), mirrors its row furniture for right-to-left, and
+substitutes a lighter weight where English uses italic. Getting there required three fonts to be
+tested and two rejected; §7 records the evidence.
 
 ## 2. Files created or changed
 
@@ -25,9 +27,23 @@ rather than substitute a font. §7 records exactly what was found.
 - `frontend/src/i18n/messages/en.json` — 13 keys added under `portal.case`
 - `frontend/src/i18n/messages/fa.json` — the same 13 keys, in Persian
 
-**Not changed, deliberately:** every other file on the 21-item inventory, including
-`backend/src/scorecard/pdf/client-report.ts` (item 14, blocked) and the backend strings that
-still surface *on this very page* — see §7.
+**Created — item 14**
+- `backend/src/scorecard/pdf/fonts.ts` — registers the three Vazirmatn faces
+- `backend/src/scorecard/pdf/client-report.copy.ts` — all 48 strings, both languages
+- `backend/src/scorecard/pdf/client-report.spec.ts` — regression guards (§6)
+- `backend/assets/fonts/vazirmatn-{regular,bold,light}.ttf` + `VAZIRMATN-LICENSE.txt`
+
+**Changed — item 14**
+- `backend/src/scorecard/pdf/client-report.ts` — literals replaced by the copy table; RTL layout
+- `backend/src/scorecard/pdf/helpers.ts` — optional `ReportStyle` on six helpers, defaulting to
+  exactly the previous English behaviour, so the internal report is untouched
+- `backend/src/scorecard/scorecard.service.ts` — resolves the locale from the client's contact
+
+**No Dockerfile change was needed.** `COPY assets ./assets/` already ships the fonts directory
+(it was added for Caladea), and `.dockerignore` excludes nothing under `assets/`.
+
+**Not changed, deliberately:** every other file on the 21-item inventory, and the backend strings
+that still surface *on this very page* and inside the Persian PDF — see §7.
 
 ### The 13 strings
 
@@ -102,32 +118,81 @@ fault, and all worth knowing about before writing the next one:
 - `دی` (the Jalali month Dey) is a substring of ordinary Persian words — `قدم‌های بعدی` contains
   it. A Jalali *year* is unambiguous; a Jalali month name is not.
 
+### Item 14 — the client report PDF
+
+1. **Font coverage first, as a gate.** All three Vazirmatn weights checked through fontkit — the
+   same library pdfkit embeds fonts with — for the Persian-specific letters (پ چ ژ گ ک ی) and a
+   full test sentence: **11/11 codepoints, 0 `.notdef`** in Regular, Bold and Light. The two
+   rejected fonts were measured the same way (§7).
+2. **The English report is unchanged, byte-for-byte.** An English PDF was rendered from the
+   *pre-change* build, then again after, and compared: **identical apart from the generation
+   timestamp and the `/ID` derived from it**. This caught a real regression mid-build — measuring
+   text for the new height-aware callouts emitted an extra PDF font operator on the English path
+   and shifted it by 3 bytes. The measurement is now inside the RTL branch.
+3. **Every page of the Persian PDF was rasterised and read**, not merely generated. Confirmed: no
+   empty boxes anywhere; the four secondary passages render in Light and read as quieter asides
+   rather than emphasis; dates and `ICEF` read left-to-right; word order, spacing and the RTL
+   mirroring (bars filling from the right, bullets on the right, columns swapped) are correct.
+   Two layout defects were found and fixed this way — the progress-bar labels were struck through
+   by their own bars (Persian descenders sit lower than Helvetica's), and the philosophy callout
+   overflowed its fixed-height panel because Persian runs longer than the English it replaced.
+4. **14 regression tests** (`client-report.spec.ts`) lock the findings: English category names
+   still match the scoring engine, the English wording is unchanged, an English render embeds no
+   font, no Persian digits and no parentheses appear anywhere in the Persian copy, dates stay
+   Gregorian with Latin numerals, and `padScriptBoundaries` pads only true boundaries. Two of
+   them failed on first run and drove code fixes, so they are known to be capable of failing.
+5. **1265 tests / 105 suites.**
+
 ## 7. Known limitations
 
-**Item 14 — the client report PDF — is BLOCKED, awaiting an owner decision.** The instruction
-was to confirm Calibri's Persian coverage first and stop rather than silently substitute. It
-was rendered through the real pipeline (pdfkit) and inspected as an image. Three findings:
+**The font took three attempts, and the first two failed for different reasons.**
 
-1. **Calibri Regular and Bold are fine.** Full Persian coverage including the Persian-specific
-   letters (پ چ ژ گ), correct right-to-left contextual shaping, zero `.notdef` glyphs.
-2. **Calibri Italic has no Arabic glyphs at all** — 22 of 26 glyphs in a Persian test sentence
-   come back `.notdef` and render as empty boxes. This is not cosmetic: `client-report.ts` uses
-   `FONTS.ITALIC` in **four** places, all carrying real prose (the band meaning, the "every area
-   has room to grow" sentence, the counsellor credential line, the category subtitles). Calibri
-   Italic renders English perfectly — the gap is Arabic-script only.
-3. **Latin inside a Persian string renders reversed.** `تاریخ صدور: 17 August 2026` comes out as
-   `6202 tsuguA 71`, and `ICEF` as `FECI`. pdfkit applies one direction per run and does not do
-   bidi. Wrapping the Latin in `U+200E` (LRM) fixes it; `U+2066`/`U+2069` isolates do **not** —
-   they render as boxes. This matters directly for the "dates stay Gregorian" requirement: the
-   date stays Gregorian, but without LRM it prints backwards.
+| Font | Persian coverage | Verdict |
+|---|---|---|
+| Calibri | Regular/Bold full; **Italic 1 of 11 codepoints** | rejected — italic renders as empty boxes, and it is not redistributable |
+| Carlito | **1 of 11 in every weight** | rejected — a Latin/Greek/Cyrillic face; no Persian at all |
+| **Vazirmatn** | **11 of 11, all weights, 0 `.notdef`** | shipped — SIL OFL, covers Latin too |
 
-There is also a **deployment and licensing** question, separate from the glyphs. Production is
-`node:22-alpine`, which ships no system fonts, and the Dockerfile copies only `assets/`. Calibri
-would have to be committed to the repo — and Calibri is licensed with Windows/Office, not
-redistributable. Note the precedent already in this codebase: `engagement-letter-stamp.ts`
-bundles **Caladea** precisely because it is the metric-compatible libre stand-in for Cambria.
-The equivalent substitution for Calibri would be **Carlito** — but that is the owner's call to
-make, which is why nothing was changed.
+Carlito was the obvious choice on paper: metric-compatible with Calibri, freely redistributable,
+and the exact parallel to the existing Caladea/Cambria precedent in `engagement-letter-stamp.ts`.
+It has no Persian whatsoever. The lesson is that the precedent was about *metrics*, not scripts —
+Caladea has no Persian either. Metric compatibility was moot regardless: this report is set in
+**Helvetica**, not Calibri, so there was no Calibri layout to preserve.
+
+**Persian has no italic**, so the four passages English sets in italic use Vazirmatn **Light**.
+
+### Three rendering defects that only a rendered page would reveal
+
+Each of these passed a type-check and a glyph-coverage check and still produced a wrong document.
+
+1. **Arabic-Indic digits reverse.** `۱۷ اوت ۲۰۲۶` printed as `۷۱ اوت ۶۲۰۲`, and a score of `۱۰۰`
+   as `۰۰۱`. fontkit folds them into the surrounding Arabic run and reverses them with it.
+   **U+200E does not rescue them** — the LRM-wrapped and bare forms render identically. Fixed by
+   keeping every numeral Latin: dates use `fa-IR-u-ca-gregory-nu-latn`, scores stay ASCII.
+2. **One space vanished per line.** pdfkit trims leading whitespace; the RTL reversal moves the
+   string's *last* space into the leading position, where it is eaten — gluing the final two
+   words together (`شماشخصی`). Fixed with a trailing space that gives the trim something
+   expendable. NBSP "fixes" it too, but pins the string into one token so it renders
+   left-to-right — worse.
+3. **Spaces at a script boundary are displaced**, not deleted: `اوت  17صدور:` — two on one side,
+   none on the other. Fixed by doubling the boundary space, restricted to a true Arabic↔Latin
+   boundary so the space inside "Maryam Karimi" is left alone.
+
+**U+200E was implemented, tested and removed.** It was required under Calibri, but with
+Vazirmatn pages rendered with and without it are identical, and it interfered with boundary
+spacing. Keeping an inert safeguard that reads like a working one is worse than not having it;
+`helpers.ts` records the finding where the next person will look.
+
+**Parentheses are unusable in Persian copy here.** pdfkit does not mirror paired punctuation for
+RTL, so `(1 تا 3 سال)` renders with the brackets swapped onto the wrong words. The three strings
+that used them were rewritten with commas. A test enforces this.
+
+### Still English inside the Persian PDF, by design
+
+The scoring engine's advice text — `nextActionContent` (lead-in, heading, bullets), `bandName`
+and `bandRange` — is stored per submission in English only. That is inventory **item 2**, which
+the owner deferred, so a Persian report carries an English recommendation block. `nextActionTextFa`
+exists in the database but holds English ("Persian mirrors English per Fix 9").
 
 **The page still shows English that this phase did not touch — by design.** `/portal/case`
 renders next-step and timeline text supplied by the backend: *"Pay account opening fee"*,
@@ -152,10 +217,26 @@ When verifying, assert **absence as well as presence**, capture the English base
 use exact element text for anything short enough to be a substring of something else. The three
 false failures in §6 all came from skipping one of those.
 
+**For the PDF: render it and look at it.** Every one of the five Persian defects in §7 passed a
+type-check, and three of them passed a glyph-coverage check too. Reversed digits, a swallowed
+space and a callout overflowing its panel are only visible on a rasterised page.
+
+Adding a locale to the report means adding a `ReportCopy` entry and, if the script needs it, a
+font in `fonts.ts`. Keep helper defaults exactly as they are — the English document is asserted
+byte-for-byte, and an unconditional `font()` call is enough to break that.
+
+Do not "improve" the Persian copy by localising the numerals or adding parentheses. Both render
+incorrectly, and both are covered by tests that explain why.
+
 ## 9. Security layers applied
 
-**None needed — this phase moved display strings only.** No endpoint, guard, query or
-permission changed. The page remains a server component reading `/portal/me/case` with the
+**None needed — this phase moved display strings and added a font.** No endpoint, guard, query
+or permission changed. The report locale comes from `Contact.preferredLanguage`, a field that
+already existed and carries no authority: it selects a copy table.
+
+One deliberate choice: the PDF follows the **client's** language, not the downloader's, so a
+staff member fetching a Persian client's report sees exactly the document the client receives.
+The ownership check on that endpoint is unchanged. The page remains a server component reading `/portal/me/case` with the
 cookie-bound session, and the locale comes from the `NEXT_LOCALE` cookie, which carries no
 authority: it selects a message catalogue and nothing else.
 
@@ -165,6 +246,10 @@ the scorecard submission — 0 rows remaining).
 
 ## 10. Rollback instructions
 
-Revert the commit. The 13 literals return to the JSX and the 13 keys leave both catalogues;
-nothing else is affected. No migration ran, no data was written, and no other locale key was
-touched, so there is nothing to unwind in the database.
+Revert the commit. The 13 literals return to the JSX, the 13 keys leave both catalogues, the
+report reverts to English-only and the Vazirmatn files leave `assets/`. No migration ran and no
+data was written, so there is nothing to unwind in the database.
+
+Reverting only the PDF half is also safe: `client-report.ts`, `client-report.copy.ts`,
+`fonts.ts`, the fonts and the `ReportStyle` parameters are self-contained, and the case-page
+change shares nothing with them.
