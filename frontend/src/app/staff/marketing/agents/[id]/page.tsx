@@ -5,6 +5,9 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { AgentActions } from '@/components/staff/marketing/AgentActions';
 import { AgentPortalAccessCard, type PortalAccess } from '@/components/staff/marketing/AgentPortalAccessCard';
+import { AgentRateCard } from '@/components/staff/marketing/AgentRateCard';
+import { AgentHistoryCard } from '@/components/staff/marketing/AgentHistoryCard';
+import { getSession } from '@/lib/auth';
 
 // PR-SCORECARD-2 — Affiliate agent detail.
 
@@ -17,6 +20,12 @@ interface AgentDetail {
   notes: string | null;
   activeLinkCount: number;
   totalLeadCount: number;
+  // PR-AGENT-PORTAL-2
+  commissionRatePercent: number | null;
+  effectiveRatePercent: number;
+  usesCompanyDefault: boolean;
+  verified: boolean;
+  contractState: 'NONE' | 'MANUAL_OVERRIDE' | 'SIGNED';
   links: Array<{
     id: string;
     shortCode: string;
@@ -33,6 +42,9 @@ interface AgentDetail {
 }
 
 export default async function AgentDetailPage({ params }: { params: { id: string } }) {
+  // The rate editor is Owner-only. The server re-checks; this just hides a
+  // control the caller could not use.
+  const session = await getSession();
   let data: AgentDetail | null = null;
   let errorMsg: string | null = null;
   try {
@@ -89,6 +101,16 @@ export default async function AgentDetailPage({ params }: { params: { id: string
       </div>
 
       {/* Band distribution */}
+      {/* PR-AGENT-PORTAL-2 — rate (Owner-editable) and the audit history. */}
+      <AgentRateCard
+        agentId={data.id}
+        ratePercent={data.commissionRatePercent}
+        effectiveRatePercent={data.effectiveRatePercent}
+        usesCompanyDefault={data.usesCompanyDefault}
+        canEdit={session?.role === 'OWNER'}
+      />
+      <AgentHistoryCard agentId={data.id} />
+
       <Card className="mb-6">
         <CardContent>
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#4A4A4A]/60 mb-3">

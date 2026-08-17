@@ -15,6 +15,12 @@ interface AgentRow {
   activeLinkCount: number;
   totalLeadCount: number;
   createdAt: string;
+  // PR-AGENT-PORTAL-2
+  commissionRatePercent: number | null;
+  effectiveRatePercent: number;
+  usesCompanyDefault: boolean;
+  verified: boolean;
+  contractState: 'NONE' | 'MANUAL_OVERRIDE' | 'SIGNED';
 }
 
 type SearchParams = { status?: string; q?: string };
@@ -84,6 +90,12 @@ export default async function AgentsListPage({
                     <th className="px-4 py-3 text-left">Name</th>
                     <th className="px-4 py-3 text-left">Email</th>
                     <th className="px-4 py-3 text-left">Status</th>
+                    {/* PR-AGENT-PORTAL-2 — the three things that previously
+                        required opening every agent, and in the rate's case
+                        could not be seen at all. */}
+                    <th className="px-4 py-3 text-left">Rate</th>
+                    <th className="px-4 py-3 text-left">Verified</th>
+                    <th className="px-4 py-3 text-left">Contract</th>
                     <th className="px-4 py-3 text-left">Active links</th>
                     <th className="px-4 py-3 text-left">Total leads</th>
                     <th className="px-4 py-3 text-right">Action</th>
@@ -95,6 +107,24 @@ export default async function AgentsListPage({
                       <td className="px-4 py-3 font-semibold text-[#1E3A5F]">{r.fullName}</td>
                       <td className="px-4 py-3 text-[#4A4A4A] truncate max-w-[200px]">{r.email ?? '—'}</td>
                       <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                      <td className="px-4 py-3 font-mono text-[#1E3A5F]">
+                        {r.effectiveRatePercent}%
+                        {r.usesCompanyDefault && (
+                          <span className="ml-1 text-[10px] font-sans text-[#4A4A4A]/50">default</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.verified
+                          ? <span className="text-xs font-semibold text-emerald-700">Verified</span>
+                          : <span className="text-xs text-[#4A4A4A]/50">Not verified</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.contractState === 'NONE'
+                          ? <span className="text-xs text-[#4A4A4A]/50">None</span>
+                          : r.contractState === 'MANUAL_OVERRIDE'
+                            ? <span className="text-xs font-semibold text-amber-700">Manually cleared</span>
+                            : <span className="text-xs font-semibold text-emerald-700">Signed</span>}
+                      </td>
                       <td className="px-4 py-3 font-mono text-[#1E3A5F]">{r.activeLinkCount}</td>
                       <td className="px-4 py-3 font-mono text-[#1E3A5F]">{r.totalLeadCount}</td>
                       <td className="px-4 py-3 text-right">

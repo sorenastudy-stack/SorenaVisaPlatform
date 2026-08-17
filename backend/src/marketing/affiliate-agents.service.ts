@@ -5,6 +5,7 @@ import {
 import { AffiliateAgentStatus, Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AGENT_COMMISSION_RATE_PERCENT } from '../commissions/agent-payables.service';
 import {
   CreateAffiliateAgentDto, UpdateAffiliateAgentDto,
 } from './dto/marketing.dto';
@@ -38,6 +39,22 @@ export interface AgentListItem {
   totalLeadCount: number;
   createdAt: string;
   updatedAt: string;
+  // PR-AGENT-PORTAL-2 — the three things an Owner previously had to open each
+  // agent to discover, and in the rate's case could not discover at all.
+  /** Null = no per-agent rate; the company default applies. NOT the same as 0. */
+  commissionRatePercent: number | null;
+  /** The rate actually used when a payable is derived, default included. */
+  effectiveRatePercent: number;
+  usesCompanyDefault: boolean;
+  verified: boolean;
+  /**
+   * 'SIGNED' is unreachable today — nothing can set contractSignedAt except the
+   * Owner override, which also sets contractIsManualOverride. It is derived
+   * honestly anyway rather than collapsed into MANUAL_OVERRIDE, because phase 3
+   * writes exactly that state and a UI that had been told overrides and
+   * signatures look identical would then be wrong about real contracts.
+   */
+  contractState: 'NONE' | 'MANUAL_OVERRIDE' | 'SIGNED';
 }
 
 /** PR-AGENT-PORTAL phase 1 — whether this agent can actually use the portal,
@@ -66,6 +83,44 @@ export interface AgentDetail extends AgentListItem {
     createdAt: string;
   }>;
   bandDistribution: Record<string, number>;
+}
+
+export interface AgentHistoryEntry {
+  id: string;
+  eventType: string;
+  at: string;
+  actorName: string | null;
+  actorRole: string | null;
+  /** Plain-English line for the Owner. Derived, never stored. */
+  summary: string;
+}
+
+// One readable sentence per audit row. Kept out of the UI so the wording is the
+// same wherever the history is shown, and so a screen never has to understand
+// the shape of a JSON payload it did not write.
+function summariseAgentEvent(eventType: string | null, oldValue: unknown, newValue: unknown): string {
+  const n = (newValue ?? {}) as Record<string, unknown>;
+  const o = (oldValue ?? {}) as Record<string, unknown>;
+  const pct = (v: unknown) => (v === null || v === undefined ? 'the company default' : `${v}%`);
+
+  switch (eventType) {
+    case 'AFFILIATE_AGENT_CREATED':
+      return 'Agent created.';
+    case 'AFFILIATE_AGENT_UPDATED': {
+      const fields = Array.isArray(n.changedFields) ? (n.changedFields as string[]) : [];
+      return fields.length ? `Details updated: ${fields.join(', ')}.` : 'Details updated.';
+    }
+    case 'AFFILIATE_AGENT_STATUS_CHANGED':
+      return `Status changed to ${String(n.status ?? n.to ?? 'unknown')}.`;
+    case 'AFFILIATE_AGENT_RATE_CHANGED':
+      return `Commission rate changed from ${pct(o.ratePercent ?? n.previousRatePercent)} to ${pct(n.ratePercent)}.`;
+    case 'AGENT_CONTRACT_MANUALLY_CLEARED':
+      return `Contract manually cleared${n.reason ? ` — “${String(n.reason)}”` : ''}.`;
+    case 'AFFILIATE_AGENT_DELETED':
+      return 'Agent deleted.';
+    default:
+      return eventType ? eventType.replace(/_/g, ' ').toLowerCase() : 'Change recorded.';
+  }
 }
 
 @Injectable()
@@ -106,6 +161,13 @@ export class AffiliateAgentsService {
       totalLeadCount: r._count.attributedLeads,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
+      commissionRatePercent: r.commissionRatePercent,
+      effectiveRatePercent: r.commissionRatePercent ?? AGENT_COMMISSION_RATE_PERCENT,
+      usesCompanyDefault: r.commissionRatePercent === null,
+      verified: !!r.verifiedAt,
+      contractState: (!r.contractSignedAt
+        ? 'NONE'
+        : r.contractIsManualOverride ? 'MANUAL_OVERRIDE' : 'SIGNED') as 'NONE' | 'MANUAL_OVERRIDE' | 'SIGNED',
     }));
   }
 
@@ -140,6 +202,13 @@ export class AffiliateAgentsService {
     }
 
     return {
+      commissionRatePercent: row.commissionRatePercent,
+      effectiveRatePercent: row.commissionRatePercent ?? AGENT_COMMISSION_RATE_PERCENT,
+      usesCompanyDefault: row.commissionRatePercent === null,
+      verified: !!row.verifiedAt,
+      contractState: (!row.contractSignedAt
+        ? 'NONE'
+        : row.contractIsManualOverride ? 'MANUAL_OVERRIDE' : 'SIGNED') as 'NONE' | 'MANUAL_OVERRIDE' | 'SIGNED',
       id: row.id,
       fullName: row.fullName,
       email: row.email,
@@ -361,6 +430,104 @@ export class AffiliateAgentsService {
    * OWNER only — enforced at the controller and re-checked here, so the rule
    * does not depend on the route shape.
    */
+  // PR-AGENT-PORTAL-2 — this agent's history, read from the audit rows that
+  // already exist. No new storage: every one of these events was already being
+  // written and simply had nowhere to be seen.
+  //
+  // Deliberately NOT the whole audit log filtered by hand in the UI — the query
+  // is scoped to this entity server-side, so a screen cannot accidentally widen
+  // it. Read-only, and Owner/admin-tier by virtue of the controller.
+  async history(id: string): Promise<AgentHistoryEntry[]> {
+    const agent = await this.prisma.affiliateAgent.findUnique({ where: { id }, select: { id: true } });
+    if (!agent) throw new NotFoundException('Affiliate agent not found.');
+
+    const rows = await this.prisma.auditLog.findMany({
+      where: { entityType: 'AFFILIATE_AGENT', entityId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true, eventType: true, createdAt: true,
+        actorNameSnapshot: true, actorRoleSnapshot: true,
+        oldValue: true, newValue: true,
+      },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      eventType: r.eventType ?? 'UNKNOWN',
+      at: r.createdAt.toISOString(),
+      actorName: r.actorNameSnapshot,
+      actorRole: r.actorRoleSnapshot,
+      summary: summariseAgentEvent(r.eventType, r.oldValue, r.newValue),
+    }));
+  }
+
+  // PR-AGENT-PORTAL-2 — set (or clear) an agent's commission rate.
+  //
+  // OWNER only, re-checked HERE and not merely at the controller: this is the
+  // field that decides what a person is paid, and a role check that lives only
+  // in a decorator is one refactor away from being dropped. Same belt-and-braces
+  // as clearContract above.
+  //
+  // NULL CLEARS, and that is deliberate and different from 0. Null means "no
+  // per-agent rate — use the company default"; 0 means "we agreed nothing". The
+  // payables deriver already reads `commissionRatePercent ?? AGENT_COMMISSION_
+  // RATE_PERCENT`, so clearing restores the fallback exactly.
+  //
+  // NOT retroactive. AgentPayable snapshots the rate at derivation, so changing
+  // it here never restates what an agent has already been told they are owed —
+  // the same principle the payables ledger was built on.
+  async setRate(id: string, ratePercent: number | null | undefined, actor: Actor): Promise<AgentDetail> {
+    if (actor.role !== 'OWNER') {
+      throw new ForbiddenException('Only the Owner can change an agent commission rate.');
+    }
+
+    const next = ratePercent === undefined || ratePercent === null ? null : Number(ratePercent);
+    if (next !== null) {
+      // Bounds are enforced at the DTO too; repeated here because this method is
+      // reachable from any future caller, not only that one HTTP route.
+      if (!Number.isFinite(next) || next < 0 || next > 100) {
+        throw new BadRequestException('Rate must be between 0 and 100 percent.');
+      }
+    }
+
+    const existing = await this.prisma.affiliateAgent.findUnique({
+      where: { id },
+      select: { id: true, fullName: true, commissionRatePercent: true },
+    });
+    if (!existing) throw new NotFoundException('Affiliate agent not found.');
+
+    const previous = existing.commissionRatePercent;
+    if (previous === next) return this.get(id);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.affiliateAgent.update({ where: { id }, data: { commissionRatePercent: next } });
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId,
+          action: 'UPDATE',
+          eventType: 'AFFILIATE_AGENT_RATE_CHANGED',
+          entityType: 'AFFILIATE_AGENT',
+          entityId: id,
+          // Old AND new, so the trail answers "what did it used to be" without
+          // replaying every prior row.
+          oldValue: { ratePercent: previous } as Prisma.InputJsonValue,
+          newValue: {
+            agentId: id,
+            agentName: existing.fullName,
+            ratePercent: next,
+            previousRatePercent: previous,
+            usesCompanyDefault: next === null,
+          } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name ?? null,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+    });
+
+    return this.get(id);
+  }
+
   async clearContract(id: string, reason: string, actor: Actor): Promise<AgentDetail> {
     if (actor.role !== 'OWNER') {
       throw new ForbiddenException('Only the Owner can clear an agent contract.');

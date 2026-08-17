@@ -126,10 +126,13 @@ would have left the second half untested until the phase that depends on it. The
 column that can be set without a contract existing, which is why it is flagged, reasoned,
 attributed and audited rather than silently set.
 
-**`EngagementPaidGuard` says the wrong thing to an agent.** The 403 above reads *"Your full
-access opens once we confirm your payment"* — accurate for a client, meaningless to an
-agent who will never have a payment. Not a leak and not this phase's surface, but the words
-are wrong for the caller now receiving them.
+**~~`EngagementPaidGuard` says the wrong thing to an agent.~~ RESOLVED in `97cdd00`,** after
+this doc was written. The guard is now role-aware: an AGENT gets *"This is a client area.
+Your agent dashboard is at /agent."* and only a client sees the payment wording.
+
+Left visible rather than deleted because this stale paragraph was later quoted as a current
+finding in a state-check — the code had been fixed and the doc had not. A limitations list
+records the state at the time of writing, so read it against the code before repeating it.
 
 **`AgentProfile` is still dead.** 0 rows, no code references, semantics from a different
 idea (agency counsellor, not affiliate). Deliberately not reused here — reusing a dead

@@ -15,6 +15,7 @@ import {
   TrackingLinkStatus,
   UpdateAffiliateAgentDto,
 } from './dto/marketing.dto';
+import { SetAgentRateDto } from './dto/set-agent-rate.dto';
 import { ClearAgentContractDto } from './dto/clear-agent-contract.dto';
 
 // PR-SCORECARD-2 — Staff-facing marketing endpoints.
@@ -49,6 +50,12 @@ export class MarketingController {
     return this.agents.get(id);
   }
 
+  // PR-AGENT-PORTAL-2 — the agent's own audit trail, read-only.
+  @Get('agents/:id/history')
+  agentHistory(@Param('id') id: string) {
+    return this.agents.history(id);
+  }
+
   @Post('agents')
   createAgent(@Body() dto: CreateAffiliateAgentDto, @Req() req: any) {
     return this.agents.create(dto, this.actor(req));
@@ -70,6 +77,19 @@ export class MarketingController {
     @Req() req: any,
   ) {
     return this.agents.changeStatus(id, dto.status, this.actor(req));
+  }
+
+  // PR-AGENT-PORTAL-2 — set or clear the agent's commission rate.
+  // OWNER only (the service re-checks), bounds-validated by the DTO, and audited
+  // as AFFILIATE_AGENT_RATE_CHANGED with the old value alongside the new.
+  @Patch('agents/:id/rate')
+  @Roles('OWNER')
+  setAgentRate(
+    @Param('id') id: string,
+    @Body() dto: SetAgentRateDto,
+    @Req() req: any,
+  ) {
+    return this.agents.setRate(id, dto.ratePercent ?? null, this.actor(req));
   }
 
   // PR-AGENT-PORTAL phase 1 — mark an agent as under contract without one.
