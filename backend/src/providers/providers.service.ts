@@ -17,6 +17,7 @@ import {
 } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { UploadScanService } from '../common/antivirus/upload-scan.service';
 import { EventsService, EventSource } from '../events/events.service';
 import { ProgrammeImportService } from './import/programme-import.service';
 import { providerTypeFor } from './import/programme-import.logic';
@@ -44,6 +45,8 @@ export class ProvidersService {
     private programmeImport: ProgrammeImportService,
     private catalogSync: CatalogSyncService,
     private r2: R2Service,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   // PR-EXPLORE (Round 2) — Owner-uploaded programme cover image, shown on the
@@ -71,6 +74,17 @@ export class ProvidersService {
     });
     if (!programme) throw new NotFoundException('Programme not found.');
 
+    // PR-AV slice 2 — scan before the bytes reach R2. Images only, so no
+    // blockOfficeMacros. Note this key is deterministic per programme: an
+    // accepted upload OVERWRITES the previous cover, which is one more reason
+    // an infected file must never get this far.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     actorId,
+      surface:    'PROGRAMME_COVER_IMAGE_UPLOAD',
+      entityType: 'EDUCATION_PROGRAMME',
+      entityId:   programmeId,
+    });
+
     const ext = file.mimetype === 'image/png' ? 'png' : file.mimetype === 'image/webp' ? 'webp' : 'jpg';
     const key = `programme-covers/${programme.providerId}/${programmeId}.${ext}`;
     await this.r2.putObject(key, file.buffer, file.mimetype);
@@ -96,10 +110,29 @@ export class ProvidersService {
   // PR-CATALOG-1 — Owner-panel Excel import for ONE institution. Runs the shared
   // importer with a fixed providerId → all programmes land PENDING, source
   // MANUAL_EXCEL, invisible to students until per-programme approval.
-  async importProgrammes(providerId: string, file: { buffer?: Buffer; originalname?: string } | undefined, dryRun: boolean) {
+  async importProgrammes(
+    providerId: string,
+    file: { buffer?: Buffer; originalname?: string; mimetype?: string; size?: number } | undefined,
+    dryRun: boolean,
+    actorId: string | null = null,
+  ) {
     if (!file?.buffer) throw new BadRequestException('No file uploaded.');
     const provider = await this.prisma.educationProvider.findUnique({ where: { id: providerId }, select: { id: true, institutionType: true } });
     if (!provider) throw new NotFoundException('Institution not found.');
+
+    // PR-AV slice 2 — scan before the workbook is parsed, on dry runs too: a
+    // preview still opens the file. This sits OUTSIDE the try below on purpose —
+    // that catch turns any error into "Could not read the spreadsheet", which
+    // would quietly downgrade a scanner outage into a 400 about file format and
+    // lose the fail-closed signal entirely.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     actorId,
+      surface:    'PROGRAMME_IMPORT_UPLOAD',
+      entityType: 'EDUCATION_PROVIDER',
+      entityId:   providerId,
+      blockOfficeMacros: true,
+    });
+
     try {
       return await this.programmeImport.importFromXlsx(file.buffer, {
         institutionType: provider.institutionType ?? 'ITP',

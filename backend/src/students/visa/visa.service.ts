@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { DeclarationAcceptanceService } from '../../common/declaration-acceptance.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { decryptPiiFields } from '../admission/admission-encryption.util';
 import { isValidCountryCode } from '../../common/country-codes';
@@ -247,6 +248,8 @@ export class VisaService {
     private prisma: PrismaService,
     private crypto: CryptoService,
     private declarations: DeclarationAcceptanceService,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   // ── Auth helper — same shape as AdmissionService.resolveContactAndCase ──
@@ -3229,13 +3232,21 @@ export class VisaService {
       );
     }
 
-    // Move pending → final dir. The pending sweep in main.ts deletes
-    // anything left behind in PENDING_DIR older than 1 h, so a crash
-    // between multer write and this rename self-heals.
+    // PR-AV slice 2 — scan before these bytes touch the disk. memoryStorage
+    // means nothing has been written yet, so a rejection leaves no temp file
+    // behind and no sweep is needed to tidy up after one.
+    await this.uploadScan.scanOrReject(file, {
+      userId,
+      surface:    'STUDENT_VISA_SUPPORTING_DOCUMENT_UPLOAD',
+      entityType: 'VisaApplication',
+      entityId:   visa.id,
+    });
+
     const destDir = path.join(UPLOAD_DIR, 'visa-supporting', visa.id);
     await fs.promises.mkdir(destDir, { recursive: true });
-    const destPath = path.join(destDir, path.basename(file.path));
-    await fs.promises.rename(file.path, destPath);
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const destPath = path.join(destDir, `${unique}${path.extname(file.originalname)}`);
+    await fs.promises.writeFile(destPath, file.buffer);
 
     // Find-or-create the parent requirement. The UNIQUE constraint on
     // (visaApplicationId, documentType) means a concurrent create
@@ -3413,10 +3424,19 @@ export class VisaService {
       throw new NotFoundException('Entry not found');
     }
 
+    // PR-AV slice 2 — scan before these bytes touch the disk.
+    await this.uploadScan.scanOrReject(file, {
+      userId,
+      surface:    'STUDENT_VISA_OTHER_EVIDENCE_UPLOAD',
+      entityType: 'VisaOtherEvidenceEntry',
+      entityId:   entry.id,
+    });
+
     const destDir = path.join(UPLOAD_DIR, 'visa-other-evidence', visa.id);
     await fs.promises.mkdir(destDir, { recursive: true });
-    const destPath = path.join(destDir, path.basename(file.path));
-    await fs.promises.rename(file.path, destPath);
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const destPath = path.join(destDir, `${unique}${path.extname(file.originalname)}`);
+    await fs.promises.writeFile(destPath, file.buffer);
 
     const childFile = await this.prisma.visaOtherEvidenceFile.create({
       data: {

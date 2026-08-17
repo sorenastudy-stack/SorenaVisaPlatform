@@ -17,9 +17,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { diskStorage } from 'multer';
-import * as fs from 'fs';
-import * as path from 'path';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { EngagementPaidGuard } from '../../common/guards/engagement-paid.guard';
@@ -40,17 +38,17 @@ import {
 } from './dto/supporting-documents-2.dto';
 
 // PR-FILES-1 — multer config mirrors the admission upload pattern
-// (admission.controller.ts:39-59). Disk storage lands the file in
-// PENDING_DIR with a random filename; the boot-time pending sweep
-// in main.ts removes any pending file older than 1 h. The 10 MB
-// size cap + PDF / JPEG / PNG allowlist match the DTO-level limits
-// declared in supporting-documents.dto.ts and matches the page-1
-// guidance copy in the UI. Security-layer hooks (see also the
-// service file): layer 7 (size limit + type allowlist + random
-// filename), enforced at the multer boundary so a rejected file
+// (admission.controller.ts). The 10 MB size cap + PDF / JPEG / PNG
+// allowlist match the DTO-level limits declared in
+// supporting-documents.dto.ts and the page-1 guidance copy in the UI.
+// Security-layer hooks (see also the service file): layer 7 (size limit
+// + type allowlist), enforced at the multer boundary so a rejected file
 // never even reaches the service.
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
-const PENDING_DIR = path.join(UPLOAD_DIR, 'pending');
+//
+// PR-AV slice 2 — storage is memoryStorage now. The file no longer lands
+// in PENDING_DIR first, so there is nothing for the boot-time pending
+// sweep to reclaim and no window where unscanned bytes sit on disk; the
+// service writes to the final location only after a clean verdict.
 
 const VISA_ALLOWED_MIMES = [
   'application/pdf',
@@ -59,16 +57,8 @@ const VISA_ALLOWED_MIMES = [
 ];
 
 const visaMulterOptions = {
-  storage: diskStorage({
-    destination: (_req: any, _file: any, cb: any) => {
-      fs.mkdirSync(PENDING_DIR, { recursive: true });
-      cb(null, PENDING_DIR);
-    },
-    filename: (_req: any, file: any, cb: any) => {
-      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      cb(null, `${unique}${path.extname(file.originalname)}`);
-    },
-  }),
+  // PR-AV slice 2 — memoryStorage, so nothing is written before it is scanned.
+  storage: memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req: any, file: any, cb: any) => {
     if (VISA_ALLOWED_MIMES.includes(file.mimetype)) {

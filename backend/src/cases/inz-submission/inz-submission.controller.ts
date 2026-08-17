@@ -13,9 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import * as fs from 'fs';
-import * as path from 'path';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -41,8 +39,6 @@ import { CaseAccessGuard, CaseParam } from '../case-access.guard';
 // All four routes use req.user?.userId ?? req.user?.id per the
 // PR-LIA-d95640d fix (the JWT strategy populates `userId`, not `id`).
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
-const PENDING_DIR = path.join(UPLOAD_DIR, 'pending');
 
 const ALLOWED_RECEIPT_MIMES = [
   'application/pdf',
@@ -53,16 +49,8 @@ const ALLOWED_RECEIPT_MIMES = [
 ];
 
 const multerOptions = {
-  storage: diskStorage({
-    destination: (_req: any, _file: any, cb: any) => {
-      fs.mkdirSync(PENDING_DIR, { recursive: true });
-      cb(null, PENDING_DIR);
-    },
-    filename: (_req: any, file: any, cb: any) => {
-      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      cb(null, `${unique}${path.extname(file.originalname)}`);
-    },
-  }),
+  // PR-AV slice 2 — memoryStorage, so nothing is written before it is scanned.
+  storage: memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req: any, file: any, cb: any) => {
     if (ALLOWED_RECEIPT_MIMES.includes(file.mimetype)) {

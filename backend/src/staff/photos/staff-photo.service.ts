@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import { R2Service } from '../../common/r2/r2.service';
 
 // PR-STAFF-PHOTOS — staff profile photos on Cloudflare R2 (the persistent,
@@ -45,6 +46,8 @@ export class StaffPhotoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly r2: R2Service,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   // Presigned GET url for a stored key (null when there's no photo). Signing is
@@ -61,7 +64,7 @@ export class StaffPhotoService {
 
   // ── Self-service (own JWT only) ──────────────────────────────────────────
   async uploadOwnPhoto(userId: string, file: Express.Multer.File | undefined) {
-    return this.store(userId, file);
+    return this.store(userId, file, userId);
   }
 
   async deleteOwnPhoto(userId: string) {
@@ -70,7 +73,7 @@ export class StaffPhotoService {
 
   // ── Admin (role-gated by the controller) — audited ───────────────────────
   async uploadPhotoForUser(targetUserId: string, file: Express.Multer.File | undefined, actor: Actor) {
-    const res = await this.store(targetUserId, file);
+    const res = await this.store(targetUserId, file, actor.id);
     await this.auditAdmin('STAFF_PHOTO_UPDATED_BY_ADMIN', targetUserId, actor);
     return res;
   }
@@ -82,7 +85,10 @@ export class StaffPhotoService {
   }
 
   // ── Internals ────────────────────────────────────────────────────────────
-  private async store(userId: string, file: Express.Multer.File | undefined) {
+  // uploaderId is who to attribute a refusal to — the same person for a
+  // self-upload, the admin for an admin-upload. Attributing an admin's rejected
+  // file to the staff member it was being set on would misread the audit trail.
+  private async store(userId: string, file: Express.Multer.File | undefined, uploaderId: string) {
     if (!file || !file.buffer) {
       throw new BadRequestException('An image file is required.');
     }
@@ -98,6 +104,15 @@ export class StaffPhotoService {
       select: { id: true, photoKey: true },
     });
     if (!existing) throw new NotFoundException('Staff member not found.');
+
+    // PR-AV slice 2 — scan before the bytes reach R2. Images only, so no
+    // blockOfficeMacros: the whitelist above admits no Office format at all.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     uploaderId,
+      surface:    'STAFF_PHOTO_UPLOAD',
+      entityType: 'User',
+      entityId:   userId,
+    });
 
     const key = `staff-photos/${userId}/${randomBytes(16).toString('hex')}${extFromMime(file.mimetype)}`;
     await this.r2.putObject(key, file.buffer, file.mimetype);

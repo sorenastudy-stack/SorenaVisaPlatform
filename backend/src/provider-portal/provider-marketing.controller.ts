@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -15,6 +16,15 @@ import { ProviderMarketingService } from './provider-marketing.service';
 // nothing and 404s.
 const UPLOAD_LIMIT = { default: { ttl: 60_000, limit: 12 } };
 
+// PR-AV slice 2 — an explicit cap at the multipart boundary, matching the 20 MB
+// the service already enforces. Without it multer would buffer the whole body
+// into memory before the service ever got to complain about the size, and the
+// scanner would be handed bytes no cap had bounded.
+const MARKETING_UPLOAD = {
+  storage: memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+};
+
 @Controller('provider/marketing')
 @UseGuards(JwtAuthGuard, RolesGuard, ProviderAccessGuard)
 @Roles('PROVIDER')
@@ -28,7 +38,7 @@ export class ProviderMarketingController {
 
   @Post()
   @Throttle(UPLOAD_LIMIT)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', MARKETING_UPLOAD))
   upload(@Req() req: any, @UploadedFile() file: any, @Body('label') label?: string) {
     return this.service.upload(file, label, this.actor(req));
   }

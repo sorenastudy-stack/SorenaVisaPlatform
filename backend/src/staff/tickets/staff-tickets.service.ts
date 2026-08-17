@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { R2Service } from '../../common/r2/r2.service';
 import {
@@ -138,6 +139,8 @@ export class StaffTicketsService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly r2: R2Service,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   // ─── Read: list ─────────────────────────────────────────────────────
@@ -642,6 +645,15 @@ export class StaffTicketsService {
     if (file.size > ATTACH_MAX_BYTES) {
       throw new BadRequestException(`File is too large (max ${ATTACH_MAX_BYTES / (1024 * 1024)} MB).`);
     }
+
+    // PR-AV slice 2 — scan before the bytes reach R2. Image/PDF only, so no
+    // blockOfficeMacros: the whitelist above admits no Office format at all.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     actor.id,
+      surface:    'TICKET_ATTACHMENT_UPLOAD',
+      entityType: 'VisaSupportTicket',
+      entityId:   ticket.id,
+    });
 
     const key = `ticket-attachments/${ticket.id}/${randomBytes(16).toString('hex')}${attachExt(file.mimetype)}`;
     await this.r2.putObject(key, file.buffer, file.mimetype);

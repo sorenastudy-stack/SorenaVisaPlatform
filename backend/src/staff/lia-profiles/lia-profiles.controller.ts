@@ -13,9 +13,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
-import { diskStorage } from 'multer';
-import * as fs from 'fs';
-import * as path from 'path';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -34,8 +32,6 @@ import { UpdateLicenceNumberDto } from './dto/lia-profile.dto';
 // No userId in path/query/body on these routes — there is nothing to
 // attack to read or write another LIA's profile.
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
-const PENDING_DIR = path.join(UPLOAD_DIR, 'pending');
 // PR-DOCUSIGN-1 (scope widening): IAA licence accepts a PDF or a
 // register-page screenshot (PNG / JPG). 10 MB size cap unchanged.
 // Must mirror the service-side allowlist — service re-validates
@@ -43,16 +39,8 @@ const PENDING_DIR = path.join(UPLOAD_DIR, 'pending');
 const ALLOWED_LICENCE_MIMES = ['application/pdf', 'image/png', 'image/jpeg'];
 
 const licenceFileMulterOptions = {
-  storage: diskStorage({
-    destination: (_req: any, _file: any, cb: any) => {
-      fs.mkdirSync(PENDING_DIR, { recursive: true });
-      cb(null, PENDING_DIR);
-    },
-    filename: (_req: any, file: any, cb: any) => {
-      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      cb(null, `${unique}${path.extname(file.originalname)}`);
-    },
-  }),
+  // PR-AV slice 2 — memoryStorage, so nothing is written before it is scanned.
+  storage: memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req: any, file: any, cb: any) => {
     if (ALLOWED_LICENCE_MIMES.includes(file.mimetype)) {

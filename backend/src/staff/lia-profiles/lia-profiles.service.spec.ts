@@ -124,9 +124,11 @@ async function cleanupLia(prisma: PrismaClient, lia: SeededLia) {
   await prisma.user.delete({ where: { id: lia.userId } });
 }
 
-// Construct a real on-disk file in PENDING_DIR and return a synthetic
-// Multer file descriptor pointing at it. Mirrors the shape Multer
-// hands the controller after disk-storage diskStorage().
+// Return a synthetic Multer file descriptor. Mirrors the shape Multer
+// hands the controller under memoryStorage() — `buffer` is what the
+// service actually writes now (PR-AV slice 2); the on-disk copy in
+// PENDING_DIR is left in place only so the older path assertions below
+// keep their fixture.
 //
 // PR-DOCUSIGN-1 (scope widening): parametrised so a test can drive a
 // PDF / PNG / JPG payload through the same helper. Defaults reproduce
@@ -138,11 +140,12 @@ async function makePendingFile(
   const mime = opts.mime ?? 'application/pdf';
   const ext = opts.ext ?? '.pdf';
   const size = opts.size ?? 2048;
-  await fs.promises.mkdir(PENDING_DIR, { recursive: true });
   const basename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+  // PR-AV slice 2 — memoryStorage: nothing is written to PENDING_DIR any more,
+  // so the fixture stops writing one too. `path` is kept on the descriptor only
+  // because Express.Multer.File declares it; the service never reads it.
   const fullPath = path.join(PENDING_DIR, basename);
-  const buf = Buffer.alloc(size, 0x42);  // arbitrary content; never read
-  await fs.promises.writeFile(fullPath, buf);
+  const buf = Buffer.alloc(size, 0x42);
   return {
     fieldname:    'file',
     originalname: `licence-${stamp}${ext}`,
@@ -166,7 +169,13 @@ describe('LiaProfilesService (PR-DOCUSIGN-1 step 3 — C3)', () => {
   beforeAll(async () => {
     prisma = new PrismaClient();
     await prisma.$connect();
-    service = new LiaProfilesService(prisma as unknown as PrismaService);
+    // PR-AV slice 2 — the service now scans before writing. A clean-verdict
+    // stub keeps these tests about scoping and licence state; the real
+    // scan-or-reject behaviour is covered by the EICAR route matrix.
+    service = new LiaProfilesService(
+      prisma as unknown as PrismaService,
+      { scanOrReject: async () => undefined } as any,
+    );
   });
 
   afterAll(async () => {
@@ -248,7 +257,10 @@ describe('LiaProfilesService (PR-DOCUSIGN-1 step 3 — C3)', () => {
       expect(fs.existsSync(row!.iaaLicenceFileUrl!)).toBe(true);
 
       // The original pending file is gone
-      expect(fs.existsSync(file.path)).toBe(false);
+      // The pending temp file this once asserted was consumed no longer exists
+      // to consume — memoryStorage never creates one. What matters now is that
+      // the STORED file holds the uploaded bytes, which is asserted directly.
+      expect(fs.readFileSync(row!.iaaLicenceFileUrl!).length).toBe(file.size);
 
       // Audit row written
       const audit = await prisma.auditLog.findMany({
@@ -300,7 +312,10 @@ describe('LiaProfilesService (PR-DOCUSIGN-1 step 3 — C3)', () => {
         new RegExp(`lia-licences[\\\\/]${lia.userId}[\\\\/].*\\.png$`),
       );
       expect(fs.existsSync(row!.iaaLicenceFileUrl!)).toBe(true);
-      expect(fs.existsSync(file.path)).toBe(false);
+      // The pending temp file this once asserted was consumed no longer exists
+      // to consume — memoryStorage never creates one. What matters now is that
+      // the STORED file holds the uploaded bytes, which is asserted directly.
+      expect(fs.readFileSync(row!.iaaLicenceFileUrl!).length).toBe(file.size);
 
       const audit = await prisma.auditLog.findMany({
         where: {

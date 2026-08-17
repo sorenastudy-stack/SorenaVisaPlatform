@@ -9,6 +9,7 @@ import { LiaProfile, Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { RejectLicenceDto, UpdateLicenceNumberDto } from './dto/lia-profile.dto';
 
@@ -85,7 +86,11 @@ export interface LiaProfileResponse {
 export class LiaProfilesService {
   private readonly logger = new Logger(LiaProfilesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
+  ) {}
 
   // ─── E1 — GET /staff/lia-profile/me ───────────────────────────────────
 
@@ -221,13 +226,11 @@ export class LiaProfilesService {
       throw new BadRequestException('Licence PDF file is required.');
     }
     if (!ALLOWED_LICENCE_MIMES.has(file.mimetype)) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         `Unsupported file type "${file.mimetype}". Only PDF is allowed.`,
       );
     }
     if (file.size > MAX_LICENCE_BYTES) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         `Licence file is ${file.size} bytes; maximum is ${MAX_LICENCE_BYTES}.`,
       );
@@ -235,24 +238,21 @@ export class LiaProfilesService {
 
     const existing = await this.findOrCreateOwn(userId);
 
+    // PR-AV slice 2 — scan before these bytes touch the disk. memoryStorage
+    // means the checks above have no temp file left to clean up either.
+    await this.uploadScan.scanOrReject(file, {
+      userId,
+      surface:    'LIA_LICENCE_FILE_UPLOAD',
+      entityType: 'LiaProfile',
+      entityId:   existing.id ?? userId,
+    });
+
     const destDir = path.join(LIA_LICENCE_DIR, userId);
     await fs.promises.mkdir(destDir, { recursive: true });
     const ext = path.extname(file.originalname) || extFromMime(file.mimetype);
     const destBasename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
     const destPath = path.join(destDir, destBasename);
-
-    try {
-      await fs.promises.rename(file.path, destPath);
-    } catch (err: any) {
-      // EXDEV — cross-device rename. Fall back to copy + unlink.
-      if (err?.code === 'EXDEV') {
-        await fs.promises.copyFile(file.path, destPath);
-        this.unlinkSilently(file.path);
-      } else {
-        this.unlinkSilently(file.path);
-        throw err;
-      }
-    }
+    await fs.promises.writeFile(destPath, file.buffer);
 
     const priorFileUrl = existing.iaaLicenceFileUrl;
     const replacedPrior = priorFileUrl !== null;

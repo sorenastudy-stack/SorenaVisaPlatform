@@ -15,6 +15,11 @@ jest.setTimeout(60000);
 
 const events: any = { emit: jest.fn().mockResolvedValue(undefined) };
 
+// PR-AV slice 2 — ProvidersService now scans uploads. These tests exercise
+// status/scholarship paths that upload nothing, so a clean-verdict stub keeps
+// them focused; the real gate is proven by the EICAR route matrix.
+const scanStub: any = { scanOrReject: async () => undefined };
+
 describe('ProviderScholarship CRUD + gating', () => {
   let prisma: PrismaClient;
   let svc: ProvidersService;
@@ -24,7 +29,7 @@ describe('ProviderScholarship CRUD + gating', () => {
     await prisma.$connect();
     // scholarship methods use neither the importer, the web-sync service, nor R2
     // (PR-EXPLORE added R2 for programme cover images) → stub them all.
-    svc = new ProvidersService(prisma as any, events, {} as any, {} as any, {} as any);
+    svc = new ProvidersService(prisma as any, events, {} as any, {} as any, {} as any, scanStub);
   }, 60000);
 
   afterAll(async () => { await prisma.$disconnect(); });

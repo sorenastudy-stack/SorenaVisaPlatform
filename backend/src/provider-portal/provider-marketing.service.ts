@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { EventSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { UploadScanService } from '../common/antivirus/upload-scan.service';
 import { EventsService } from '../events/events.service';
 import { R2Service } from '../common/r2/r2.service';
 
@@ -47,6 +48,8 @@ export class ProviderMarketingService {
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
     private readonly r2: R2Service,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   async list(actor: MarketingActor) {
@@ -83,6 +86,15 @@ export class ProviderMarketingService {
     if (!exts.includes(ext)) {
       throw new BadRequestException('That file’s name and type don’t match. Please re-save it and try again.');
     }
+
+    // PR-AV slice 2 — scan before the bytes reach R2. No blockOfficeMacros: the
+    // whitelist above is images and PDF only, no Office format to refuse.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     actor.userId,
+      surface:    'PROVIDER_MARKETING_UPLOAD',
+      entityType: 'Provider',
+      entityId:   actor.providerId,
+    });
 
     // Derived server-side, and namespaced by institution: nothing the caller
     // sends reaches the key, so one institution cannot write into another's

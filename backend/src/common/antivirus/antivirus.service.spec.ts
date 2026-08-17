@@ -126,54 +126,14 @@ describe('it fails CLOSED — never CLEAN by accident', () => {
   });
 });
 
-describe('the receipt handler is the ONLY caller in this slice', () => {
-  const read = (p: string) => require('fs').readFileSync(require.resolve(p), 'utf8');
-
-  it('scans before the invoice row is written', () => {
-    const svc = read('../../portal/portal.service.ts');
-    const body = svc.slice(svc.indexOf('async uploadInvoiceReceipt('));
-    expect(body.indexOf('this.antivirus.scanFile(')).toBeLessThan(body.indexOf('this.prisma.invoice.update('));
-  });
-
-  it('deletes the file on both rejection paths', () => {
-    const svc = read('../../portal/portal.service.ts');
-    const body = svc.slice(svc.indexOf('const verdict = await this.antivirus.scanFile'), svc.indexOf('await this.prisma.invoice.update('));
-    expect((body.match(/cleanup\(\);/g) ?? []).length).toBe(2);
-  });
-
-  it('tells the uploader nothing technical about a detection', () => {
-    const svc = read('../../portal/portal.service.ts');
-    expect(svc).toMatch(/This file could not be uploaded\. Please try a different file\./);
-    // The signature goes to the audit trail, never to the response. Scoped to
-    // the malware block — the file has other, unrelated 422s further up.
-    const block = svc.slice(
-      svc.indexOf("if (verdict.status === 'INFECTED')"),
-      svc.indexOf("if (verdict.status === 'UNAVAILABLE')"),
-    );
-    expect(block.length).toBeGreaterThan(200); // the slice really found the block
-    const thrown = block.slice(block.indexOf('throw new UnprocessableEntityException('));
-    expect(thrown).not.toMatch(/signature|verdict|FOUND/);
-  });
-
-  it('audits who, what and which threat', () => {
-    const svc = read('../../portal/portal.service.ts');
-    expect(svc).toMatch(/RECEIPT_UPLOAD_REJECTED_MALWARE/);
-    for (const field of ['userId', 'fileName', 'signature', 'sizeBytes']) {
-      expect(svc).toMatch(new RegExp(field));
-    }
-  });
-
-  it('no other upload surface calls the scanner in this slice', () => {
-    // Specs are excluded: this spec names the method in its own assertions, and
-    // a test file is not an upload surface. Product code only.
-    const { execFileSync } = require('child_process');
-    const hits = execFileSync(
-      'git',
-      ['grep', '-l', '-E', 'antivirus\\.(scanFile|scanBuffer)', '--', 'backend/src/**/*.ts'],
-      { cwd: require('path').resolve(__dirname, '../../../..'), encoding: 'utf8' },
-    )
-      .trim().split('\n').filter(Boolean)
-      .filter((f: string) => !f.endsWith('.spec.ts'));
-    expect(hits).toEqual(['backend/src/portal/portal.service.ts']);
-  });
-});
+// The slice-1 pinning block that lived here — "portal.service.ts is the only
+// caller", plus source-text assertions about scan ordering and cleanup — has
+// been REPLACED by eicar-routes.spec.ts.
+//
+// It was the right test for one upload point and the wrong one for twenty-two.
+// It read source text rather than behaviour, so it could confirm a scan call
+// existed while saying nothing about whether the route refused anything; and
+// its central assertion, that exactly one file calls the scanner, became false
+// by design the moment slice 2 wired the rest. The replacement drives real HTTP
+// with a real EICAR file at every named route and asserts the refusal and that
+// nothing was stored.

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 
 // Same disk root as the student document uploaders (UPLOAD_DIR env, default
@@ -18,7 +19,11 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 // short-lived bearer capability over the file path only.
 @Injectable()
 export class StaffHrService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
+  ) {}
 
   /** Metadata for the caller's own contract (or { hasContract: false }). */
   async myContract(userId: string) {
@@ -86,18 +91,30 @@ export class StaffHrService {
   }
 
   /**
-   * Store a new contract PDF (replace-on-reupload): move the uploaded file
+   * Store a new contract PDF (replace-on-reupload): write the uploaded file
    * into ./uploads/staff-contracts/{userId}/, upsert the one row, then delete
    * the previous file from disk (best-effort). Multer has already enforced
    * PDF-only + the 10 MB cap at the controller.
+   *
+   * PR-AV slice 2 — scanned first. No blockOfficeMacros here: the controller's
+   * whitelist is application/pdf and nothing else, so there is no Office format
+   * to refuse.
    */
   async adminUploadContract(userId: string, file: Express.Multer.File, uploaderId: string) {
     await this.requireUser(userId);
 
+    await this.uploadScan.scanOrReject(file, {
+      userId:     uploaderId,
+      surface:    'HR_CONTRACT_UPLOAD',
+      entityType: 'StaffContract',
+      entityId:   userId,
+    });
+
     const destDir = path.join(UPLOAD_DIR, 'staff-contracts', userId);
     await fs.promises.mkdir(destDir, { recursive: true });
-    const destPath = path.join(destDir, path.basename(file.path));
-    await fs.promises.rename(file.path, destPath);
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const destPath = path.join(destDir, `${unique}${path.extname(file.originalname)}`);
+    await fs.promises.writeFile(destPath, file.buffer);
 
     const previous = await this.prisma.staffContract.findUnique({
       where: { userId }, select: { fileUrl: true },

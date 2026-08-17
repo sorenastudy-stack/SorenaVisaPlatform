@@ -14,6 +14,7 @@ import { CryptoService } from '../../common/crypto/crypto.service';
 import { MailService } from '../../mail/mail.service';
 // Phase 4 — Pastoral Care (SUPPORT slot) auto-assigns when the visa is approved.
 import { LiaAssignmentService } from '../lia-assignment.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import {
   DeclineVisaDto,
   EditVisaDto,
@@ -65,6 +66,8 @@ export class VisaService {
     private readonly mail: MailService,
     // Phase 4 — auto-assign Pastoral Care on visa approval.
     private readonly liaAssignments: LiaAssignmentService,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   // ─── Issue (APPROVED) ──────────────────────────────────────────────────
@@ -79,27 +82,22 @@ export class VisaService {
       throw new BadRequestException('Visa document file is required.');
     }
     if (!ALLOWED_VISA_MIMES.has(file.mimetype)) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         `Unsupported visa document type "${file.mimetype}". Allowed: PDF, JPEG, PNG, HEIC.`,
       );
     }
     if (file.size > MAX_VISA_BYTES) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         `Visa document is ${file.size} bytes; maximum is ${MAX_VISA_BYTES}.`,
       );
     }
     if (!(dto.visaStartDate instanceof Date) || !(dto.visaEndDate instanceof Date)) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException('Visa start and end dates are required.');
     }
     if (dto.visaStartDate.getTime() > dto.visaEndDate.getTime()) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException('Visa start date must be on or before the end date.');
     }
     if (dto.visaEndDate.getTime() <= Date.now()) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException('Visa end date must be in the future.');
     }
 
@@ -111,40 +109,41 @@ export class VisaService {
       },
     });
     if (!existing) {
-      this.unlinkSilently(file.path);
       throw new NotFoundException('Case not found');
     }
     if (existing.stage !== 'INZ_SUBMITTED') {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         `Case must be in INZ_SUBMITTED stage to record an outcome (current: ${existing.stage}).`,
       );
     }
     if (existing.visa) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         'Visa outcome already recorded on this case. Use the edit or revert endpoint to change it.',
       );
     }
 
-    // Move file from /uploads/pending/ to /uploads/visas/<caseId>/.
+    // PR-AV slice 2 — scan before these bytes touch the disk.
+    //
+    // The route is memoryStorage now, so nothing has been written yet and there
+    // is no temp file to clean up on rejection: an infected upload leaves the
+    // filesystem exactly as it found it. scanOrReject throws on INFECTED or on
+    // scanner-unavailable, so control only reaches the write below on a clean
+    // verdict.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     actor.id,
+      surface:    'CASE_VISA_DOCUMENT_UPLOAD',
+      entityType: 'CASE',
+      entityId:   caseId,
+    });
+
+    // Write to /uploads/visas/<caseId>/.
     const destDir = path.join(VISA_FILE_DIR, caseId);
     await fs.promises.mkdir(destDir, { recursive: true });
     const ext = path.extname(file.originalname) || this.extFromMime(file.mimetype);
     const stamp = Date.now();
     const destBasename = `visa-${caseId}-${stamp}${ext}`;
     const destPath = path.join(destDir, destBasename);
-    try {
-      await fs.promises.rename(file.path, destPath);
-    } catch (err: any) {
-      if (err?.code === 'EXDEV') {
-        await fs.promises.copyFile(file.path, destPath);
-        this.unlinkSilently(file.path);
-      } else {
-        this.unlinkSilently(file.path);
-        throw err;
-      }
-    }
+    await fs.promises.writeFile(destPath, file.buffer);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const visa = await tx.visa.create({

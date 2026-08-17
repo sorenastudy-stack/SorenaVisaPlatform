@@ -16,6 +16,11 @@ import { ProvidersService } from './providers.service';
 
 jest.setTimeout(60000);
 
+// PR-AV slice 2 — ProvidersService now scans uploads. These tests exercise
+// status/scholarship paths that upload nothing, so a clean-verdict stub keeps
+// them focused; the real gate is proven by the EICAR route matrix.
+const scanStub: any = { scanOrReject: async () => undefined };
+
 describe('ProvidersService.updateProvider — status audit', () => {
   let prisma: PrismaClient;
   let svc: ProvidersService;
@@ -24,7 +29,7 @@ describe('ProvidersService.updateProvider — status audit', () => {
   beforeAll(async () => {
     prisma = new PrismaClient();
     await prisma.$connect();
-    svc = new ProvidersService(prisma as any, events, {} as any, {} as any, {} as any);
+    svc = new ProvidersService(prisma as any, events, {} as any, {} as any, {} as any, scanStub);
   }, 60000);
 
   afterAll(async () => { await prisma.$disconnect(); });
@@ -116,7 +121,7 @@ describe('ProvidersService.updateProvider — status audit', () => {
     const p = await mkProvider('PENDING');
     const broken = new ProvidersService(
       { ...(prisma as any), auditLog: { create: jest.fn().mockRejectedValue(new Error('audit table down')) } } as any,
-      events, {} as any, {} as any, {} as any,
+      events, {} as any, {} as any, {} as any, scanStub,
     );
 
     await expect(broken.updateProvider(p.id, { status: 'ACTIVE' } as any, null)).resolves.toBeTruthy();

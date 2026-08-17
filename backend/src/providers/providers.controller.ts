@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -43,6 +44,21 @@ import { ProvisionProviderLoginDto } from './dto/provision-provider-login.dto';
 const CATALOG_READ = ['OWNER', 'SUPER_ADMIN', 'ADMIN', 'OPERATIONS', 'CONSULTANT'] as const;
 const CATALOG_ADMIN = ['OWNER', 'SUPER_ADMIN', 'ADMIN'] as const;
 const PROVIDER_ADMIN = ['OWNER', 'SUPER_ADMIN'] as const;
+
+
+// PR-AV slice 2 — explicit caps at the multipart boundary. These four staff
+// routes had none: multer would buffer an unbounded body into memory before any
+// service-level check ran. Sheets match the 5 MB the importers enforce; the
+// cover image matches the 2 MB setProgrammeCoverImage enforces. Both sit well
+// under clamd's stream limit, so a file can never be too large to scan.
+const SHEET_UPLOAD = {
+  storage: memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+};
+const COVER_IMAGE_UPLOAD = {
+  storage: memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+};
 
 @Controller('providers')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -98,13 +114,15 @@ export class ProvidersController {
   // PR-CATALOG-1 — Owner-panel Excel import for ONE institution (multipart upload).
   @Post(':id/import-programmes')
   @Roles(...PROVIDER_ADMIN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', SHEET_UPLOAD))
   importProgrammes(
     @Param('id') providerId: string,
-    @UploadedFile() file: { buffer?: Buffer; originalname?: string },
+    @UploadedFile() file: { buffer?: Buffer; originalname?: string; mimetype?: string; size?: number },
     @Query('dry') dry?: string,
+    @Req() req?: any,
   ) {
-    return this.providersService.importProgrammes(providerId, file, dry === 'true');
+    // actorId threaded through so a scanner refusal names who sent the file.
+    return this.providersService.importProgrammes(providerId, file, dry === 'true', req?.user?.userId ?? null);
   }
 
   // PR-CATALOG-1 — cross-institution pending-programme review queue. Declared
@@ -158,7 +176,7 @@ export class ProvidersController {
   // The single-row forms below remain for one-off corrections.
   @Post(':id/scholarships/import')
   @Roles(...PROVIDER_ADMIN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', SHEET_UPLOAD))
   importScholarships(
     @Param('id') providerId: string,
     @UploadedFile() file: { buffer?: Buffer; originalname?: string; size?: number; mimetype?: string },
@@ -170,7 +188,7 @@ export class ProvidersController {
 
   @Post(':id/tuitions/import')
   @Roles(...PROVIDER_ADMIN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', SHEET_UPLOAD))
   importTuitions(
     @Param('id') providerId: string,
     @UploadedFile() file: { buffer?: Buffer; originalname?: string; size?: number; mimetype?: string },
@@ -184,7 +202,7 @@ export class ProvidersController {
   // detail page). Image mime-types only, 2 MB cap, key derived server-side.
   @Post('programmes/:programmeId/cover-image')
   @Roles(...PROVIDER_ADMIN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', COVER_IMAGE_UPLOAD))
   setProgrammeCoverImage(
     @Param('programmeId') programmeId: string,
     @UploadedFile() file: { buffer?: Buffer; originalname?: string; mimetype?: string; size?: number },

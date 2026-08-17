@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import { EventsService } from '../../events/events.service';
 import { EventSource } from '@prisma/client';
 import { parseScholarshipWorkbook } from './scholarship-import.logic';
@@ -37,6 +38,8 @@ export class PricingImportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   private assertValidFile(file: UploadedSheet | undefined): Buffer {
@@ -65,6 +68,18 @@ export class PricingImportService {
   async importScholarships(providerId: string, file: UploadedSheet | undefined, dryRun: boolean, actorId: string | null) {
     const buffer = this.assertValidFile(file);
     const provider = await this.assertProvider(providerId);
+
+    // PR-AV slice 2 — scan before the workbook is parsed, dry runs included.
+    // Deliberately ahead of the try/catch below, which rewrites any error into
+    // "Could not read the spreadsheet" and would otherwise mask a scanner
+    // outage as a file-format complaint.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     actorId,
+      surface:    'SCHOLARSHIP_IMPORT_UPLOAD',
+      entityType: 'EDUCATION_PROVIDER',
+      entityId:   providerId,
+      blockOfficeMacros: true,
+    });
 
     let preview: ReturnType<typeof parseScholarshipWorkbook>;
     try {
@@ -120,6 +135,18 @@ export class PricingImportService {
   async importTuitions(providerId: string, file: UploadedSheet | undefined, dryRun: boolean, actorId: string | null) {
     const buffer = this.assertValidFile(file);
     const provider = await this.assertProvider(providerId);
+
+    // PR-AV slice 2 — scan before the workbook is parsed, dry runs included.
+    // Deliberately ahead of the try/catch below, which rewrites any error into
+    // "Could not read the spreadsheet" and would otherwise mask a scanner
+    // outage as a file-format complaint.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     actorId,
+      surface:    'TUITION_IMPORT_UPLOAD',
+      entityType: 'EDUCATION_PROVIDER',
+      entityId:   providerId,
+      blockOfficeMacros: true,
+    });
 
     let preview: ReturnType<typeof parseTuitionWorkbook>;
     try {

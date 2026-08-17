@@ -74,6 +74,14 @@ export class ProviderImportService {
   async run(kind: ImportKind, actor: Actor, file: UploadedSheet | undefined, dryRun: boolean) {
     this.assertProviderFile(file);
 
+    // PR-AV slice 2 — the scan lives one layer down, in the importer services
+    // this dispatches to (ProvidersService.importProgrammes,
+    // PricingImportService.importTuitions / importScholarships). Those are the
+    // innermost point BOTH the staff routes and these provider routes pass
+    // through, so scanning there covers all nine importer routes and scans each
+    // upload exactly once. Adding a second call here would double-scan every
+    // provider upload.
+
     const result = await this.dispatch(kind, actor, file, dryRun);
     await this.audit(kind, actor, file, dryRun, result);
     return { kind, dryRun, ...result };
@@ -84,7 +92,7 @@ export class ProviderImportService {
       case 'programmes':
         // providerId is the second argument the whole boundary rests on: supplying
         // it puts ProgrammeImportService in fixed-target mode, where Brand is dead.
-        return this.providers.importProgrammes(actor.providerId, file, dryRun);
+        return this.providers.importProgrammes(actor.providerId, file, dryRun, actor.userId);
       case 'tuition':
         return this.pricing.importTuitions(actor.providerId, file, dryRun, actor.userId);
       case 'scholarships':

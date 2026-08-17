@@ -3,9 +3,7 @@ import {
   UnsupportedMediaTypeException, UseFilters, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import * as fs from 'fs';
-import * as path from 'path';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { StaffRolesGuard } from '../roles/staff-roles.guard';
 import { AdminTier } from '../roles/staff-roles.decorator';
@@ -18,21 +16,11 @@ import { SetJobDescriptionDto } from './dto/staff-hr.dto';
 // @AdminTier (OWNER/SUPER_ADMIN/ADMIN). The surface lives in the existing
 // StaffDetailOverlay. Staff read their OWN data via /staff/me/* (separate).
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
-const PENDING_DIR = path.join(UPLOAD_DIR, 'pending');
 
 // Contracts are PDF-only (tighter than the student uploaders' allow-list).
 const multerOptions = {
-  storage: diskStorage({
-    destination: (_req: any, _file: any, cb: any) => {
-      fs.mkdirSync(PENDING_DIR, { recursive: true });
-      cb(null, PENDING_DIR);
-    },
-    filename: (_req: any, file: any, cb: any) => {
-      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      cb(null, `${unique}${path.extname(file.originalname)}`);
-    },
-  }),
+  // PR-AV slice 2 — memoryStorage, so nothing is written before it is scanned.
+  storage: memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
   fileFilter: (req: any, file: any, cb: any) => {
     if (file.mimetype === 'application/pdf') {

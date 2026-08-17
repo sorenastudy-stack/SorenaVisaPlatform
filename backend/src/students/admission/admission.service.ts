@@ -18,6 +18,7 @@ import {
 } from './programme-choice-notice';
 import { decideReassignment } from '../../matching/intake-window';
 import { DeclarationAcceptanceService } from '../../common/declaration-acceptance.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import {
   intakeReassignedNotice, intakeManualReviewNotice, reassignTaskTitle,
   manualReviewTaskTitle, intakeTermLabel,
@@ -376,6 +377,8 @@ export class AdmissionService {
     private choiceRules: ProgrammeChoiceRulesService,
     private events: EventsService,
     private declarations: DeclarationAcceptanceService,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -526,10 +529,24 @@ export class AdmissionService {
       }
     }
 
+    // PR-AV slice 2 — scan before these bytes touch the disk.
+    //
+    // blockOfficeMacros because this surface accepts .docx: the mime whitelist
+    // above would refuse a macro-enabled mime, but not a .docm renamed to .docx
+    // and sent with a spoofed content type. The extension check catches that.
+    await this.uploadScan.scanOrReject(file, {
+      userId,
+      surface:    'ADMISSION_DOCUMENT_UPLOAD',
+      entityType: 'AdmissionApplication',
+      entityId:   application.id,
+      blockOfficeMacros: true,
+    });
+
     const destDir = path.join(UPLOAD_DIR, 'admission-documents', application.id);
     await fs.promises.mkdir(destDir, { recursive: true });
-    const destPath = path.join(destDir, path.basename(file.path));
-    await fs.promises.rename(file.path, destPath);
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const destPath = path.join(destDir, `${unique}${path.extname(file.originalname)}`);
+    await fs.promises.writeFile(destPath, file.buffer);
 
     const doc = await this.prisma.admissionDocument.create({
       data: {

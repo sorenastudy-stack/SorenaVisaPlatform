@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import { setCaseStage } from '../case-stage.util';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { MailService } from '../../mail/mail.service';
@@ -56,6 +57,8 @@ export class InzSubmissionService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly mail: MailService,
+    // PR-AV slice 2 — the shared scan-or-reject gate.
+    private readonly uploadScan: UploadScanService,
   ) {}
 
   // ─── Submit ────────────────────────────────────────────────────────────
@@ -71,13 +74,11 @@ export class InzSubmissionService {
     }
     if (!ALLOWED_RECEIPT_MIMES.has(file.mimetype)) {
       // Best-effort: clean up the rejected upload from the pending dir.
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         `Unsupported receipt type "${file.mimetype}". Allowed: PDF, JPEG, PNG, HEIC.`,
       );
     }
     if (file.size > MAX_RECEIPT_BYTES) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         `Receipt is ${file.size} bytes; maximum is ${MAX_RECEIPT_BYTES}.`,
       );
@@ -90,50 +91,44 @@ export class InzSubmissionService {
       },
     });
     if (!existing) {
-      this.unlinkSilently(file.path);
       throw new NotFoundException('Case not found');
     }
     if (existing.stage !== 'VISA') {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         `Case must be in VISA stage to submit to INZ (current: ${existing.stage}).`,
       );
     }
     if (!existing.liaId) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         'Case must have an assigned LIA before submitting to INZ.',
       );
     }
     if (existing.inzApplicationNumber || existing.inzSubmittedAt) {
-      this.unlinkSilently(file.path);
       throw new BadRequestException(
         'INZ submission already recorded on this case. Use the edit or revert endpoint to change it.',
       );
     }
 
-    // Move the file from /uploads/pending/ to /uploads/inz-receipts/<caseId>/
-    // with a deterministic name. The original filename is preserved as
-    // metadata on Case (inzReceiptFileName) so the LIA still sees a
-    // human-readable name on download.
+    // PR-AV slice 2 — scan before these bytes touch the disk. memoryStorage
+    // means a rejection leaves the filesystem untouched, so the guard clauses
+    // above no longer have a temp file to clean up either.
+    await this.uploadScan.scanOrReject(file, {
+      userId:     actor.id,
+      surface:    'INZ_RECEIPT_UPLOAD',
+      entityType: 'CASE',
+      entityId:   caseId,
+    });
+
+    // Write to /uploads/inz-receipts/<caseId>/ with a deterministic name. The
+    // original filename is preserved as metadata on Case (inzReceiptFileName)
+    // so the LIA still sees a human-readable name on download.
     const destDir = path.join(INZ_RECEIPT_DIR, caseId);
     await fs.promises.mkdir(destDir, { recursive: true });
     const ext = path.extname(file.originalname) || this.extFromMime(file.mimetype);
     const stamp = (dto.submittedAt ?? new Date()).getTime();
     const destBasename = `inz-receipt-${caseId}-${stamp}${ext}`;
     const destPath = path.join(destDir, destBasename);
-    try {
-      await fs.promises.rename(file.path, destPath);
-    } catch (err: any) {
-      // Cross-device renames fail on EXDEV — fall back to copy+unlink.
-      if (err?.code === 'EXDEV') {
-        await fs.promises.copyFile(file.path, destPath);
-        this.unlinkSilently(file.path);
-      } else {
-        this.unlinkSilently(file.path);
-        throw err;
-      }
-    }
+    await fs.promises.writeFile(destPath, file.buffer);
 
     const submittedAt = dto.submittedAt ?? new Date();
 
