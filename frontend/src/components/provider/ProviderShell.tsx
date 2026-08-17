@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, Clock, Globe2, GraduationCap, LogOut, ShieldAlert } from 'lucide-react';
+import { BarChart3, Building2, Clock, Globe2, GraduationCap, LogOut, ShieldAlert } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 
 // PR-PROVIDER-PORTAL slice C — the institution's shell, and the wall in front of it.
@@ -50,6 +50,7 @@ const NAV = [
   { href: '/provider', label: 'Your institution', icon: <Building2 size={17} /> },
   { href: '/provider/programmes', label: 'Programmes', icon: <GraduationCap size={17} /> },
   { href: '/provider/pricing', label: 'Country groups', icon: <Globe2 size={17} /> },
+  { href: '/provider/analytics', label: 'Performance', icon: <BarChart3 size={17} /> },
 ];
 
 export function ProviderShell({ children }: { children: React.ReactNode }) {

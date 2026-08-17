@@ -10,6 +10,8 @@ import { ProviderProgrammeController } from './provider-programme.controller';
 import { ProviderProgrammeService } from './provider-programme.service';
 import { NationalityGroupController } from './nationality-group.controller';
 import { NationalityGroupService } from './nationality-group.service';
+import { ProviderAnalyticsController } from './provider-analytics.controller';
+import { ProviderAnalyticsService } from './provider-analytics.service';
 import { ProviderAccessGuard } from './provider-access.guard';
 
 // PR-PROVIDER-PORTAL slice B — the institution-facing surface, deliberately its
@@ -22,10 +24,10 @@ import { ProviderAccessGuard } from './provider-access.guard';
   imports: [PrismaModule, ProvidersModule],
   controllers: [
     ProviderPortalController, ProviderImportController, ProviderProgrammeController,
-    NationalityGroupController,
+    NationalityGroupController, ProviderAnalyticsController,
   ],
   providers: [
-    ProviderPortalService, ProviderImportService, ProviderProgrammeService, NationalityGroupService,
+    ProviderPortalService, ProviderImportService, ProviderProgrammeService, NationalityGroupService, ProviderAnalyticsService,
     ProviderAccessGuard, EventsService,
   ],
 })

@@ -524,14 +524,44 @@ they now go through one mapper (`pricing-rows.mapper.ts`) with no casts.
 Proof: 29/29 over HTTP, 15/15 in a real browser, 19 logic tests, six guards proven RED. Backend
 1401/1401, frontend 53/53.
 
-### Slice F — provider analytics panel — NEXT
-What an institution can see about its own performance. Undesigned; needs a decision on what is
-theirs to see (their own applications and conversions) versus what is Sorena's (comparative
-ranking against other institutions).
+### Slice F — analytics panel — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_SLICE_F.md`. No migration.
 
-**Still unbuilt across the portal:** editing or deleting existing rate rows (slice E only creates
-them), bulk approval (still needs an upload to be a thing the database knows about), and
-rejected-programme resubmission (needs a rejection reason first).
+`GET /provider/analytics` — two numbers per programme (times suggested, times chosen), one query
+with two correlated `_count`s scoped to the caller, no pre-aggregation. The answer on what is
+theirs to see: **their own numbers only**. No platform totals, no ranking, no percentile — an
+absence test fails if any of that appears.
+
+Proof: 18/18 over HTTP with counts checked against a **direct database count**, not just against
+each other; B sees 1/1 while the database holds more. 9/9 in a real browser reading the actual
+table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
+
+---
+
+## ✅ Education provider portal — COMPLETE (slices A–F, 17 Aug 2026)
+
+Review gate → login and ownership boundary → importer wrapper and UI → programme CRUD → grouped
+pricing → analytics. One migration outstanding on production (`20260817163000_provider_portal_slice_e`).
+
+**Deliberately deferred, with the real reasons:**
+
+- **Visa-approved analytics.** The reason recorded in the slice-F brief was that `OfferRecord`
+  needs writing first. That is wrong twice over: `OfferRecord` **is** written (`offer.service.ts`
+  + full CRUD routes; 0 rows in dev, so the path exists and is unused), and visa approval would
+  not come from it anyway — an offer is the institution's decision, a visa is Immigration's. The
+  field is `Application.status = VISA_APPROVED`, which already exists alongside `providerId`,
+  `programmeId` and `visaDecisionAt`. **The real blocker: all 1,102 `Application` rows in dev sit
+  at `PREPARATION`** — nothing advances the status, so the metric would read 0 forever. Make the
+  admission flow advance it and this becomes a one-line count.
+- **Editing or deleting existing rate rows** — slice E only creates them.
+- **Bulk approval** — still needs an upload to be a thing the database knows about (a batch id).
+- **Rejected-programme resubmission** — needs a rejection reason first, or the institution is
+  being asked to guess.
+- **The staff activation toggle still couples review and activation** while the provider one does
+  not (slice D). Two surfaces, two behaviours; an Owner decision, not a bug.
+- **Scholarship group awards SUM with exact-nationality awards** (slice E). Correct per the
+  standing summing rule, but a migration into a group without deleting the old row doubles an
+  award.
 
 ---
 
