@@ -17,6 +17,21 @@ const STUDENT_VISIBLE = {
   provider: { status: 'ACTIVE' as const },
 };
 
+// PR-PROVIDER-PORTAL slice A — the same rule for PRICING.
+//
+// Tuition and scholarships previously had only `isActive`, which is a switch the
+// uploader controls, not a second pair of eyes: a spreadsheet could put a price
+// in front of a client in one step. They now carry reviewStatus like programmes,
+// and this is the one condition every student-facing pricing read applies.
+//
+// Exported so the pricing reads in other services use THIS and cannot drift —
+// the same reason STUDENT_VISIBLE above is a single constant. A price shown
+// without review is the failure this exists to prevent.
+export const STUDENT_VISIBLE_PRICING = {
+  isActive: true,
+  reviewStatus: 'APPROVED' as const,
+};
+
 export interface ExploreFilters {
   sort?: ExploreSort;
   search?: string;
@@ -78,8 +93,8 @@ export class ExploreService {
 
     const providerIds = [...new Set(programmes.map((p) => p.provider.id))];
     const [tuitions, scholarships] = await Promise.all([
-      this.prisma.providerTuition.findMany({ where: { providerId: { in: providerIds } } }),
-      this.prisma.providerScholarship.findMany({ where: { providerId: { in: providerIds }, isActive: true } }),
+      this.prisma.providerTuition.findMany({ where: { providerId: { in: providerIds }, ...STUDENT_VISIBLE_PRICING } }),
+      this.prisma.providerScholarship.findMany({ where: { providerId: { in: providerIds }, ...STUDENT_VISIBLE_PRICING } }),
     ]);
 
     const rows: ExploreRow[] = programmes.map((p) => {
@@ -170,8 +185,8 @@ export class ExploreService {
     if (!p) throw new NotFoundException('Programme not found.');
 
     const [tuitions, scholarships] = await Promise.all([
-      this.prisma.providerTuition.findMany({ where: { providerId: p.providerId } }),
-      this.prisma.providerScholarship.findMany({ where: { providerId: p.providerId, isActive: true } }),
+      this.prisma.providerTuition.findMany({ where: { providerId: p.providerId, ...STUDENT_VISIBLE_PRICING } }),
+      this.prisma.providerScholarship.findMany({ where: { providerId: p.providerId, ...STUDENT_VISIBLE_PRICING } }),
     ]);
 
     const pricing = resolveStudentPricing(tuitions as any, scholarships as any, {

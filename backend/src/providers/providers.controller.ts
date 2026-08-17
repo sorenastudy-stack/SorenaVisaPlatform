@@ -228,6 +228,33 @@ export class ProvidersController {
     return this.providersService.deleteScholarship(scholarshipId, req.user?.userId ?? null);
   }
 
+  // PR-PROVIDER-PORTAL slice A — approve/reject a pending PRICING row.
+  // PROVIDER_ADMIN (OWNER/SUPER_ADMIN), matching the tier that already owns the
+  // commercial terms — a price is a commercial fact, not catalogue curation.
+  @Patch('tuitions/:id/approve')
+  @Roles(...PROVIDER_ADMIN)
+  approveTuition(@Param('id') id: string, @Req() req: any) {
+    return this.providersService.approveTuition(id, req.user?.userId ?? null);
+  }
+
+  @Patch('tuitions/:id/reject')
+  @Roles(...PROVIDER_ADMIN)
+  rejectTuition(@Param('id') id: string, @Req() req: any) {
+    return this.providersService.rejectTuition(id, req.user?.userId ?? null);
+  }
+
+  @Patch('scholarships/:id/approve')
+  @Roles(...PROVIDER_ADMIN)
+  approveScholarship(@Param('id') id: string, @Req() req: any) {
+    return this.providersService.approveScholarship(id, req.user?.userId ?? null);
+  }
+
+  @Patch('scholarships/:id/reject')
+  @Roles(...PROVIDER_ADMIN)
+  rejectScholarship(@Param('id') id: string, @Req() req: any) {
+    return this.providersService.rejectScholarship(id, req.user?.userId ?? null);
+  }
+
   @Patch('programmes/:programmeId/approve')
   @Roles(...CATALOG_ADMIN)
   approveProgramme(

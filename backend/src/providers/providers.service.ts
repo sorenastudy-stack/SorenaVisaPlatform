@@ -137,7 +137,7 @@ export class ProvidersService {
   // Nothing here is visible to students until per-item approval.
   async reviewQueue() {
     const provider = { select: { id: true, name: true, status: true, institutionType: true } };
-    const [programmes, changes, candidates] = await Promise.all([
+    const [programmes, changes, candidates, tuitions, scholarships] = await Promise.all([
       this.pendingProgrammes(),
       this.prisma.programmeChangeProposal.findMany({
         where: { status: 'PENDING' },
@@ -149,9 +149,55 @@ export class ProvidersService {
         orderBy: [{ confidence: 'desc' }, { detectedAt: 'desc' }],
         include: { provider },
       }),
+      // PR-PROVIDER-PORTAL slice A — pending PRICING. Carries the actual figures,
+      // because "approve this tuition row" is not a decision anyone can make from
+      // an id: the reviewer needs the institution, the nationality it applies to,
+      // the amount, and which programme/level it is scoped to.
+      this.prisma.providerTuition.findMany({
+        where: { reviewStatus: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+        include: { provider, programme: { select: { id: true, name: true } } },
+        take: 200,
+      }),
+      this.prisma.providerScholarship.findMany({
+        where: { reviewStatus: 'PENDING' },
+        orderBy: { createdAt: 'desc' },
+        include: { provider, programme: { select: { id: true, name: true } } },
+        take: 200,
+      }),
     ]);
     return {
       programmes,
+      tuitions: tuitions.map((t) => ({
+        id: t.id,
+        provider: t.provider,
+        programmeId: t.programmeId,
+        programmeName: t.programme?.name ?? null,
+        level: t.level,
+        nationality: t.nationality,
+        amountValue: t.amountValue,
+        currency: t.currency,
+        feeYear: t.feeYear,
+        term: t.term,
+        notes: t.notes,
+        isActive: t.isActive,
+        createdAt: t.createdAt,
+      })),
+      scholarships: scholarships.map((sc) => ({
+        id: sc.id,
+        provider: sc.provider,
+        programmeId: sc.programmeId,
+        programmeName: sc.programme?.name ?? null,
+        level: sc.level,
+        nationality: sc.nationality,
+        name: sc.name,
+        amountType: sc.amountType,
+        amountValue: sc.amountValue,
+        currency: sc.currency,
+        eligibilityNotes: sc.eligibilityNotes,
+        isActive: sc.isActive,
+        createdAt: sc.createdAt,
+      })),
       changes: changes.map((c) => ({
         id: c.id,
         programmeId: c.programmeId,
@@ -494,6 +540,61 @@ export class ProvidersService {
       },
     });
   }
+
+  // ─── PR-PROVIDER-PORTAL slice A — pricing review ────────────────────────
+  //
+  // Mirrors approveProgramme/rejectProgramme deliberately, including emitting an
+  // event per decision: a price becoming visible to clients is at least as
+  // consequential as a programme doing so, and the trail has to say who made it
+  // visible and when.
+  //
+  // Unlike a programme, approving does NOT flip `isActive`. The two mean
+  // different things here: isActive is "this rate is current" (an institution can
+  // retire a rate without it being rejected), reviewStatus is "somebody checked
+  // it". Coupling them would silently republish a retired price on approval.
+  private async setPricingReview(
+    kind: 'tuition' | 'scholarship',
+    id: string,
+    status: 'APPROVED' | 'REJECTED',
+    actorId: string | null,
+  ) {
+    const model = kind === 'tuition' ? this.prisma.providerTuition : this.prisma.providerScholarship;
+    const existing = await (model as any).findUnique({
+      where: { id },
+      select: { id: true, providerId: true, nationality: true, amountValue: true, currency: true, reviewStatus: true },
+    });
+    if (!existing) throw new NotFoundException('Pricing row not found.');
+
+    const updated = await (model as any).update({
+      where: { id },
+      data: { reviewStatus: status },
+    });
+
+    await this.eventsService.emit(
+      kind === 'tuition'
+        ? (status === 'APPROVED' ? 'PROVIDER_TUITION_APPROVED' : 'PROVIDER_TUITION_REJECTED')
+        : (status === 'APPROVED' ? 'PROVIDER_SCHOLARSHIP_APPROVED' : 'PROVIDER_SCHOLARSHIP_REJECTED'),
+      kind === 'tuition' ? 'PROVIDER_TUITION' : 'PROVIDER_SCHOLARSHIP',
+      id,
+      null,
+      EventSource.USER,
+      actorId,
+      {
+        providerId: existing.providerId,
+        nationality: existing.nationality,
+        amountValue: existing.amountValue,
+        currency: existing.currency,
+        previousStatus: existing.reviewStatus,
+      },
+    );
+
+    return updated;
+  }
+
+  approveTuition(id: string, actorId: string | null) { return this.setPricingReview('tuition', id, 'APPROVED', actorId); }
+  rejectTuition(id: string, actorId: string | null) { return this.setPricingReview('tuition', id, 'REJECTED', actorId); }
+  approveScholarship(id: string, actorId: string | null) { return this.setPricingReview('scholarship', id, 'APPROVED', actorId); }
+  rejectScholarship(id: string, actorId: string | null) { return this.setPricingReview('scholarship', id, 'REJECTED', actorId); }
 
   async approveProgramme(programmeId: string, actorId: string | null) {
     const programme = await this.ensureProgrammeExists(programmeId);

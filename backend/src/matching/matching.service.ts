@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+// PR-PROVIDER-PORTAL slice A — one pricing-visibility rule, defined once.
+import { STUDENT_VISIBLE_PRICING } from '../explore/explore.service';
 import {
   rankRecommendations, allowedFieldIds,
   type MatchCriteria, type ProgrammeForMatch, type FieldNode, type RelationEdge, type QualLevel,
@@ -63,7 +65,7 @@ export class MatchingService {
     const weighting = (execConfig?.institutionTypeWeighting as unknown as InstitutionWeighting | null) ?? undefined;
 
     const scholarships = criteria.nationality
-      ? await this.prisma.providerScholarship.findMany({ where: { isActive: true, nationality: criteria.nationality } })
+      ? await this.prisma.providerScholarship.findMany({ where: { ...STUDENT_VISIBLE_PRICING, nationality: criteria.nationality } })
       : [];
     const scholarshipsFor = (p: (typeof programmes)[number]) =>
       scholarships.filter(

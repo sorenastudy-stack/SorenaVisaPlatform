@@ -37,6 +37,10 @@ enum UserRole {
   // eligibility to visa result). DISTINCT from CONSULTANT, which is the
   // "Admission Specialist" slot (Case.ownerId). Held in Case.consultantId.
   CLIENT_CONSULTANT
+  // PR-PROVIDER-PORTAL slice A — an education institution logging in to manage
+  // its OWN catalogue. Additive per the no-auto-migration rule above: no
+  // existing row changes, and nothing reads this value until slice B.
+  PROVIDER
 }
 
 // PR-STAFF-RENAME — the staff-portal role taxonomy. "Staff" is the umbrella
@@ -635,6 +639,8 @@ model User {
   // `affiliateAgentsVerified` — agents whose ID/business documents this
   //                            OWNER reviewed.
   affiliateAgent          AffiliateAgent?  @relation("AffiliateAgentLogin")
+  // PR-PROVIDER-PORTAL slice A — the institution this login belongs to, if any.
+  educationProvider       EducationProvider? @relation("EducationProviderLogin")
   affiliateAgentsVerified AffiliateAgent[] @relation("AffiliateAgentVerifier")
 
   // PR-SCORECARD-4: OWNER-editable platform settings (booking URLs +
@@ -2496,6 +2502,17 @@ model EducationProvider {
   // Institute of Canterbury"). ITP/PTE files only; universities publish one name.
   brand                    String?
   country                  String           @default("NZ")
+  // PR-PROVIDER-PORTAL slice A — the institution's single login.
+  //
+  // Nullable because almost no provider has one (production: 96 providers, 0
+  // logins), and @unique because the decision is ONE login per institution,
+  // mirroring AffiliateAgent.userId exactly. SetNull on delete: removing a user
+  // must never cascade into deleting an institution and its catalogue.
+  //
+  // Slice B resolves "which provider is this caller" from here, via the JWT —
+  // never from a URL parameter. Nothing reads it yet.
+  userId                   String?          @unique
+  user                     User?            @relation("EducationProviderLogin", fields: [userId], references: [id], onDelete: SetNull)
   city                     String?
   // PR-EXPLORE — map coordinates for the student Explore map.
   //
@@ -2791,6 +2808,19 @@ model ProviderScholarship {
   currency         String              @default("NZD")
   eligibilityNotes String?
   isActive         Boolean             @default(true)
+  /// PR-PROVIDER-PORTAL slice A — pricing must be reviewed before a student sees it.
+  ///
+  /// Programmes have had this gate since the catalogue import existed; tuition and
+  /// scholarships had only `isActive`, which is an on/off switch an uploader
+  /// controls, not a second pair of eyes. That was the commercially sensitive gap:
+  /// a spreadsheet could put a price in front of a client in one step.
+  ///
+  /// Defaults to PENDING for EVERY new row regardless of who created it. One
+  /// review standard, not two tiers of trust — a staff upload is gated exactly
+  /// like a future provider submission. This is a deliberate workflow change:
+  /// uploading no longer makes a price live.
+  reviewStatus ReviewStatus @default(PENDING)
+
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   updatedById      String?
@@ -2829,6 +2859,19 @@ model ProviderTuition {
   term        String?
   notes       String?
   isActive    Boolean             @default(true)
+  /// PR-PROVIDER-PORTAL slice A — pricing must be reviewed before a student sees it.
+  ///
+  /// Programmes have had this gate since the catalogue import existed; tuition and
+  /// scholarships had only `isActive`, which is an on/off switch an uploader
+  /// controls, not a second pair of eyes. That was the commercially sensitive gap:
+  /// a spreadsheet could put a price in front of a client in one step.
+  ///
+  /// Defaults to PENDING for EVERY new row regardless of who created it. One
+  /// review standard, not two tiers of trust — a staff upload is gated exactly
+  /// like a future provider submission. This is a deliberate workflow change:
+  /// uploading no longer makes a price live.
+  reviewStatus ReviewStatus @default(PENDING)
+
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   updatedById String?

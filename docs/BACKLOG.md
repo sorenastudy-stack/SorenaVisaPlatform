@@ -364,6 +364,56 @@ fixable for the first time.
 
 ---
 
+## Education provider portal
+
+### Slice A — foundation and review gate — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_SLICE_A.md`.
+
+`PROVIDER` added to `UserRole`; `EducationProvider.userId` added (unique, nullable, SET NULL) —
+the field slice B resolves identity from. Neither is read by anything yet.
+
+**The real change is the pricing review gate.** `ProviderTuition` and `ProviderScholarship` had
+only `isActive` — a switch the uploader controls, not a second pair of eyes — so a spreadsheet
+could put a price in front of a client in one step. Both now carry `reviewStatus` defaulting to
+PENDING, and `STUDENT_VISIBLE_PRICING` (exported from `explore.service.ts`, reused by
+`matching.service.ts`) requires APPROVED. Approve/reject sit on `/providers/{tuitions,
+scholarships}/:id/{approve,reject}`, OWNER/SUPER_ADMIN, each emitting an audited event with the
+figures and the actor. Pending rows appear in the existing review queue with the institution,
+nationality and amount — enough to actually decide.
+
+**⚠ A deliberate workflow change:** staff can no longer make a price live in one upload step.
+Every row from the existing Excel importer now lands PENDING. One standard, not two tiers of
+trust — a staff upload is gated exactly like a future provider submission.
+
+Existing scholarships were backfilled to APPROVED (dev 297; production 0 — a no-op there).
+**Tuition was deliberately NOT backfilled**: both environments hold zero rows, and if the
+migration is ever replayed somewhere that has tuition, the safe default is the one that hides a
+price rather than publishing it unreviewed.
+
+Visibility proof, dev: 158 programmes / 198 scholarships / 0 tuition — **identical before and
+after**, and stated in its complete form — *zero rows could disappear*, since no `isActive` row
+is anything but APPROVED. 19/19 end-to-end over HTTP, including ADMIN 403 and anonymous 401.
+
+### Slice B — login and ownership boundary — NEXT
+Provisioning from the Owner's provider screen (magic-link only, unusable password, mirroring
+`provisionLogin()`), a guard resolving the provider from the JWT, a narrow provider DTO, and the
+cross-tenant refusal tests.
+
+**Do not extend `ProvidersController`** — it has no ownership check on `:id` anywhere (`req.user`
+appears 17 times, all attribution), so adding `PROVIDER` to its roles would be a direct
+cross-tenant leak. And never expose `UpdateProviderDto`: it carries eight commission fields plus
+volume/bonus terms.
+
+Slice B also owns the security layers this slice had no surface for — rate limiting and
+Owner-approval-gated provisioning.
+
+### Slice C — importer wrapper and provider UI — after B
+Smallest slice: the importer is already provider-scoped internally and already lands PENDING.
+Bulk approval belongs here, where a batch is a known unit — approval is currently per row, which
+is fine at zero rows and will not be at real volume.
+
+---
+
 ## Blocked / awaiting someone else
 
 - **Agent Portal Phase 3** — DocuSeal contract signing for agents. Plan approved; held for
