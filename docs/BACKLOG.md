@@ -538,6 +538,34 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## Clearing a rate from the group screen — DONE 18 Aug 2026
+No migration. A **Clear** button beside each live rate in "Rates set on a group".
+
+**The premise was right, and the reality was worse.** Clearing did work by blanking an amount and
+saving — but only on the *right* form: the group's Edit form reconciles `programmeId: null`, so it
+clears the institution-wide default and nothing else. A **per-programme override appeared in that
+list with no way to clear it from that screen at all** — it had to be found on the programme it
+belonged to. Since a group cannot be archived while any rate is live, archiving was unreachable
+from the screen that offers it. Demonstrated live before fixing: blanking the form left the $31,000
+override applying and archiving still 409.
+
+`POST /provider/nationality-groups/rates/{tuition,scholarship}/:id/clear` routes through the SAME
+reconciler both forms use with `amount = null`, so Clear means exactly what blanking means —
+deactivate, never delete — with the same audit event. A second implementation of "clearing" is the
+one that drifts into deleting.
+
+The list now also names the programme each rate belongs to (`South Asia · 2 countries · Nursing`,
+or `· all programmes`), because a Clear button beside a row that only said "South Asia" could not
+be aimed. A nationality-scoped importer row is refused rather than cleared; clearing an
+already-cleared rate is a no-op.
+
+Proof: 19/19 over HTTP — row survives at `isActive:false` with amount and review state intact, all
+three price rows still on the record after archiving, cross-tenant refused. 12/12 in a real browser
+including the confirmation copy and **Archive unlocking automatically**. Backend 1441/1441,
+frontend 66/66.
+
+---
+
 ## Archiving a country group — DONE 17 Aug 2026
 `docs/PHASE_PROVIDER_PORTAL_GROUP_ARCHIVE.md`. Migration
 `20260817222500_nationality_group_archive` — one nullable `archivedAt` column, no backfill.

@@ -68,6 +68,26 @@ export class NationalityGroupController {
     return this.service.createGroupScholarship(dto, this.actor(req));
   }
 
+  // ── Clearing one rate, straight from the list that shows it ────────────────
+  //
+  // Two explicit routes rather than one with a `:kind` segment: the kind decides
+  // which table is written, and a path parameter that selects a table is a
+  // parameter worth not having.
+  //
+  // POST, not DELETE: nothing is deleted. The row is deactivated, exactly as
+  // blanking the amount on the form does.
+  @Post('rates/tuition/:id/clear')
+  @Throttle(WRITE_LIMIT)
+  clearTuition(@Req() req: any, @Param('id') id: string) {
+    return this.service.clearRate('tuition', id, this.actor(req));
+  }
+
+  @Post('rates/scholarship/:id/clear')
+  @Throttle(WRITE_LIMIT)
+  clearScholarship(@Req() req: any, @Param('id') id: string) {
+    return this.service.clearRate('scholarship', id, this.actor(req));
+  }
+
   private actor(req: any) {
     return {
       providerId: req.providerAccess.providerId,

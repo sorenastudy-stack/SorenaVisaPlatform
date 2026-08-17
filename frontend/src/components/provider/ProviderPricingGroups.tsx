@@ -38,6 +38,8 @@ interface RateRow {
   isActive: boolean;
   name?: string;
   amountType?: string;
+  /** Null = the institution-wide default; set = an override for one programme. */
+  programme: { id: string; name: string } | null;
   nationalityGroup: { id: string; name: string; nationalities: string[] } | null;
 }
 
@@ -123,6 +125,34 @@ export function ProviderPricingGroups() {
       load();
     } catch (e: any) {
       toast.error(e?.message ?? 'That group couldn’t be archived.');
+    } finally { setBusy(null); }
+  };
+
+  /**
+   * Clear one rate from the list it appears in.
+   *
+   * Before this the only way was to blank a field on a form — and only the right
+   * form: the group's Edit form clears the institution-wide default, while a
+   * per-programme override had to be found on its own programme. Since a group
+   * cannot be archived while a rate is live, archiving was effectively
+   * unreachable from the screen offering it.
+   */
+  const clearRate = async (r: RateRow) => {
+    const kind = r.name ? 'scholarship' : 'tuition';
+    const label = r.programme ? `${r.programme.name}` : 'your standard price';
+    if (!window.confirm(
+      `Stop applying this ${kind === 'tuition' ? 'fee' : 'scholarship'} for ${r.nationalityGroup?.name}`
+      + `${r.programme ? ` on ${label}` : ''}?
+
+Nothing will be deleted — we keep the record, it just stops applying.`,
+    )) return;
+    setBusy(r.id);
+    try {
+      await api.post(`/provider/nationality-groups/rates/${kind}/${r.id}/clear`, {});
+      toast.success('Cleared. Nothing was deleted — the record is kept.');
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'That couldn’t be cleared.');
     } finally { setBusy(null); }
   };
 
@@ -372,6 +402,10 @@ export function ProviderPricingGroups() {
                   </p>
                   <p className="mt-0.5 text-xs text-gray-500">
                     {r.nationalityGroup!.name} · {r.nationalityGroup!.nationalities.length} countries
+                    {/* Which programme this applies to — the list mixes
+                        institution-wide defaults with per-programme overrides,
+                        and Clear needs to be aimable. */}
+                    {r.programme ? ` · ${r.programme.name}` : ' · all programmes'}
                   </p>
                 </div>
                 {/* Three states, not two. A cleared price is still on the record
@@ -391,6 +425,17 @@ export function ProviderPricingGroups() {
                       ? <><CheckCircle2 size={13} /> Shown to students</>
                       : <><Clock3 size={13} /> With us for review</>}
                 </span>
+                {/* Only for rates that are actually applying — clearing a
+                    already-cleared row would be a button that does nothing. */}
+                {r.isActive && (
+                  <button
+                    onClick={() => clearRate(r)}
+                    disabled={busy === r.id}
+                    title="Stop applying this price. Nothing will be deleted."
+                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-[#1e3a5f] hover:bg-[#faf8f3] disabled:opacity-40">
+                    {busy === r.id ? <Loader2 size={14} className="animate-spin" /> : <EyeOff size={14} />} Clear
+                  </button>
+                )}
               </CardContent>
             </Card>
           ))}

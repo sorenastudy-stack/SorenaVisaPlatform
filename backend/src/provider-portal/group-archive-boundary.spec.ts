@@ -91,6 +91,55 @@ describe('an archived group is off the menu everywhere a group can be chosen', (
   });
 });
 
+describe('clearing one rate is reachable, and means deactivate', () => {
+  const ctrl = read('./nationality-group.controller.ts');
+
+  it('goes through the SAME reconciler the forms use', () => {
+    const body = group.slice(group.indexOf('async clearRate('), group.indexOf('   * Every rate the institution has'));
+    expect(body).toMatch(/reconcileGroupRate\(/);
+    expect(body).toMatch(/null, actor, \{ groupName/); // amount = null → deactivate
+    // A second implementation of "clearing" is the one that drifts into deleting.
+    expect(body).not.toMatch(/\.update\(|\.delete\(/);
+  });
+
+  it('is scoped to the caller — an id names a rate, never a tenant', () => {
+    const body = group.slice(group.indexOf('async clearRate('), group.indexOf('   * Every rate the institution has'));
+    expect(body).toMatch(/where: \{ id: rateId, providerId: actor\.providerId \}/);
+    expect(body).toMatch(/if \(!row\) throw new NotFoundException/);
+  });
+
+  it('refuses a rate that is not attached to a group', () => {
+    // Nationality-scoped rows belong to the staff importer, not this screen.
+    expect(group).toMatch(/if \(!row\.nationalityGroupId\)/);
+    expect(group).toMatch(/not attached to a country group/);
+  });
+
+  it('clears a per-programme override too, not only the default', () => {
+    // The gap this closes: the group Edit form only reconciles programmeId:null,
+    // so an override appeared in the list with no way to clear it from here.
+    const body = group.slice(group.indexOf('async clearRate('), group.indexOf('   * Every rate the institution has'));
+    expect(body).toMatch(/programmeId: row\.programmeId/);
+    expect(body).not.toMatch(/programmeId: null/);
+  });
+
+  it('is POST, not DELETE, on both kinds', () => {
+    expect(ctrl).toMatch(/@Post\('rates\/tuition\/:id\/clear'\)/);
+    expect(ctrl).toMatch(/@Post\('rates\/scholarship\/:id\/clear'\)/);
+    expect(ctrl).not.toMatch(/@Delete\('rates/);
+  });
+
+  it('rate-limits both clear routes', () => {
+    const writes = (ctrl.match(/@(Post|Put|Delete|Patch)\(/g) ?? []).length;
+    const limits = (ctrl.match(/@Throttle\(/g) ?? []).length;
+    expect(limits).toBe(writes);
+  });
+
+  it('the list says which programme each rate belongs to', () => {
+    // Without it a Clear button beside "South Asia" cannot be aimed.
+    expect((group.match(/programme: \{ select: \{ id: true, name: true \} \}/g) ?? []).length).toBe(2);
+  });
+});
+
 describe('a retired name can be used again', () => {
   it('only an ACTIVE namesake is a clash', () => {
     expect(group).toMatch(/if \(clash\?\.archivedAt\) \{/);

@@ -338,6 +338,55 @@ export class NationalityGroupService {
   }
 
   /**
+   * Clear ONE rate, by id, from the group screen.
+   *
+   * Before this, clearing was only reachable by blanking a field on a form —
+   * and only the RIGHT form: the group's Edit form clears the institution-wide
+   * default (`programmeId: null`) and nothing else, so a per-programme override
+   * appeared in this list with no way to clear it from here at all. It had to be
+   * found on the programme it belonged to. Since a group cannot be archived
+   * while any rate is live, that made archiving unreachable from the screen that
+   * offers it.
+   *
+   * Routed through the SAME reconciler the forms use, with `amount = null`, so
+   * "clear" means exactly what blanking the field means — deactivate, never
+   * delete — and emits the same audit event. A second implementation of
+   * "clearing" is the thing most likely to drift into deleting.
+   */
+  async clearRate(kind: 'tuition' | 'scholarship', rateId: string, actor: GroupActor) {
+    const model: any = kind === 'tuition' ? this.prisma.providerTuition : this.prisma.providerScholarship;
+
+    // Scoped by providerId: an id names a resource, never a tenant.
+    const row = await model.findFirst({
+      where: { id: rateId, providerId: actor.providerId },
+      select: {
+        id: true, programmeId: true, nationalityGroupId: true, level: true, isActive: true,
+        amountValue: true, nationalityGroup: { select: { name: true } },
+      },
+    });
+    if (!row) throw new NotFoundException('Rate not found.');
+
+    // Nationality-scoped rows come from the staff importer and are not this
+    // screen's to touch; refusing is safer than deactivating one by surprise.
+    if (!row.nationalityGroupId) {
+      throw new BadRequestException('That rate is not attached to a country group.');
+    }
+    if (!row.isActive) return { cleared: false, alreadyCleared: true, id: row.id };
+
+    const r = await reconcileGroupRate(
+      this.prisma, this.events, kind,
+      {
+        providerId: actor.providerId,
+        programmeId: row.programmeId,
+        nationalityGroupId: row.nationalityGroupId,
+        level: row.level ?? null,
+      },
+      null, actor, { groupName: row.nationalityGroup?.name ?? '' },
+    );
+    return { cleared: r.action === 'deactivated', id: row.id, previousAmount: r.previousAmount };
+  }
+
+  /**
    * Every rate the institution has — for the screen that shows current pricing.
    *
    * Rates belonging to an ARCHIVED group are excluded. Leaving them in made the
@@ -353,6 +402,10 @@ export class NationalityGroupService {
         select: {
           id: true, nationality: true, amountValue: true, currency: true, feeYear: true,
           level: true, programmeId: true, isActive: true, reviewStatus: true,
+          // The programme's NAME, not just its id: this list mixes
+          // institution-wide defaults with per-programme overrides, and a Clear
+          // button beside a row that only says "South Asia" cannot be aimed.
+          programme: { select: { id: true, name: true } },
           nationalityGroup: { select: { id: true, name: true, nationalities: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -363,6 +416,7 @@ export class NationalityGroupService {
         select: {
           id: true, nationality: true, name: true, amountType: true, amountValue: true,
           currency: true, level: true, programmeId: true, isActive: true, reviewStatus: true,
+          programme: { select: { id: true, name: true } },
           nationalityGroup: { select: { id: true, name: true, nationalities: true } },
         },
         orderBy: { createdAt: 'desc' },
