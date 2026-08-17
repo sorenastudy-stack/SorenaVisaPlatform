@@ -30,6 +30,7 @@ import { CreateScholarshipDto } from './dto/create-scholarship.dto';
 import { UpdateScholarshipDto } from './dto/update-scholarship.dto';
 import { UpdateProgrammeDto, SetProgrammeActivationDto } from './dto/update-programme.dto';
 import { ProgrammeCurationService } from './programme-curation.service';
+import { ProvisionProviderLoginDto } from './dto/provision-provider-login.dto';
 
 // Provider/programme catalog — institutional reference data (not user PII), but
 // the reads were allow-all and several writes (faculties/programmes/agreement
@@ -226,6 +227,25 @@ export class ProvidersController {
     @Req() req: any,
   ) {
     return this.providersService.deleteScholarship(scholarshipId, req.user?.userId ?? null);
+  }
+
+  // PR-PROVIDER-PORTAL slice B — give this institution a login.
+  //
+  // OWNER only (the service re-checks). Magic-link only: the created User has an
+  // unusable password placeholder, so there is no password door to attack.
+  // Fails cleanly if a login already exists rather than repointing it.
+  @Post(':id/provision-login')
+  @Roles('OWNER')
+  provisionProviderLogin(
+    @Param('id') providerId: string,
+    @Body() dto: ProvisionProviderLoginDto,
+    @Req() req: any,
+  ) {
+    return this.providersService.provisionLogin(providerId, dto.email, {
+      userId: req.user?.userId ?? null,
+      name: req.user?.name ?? null,
+      role: req.user?.role ?? null,
+    });
   }
 
   // PR-PROVIDER-PORTAL slice A — approve/reject a pending PRICING row.

@@ -70,6 +70,7 @@ import { WebSyncModule } from './providers/websync/websync.module';
 import { DiaryModule } from './diary/diary.module';
 import { KanbanModule } from './kanban/kanban.module';
 import { SlaModule } from './sla/sla.module';
+import { ProviderPortalModule } from './provider-portal/provider-portal.module';
 
 @Module({
   imports: [
@@ -202,6 +203,8 @@ import { SlaModule } from './sla/sla.module';
     // PR-SLA: Owner-manageable, institution-type-varying stage deadlines +
     // overdue-by-officer report. Exports SlaService (used by the kanban cards).
     SlaModule,
+    // PR-PROVIDER-PORTAL slice B — the institution's own, ownership-scoped surface.
+    ProviderPortalModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min from the `default`

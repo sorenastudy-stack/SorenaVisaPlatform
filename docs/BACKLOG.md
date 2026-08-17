@@ -394,20 +394,29 @@ Visibility proof, dev: 158 programmes / 198 scholarships / 0 tuition — **ident
 after**, and stated in its complete form — *zero rows could disappear*, since no `isActive` row
 is anything but APPROVED. 19/19 end-to-end over HTTP, including ADMIN 403 and anonymous 401.
 
-### Slice B — login and ownership boundary — NEXT
-Provisioning from the Owner's provider screen (magic-link only, unusable password, mirroring
-`provisionLogin()`), a guard resolving the provider from the JWT, a narrow provider DTO, and the
-cross-tenant refusal tests.
+### Slice B — login and ownership boundary — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_SLICE_B.md`. No migration — Slice A's `userId` was the only column
+needed.
 
-**Do not extend `ProvidersController`** — it has no ownership check on `:id` anywhere (`req.user`
-appears 17 times, all attribution), so adding `PROVIDER` to its roles would be a direct
-cross-tenant leak. And never expose `UpdateProviderDto`: it carries eight commission fields plus
-volume/bonus terms.
+`POST /providers/:id/provision-login` (OWNER, service re-checks) creates a magic-link-only `User`
+with an unusable password and refuses rather than repointing if a login already exists. A new
+`/provider` controller — **not** an extension of `ProvidersController` — carries `GET`/`PATCH
+/provider/me`, and `ProviderAccessGuard` resolves the institution from the JWT.
 
-Slice B also owns the security layers this slice had no surface for — rate limiting and
-Owner-approval-gated provisioning.
+**The boundary is that no route accepts an id at all** — no `:id`, no `@Param`, no `@Query`. A
+body that names another institution hits the global `forbidNonWhitelisted` pipe and is rejected
+with 400, so there is no code path where a caller-supplied id is read and therefore no
+guard-vs-parameter conflict to resolve. `UpdateOwnProviderDto` is six descriptive fields;
+`getOwn()` uses an explicit select, so commission, agreement, ranking and staff `notes` are never
+fetched.
 
-### Slice C — importer wrapper and provider UI — after B
+Proof: 29/29 over HTTP with two real institutions logging in through the app's own magic-link
+endpoints — cross-tenant read and write both refused, unprovisioned and cleared-`userId` both
+403, PROVIDER refused on three staff routes. Rate limit measured, not assumed: 20 accepted, first
+429 at request 21. Suite 1322/1322. The three boundary tests were each proven to go RED when the
+mistake they guard against is reintroduced.
+
+### Slice C — importer wrapper and provider UI — NEXT
 Smallest slice: the importer is already provider-scoped internally and already lands PENDING.
 Bulk approval belongs here, where a batch is a known unit — approval is currently per row, which
 is fine at zero rows and will not be at real volume.

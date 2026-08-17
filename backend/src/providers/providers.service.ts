@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -13,6 +15,7 @@ import {
   ProviderType,
   ReviewStatus,
 } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService, EventSource } from '../events/events.service';
 import { ProgrammeImportService } from './import/programme-import.service';
@@ -378,6 +381,87 @@ export class ProvidersService {
     }
 
     return provider;
+  }
+
+  // PR-PROVIDER-PORTAL slice B — give an institution a login.
+  //
+  // Reuses the agent pattern exactly: a User with an UNUSABLE password, so the
+  // password door does not exist for this account and magic-link is the only way
+  // in. Nothing here sets a real password, and nothing later should.
+  //
+  // Refuses rather than overwrites when a login already exists. Silently
+  // repointing EducationProvider.userId would orphan the previous login while
+  // leaving it able to authenticate — a live credential attached to nothing,
+  // which is the worst of both outcomes.
+  //
+  // OWNER-only, re-checked here and not merely at the route: this hands an
+  // external party a way into the system.
+  async provisionLogin(
+    providerId: string,
+    email: string,
+    actor: { userId: string | null; name: string | null; role?: string | null },
+  ) {
+    if (actor.role !== 'OWNER') {
+      throw new ForbiddenException('Only the Owner can provision an institution login.');
+    }
+    const normalized = (email ?? '').trim().toLowerCase();
+    if (!normalized || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) {
+      throw new BadRequestException('A valid email address is required for the login.');
+    }
+
+    const provider = await this.prisma.educationProvider.findUnique({
+      where: { id: providerId },
+      select: { id: true, name: true, userId: true },
+    });
+    if (!provider) throw new NotFoundException('Institution not found.');
+    if (provider.userId) {
+      throw new BadRequestException('That institution already has a login.');
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const existingUser = await tx.user.findUnique({
+        where: { email: normalized },
+        select: { id: true, educationProvider: { select: { id: true } } },
+      });
+      if (existingUser?.educationProvider) {
+        throw new ConflictException('That email already belongs to another institution.');
+      }
+
+      // 48 random bytes as the password hash: not a password anyone can present,
+      // and not a null that some future code path might treat as "no password
+      // required". Identical to provisionLogin() for agents.
+      const userId = existingUser
+        ? existingUser.id
+        : (await tx.user.create({
+            data: {
+              name: provider.name,
+              email: normalized,
+              passwordHash: randomBytes(48).toString('base64'),
+              role: 'PROVIDER',
+              isActive: true,
+            },
+            select: { id: true },
+          })).id;
+
+      await tx.educationProvider.update({ where: { id: providerId }, data: { userId } });
+
+      await tx.auditLog.create({
+        data: {
+          userId: actor.userId,
+          action: 'CREATE',
+          eventType: 'EDUCATION_PROVIDER_LOGIN_PROVISIONED',
+          entityType: 'EDUCATION_PROVIDER',
+          entityId: providerId,
+          newValue: { providerId, providerName: provider.name, loginUserId: userId } as Prisma.InputJsonValue,
+          actorNameSnapshot: actor.name,
+          actorRoleSnapshot: actor.role ?? null,
+        },
+      });
+
+      return { providerId, providerName: provider.name, userId, email: normalized };
+    });
+
+    return result;
   }
 
   async updateProvider(id: string, dto: UpdateProviderDto, actorId?: string | null) {
