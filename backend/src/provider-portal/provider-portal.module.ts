@@ -8,6 +8,7 @@ import { ProviderImportController } from './provider-import.controller';
 import { ProviderImportService } from './provider-import.service';
 import { ProviderProgrammeController } from './provider-programme.controller';
 import { ProviderProgrammeService } from './provider-programme.service';
+import { ProviderProgrammePricingService } from './provider-programme-pricing.service';
 import { NationalityGroupController } from './nationality-group.controller';
 import { NationalityGroupService } from './nationality-group.service';
 import { ProviderAnalyticsController } from './provider-analytics.controller';
@@ -27,7 +28,7 @@ import { ProviderAccessGuard } from './provider-access.guard';
     NationalityGroupController, ProviderAnalyticsController,
   ],
   providers: [
-    ProviderPortalService, ProviderImportService, ProviderProgrammeService, NationalityGroupService, ProviderAnalyticsService,
+    ProviderPortalService, ProviderImportService, ProviderProgrammeService, ProviderProgrammePricingService, NationalityGroupService, ProviderAnalyticsService,
     ProviderAccessGuard, EventsService,
   ],
 })

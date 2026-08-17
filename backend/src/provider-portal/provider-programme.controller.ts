@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -8,6 +8,8 @@ import { ProviderProgrammeService } from './provider-programme.service';
 import {
   CreateOwnProgrammeDto, SetOwnProgrammeActiveDto, UpdateOwnProgrammeDto,
 } from './dto/provider-programme.dto';
+import { SetProgrammeGroupPricingDto } from './dto/programme-group-pricing.dto';
+import { ProviderProgrammePricingService } from './provider-programme-pricing.service';
 
 // PR-PROVIDER-PORTAL slice D — an institution's own programmes.
 //
@@ -33,7 +35,10 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard, ProviderAccessGuard)
 @Roles('PROVIDER')
 export class ProviderProgrammeController {
-  constructor(private readonly service: ProviderProgrammeService) {}
+  constructor(
+    private readonly service: ProviderProgrammeService,
+    private readonly pricing: ProviderProgrammePricingService,
+  ) {}
 
   /** Their own catalogue. Never anyone else's — the service scopes by provider. */
   @Get()
@@ -72,6 +77,31 @@ export class ProviderProgrammeController {
   @Throttle({ default: { ttl: 60_000, limit: 60 } })
   setActive(@Req() req: any, @Param('id') id: string, @Body() dto: SetOwnProgrammeActiveDto) {
     return this.service.setActive(id, dto.active, this.actor(req));
+  }
+
+  // ── Pricing by country group, for THIS programme ───────────────────────────
+  //
+  // The rows are ordinary group-scoped ProviderTuition / ProviderScholarship
+  // rows that also carry this programmeId, which is a shape slice E's resolver
+  // already ranks correctly. `:id` names the programme; the institution still
+  // comes from the guard, and the service refuses a programme or a group that is
+  // not the caller's.
+
+  @Get(':id/group-pricing')
+  getGroupPricing(@Req() req: any, @Param('id') id: string) {
+    return this.pricing.get(id, this.actor(req));
+  }
+
+  /**
+   * PUT, not PATCH: the body is the DESIRED STATE for this programme, and a group
+   * left out of it is how "stop pricing this group" is expressed. There is no
+   * delete verb here because the portal never hard-deletes priced data — an
+   * omitted group deactivates its row.
+   */
+  @Put(':id/group-pricing')
+  @Throttle({ default: { ttl: 60_000, limit: 40 } })
+  setGroupPricing(@Req() req: any, @Param('id') id: string, @Body() dto: SetProgrammeGroupPricingDto) {
+    return this.pricing.set(id, dto, this.actor(req));
   }
 
   /** The caller, entirely from the guard. */

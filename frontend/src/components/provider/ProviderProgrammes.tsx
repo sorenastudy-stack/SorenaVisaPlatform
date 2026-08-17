@@ -5,6 +5,7 @@ import { Loader2, Plus, PencilLine, CheckCircle2, Clock3, Eye, EyeOff, X } from 
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
+import { ProgrammeGroupPricing, type GroupPricingDraft } from './ProgrammeGroupPricing';
 
 // PR-PROVIDER-PORTAL slice D — an institution's own programmes.
 //
@@ -55,6 +56,7 @@ export function ProviderProgrammes() {
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pricing, setPricing] = useState<GroupPricingDraft>({});
 
   const load = useCallback(() => {
     api.get<ListResponse>('/provider/programmes')
@@ -63,14 +65,33 @@ export function ProviderProgrammes() {
   }, []);
   useEffect(load, [load]);
 
-  const openNew = () => { setDraft(EMPTY); setEditing('new'); };
+  const openNew = () => { setDraft(EMPTY); setPricing({}); setEditing('new'); };
   const openEdit = (p: Programme) => {
     setDraft({
       name: p.name, level: p.level, nzqfLevel: p.nzqfLevel, intakeMonths: p.intakeMonths ?? [],
       campusCity: p.campusCity ?? '', durationMonths: p.durationMonths?.toString() ?? '',
       tuitionFeeNZD: p.tuitionFeeNZD?.toString() ?? '', programmeUrl: p.programmeUrl ?? '',
     });
+    setPricing({});
     setEditing(p.id);
+  };
+
+  /**
+   * Send the DESIRED STATE for every group: an unticked group is simply absent,
+   * which is how the server is told to stop applying it. A blank amount is sent
+   * as absent too, so "ticked but empty" means no override rather than zero.
+   */
+  const savePricing = async (programmeId: string) => {
+    const entries = Object.entries(pricing)
+      .filter(([, v]) => v.on && (v.tuition.trim() !== '' || v.scholarship.trim() !== ''))
+      .map(([nationalityGroupId, v]) => ({
+        nationalityGroupId,
+        ...(v.tuition.trim() !== '' ? { tuitionAmount: Number(v.tuition) } : {}),
+        ...(v.scholarship.trim() !== '' ? { scholarshipAmount: Number(v.scholarship) } : {}),
+      }));
+    // Always sent, even when empty — an empty list is the instruction that
+    // deactivates whatever used to be priced.
+    await api.put(`/provider/programmes/${programmeId}/group-pricing`, { entries });
   };
 
   const save = async () => {
@@ -92,9 +113,14 @@ export function ProviderProgrammes() {
       if (editing === 'new') {
         await api.post('/provider/programmes', body);
         toast.success('Added — our team will review it before students see it.');
-      } else {
-        const before = data?.programmes.find((p) => p.id === editing);
-        await api.patch(`/provider/programmes/${editing}`, body);
+      } else if (editing) {
+        const programmeId = editing; // narrowed: not 'new', not null
+        const before = data?.programmes.find((p) => p.id === programmeId);
+        await api.patch(`/provider/programmes/${programmeId}`, body);
+        // Group pricing is a second call on purpose: it writes to different rows
+        // with their own review state, and folding it into the programme PATCH
+        // would mean a rejected price could fail a legitimate name change.
+        await savePricing(programmeId);
         toast.success(
           before?.reviewStatus === 'APPROVED'
             ? 'Saved — because the details changed, it goes back to us for a quick check.'
@@ -205,6 +231,12 @@ export function ProviderProgrammes() {
             <Field label="Programme page (link)">
               <input value={draft.programmeUrl} onChange={(e) => setDraft({ ...draft, programmeUrl: e.target.value })} className={INPUT} placeholder="https://…" />
             </Field>
+
+            <ProgrammeGroupPricing
+              programmeId={editing === 'new' ? null : editing}
+              draft={pricing}
+              onDraftChange={setPricing}
+            />
 
             <div className="flex flex-col gap-2 sm:flex-row">
               <button onClick={save} disabled={busy !== null}

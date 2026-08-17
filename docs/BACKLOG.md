@@ -538,6 +538,39 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## Per-programme pricing by country group — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_GROUP_PRICING_PER_PROGRAMME.md`. No migration.
+
+`GET`/`PUT /provider/programmes/:id/group-pricing`, plus a section on the programme edit form:
+tick a country group, give it a tuition fee, a scholarship, or both. Rows are ordinary
+`ProviderTuition`/`ProviderScholarship` rows carrying **both** `programmeId` and
+`nationalityGroupId` — a shape slice E's resolver already ranks, so **the matching logic did not
+change**. Verified end-to-end: a student in the group is quoted the programme price via GROUP, one
+outside it falls back to the flat fee.
+
+**This closes the "editing existing rate rows" item deferred out of Slice E.** Slice E could only
+create; this adds edit (a changed amount returns the row to PENDING, an unchanged save does not —
+slice C's rule) and uncheck (**deactivate, never delete** — a price a student may already have been
+quoted stays on the record). Re-ticking an unchanged row reactivates it without costing its
+approval, matching slice D's "activation is not content".
+
+The payload is the DESIRED STATE for the programme, which is what makes unchecking expressible at
+all: a group left out of the list is the instruction to deactivate its row. There is no delete
+verb.
+
+No unique index was added across provider+programme+group, deliberately — staff and the importer
+may hold rows differing by level or feeYear, and a constraint would make those unwritable.
+
+Proof: 30/30 over HTTP including approve → edit → back to PENDING and uncheck → deactivated;
+16/16 in a real browser on the actual form; five guards proven RED. Backend 1419/1419, frontend
+66/66.
+
+**Still unbuilt:** bulk approval (still needs an upload to be a thing the database knows about),
+rejected-programme resubmission (needs a rejection reason first), per-level group pricing, and
+percentage scholarships from the portal (the importer can still create them).
+
+---
+
 ## ✅ Education provider portal — COMPLETE (slices A–F, 17 Aug 2026)
 
 Review gate → login and ownership boundary → importer wrapper and UI → programme CRUD → grouped
@@ -553,7 +586,7 @@ pricing → analytics. One migration outstanding on production (`20260817163000_
   `programmeId` and `visaDecisionAt`. **The real blocker: all 1,102 `Application` rows in dev sit
   at `PREPARATION`** — nothing advances the status, so the metric would read 0 forever. Make the
   admission flow advance it and this becomes a one-line count.
-- **Editing or deleting existing rate rows** — slice E only creates them.
+- ~~Editing or deleting existing rate rows~~ — **DONE 17 Aug 2026**, see below.
 - **Bulk approval** — still needs an upload to be a thing the database knows about (a batch id).
 - **Rejected-programme resubmission** — needs a rejection reason first, or the institution is
   being asked to guess.

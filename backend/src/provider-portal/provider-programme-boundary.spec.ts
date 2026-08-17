@@ -77,10 +77,61 @@ describe('the provider programme controller', () => {
   });
 
   it('rate-limits every write', () => {
-    const writes = (src.match(/@(Post|Patch)\(/g) ?? []).length;
+    // Counted rather than fixed at a number: the invariant is "every write verb
+    // carries a throttle", and pinning the count meant adding a route made this
+    // fail for the wrong reason. PUT is included — group pricing uses it.
+    const writes = (src.match(/@(Post|Patch|Put|Delete)\(/g) ?? []).length;
     const limits = (src.match(/@Throttle\(/g) ?? []).length;
-    expect(writes).toBe(3);
-    expect(limits).toBe(3);
+    expect(writes).toBeGreaterThanOrEqual(4);
+    expect(limits).toBe(writes);
+  });
+});
+
+describe('per-programme group pricing stays inside the same boundary', () => {
+  const ctrl = read('./provider-programme.controller.ts');
+  const svc = read('./provider-programme-pricing.service.ts');
+
+  it('the programme is verified as the caller’s before anything is written', () => {
+    expect(svc).toMatch(/where: \{ id: programmeId, providerId: actor\.providerId \}/);
+    const body = svc.slice(svc.indexOf('async set('));
+    expect(body.indexOf('assertOwnProgramme')).toBeLessThan(body.indexOf('nationalityGroup.findMany'));
+  });
+
+  it('a group that is not the caller’s is refused, not skipped', () => {
+    expect(svc).toMatch(/if \(!byId\.has\(e\.nationalityGroupId\)\) throw new NotFoundException/);
+  });
+
+  it('every pricing query is scoped by providerId', () => {
+    const queries = svc.match(/where: \{ providerId: actor\.providerId[^}]*\}/g) ?? [];
+    expect(queries.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('new pricing lands PENDING and a changed amount returns to PENDING', () => {
+    expect(svc).toMatch(/reviewStatus: 'PENDING'/);
+    expect((svc.match(/amountChanged \? \{ reviewStatus: 'PENDING' as const \} : \{\}/g) ?? []).length).toBe(2);
+  });
+
+  it('unchecking DEACTIVATES — it never deletes', () => {
+    expect(svc).not.toMatch(/providerTuition\.delete|providerScholarship\.delete/);
+    expect(svc).toMatch(/data: \{ isActive: false, updatedById: actor\.userId \}/);
+  });
+
+  it('reactivating an unchanged row does not cost its approval', () => {
+    // `isActive: true` is set unconditionally on the update; reviewStatus moves
+    // only when the amount moved.
+    const t = svc.slice(svc.indexOf('providerTuition.update'), svc.indexOf('// ── scholarship'));
+    expect(t).toMatch(/isActive: true/);
+    expect(t).toMatch(/amountChanged \?/);
+  });
+
+  it('these rows are group-scoped only — never a bare nationality', () => {
+    expect((svc.match(/nationality: null/g) ?? []).length).toBe(2);
+    expect(svc).not.toMatch(/nationality: (?!null)[a-z]/i);
+  });
+
+  it('the route takes the desired state, so omission is expressible', () => {
+    expect(ctrl).toMatch(/@Put\(':id\/group-pricing'\)/);
+    expect(ctrl).not.toMatch(/@Delete\(':id\/group-pricing/);
   });
 });
 
