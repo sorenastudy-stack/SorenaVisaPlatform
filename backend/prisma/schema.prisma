@@ -535,7 +535,6 @@ model User {
   assignedTickets   Ticket[]               @relation("TicketAssignee")
   createdTickets    Ticket[]               @relation("TicketCreator")
   ticketMessages    TicketMessage[]        @relation("TicketMessageSender")
-  agentProfile      AgentProfile?
   agentApplications AdmissionApplication[] @relation("ApplicationAgent")
 
   // PR-DASH-1: client dashboard relations. `clientVisaCases` are the
@@ -3663,23 +3662,10 @@ model AdmissionDocument {
   @@map("admission_documents")
 }
 
-model AgentProfile {
-  id         String   @id @default(cuid())
-  userId     String   @unique
-  agencyName String
-  agencyCode String   @unique
-  branchName String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("agent_profiles")
-}
 
 // ─── LIA PROFILES (PR-DOCUSIGN-1) ─────────────────────────────────────────────
 // LIA's IAA (Immigration Advisers Authority) credential record. 1:1 with a
-// User of role=LIA. Mirrors the AgentProfile shape — 1:1 child table on User,
+// User of role=LIA. A 1:1 child table on User,
 // snake_case @@map, cascade on user delete.
 //
 // Lifecycle: an LIA logs in for the first time after this migration ships,
@@ -5580,7 +5566,7 @@ enum AIGuidanceLevel {
 }
 
 // The 9 AI agents (PRD_13). Names checked against the existing referral-agency
-// models (AgentProfile / AffiliateAgent) — no collision; these are AI agents.
+// models (AffiliateAgent) — no collision; these are AI agents.
 enum AIAgentType {
   USER_GUIDANCE
   COUNTRY_COMPARE
