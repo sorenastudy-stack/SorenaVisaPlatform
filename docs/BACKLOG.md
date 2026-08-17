@@ -538,6 +538,47 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## Virus scanning, slice 2 — every in-handler upload — DONE 18 Aug 2026
+`docs/PHASE_41_ANTIVIRUS_SLICE2_ALL_UPLOAD_POINTS.md`. No migration, no new env vars, no new
+services — 21 routes wired to one shared `UploadScanService.scanOrReject()`.
+
+Eight handlers used multer's `diskStorage`, so the file was on the volume before any code ran;
+all now `memoryStorage()`, and a refused upload leaves the filesystem untouched. Eleven routes
+had **no size cap at the multipart boundary at all** — multer would buffer an unbounded body
+into memory before any service check ran. All capped now, nothing above 20 MB.
+
+Two placement traps found while wiring. The importers wrap their parse in a catch that rewrites
+any error into "Could not read the spreadsheet" — a scan inside it turns a scanner outage into a
+400 about file format. And the importer services are shared by the staff and provider routes, so
+scanning at both layers would double-scan every provider upload; the scan sits at the innermost
+shared method, once per request, with a comment at the outer one explaining the absence.
+
+Macro-capable Office formats refused by extension AND mime on the importers **and admission
+documents** (accepts .docx — the brief's own rule covers it). Not on HR contracts: PDF-only,
+nothing to refuse.
+
+The slice-1 pinning test is gone. "portal.service.ts is the only caller" read source text rather
+than behaviour and became false by design here. Replaced by `eicar-routes.spec.ts`: real
+AppModule, real EICAR over real HTTP at all 22 routes, exact 422 + exact message + measured
+deltas on nine tables, disk and R2. **The exactness caught five routes answering 401/403/400
+without ever reaching the scanner** — "assert some 4xx" would have called them green. Proven able
+to fail: removing one route's scan turned it red on exactly those two routes.
+
+Near-miss worth remembering: the matrix's first version resolved guard overrides inside a
+try/catch, one path was wrong, and the swallow left a guard active. Guards are imported by name
+now so a bad path is a loud import error.
+
+Proof: 24/24 matrix, backend 1489/1489, clean build.
+
+**Still open.** (a) The R2 presigned case-document flow (`documents.service.ts`, 7 existing
+UPLOADED rows) — backend never sees the bytes, so there is no handler to scan and **the guard
+test cannot detect this gap**; needs a staging prefix, scan job, AVAILABLE download gate and a
+backfill. (b) clamd hardening — still stock `clamav/clamav:stable`; `AlertEncrypted`, `ScanOLE2`
+and an explicit `StreamMaxLength` all need a `clamav/Dockerfile` in this repo and the Railway
+service repointed to repo-deploy.
+
+---
+
 ## Virus scanning, slice 1 — payment receipts — DONE 18 Aug 2026
 `docs/PHASE_40_ANTIVIRUS_SLICE1_PAYMENT_RECEIPTS.md`. No migration. New Railway service `clamav`
 (private network only) plus `CLAMAV_HOST` / `CLAMAV_PORT` on the backend.
