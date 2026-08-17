@@ -538,6 +538,40 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## Archiving a country group — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_GROUP_ARCHIVE.md`. Migration
+`20260817222500_nationality_group_archive` — one nullable `archivedAt` column, no backfill.
+
+**Closes the "clearing a default still doesn't let you delete the group" gap.** Delete was a hard
+`DELETE` and the pricing rows hold a `RESTRICT` FK, so it was refused whenever any rate had EVER
+referenced the group — including rates already cleared. A once-priced group was permanently
+undeletable. The blocker moved from *any row exists* to *any row is live*.
+
+**"Delete" now archives**, matching the rest of the portal: the group leaves the active list,
+cannot be picked for new pricing (per-programme or default), cannot be edited back into use — and
+**not one priced row is touched**. Verified byte-for-byte: same amounts, same review states, same
+rows.
+
+**The step-3 decision: BLOCKED while any price is live, not auto-deactivated.** Auto-deactivating
+would let one click on a button labelled "Delete" silently change what real students are quoted
+across every programme using the group. That is the same call slice E made refusing to null these
+references, and slice D made when approval stopped publishing. The refusal names what is in the
+way and promises nothing will be deleted; clearing the prices then unlocks it.
+
+Two smaller things: an archived group's name is freed for reuse (the archived one is renamed
+`South Asia (archived 2026-08-17)` rather than permanently owning it), and its rates are hidden
+from the current-pricing view — the page contradicted itself otherwise, with the group gone from
+the list above while its name still headed a rate below.
+
+Proof: 26/26 over HTTP, 11/11 in a real browser, five guards proven RED — including the one that
+matters most, the per-programme **write** path walking archived groups, which would have turned an
+archive into exactly the silent price change this design refuses. Backend 1434/1434, frontend
+66/66.
+
+**Still open:** no un-archive button (needs a DB update), and no archived view for the institution.
+
+---
+
 ## Default pricing at country-group level — DONE 17 Aug 2026
 `docs/PHASE_PROVIDER_PORTAL_GROUP_DEFAULT_PRICING.md`. No migration.
 
@@ -564,9 +598,8 @@ rates now read **Not applied**.
 
 Proof: 24/24 over HTTP, 14/14 in a real browser. Backend 1420/1420, frontend 66/66.
 
-⚠ **Known gap worth revisiting:** clearing a default does not let you delete the group — the FK is
-`RESTRICT` and counts deactivated rows too. The list labels them "Not applied" so the disabled
-Delete button is explicable, but "clear the price, then delete the group" still fails.
+~~⚠ Known gap: clearing a default does not let you delete the group~~ — **CLOSED 17 Aug 2026** by
+archiving; see below.
 
 ---
 

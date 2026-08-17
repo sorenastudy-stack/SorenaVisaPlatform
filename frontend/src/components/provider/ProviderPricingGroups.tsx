@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Plus, PencilLine, Trash2, X, Clock3, CheckCircle2, EyeOff, Users } from 'lucide-react';
+import { Loader2, Plus, PencilLine, Archive, X, Clock3, CheckCircle2, EyeOff, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -119,10 +119,10 @@ export function ProviderPricingGroups() {
     setBusy(g.id);
     try {
       await api.delete(`/provider/nationality-groups/${g.id}`);
-      toast.success(`“${g.name}” deleted.`);
+      toast.success(`“${g.name}” archived. Its price history is kept.`);
       load();
     } catch (e: any) {
-      toast.error(e?.message ?? 'That group couldn’t be deleted.');
+      toast.error(e?.message ?? 'That group couldn’t be archived.');
     } finally { setBusy(null); }
   };
 
@@ -293,6 +293,10 @@ export function ProviderPricingGroups() {
       <div className="space-y-2">
         {groups.map((g) => {
           const attached = g.attachedRates.tuitions + g.attachedRates.scholarships;
+          // Mirrors the server's rule: only rates that are still applied block
+          // archiving. A cleared rate still references the group but is not in
+          // front of anybody.
+          const livePrices = groupedRates.filter((r) => r.nationalityGroup?.id === g.id && r.isActive).length;
           return (
             <Card key={g.id}>
               <CardContent className="space-y-3 p-4">
@@ -327,13 +331,19 @@ export function ProviderPricingGroups() {
                     className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-[#1e3a5f] hover:bg-[#faf8f3]">
                     <PencilLine size={14} /> Edit
                   </button>
-                  {/* Explains itself instead of failing when pressed. */}
+                  {/* "Archive", not "Delete" — the group leaves the list and its
+                      prices stay exactly as they are. Blocked only while a price
+                      is still LIVE, so clearing the prices now genuinely unlocks
+                      it; previously any rate that had EVER existed blocked it
+                      forever. */}
                   <button
                     onClick={() => removeGroup(g)}
-                    disabled={busy === g.id || attached > 0}
-                    title={attached > 0 ? 'Remove the rates using this group first.' : undefined}
+                    disabled={busy === g.id || livePrices > 0}
+                    title={livePrices > 0
+                      ? 'Clear this group’s prices first — nothing will be deleted.'
+                      : 'Archive: the group leaves this list, its price history is kept.'}
                     className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-[#1e3a5f] hover:bg-[#faf8f3] disabled:cursor-not-allowed disabled:opacity-40">
-                    {busy === g.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Delete
+                    {busy === g.id ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />} Archive
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-1.5">

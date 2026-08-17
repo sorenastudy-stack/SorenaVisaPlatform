@@ -2865,6 +2865,18 @@ model NationalityGroup {
   providerId    String
   name          String
   nationalities String[]
+  /// PR-PROVIDER-PORTAL — ARCHIVED, not deleted.
+  ///
+  /// The rows that reference a group hold a RESTRICT foreign key, so a hard
+  /// delete was refused whenever any price had ever pointed at it — including
+  /// prices the institution had already cleared. Archiving retires the group
+  /// without touching a single priced row: it leaves the active list, cannot be
+  /// chosen for new pricing, and every rate it ever carried stays exactly where
+  /// it is, still resolvable and still auditable.
+  ///
+  /// A timestamp rather than a boolean: "when was this retired" is the question
+  /// asked afterwards, and a boolean cannot answer it.
+  archivedAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -2872,8 +2884,12 @@ model NationalityGroup {
   tuitions     ProviderTuition[]
   scholarships ProviderScholarship[]
 
-  /// One institution cannot have two groups called the same thing — the name is
-  /// how their own staff tell them apart on the rate screen.
+  /// One institution cannot have two ACTIVE groups called the same thing — the
+  /// name is how their own staff tell them apart on the rate screen. The
+  /// constraint stays on (providerId, name) because Postgres cannot express a
+  /// partial unique index through Prisma; the service therefore checks the clash
+  /// against ACTIVE groups only and renames an archived namesake out of the way,
+  /// so retiring "South Asia" does not permanently burn the name.
   @@unique([providerId, name])
   @@index([providerId])
   @@map("nationality_groups")

@@ -69,7 +69,9 @@ export class ProviderProgrammePricingService {
 
     const [groups, tuitions, scholarships] = await Promise.all([
       this.prisma.nationalityGroup.findMany({
-        where: { providerId: actor.providerId },
+        // Archived groups are off the menu — they cannot be picked for new
+        // pricing. Rates they already carry are untouched and keep resolving.
+        where: { providerId: actor.providerId, archivedAt: null },
         select: { id: true, name: true, nationalities: true },
         orderBy: { name: 'asc' },
       }),
@@ -111,8 +113,11 @@ export class ProviderProgrammePricingService {
   async set(programmeId: string, dto: SetProgrammeGroupPricingDto, actor: PricingActor) {
     const programme = await this.assertOwnProgramme(programmeId, actor);
 
+    // Archived groups are excluded here too, which means two things at once: an
+    // entry naming one is refused, and the reconcile loop below does not walk
+    // it — so archiving never silently deactivates the rates it still holds.
     const groups = await this.prisma.nationalityGroup.findMany({
-      where: { providerId: actor.providerId },
+      where: { providerId: actor.providerId, archivedAt: null },
       select: { id: true, name: true },
     });
     const byId = new Map(groups.map((g) => [g.id, g]));

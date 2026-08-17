@@ -23,8 +23,11 @@ export interface GroupActor {
   userId: string | null;
 }
 
+/** Archived groups are excluded from every place a group can be CHOSEN. */
+const ACTIVE_ONLY = { archivedAt: null } as const;
+
 const GROUP_SELECT = {
-  id: true, name: true, nationalities: true, createdAt: true, updatedAt: true,
+  id: true, name: true, nationalities: true, archivedAt: true, createdAt: true, updatedAt: true,
   _count: { select: { tuitions: true, scholarships: true } },
 } satisfies Prisma.NationalityGroupSelect;
 
@@ -37,6 +40,11 @@ export class NationalityGroupService {
 
   private scoped(id: string, providerId: string) {
     return { id, providerId };
+  }
+
+  /** Scoped AND not archived — for anything that picks a group to price. */
+  private selectable(id: string, providerId: string) {
+    return { id, providerId, ...ACTIVE_ONLY };
   }
 
   /**
@@ -110,7 +118,7 @@ export class NationalityGroupService {
 
   async list(actor: GroupActor) {
     const groups = await this.prisma.nationalityGroup.findMany({
-      where: { providerId: actor.providerId },
+      where: { providerId: actor.providerId, ...ACTIVE_ONLY },
       select: GROUP_SELECT,
       orderBy: { name: 'asc' },
     });
@@ -123,11 +131,21 @@ export class NationalityGroupService {
     const name = dto.name.trim();
     if (!name) throw new BadRequestException('Give the group a name.');
 
+    // Only an ACTIVE namesake is a clash. An archived one still holds the unique
+    // index, so it is renamed out of the way rather than permanently owning a
+    // name the institution may want back.
     const clash = await this.prisma.nationalityGroup.findFirst({
       where: { providerId: actor.providerId, name },
-      select: { id: true },
+      select: { id: true, archivedAt: true },
     });
-    if (clash) throw new ConflictException('You already have a group with that name.');
+    if (clash?.archivedAt) {
+      await this.prisma.nationalityGroup.update({
+        where: { id: clash.id },
+        data: { name: `${name} (archived ${clash.archivedAt.toISOString().slice(0, 10)})` },
+      });
+    } else if (clash) {
+      throw new ConflictException('You already have a group with that name.');
+    }
 
     const group = await this.prisma.nationalityGroup.create({
       data: { providerId: actor.providerId, name, nationalities },
@@ -141,7 +159,7 @@ export class NationalityGroupService {
 
   async update(id: string, dto: UpsertNationalityGroupDto, actor: GroupActor) {
     const existing = await this.prisma.nationalityGroup.findFirst({
-      where: this.scoped(id, actor.providerId),
+      where: this.selectable(id, actor.providerId),
       select: { id: true, name: true, nationalities: true },
     });
     if (!existing) throw new NotFoundException('Group not found.');
@@ -152,7 +170,7 @@ export class NationalityGroupService {
 
     if (name !== existing.name) {
       const clash = await this.prisma.nationalityGroup.findFirst({
-        where: { providerId: actor.providerId, name, id: { not: id } },
+        where: { providerId: actor.providerId, name, id: { not: id }, ...ACTIVE_ONLY },
         select: { id: true },
       });
       if (clash) throw new ConflictException('You already have a group with that name.');
@@ -179,47 +197,76 @@ export class NationalityGroupService {
   }
 
   /**
-   * Delete — BLOCKED while any rate still points at the group.
+   * ARCHIVE — the portal's "delete".
    *
-   * The alternative was to null the reference and let those rates fall back to
-   * the programme's flat fee. That is worse in a way that does not announce
-   * itself: the rows would survive with neither a nationality nor a group (which
-   * the CHECK constraint forbids anyway), and if they were instead deleted or
-   * ignored, a student would quietly start being quoted a different number with
-   * nothing in the audit trail tying it to this action.
+   * The old behaviour hard-deleted, and the RESTRICT foreign key refused it
+   * whenever any rate had EVER referenced the group — including rates the
+   * institution had already cleared. So a group could become permanently
+   * undeletable by having once been priced, which is the gap this closes.
    *
-   * Blocking makes the institution say what those rates should be first. The
-   * message names the count, because "cannot delete" without a number is a dead
-   * end rather than an instruction.
+   * WHAT ARCHIVING DOES NOT DO: touch a single priced row. Every rate the group
+   * ever carried stays exactly as it is — same amounts, same review status, same
+   * history — and the resolver keeps reading them for as long as they are
+   * active. Archiving is about the group leaving the *menu*, not about money
+   * changing.
+   *
+   * WHICH IS WHY IT IS BLOCKED WHILE ANY RATE IS STILL LIVE. The alternative —
+   * auto-deactivating the group's prices along with it — would let one click on
+   * a button labelled "delete" silently change what real students are quoted
+   * across every programme using that group, with nothing in the UI saying so.
+   * That is the same judgement slice E already made when it refused to null
+   * these references, and slice D made when approval stopped publishing: no
+   * single action should quietly move a price in front of a student, or out from
+   * under one. Clearing the prices first is a visible, per-rate decision; this
+   * is not.
+   *
+   * Once those rates are cleared (each deactivated, none deleted), archiving
+   * succeeds — which is exactly the case that used to be impossible.
    */
   async remove(id: string, actor: GroupActor) {
     const existing = await this.prisma.nationalityGroup.findFirst({
-      where: this.scoped(id, actor.providerId),
-      select: { id: true, name: true, _count: { select: { tuitions: true, scholarships: true } } },
+      where: this.selectable(id, actor.providerId),
+      select: { id: true, name: true },
     });
     if (!existing) throw new NotFoundException('Group not found.');
 
-    const attached = existing._count.tuitions + existing._count.scholarships;
-    if (attached > 0) {
+    // ACTIVE rates only. A cleared rate still references the group and still
+    // holds the FK, but it is not in front of anybody.
+    const [liveTuitions, liveScholarships] = await Promise.all([
+      this.prisma.providerTuition.count({ where: { nationalityGroupId: id, isActive: true } }),
+      this.prisma.providerScholarship.count({ where: { nationalityGroupId: id, isActive: true } }),
+    ]);
+    const live = liveTuitions + liveScholarships;
+    if (live > 0) {
       const bits: string[] = [];
-      if (existing._count.tuitions) bits.push(`${existing._count.tuitions} fee${existing._count.tuitions === 1 ? '' : 's'}`);
-      if (existing._count.scholarships) bits.push(`${existing._count.scholarships} scholarship${existing._count.scholarships === 1 ? '' : 's'}`);
+      if (liveTuitions) bits.push(`${liveTuitions} fee${liveTuitions === 1 ? '' : 's'}`);
+      if (liveScholarships) bits.push(`${liveScholarships} scholarship${liveScholarships === 1 ? '' : 's'}`);
       throw new ConflictException(
-        `“${existing.name}” is still used by ${bits.join(' and ')}. Change or remove those first, then delete the group.`,
+        `“${existing.name}” is still used by ${bits.join(' and ')}. Clear those prices first, then archive the group — nothing will be deleted.`,
       );
     }
 
-    await this.prisma.nationalityGroup.delete({ where: { id } });
-    await this.audit('PROVIDER_NATIONALITY_GROUP_DELETED', id, actor, { name: existing.name });
-    return { deleted: true, id };
+    const archivedAt = new Date();
+    await this.prisma.nationalityGroup.update({ where: { id }, data: { archivedAt } });
+    await this.audit('PROVIDER_NATIONALITY_GROUP_ARCHIVED', id, actor, {
+      name: existing.name,
+      archivedAt: archivedAt.toISOString(),
+      // Counted so the trail records that history was left intact, not removed.
+      retainedPricingRows:
+        (await this.prisma.providerTuition.count({ where: { nationalityGroupId: id } }))
+        + (await this.prisma.providerScholarship.count({ where: { nationalityGroupId: id } })),
+    });
+    return { archived: true, id, archivedAt };
   }
 
   // ── Rates attached to a group ──────────────────────────────────────────────
 
   /** The group must be the caller's own, and the programme too if one is named. */
   private async assertOwnedTargets(dto: { nationalityGroupId: string; programmeId?: string }, actor: GroupActor) {
+    // selectable(), not scoped(): an archived group is off the menu, so a rate
+    // cannot be attached to one even by id.
     const group = await this.prisma.nationalityGroup.findFirst({
-      where: this.scoped(dto.nationalityGroupId, actor.providerId),
+      where: this.selectable(dto.nationalityGroupId, actor.providerId),
       select: { id: true, name: true },
     });
     if (!group) throw new NotFoundException('Group not found.');
@@ -290,11 +337,19 @@ export class NationalityGroupService {
     return { ...row, group: { id: group.id, name: group.name } };
   }
 
-  /** Every rate the institution has, grouped or not — so the screen can show both. */
+  /**
+   * Every rate the institution has — for the screen that shows current pricing.
+   *
+   * Rates belonging to an ARCHIVED group are excluded. Leaving them in made the
+   * page contradict itself: the group had vanished from the list above while its
+   * name still headed a rate below it. The rows themselves are untouched; this
+   * is a filter on one view, not a change to the data.
+   */
   async listRates(actor: GroupActor) {
+    const notArchived = { OR: [{ nationalityGroupId: null }, { nationalityGroup: { archivedAt: null } }] };
     const [tuitions, scholarships] = await Promise.all([
       this.prisma.providerTuition.findMany({
-        where: { providerId: actor.providerId },
+        where: { providerId: actor.providerId, ...notArchived },
         select: {
           id: true, nationality: true, amountValue: true, currency: true, feeYear: true,
           level: true, programmeId: true, isActive: true, reviewStatus: true,
@@ -304,7 +359,7 @@ export class NationalityGroupService {
         take: 500,
       }),
       this.prisma.providerScholarship.findMany({
-        where: { providerId: actor.providerId },
+        where: { providerId: actor.providerId, ...notArchived },
         select: {
           id: true, nationality: true, name: true, amountType: true, amountValue: true,
           currency: true, level: true, programmeId: true, isActive: true, reviewStatus: true,
