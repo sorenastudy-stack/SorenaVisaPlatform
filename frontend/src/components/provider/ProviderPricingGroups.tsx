@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
 import { getCountryName, countryCodeToFlagEmoji } from '@/lib/country-codes';
+import { CountryMultiSelect } from '@/components/common/CountryMultiSelect';
 
 // PR-PROVIDER-PORTAL slice E — country groups, and the rates attached to them.
 //
@@ -45,7 +46,7 @@ export function ProviderPricingGroups() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [name, setName] = useState('');
-  const [codes, setCodes] = useState('');
+  const [codes, setCodes] = useState<string[]>([]);
   const [rateFor, setRateFor] = useState<Group | null>(null);
   const [rateKind, setRateKind] = useState<'tuition' | 'scholarship'>('tuition');
   const [rateAmount, setRateAmount] = useState('');
@@ -62,16 +63,22 @@ export function ProviderPricingGroups() {
   }, []);
   useEffect(load, [load]);
 
-  const openNew = () => { setName(''); setCodes(''); setEditing('new'); };
-  const openEdit = (g: Group) => { setName(g.name); setCodes(g.nationalities.join(', ')); setEditing(g.id); };
+  const openNew = () => { setName(''); setCodes([]); setEditing('new'); };
+  // Existing groups were created through the old comma-separated box; their
+  // stored codes drop straight into the picker, which is why this stayed a UI
+  // change with no data migration behind it.
+  const openEdit = (g: Group) => { setName(g.name); setCodes(g.nationalities); setEditing(g.id); };
 
-  const parseCodes = (raw: string) =>
-    [...new Set(raw.split(/[\s,;]+/).map((c) => c.trim().toUpperCase()).filter((c) => CODE.test(c)))];
+  // Kept, even though the picker can only emit catalogue codes: it is the last
+  // thing between the payload and the server, and "the UI cannot produce a bad
+  // code" is a property of today's UI rather than of this function.
+  const normalise = (raw: string[]) =>
+    [...new Set(raw.map((c) => (c ?? '').trim().toUpperCase()).filter((c) => CODE.test(c)))];
 
   const saveGroup = async () => {
-    const nationalities = parseCodes(codes);
+    const nationalities = normalise(codes);
     if (!name.trim()) return toast.error('Give the group a name.');
-    if (nationalities.length === 0) return toast.error('Add at least one two-letter country code.');
+    if (nationalities.length === 0) return toast.error('Choose at least one country.');
     setBusy('group');
     try {
       const body = { name: name.trim(), nationalities };
@@ -155,23 +162,13 @@ export function ProviderPricingGroups() {
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Group name</span>
               <input value={name} onChange={(e) => setName(e.target.value)} className={INPUT} placeholder="South Asia" />
             </label>
-            <label className="block">
+            <div>
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Countries</span>
-              <input value={codes} onChange={(e) => setCodes(e.target.value)} className={INPUT} placeholder="IR, PK, IN, BD" />
-              <span className="mt-1 block text-xs text-gray-500">
-                Two-letter country codes, separated by commas.
-              </span>
-            </label>
-            {parseCodes(codes).length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {parseCodes(codes).map((c) => (
-                  <span key={c} className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs">
-                    <span aria-hidden>{countryCodeToFlagEmoji(c)}</span>
-                    <strong className="text-[#1e3a5f]">{getCountryName(c, 'en') || c}</strong>
-                  </span>
-                ))}
-              </div>
-            )}
+              {/* Search by name; the code is what gets stored. 250 is the cap the
+                  server enforces, stated here so it is hit as a message rather
+                  than a rejected save. */}
+              <CountryMultiSelect value={codes} onChange={setCodes} max={250} />
+            </div>
             {editing !== 'new' && (
               <p className="text-xs text-gray-500">
                 Changing this list changes who any fee on this group applies to.
