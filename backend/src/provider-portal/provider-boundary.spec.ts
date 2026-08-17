@@ -29,6 +29,24 @@ describe('ProvidersController must never admit the PROVIDER role', () => {
   });
 });
 
+describe('provisioning cannot hijack somebody else’s account', () => {
+  const src = read('../providers/providers.service.ts');
+
+  // Reusing a User by email was meant for re-provisioning an institution that
+  // already had one. It accepted ANY existing account, so pointing an
+  // institution at a client's address would attach that person's account to it
+  // — role untouched, so they could never reach the portal, while the
+  // institution now pointed at them.
+  it('refuses to reuse an existing account that is not a PROVIDER', () => {
+    expect(src).toMatch(/if \(existingUser && existingUser\.role !== 'PROVIDER'\)/);
+    expect(src).toMatch(/not an institution login/);
+  });
+
+  it('reads the role in order to be able to check it', () => {
+    expect(src).toMatch(/select: \{ id: true, role: true, educationProvider:/);
+  });
+});
+
 describe('the provider controller cannot be told which institution to act on', () => {
   const src = read('./provider-portal.controller.ts');
 

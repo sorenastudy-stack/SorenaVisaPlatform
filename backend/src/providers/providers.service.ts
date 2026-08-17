@@ -431,10 +431,27 @@ export class ProvidersService {
     const result = await this.prisma.$transaction(async (tx) => {
       const existingUser = await tx.user.findUnique({
         where: { email: normalized },
-        select: { id: true, educationProvider: { select: { id: true } } },
+        select: { id: true, role: true, educationProvider: { select: { id: true } } },
       });
       if (existingUser?.educationProvider) {
         throw new ConflictException('That email already belongs to another institution.');
+      }
+      // A REUSED ACCOUNT MUST ALREADY BE A PROVIDER ACCOUNT.
+      //
+      // Reusing by email was written for the case of re-provisioning an
+      // institution whose User row already exists. It silently accepted ANY
+      // existing account: pointing an institution at a client's or a staff
+      // member's address would attach their personal account to that
+      // institution, leaving their role untouched — so they would sign in,
+      // land on their own portal, and never reach the provider portal, while
+      // `educationProvider.userId` now pointed at them.
+      //
+      // Found by trying to provision a real address on production that turned
+      // out to be an existing LEAD. Refuse it, and say what to do instead.
+      if (existingUser && existingUser.role !== 'PROVIDER') {
+        throw new ConflictException(
+          'That email already belongs to a Sorena account that is not an institution login. Use a different address for this institution.',
+        );
       }
 
       // 48 random bytes as the password hash: not a password anyone can present,
