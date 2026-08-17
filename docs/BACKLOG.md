@@ -538,6 +538,35 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## Virus scanning, slice 1 — payment receipts — DONE 18 Aug 2026
+`docs/PHASE_40_ANTIVIRUS_SLICE1_PAYMENT_RECEIPTS.md`. No migration. New Railway service `clamav`
+(private network only) plus `CLAMAV_HOST` / `CLAMAV_PORT` on the backend.
+
+Scoped to the single riskiest upload: the manual bank-transfer receipt, which a Finance Admin opens
+by hand. `AntivirusService` speaks clamd's INSTREAM protocol directly and **fails closed** — an
+unreachable, slow, erroring or unintelligible scanner returns UNAVAILABLE, never CLEAN, and the
+upload is refused. A scanner that quietly stops scanning is worse than none, because the control
+still looks present.
+
+The uploader is told only *"This file could not be uploaded. Please try a different file."* The
+signature goes to the audit log (`RECEIPT_UPLOAD_REJECTED_MALWARE`), never to the response.
+
+Proof: 7/7 live on production through the real endpoint — EICAR → 422 with nothing technical
+leaked, then a clean JPG accepted **on the same invoice**, which is what proves the infected
+attempt left no receipt behind. 11/11 in the database. 15 unit tests against a fake clamd, six of
+them fail-closed cases. Backend 1470/1470.
+
+⚠️ Unsetting `CLAMAV_HOST` does **not** disable scanning — it blocks every receipt upload. Rollback
+is reverting the ~69-line block in `portal.service.ts`; see §10 of the phase doc.
+
+**Still open — slices 2–6.** Every other upload is unscanned: case and student visa documents,
+admission documents, INZ receipts, LIA licence files, HR documents, provider marketing materials,
+cover images, staff photos, ticket attachments, and the three Excel importers. Client case
+documents (slice 3) go straight to R2 by presigned PUT, so the backend never holds the bytes —
+that flow has to change before scanning is possible at all.
+
+---
+
 ## Portal navigation reorganised + marketing materials — DONE 18 Aug 2026
 `docs/PHASE_PROVIDER_PORTAL_NAV_AND_MARKETING.md`. Migration
 `20260818090000_provider_marketing_assets` — one new table, additive.
