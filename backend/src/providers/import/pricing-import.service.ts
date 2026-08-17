@@ -143,13 +143,35 @@ export class PricingImportService {
           level: (row.level as any) ?? null,
           feeYear: row.feeYear,
         },
-        select: { id: true },
+        select: { id: true, amountValue: true, currency: true, term: true, notes: true },
       });
 
       if (existing) {
+        // PR-PROVIDER-PORTAL slice C — RE-REVIEW A CHANGED PRICE.
+        //
+        // `reviewStatus` defaults to PENDING, and a default only applies on
+        // CREATE. This branch updates in place, so before this an APPROVED row
+        // silently kept its approval while its figure changed — a second upload
+        // could move a live price with nobody looking at it, which is the exact
+        // thing slice A's gate exists to prevent. It was latent then (zero
+        // tuition rows anywhere) and stops being latent the moment institutions
+        // upload their own sheets.
+        //
+        // An unchanged row keeps its approval: re-uploading the same sheet is a
+        // normal thing to do and should not throw away staff decisions.
+        const figuresChanged =
+          Number(existing.amountValue) !== Number(row.amountValue) ||
+          existing.currency !== row.currency ||
+          (existing.term ?? null) !== (row.term ?? null) ||
+          (existing.notes ?? null) !== (row.notes ?? null);
+
         await this.prisma.providerTuition.update({
           where: { id: existing.id },
-          data: { amountValue: row.amountValue, currency: row.currency, term: row.term, notes: row.notes, isActive: true, updatedById: actorId },
+          data: {
+            amountValue: row.amountValue, currency: row.currency, term: row.term, notes: row.notes,
+            isActive: true, updatedById: actorId,
+            ...(figuresChanged ? { reviewStatus: 'PENDING' as const } : {}),
+          },
         });
         updated++;
       } else {

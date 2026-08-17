@@ -28,6 +28,14 @@ export const ROLE_REDIRECT: Record<string, string> = {
   FINANCE:     '/staff/finance',
   STUDENT:     '/student/dashboard',
   LEAD:        '/portal/case',
+  // External (non-staff, non-client) portals. Both sign in by magic link, and
+  // both were missing here: with no entry, `routeForRole` returns the caller's
+  // fallback — `/login` from the password page, `/portal/case` from the
+  // magic-link confirm — so a successful sign-in landed on the login screen
+  // again, or on a client portal their role cannot open. AGENT has been in that
+  // state since the agent portal shipped; PROVIDER would have joined it.
+  AGENT:       '/agent',
+  PROVIDER:    '/provider',
 };
 
 export function routeForRole(role: string | null | undefined, fallback = '/login'): string {

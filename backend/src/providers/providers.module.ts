@@ -14,6 +14,10 @@ import { R2Module } from '../common/r2/r2.module';
   imports: [PrismaModule, WebSyncModule, R2Module], // WebSyncModule exports CatalogSyncService (sync-now)
   controllers: [ProvidersController],
   providers: [ProvidersService, EventsService, RolesGuard, ProgrammeImportService, PricingImportService, ProgrammeCurationService],
-  exports: [ProvidersService],
+  // PricingImportService/ProgrammeImportService are exported for the provider
+  // portal's slice-C wrapper — it reaches the SAME importer instances staff use,
+  // which is the point: one parser, one set of validation rules, one landing
+  // state. A second copy would be a second thing to keep in step.
+  exports: [ProvidersService, PricingImportService, ProgrammeImportService],
 })
 export class ProvidersModule {}

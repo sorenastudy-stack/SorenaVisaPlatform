@@ -416,10 +416,46 @@ endpoints — cross-tenant read and write both refused, unprovisioned and cleare
 429 at request 21. Suite 1322/1322. The three boundary tests were each proven to go RED when the
 mistake they guard against is reintroduced.
 
-### Slice C — importer wrapper and provider UI — NEXT
-Smallest slice: the importer is already provider-scoped internally and already lands PENDING.
-Bulk approval belongs here, where a batch is a known unit — approval is currently per row, which
-is fine at zero rows and will not be at real volume.
+### Slice C — importer wrapper and provider UI — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_SLICE_C.md`. No migration.
+
+Six routes under `/provider/imports` — `{programmes,tuition,scholarships}/{check,apply}` — behind
+Slice B's guard. **A separate route instead of `?dry=true`**, so this controller reads no query
+string at all and the "no caller-supplied id, ever" property needs nobody to remember it. The
+existing importer does the parsing, the flagged-row reporting and the dry run, unchanged. The UI
+is `/provider`, PROVIDER-only, no institution picker, with the review gate explained *before* the
+upload rather than only after it.
+
+**The Brand-column question, answered by testing it:** provider A uploaded a programme sheet whose
+`Brand` column named provider B on every row. All rows attached to A, none to B, and no
+institution was invented from the cell. That was already true — `ProgrammeImportService` ignores
+`Brand` whenever a providerId is supplied — and there is now a test that fails if that guard is
+removed.
+
+**⚠ Two holes closed that only became reachable now:**
+- **A changed price kept its approval.** `reviewStatus`'s `@default(PENDING)` applies on CREATE
+  only, and the tuition importer updates matching rows in place — so an APPROVED row could be
+  silently re-priced and stay live to students. Proven by removing the fix: a live figure moved
+  29,500 → 24,500 and still read APPROVED. A changed figure now returns the row to PENDING; an
+  unchanged re-upload keeps its approval. **This was a staff-path hole too, not only a provider one.**
+- **The programme importer had no size or type check at all.** The wrapper is the only thing
+  standing there; external uploads are `.xlsx` only (no macro-enabled `.xlsm`) and 5 MB.
+
+Also fixed: `role-redirect.ts` had no `PROVIDER` **or `AGENT`** entry, so a successful magic-link
+sign-in fell back to `/portal/case` — a client portal neither role can open. Both added. And the
+staff import screen still said rows were "now live" and "students see these straight away", which
+Slice A made false; corrected.
+
+Proof: 29/29 over HTTP with two real institutions and the real templates; 12/12 in a real browser
+signing in through the actual magic-link page; rate limit measured (6 accepted, first 429 at
+request 7, second institution unaffected). Backend 1340/1340, frontend 53/53. Five guards each
+proven to go RED when the mistake they catch is reintroduced.
+
+### Slice D — programme CRUD — NEXT
+Single-record add/edit/delete/activate for an institution's own programmes, so a flagged row can
+be corrected without re-uploading the whole sheet. **Bulk approval belongs here or later, not in
+C** — approving "everything from Tuesday's file" needs an upload to be a thing the database knows
+about, and today it is not. Then Slice E (country grouping) and Slice F (analytics).
 
 ---
 
