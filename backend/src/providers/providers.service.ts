@@ -680,6 +680,23 @@ export class ProvidersService {
   approveScholarship(id: string, actorId: string | null) { return this.setPricingReview('scholarship', id, 'APPROVED', actorId); }
   rejectScholarship(id: string, actorId: string | null) { return this.setPricingReview('scholarship', id, 'REJECTED', actorId); }
 
+  // PR-PROVIDER-PORTAL slice D — APPROVAL SETS reviewStatus AND NOTHING ELSE.
+  //
+  // This used to set `isActive: true` in the same breath, which quietly made
+  // approval a publish button. The two answer different questions — reviewStatus
+  // is "has somebody checked this", isActive is "is this being offered" — and an
+  // institution that deactivates a programme has answered the second one. Under
+  // the old behaviour the next approval on that programme republished it, with
+  // nothing in the UI to suggest that would happen.
+  //
+  // This is the same coupling slice A refused for pricing, in the same words:
+  // "Coupling them would silently republish a retired price on approval." A
+  // retired programme deserves the same treatment, and now gets it.
+  //
+  // ⚠ WORKFLOW CHANGE: approving no longer publishes. A first-time approved
+  // programme stays isActive:false until somebody activates it on the
+  // institution's programmes screen (or the institution does, slice D). The
+  // approvals queue says so rather than leaving it to be discovered.
   async approveProgramme(programmeId: string, actorId: string | null) {
     const programme = await this.ensureProgrammeExists(programmeId);
 
@@ -687,7 +704,6 @@ export class ProvidersService {
       where: { id: programmeId },
       data: {
         reviewStatus: ReviewStatus.APPROVED,
-        isActive: true,
       },
     });
 

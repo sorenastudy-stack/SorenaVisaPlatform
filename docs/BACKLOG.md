@@ -451,11 +451,49 @@ signing in through the actual magic-link page; rate limit measured (6 accepted, 
 request 7, second institution unaffected). Backend 1340/1340, frontend 53/53. Five guards each
 proven to go RED when the mistake they catch is reintroduced.
 
-### Slice D — programme CRUD — NEXT
-Single-record add/edit/delete/activate for an institution's own programmes, so a flagged row can
-be corrected without re-uploading the whole sheet. **Bulk approval belongs here or later, not in
-C** — approving "everything from Tuesday's file" needs an upload to be a thing the database knows
-about, and today it is not. Then Slice E (country grouping) and Slice F (analytics).
+### Slice D — programme CRUD — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_SLICE_D.md`. No migration.
+
+`GET`/`POST`/`PATCH` under `/provider/programmes`, plus `PATCH :id/active`. **No delete route** —
+`RecommendationItem` and `AdmissionProgrammeChoice` hold required FKs with no cascade, so the
+database refuses one, correctly.
+
+**This is the first portal controller that accepts an id**, which does not weaken slices B and C:
+the id names a RESOURCE, never a TENANT. Every read and write is scoped by `{ id, providerId }`
+together, so another institution's id matches no row and 404s. `scoped()` is that rule in one
+place, and the spec asserts the service contains no `findUnique` at all — it cannot take a
+providerId, so its presence would mean an unscoped read by definition.
+
+**⚠ The fix this slice opens with: approving a programme used to publish it.** `approveProgramme`
+set `reviewStatus: APPROVED` *and* `isActive: true`, so re-approving a programme an institution
+had switched off silently switched it back on. Approval now sets the review status only — the
+same rule slice A already applied to pricing. **Workflow change: approving no longer makes a
+programme live**; it must also be switched on, and the approvals screen now says so instead of
+promising "now visible to students".
+
+**⚠ The brief's premise was wrong and is worth recording:** `activation-bulk` was cited as a
+precedent that treats review and activation as separate concerns. It does the opposite —
+`setActivationBulk` → `setActivation` → `activationTarget()`, which sets APPROVED on activate and
+**back to PENDING on deactivate**. That coupling is documented there as deliberate (one switch on
+that screen) and was left alone. So the two surfaces now differ: staff deactivating a programme
+still costs its approval; an institution doing the same thing does not.
+
+Also found and fixed while building: the create DTO re-typed its four required fields with
+`declare`, which emits no runtime property, so **the validators never registered** and a body with
+no name reached Prisma and 500'd. The obvious repair (Create extends Update) fails more quietly —
+class-validator merges the parent's `@IsOptional` in. Both shapes now have a test.
+
+Proof: 33/33 over HTTP with two institutions — including **re-approving does not republish what
+was switched off**, an edit returning APPROVED→PENDING, a no-op edit keeping approval, and
+cross-tenant read/edit/deactivate all 404. 13/13 in a real browser through the form. Backend
+1382/1382, frontend 53/53. Six guards each proven to go RED.
+
+### Slice E — country-grouped tuition and scholarships — NEXT
+Provider-facing management of the per-nationality pricing rows the slice-C importer creates, so a
+single wrong rate can be corrected without re-uploading a sheet. Then Slice F (analytics).
+
+**Bulk approval is still unbuilt and still belongs after an upload becomes a thing the database
+knows about** — approving "everything from Tuesday's file" needs a batch identity.
 
 ---
 

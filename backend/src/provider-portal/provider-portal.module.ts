@@ -6,6 +6,8 @@ import { ProviderPortalController } from './provider-portal.controller';
 import { ProviderPortalService } from './provider-portal.service';
 import { ProviderImportController } from './provider-import.controller';
 import { ProviderImportService } from './provider-import.service';
+import { ProviderProgrammeController } from './provider-programme.controller';
+import { ProviderProgrammeService } from './provider-programme.service';
 import { ProviderAccessGuard } from './provider-access.guard';
 
 // PR-PROVIDER-PORTAL slice B — the institution-facing surface, deliberately its
@@ -16,7 +18,10 @@ import { ProviderAccessGuard } from './provider-access.guard';
 // external-upload constraints, and nothing else.
 @Module({
   imports: [PrismaModule, ProvidersModule],
-  controllers: [ProviderPortalController, ProviderImportController],
-  providers: [ProviderPortalService, ProviderImportService, ProviderAccessGuard, EventsService],
+  controllers: [ProviderPortalController, ProviderImportController, ProviderProgrammeController],
+  providers: [
+    ProviderPortalService, ProviderImportService, ProviderProgrammeService,
+    ProviderAccessGuard, EventsService,
+  ],
 })
 export class ProviderPortalModule {}

@@ -13,7 +13,10 @@ import { Card, CardContent } from '@/components/ui/Card';
 //   programmes  — Excel-imported, awaiting first approval (PR-CATALOG-1).
 //   changes     — field changes the monthly web check found on an approved programme.
 //   candidates  — new programmes the web check discovered.
-// Per-item Approve / Reject (no bulk). Nothing is visible to students until approved.
+// Per-item Approve / Reject (no bulk). Approving records the review decision and
+// ONLY that — a programme still has to be switched on to reach students. The two
+// were one action until slice D, which meant re-approving a programme an
+// institution had deactivated quietly put it back in front of students.
 
 interface Prov { id: string; name: string; status: string; institutionType: string | null }
 interface Pending {
@@ -92,9 +95,13 @@ export function ProgrammeApprovalsClient() {
         };
       });
       toast.success(
+        // Approval no longer publishes (slice D): it sets the review status and
+        // nothing else, so that re-approving something an institution has
+        // switched off cannot silently switch it back on. Saying "now visible"
+        // here would be the same stale promise the pricing screen was making.
         action === 'reject' ? 'Rejected.'
           : kind === 'change' ? 'Change applied to the live programme.'
-            : 'Approved — now visible to students (if the institution is Active).',
+            : 'Approved. Switch it on under the institution’s programmes to show it to students.',
       );
     } catch (e: any) {
       toast.error(e?.message ?? 'Action failed.');

@@ -1,7 +1,9 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { Clock, LogOut, ShieldAlert } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Building2, Clock, GraduationCap, LogOut, ShieldAlert } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 
 // PR-PROVIDER-PORTAL slice C — the institution's shell, and the wall in front of it.
@@ -11,8 +13,9 @@ import { api, ApiError } from '@/lib/api';
 // nothing here is load-bearing for access; ProviderAccessGuard refuses these
 // routes server-side regardless of what the browser renders.
 //
-// There is no nav yet: slice C has one page. A nav bar with a single item is
-// furniture, and slice D (programme CRUD) is where a second destination arrives.
+// Slice C had one page and therefore no nav — a nav bar with a single item is
+// furniture. Slice D adds the programmes screen, so the nav arrives with the
+// second destination, and only for institutions that can actually use it.
 
 export interface ProviderMe {
   id: string;
@@ -43,7 +46,13 @@ const BLOCKED_COPY: Record<string, { title: string; body: string }> = {
   },
 };
 
+const NAV = [
+  { href: '/provider', label: 'Your institution', icon: <Building2 size={17} /> },
+  { href: '/provider/programmes', label: 'Programmes', icon: <GraduationCap size={17} /> },
+];
+
 export function ProviderShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [me, setMe] = useState<ProviderMe | null>(null);
   const [blocked, setBlocked] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +88,30 @@ export function ProviderShell({ children }: { children: React.ReactNode }) {
             </a>
           </div>
         </header>
+
+        {/* Only once they can actually use it — a blocked account gets the wall,
+            not a list of doors that will not open. */}
+        {me && (
+          <nav className="flex gap-1 border-b border-gray-200 bg-white px-4 md:px-8">
+            {NAV.map((n) => {
+              const active = pathname === n.href;
+              return (
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className={[
+                    'inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold transition-colors',
+                    active
+                      ? 'border-sorena-navy text-sorena-navy'
+                      : 'border-transparent text-sorena-text/60 hover:text-sorena-navy',
+                  ].join(' ')}
+                >
+                  {n.icon} {n.label}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
 
         <main className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
           {error && <p className="text-sm text-red-600">{error}</p>}
