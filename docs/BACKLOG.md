@@ -538,6 +538,38 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## Default pricing at country-group level — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_GROUP_DEFAULT_PRICING.md`. No migration.
+
+Tuition and scholarship fields on the group create/edit form write rows with `programmeId: null`
+— an institution-wide default for that country group — and the list shows
+`Tuition: $25,000 · Scholarship: $2,000` or `No default price set` at a glance.
+
+**It composes with the per-programme screen with no new matching rule**, which was verified rather
+than assumed: a programme with no override resolved to the group default ($26,500 via GROUP), one
+with an override to $31,000, a student outside the group to the flat fee, and an **exact
+nationality still outranked both** ($22,000 via EXACT). Same PENDING rules as everywhere: new →
+PENDING, changed → back to PENDING, unchanged → approval kept, cleared → **deactivated, never
+deleted**.
+
+**The duplicate was removed at the same time.** Two screens now write these rows, so the
+create/re-pend/deactivate rules moved into one `group-rate.reconciler.ts` that both call — and the
+Slice E "Set a rate" endpoints were routed through it too, so they can no longer insert a second
+provider-wide rate for a group the form has already priced. A spec test fails if either caller
+grows its own copy.
+
+Also fixed a contradiction the browser check caught: a cleared rate still read "With us for
+review" in the rates list while the group above it correctly said "No default price set". Cleared
+rates now read **Not applied**.
+
+Proof: 24/24 over HTTP, 14/14 in a real browser. Backend 1420/1420, frontend 66/66.
+
+⚠ **Known gap worth revisiting:** clearing a default does not let you delete the group — the FK is
+`RESTRICT` and counts deactivated rows too. The list labels them "Not applied" so the disabled
+Delete button is explicable, but "clear the price, then delete the group" still fails.
+
+---
+
 ## Per-programme pricing by country group — DONE 17 Aug 2026
 `docs/PHASE_PROVIDER_PORTAL_GROUP_PRICING_PER_PROGRAMME.md`. No migration.
 

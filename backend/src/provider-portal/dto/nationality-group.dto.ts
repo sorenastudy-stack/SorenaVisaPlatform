@@ -28,6 +28,26 @@ export class UpsertNationalityGroupDto {
   @IsString({ each: true })
   @MaxLength(2, { each: true, message: 'Countries must be two-letter codes.' })
   nationalities!: string[];
+
+  /**
+   * The institution-wide DEFAULT for this group — a rate that applies to every
+   * programme unless that programme has its own override.
+   *
+   * Optional in three ways on purpose: absent, present-with-a-number, and
+   * explicitly `null`. Absent means "leave whatever is there alone"; null means
+   * "clear it", which deactivates the row rather than deleting it.
+   */
+  @IsOptional()
+  @IsNumber({}, { message: 'Tuition must be an amount in NZD.' })
+  @Min(0) @Max(1_000_000)
+  @Type(() => Number)
+  defaultTuitionAmount?: number | null;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'Scholarship must be an amount in NZD.' })
+  @Min(0) @Max(1_000_000)
+  @Type(() => Number)
+  defaultScholarshipAmount?: number | null;
 }
 
 /**

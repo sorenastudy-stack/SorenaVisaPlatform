@@ -5,6 +5,7 @@ import { EventsService } from '../events/events.service';
 import {
   CreateGroupScholarshipDto, CreateGroupTuitionDto, UpsertNationalityGroupDto,
 } from './dto/nationality-group.dto';
+import { reconcileGroupRate } from './group-rate.reconciler';
 
 // PR-PROVIDER-PORTAL slice E — nationality groups and the rates attached to them.
 //
@@ -57,13 +58,64 @@ export class NationalityGroupService {
     return [...seen].sort();
   }
 
+  /**
+   * The group's institution-wide DEFAULT price — a row with `programmeId: null`.
+   *
+   * It composes with the per-programme screen without a single new matching
+   * rule: the resolver scores a programme-scoped group row at 2 and this one at
+   * 0, so an override outranks a default automatically, and both still lose to
+   * any exact-nationality row.
+   *
+   * `undefined` means "not mentioned, leave it alone"; `null` means "clear it",
+   * which deactivates rather than deletes.
+   */
+  private async applyDefaults(groupId: string, groupName: string, dto: UpsertNationalityGroupDto, actor: GroupActor) {
+    const out: Record<string, string> = {};
+    for (const [kind, value] of [
+      ['tuition', dto.defaultTuitionAmount],
+      ['scholarship', dto.defaultScholarshipAmount],
+    ] as const) {
+      if (value === undefined) continue;
+      const r = await reconcileGroupRate(
+        this.prisma, this.events, kind,
+        { providerId: actor.providerId, programmeId: null, nationalityGroupId: groupId, level: null },
+        value ?? null, actor, { groupName },
+      );
+      out[kind] = r.action;
+    }
+    return out;
+  }
+
+  /** The current default for each group, so the form and the list can show it. */
+  private async defaultsFor(groupIds: string[], providerId: string) {
+    const [tuitions, scholarships] = await Promise.all([
+      this.prisma.providerTuition.findMany({
+        where: { providerId, programmeId: null, nationalityGroupId: { in: groupIds }, level: null, isActive: true },
+        select: { nationalityGroupId: true, amountValue: true, reviewStatus: true },
+      }),
+      this.prisma.providerScholarship.findMany({
+        where: { providerId, programmeId: null, nationalityGroupId: { in: groupIds }, level: null, isActive: true },
+        select: { nationalityGroupId: true, amountValue: true, reviewStatus: true },
+      }),
+    ]);
+    const pick = (rows: any[], gid: string) => {
+      const r = rows.find((x) => x.nationalityGroupId === gid);
+      return r ? { amount: r.amountValue, reviewStatus: r.reviewStatus } : null;
+    };
+    return (gid: string) => ({
+      defaultTuition: pick(tuitions, gid),
+      defaultScholarship: pick(scholarships, gid),
+    });
+  }
+
   async list(actor: GroupActor) {
     const groups = await this.prisma.nationalityGroup.findMany({
       where: { providerId: actor.providerId },
       select: GROUP_SELECT,
       orderBy: { name: 'asc' },
     });
-    return { groups: groups.map((g) => this.shape(g)) };
+    const defaults = await this.defaultsFor(groups.map((g) => g.id), actor.providerId);
+    return { groups: groups.map((g) => ({ ...this.shape(g), ...defaults(g.id) })) };
   }
 
   async create(dto: UpsertNationalityGroupDto, actor: GroupActor) {
@@ -82,7 +134,9 @@ export class NationalityGroupService {
       select: GROUP_SELECT,
     });
     await this.audit('PROVIDER_NATIONALITY_GROUP_CREATED', group.id, actor, { name, nationalities });
-    return this.shape(group);
+    await this.applyDefaults(group.id, name, dto, actor);
+    const defaults = await this.defaultsFor([group.id], actor.providerId);
+    return { ...this.shape(group), ...defaults(group.id) };
   }
 
   async update(id: string, dto: UpsertNationalityGroupDto, actor: GroupActor) {
@@ -119,7 +173,9 @@ export class NationalityGroupService {
       after: { name, nationalities },
       attachedRates: group._count.tuitions + group._count.scholarships,
     });
-    return this.shape(group);
+    await this.applyDefaults(id, name, dto, actor);
+    const defaults = await this.defaultsFor([id], actor.providerId);
+    return { ...this.shape(group), ...defaults(id) };
   }
 
   /**
@@ -185,27 +241,27 @@ export class NationalityGroupService {
   async createGroupTuition(dto: CreateGroupTuitionDto, actor: GroupActor) {
     const group = await this.assertOwnedTargets(dto, actor);
 
-    const row = await this.prisma.providerTuition.create({
-      data: {
-        providerId: actor.providerId,
-        nationalityGroupId: group.id,
-        nationality: null, // the XOR: exactly one side is set
-        programmeId: dto.programmeId ?? null,
-        level: (dto.level as any) ?? null,
-        amountValue: dto.amountValue,
-        currency: dto.currency ?? 'NZD',
-        feeYear: dto.feeYear ?? null,
-        term: dto.term ?? null,
-        notes: dto.notes ?? null,
-        isActive: true,
-        reviewStatus: 'PENDING',
-        updatedById: actor.userId,
-      },
-      select: { id: true, amountValue: true, currency: true, reviewStatus: true, feeYear: true },
-    });
+    // Routed through the reconciler rather than a bare create: the group form's
+    // default price writes the SAME row (provider-wide, this group), so a plain
+    // insert here would leave two provider-wide rates for one group and let the
+    // resolver's tiebreak decide which a student is quoted.
+    const r = await reconcileGroupRate(
+      this.prisma, this.events, 'tuition',
+      { providerId: actor.providerId, programmeId: dto.programmeId ?? null, nationalityGroupId: group.id, level: (dto.level as any) ?? null },
+      dto.amountValue, actor, { groupName: group.name },
+    );
 
-    await this.audit('PROVIDER_GROUP_TUITION_CREATED', row.id, actor, {
-      groupId: group.id, groupName: group.name, amountValue: dto.amountValue, programmeId: dto.programmeId ?? null,
+    // The extra columns this endpoint accepts and the reconciler does not.
+    if (r.rowId && (dto.feeYear != null || dto.term || dto.notes)) {
+      await this.prisma.providerTuition.update({
+        where: { id: r.rowId },
+        data: { feeYear: dto.feeYear ?? null, term: dto.term ?? null, notes: dto.notes ?? null },
+      });
+    }
+
+    const row = await this.prisma.providerTuition.findUnique({
+      where: { id: r.rowId! },
+      select: { id: true, amountValue: true, currency: true, reviewStatus: true, feeYear: true },
     });
     return { ...row, group: { id: group.id, name: group.name } };
   }
@@ -214,27 +270,22 @@ export class NationalityGroupService {
   async createGroupScholarship(dto: CreateGroupScholarshipDto, actor: GroupActor) {
     const group = await this.assertOwnedTargets(dto, actor);
 
-    const row = await this.prisma.providerScholarship.create({
-      data: {
-        providerId: actor.providerId,
-        nationalityGroupId: group.id,
-        nationality: null,
-        programmeId: dto.programmeId ?? null,
-        level: (dto.level as any) ?? null,
-        name: dto.name.trim(),
-        amountType: (dto.amountType as any) ?? 'FIXED',
-        amountValue: dto.amountValue,
-        currency: dto.currency ?? 'NZD',
-        eligibilityNotes: dto.eligibilityNotes ?? null,
-        isActive: true,
-        reviewStatus: 'PENDING',
-        updatedById: actor.userId,
-      },
-      select: { id: true, name: true, amountType: true, amountValue: true, currency: true, reviewStatus: true },
-    });
+    const r = await reconcileGroupRate(
+      this.prisma, this.events, 'scholarship',
+      { providerId: actor.providerId, programmeId: dto.programmeId ?? null, nationalityGroupId: group.id, level: (dto.level as any) ?? null },
+      dto.amountValue, actor, { groupName: group.name, scholarshipName: dto.name },
+    );
 
-    await this.audit('PROVIDER_GROUP_SCHOLARSHIP_CREATED', row.id, actor, {
-      groupId: group.id, groupName: group.name, amountValue: dto.amountValue, programmeId: dto.programmeId ?? null,
+    if (r.rowId && (dto.amountType || dto.eligibilityNotes)) {
+      await this.prisma.providerScholarship.update({
+        where: { id: r.rowId },
+        data: { amountType: (dto.amountType as any) ?? 'FIXED', eligibilityNotes: dto.eligibilityNotes ?? null },
+      });
+    }
+
+    const row = await this.prisma.providerScholarship.findUnique({
+      where: { id: r.rowId! },
+      select: { id: true, name: true, amountType: true, amountValue: true, currency: true, reviewStatus: true },
     });
     return { ...row, group: { id: group.id, name: group.name } };
   }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Plus, PencilLine, Trash2, X, Clock3, CheckCircle2, Users } from 'lucide-react';
+import { Loader2, Plus, PencilLine, Trash2, X, Clock3, CheckCircle2, EyeOff, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -25,6 +25,9 @@ interface Group {
   name: string;
   nationalities: string[];
   attachedRates: { tuitions: number; scholarships: number };
+  /** The institution-wide default for this group — applies unless a programme overrides it. */
+  defaultTuition: { amount: number; reviewStatus: string } | null;
+  defaultScholarship: { amount: number; reviewStatus: string } | null;
 }
 interface RateRow {
   id: string;
@@ -47,6 +50,8 @@ export function ProviderPricingGroups() {
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [name, setName] = useState('');
   const [codes, setCodes] = useState<string[]>([]);
+  const [defTuition, setDefTuition] = useState('');
+  const [defScholarship, setDefScholarship] = useState('');
   const [rateFor, setRateFor] = useState<Group | null>(null);
   const [rateKind, setRateKind] = useState<'tuition' | 'scholarship'>('tuition');
   const [rateAmount, setRateAmount] = useState('');
@@ -63,11 +68,17 @@ export function ProviderPricingGroups() {
   }, []);
   useEffect(load, [load]);
 
-  const openNew = () => { setName(''); setCodes([]); setEditing('new'); };
+  const openNew = () => { setName(''); setCodes([]); setDefTuition(''); setDefScholarship(''); setEditing('new'); };
   // Existing groups were created through the old comma-separated box; their
   // stored codes drop straight into the picker, which is why this stayed a UI
   // change with no data migration behind it.
-  const openEdit = (g: Group) => { setName(g.name); setCodes(g.nationalities); setEditing(g.id); };
+  const openEdit = (g: Group) => {
+    setName(g.name);
+    setCodes(g.nationalities);
+    setDefTuition(g.defaultTuition ? String(g.defaultTuition.amount) : '');
+    setDefScholarship(g.defaultScholarship ? String(g.defaultScholarship.amount) : '');
+    setEditing(g.id);
+  };
 
   // Kept, even though the picker can only emit catalogue codes: it is the last
   // thing between the payload and the server, and "the UI cannot produce a bad
@@ -81,7 +92,15 @@ export function ProviderPricingGroups() {
     if (nationalities.length === 0) return toast.error('Choose at least one country.');
     setBusy('group');
     try {
-      const body = { name: name.trim(), nationalities };
+      // A blank field is sent as null — "clear this default" — rather than
+      // omitted, because omission means "leave it alone" and the two are
+      // different instructions.
+      const body = {
+        name: name.trim(),
+        nationalities,
+        defaultTuitionAmount: defTuition.trim() === '' ? null : Number(defTuition),
+        defaultScholarshipAmount: defScholarship.trim() === '' ? null : Number(defScholarship),
+      };
       if (editing === 'new') {
         await api.post('/provider/nationality-groups', body);
         toast.success('Group saved.');
@@ -169,6 +188,29 @@ export function ProviderPricingGroups() {
                   than a rejected save. */}
               <CountryMultiSelect value={codes} onChange={setCodes} max={250} />
             </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Default price for this group</p>
+              <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                Optional. Applies to every one of your programmes unless you set a different price for
+                that programme. Leave blank to charge your standard fees.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Tuition fee (NZD)</span>
+                  <input inputMode="numeric" value={defTuition} placeholder="—"
+                    onChange={(e) => setDefTuition(e.target.value.replace(/[^\d.]/g, ''))} className={INPUT} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Scholarship (NZD)</span>
+                  <input inputMode="numeric" value={defScholarship} placeholder="—"
+                    onChange={(e) => setDefScholarship(e.target.value.replace(/[^\d.]/g, ''))} className={INPUT} />
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                Prices are checked by our team before students see them.
+              </p>
+            </div>
+
             {editing !== 'new' && (
               <p className="text-xs text-gray-500">
                 Changing this list changes who any fee on this group applies to.
@@ -261,6 +303,21 @@ export function ProviderPricingGroups() {
                       <Users size={12} /> {g.nationalities.length} countries
                       {attached > 0 && ` · ${attached} rate${attached === 1 ? '' : 's'} using it`}
                     </p>
+                    {/* At a glance: is there a default, and is it live yet? */}
+                    <p className="mt-1 text-xs">
+                      {g.defaultTuition || g.defaultScholarship ? (
+                        <span className="text-sorena-navy">
+                          {g.defaultTuition && <>Tuition: <strong>${g.defaultTuition.amount.toLocaleString()}</strong></>}
+                          {g.defaultTuition && g.defaultScholarship && ' · '}
+                          {g.defaultScholarship && <>Scholarship: <strong>${g.defaultScholarship.amount.toLocaleString()}</strong></>}
+                          {[g.defaultTuition, g.defaultScholarship].some((d) => d && d.reviewStatus !== 'APPROVED') && (
+                            <span className="ms-1.5 text-[#8a6d10]">· with us for review</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">No default price set</span>
+                      )}
+                    </p>
                   </div>
                   <button onClick={() => { setRateFor(g); setRateAmount(''); setRateName(''); }}
                     className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-[#1e3a5f] px-3 text-xs font-semibold text-white hover:bg-[#162d4a]">
@@ -307,14 +364,22 @@ export function ProviderPricingGroups() {
                     {r.nationalityGroup!.name} · {r.nationalityGroup!.nationalities.length} countries
                   </p>
                 </div>
+                {/* Three states, not two. A cleared price is still on the record
+                    (nothing is deleted) but it is NOT waiting on us — calling it
+                    "with us for review" contradicted the group above, which
+                    correctly said no default was set. */}
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                  r.reviewStatus === 'APPROVED' && r.isActive
-                    ? 'border-[#15a86b]/40 bg-[#15a86b]/5 text-[#15a86b]'
-                    : 'border-[#c9a961]/50 bg-[#faf8f3] text-[#8a6d10]'
+                  !r.isActive
+                    ? 'border-gray-200 bg-gray-50 text-gray-500'
+                    : r.reviewStatus === 'APPROVED'
+                      ? 'border-[#15a86b]/40 bg-[#15a86b]/5 text-[#15a86b]'
+                      : 'border-[#c9a961]/50 bg-[#faf8f3] text-[#8a6d10]'
                 }`}>
-                  {r.reviewStatus === 'APPROVED' && r.isActive
-                    ? <><CheckCircle2 size={13} /> Shown to students</>
-                    : <><Clock3 size={13} /> With us for review</>}
+                  {!r.isActive
+                    ? <><EyeOff size={13} /> Not applied</>
+                    : r.reviewStatus === 'APPROVED'
+                      ? <><CheckCircle2 size={13} /> Shown to students</>
+                      : <><Clock3 size={13} /> With us for review</>}
                 </span>
               </CardContent>
             </Card>

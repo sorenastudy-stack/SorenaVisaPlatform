@@ -90,6 +90,7 @@ describe('the provider programme controller', () => {
 describe('per-programme group pricing stays inside the same boundary', () => {
   const ctrl = read('./provider-programme.controller.ts');
   const svc = read('./provider-programme-pricing.service.ts');
+  const rec = read('./group-rate.reconciler.ts');
 
   it('the programme is verified as the caller’s before anything is written', () => {
     expect(svc).toMatch(/where: \{ id: programmeId, providerId: actor\.providerId \}/);
@@ -106,27 +107,39 @@ describe('per-programme group pricing stays inside the same boundary', () => {
     expect(queries.length).toBeGreaterThanOrEqual(4);
   });
 
+  // These four assertions follow the CODE: the create / re-pend / deactivate
+  // rules moved into the shared reconciler when the group-default screen began
+  // writing the same rows. Asserting them against the caller would have quietly
+  // stopped testing anything.
   it('new pricing lands PENDING and a changed amount returns to PENDING', () => {
-    expect(svc).toMatch(/reviewStatus: 'PENDING'/);
-    expect((svc.match(/amountChanged \? \{ reviewStatus: 'PENDING' as const \} : \{\}/g) ?? []).length).toBe(2);
+    expect(rec).toMatch(/reviewStatus: 'PENDING'/);
+    expect(rec).toMatch(/amountChanged \? \{ reviewStatus: 'PENDING' as const \} : \{\}/);
   });
 
-  it('unchecking DEACTIVATES — it never deletes', () => {
-    expect(svc).not.toMatch(/providerTuition\.delete|providerScholarship\.delete/);
-    expect(svc).toMatch(/data: \{ isActive: false, updatedById: actor\.userId \}/);
+  it('clearing an amount DEACTIVATES — it never deletes', () => {
+    expect(rec).not.toMatch(/\.delete\(/);
+    expect(rec).toMatch(/data: \{ isActive: false, updatedById: actor\.userId \}/);
   });
 
   it('reactivating an unchanged row does not cost its approval', () => {
-    // `isActive: true` is set unconditionally on the update; reviewStatus moves
-    // only when the amount moved.
-    const t = svc.slice(svc.indexOf('providerTuition.update'), svc.indexOf('// ── scholarship'));
-    expect(t).toMatch(/isActive: true/);
-    expect(t).toMatch(/amountChanged \?/);
+    // isActive is set unconditionally on the update; reviewStatus moves only
+    // when the amount (or the award's name) moved.
+    const update = rec.slice(rec.indexOf('await model.update({'));
+    expect(update).toMatch(/isActive: true/);
+    expect(rec).toMatch(/const amountChanged =/);
   });
 
   it('these rows are group-scoped only — never a bare nationality', () => {
-    expect((svc.match(/nationality: null/g) ?? []).length).toBe(2);
-    expect(svc).not.toMatch(/nationality: (?!null)[a-z]/i);
+    expect(rec).toMatch(/nationality: null/);
+    expect(rec).not.toMatch(/nationality: (?!null)[a-z]/i);
+  });
+
+  it('BOTH screens go through the one reconciler', () => {
+    // The point of extracting it: two callers, one set of rules. If either
+    // grows its own copy, this fails.
+    expect(svc).toMatch(/reconcileGroupRate\(/);
+    expect(read('./nationality-group.service.ts')).toMatch(/reconcileGroupRate\(/);
+    expect(svc).not.toMatch(/reviewStatus: 'PENDING'/);
   });
 
   it('the route takes the desired state, so omission is expressible', () => {

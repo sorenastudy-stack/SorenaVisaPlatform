@@ -3,6 +3,7 @@ import { EventSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { SetProgrammeGroupPricingDto } from './dto/programme-group-pricing.dto';
+import { reconcileGroupRate } from './group-rate.reconciler';
 
 // PR-PROVIDER-PORTAL — tuition and scholarships for ONE programme, by country group.
 //
@@ -123,127 +124,32 @@ export class ProviderProgrammePricingService {
     }
     const wanted = new Map(dto.entries.map((e) => [e.nationalityGroupId, e]));
 
-    const changes: Array<{ group: string; kind: 'tuition' | 'scholarship'; action: string; from?: number; to?: number }> = [];
+    const changes: Array<{ group: string; kind: 'tuition' | 'scholarship'; action: string; from?: number | null; to?: number | null }> = [];
 
+    // The create / re-pend / deactivate rules live in ONE place — the same
+    // reconciler the group form's default price uses. These two screens write
+    // the same kind of row and differ only in `programmeId`, so a second copy of
+    // the rules here would be a second thing to keep in step.
     for (const g of groups) {
       const entry = wanted.get(g.id);
-      const wantTuition = entry?.tuitionAmount ?? null;
-      const wantScholarship = entry?.scholarshipAmount ?? null;
+      for (const kind of ['tuition', 'scholarship'] as const) {
+        const amount = kind === 'tuition'
+          ? (entry?.tuitionAmount ?? null)
+          : (entry?.scholarshipAmount ?? null);
 
-      // ── tuition ──────────────────────────────────────────────────────────
-      const tRow = await this.prisma.providerTuition.findFirst({
-        where: { providerId: actor.providerId, programmeId, nationalityGroupId: g.id, ...SCOPE },
-        select: { id: true, amountValue: true, isActive: true, reviewStatus: true },
-        orderBy: { updatedAt: 'desc' },
-      });
-
-      if (wantTuition != null) {
-        if (!tRow) {
-          const created = await this.prisma.providerTuition.create({
-            data: {
-              providerId: actor.providerId, programmeId, nationalityGroupId: g.id, nationality: null,
-              level: null, amountValue: wantTuition, currency: 'NZD',
-              isActive: true, reviewStatus: 'PENDING', updatedById: actor.userId,
-            },
-            select: { id: true },
-          });
-          changes.push({ group: g.name, kind: 'tuition', action: 'created', to: wantTuition });
-          await this.audit('PROVIDER_PROGRAMME_GROUP_TUITION_SET', created.id, actor, {
-            programmeId, programmeName: programme.name, groupId: g.id, groupName: g.name,
-            amountValue: wantTuition, previousAmount: null, returnedToReview: true,
-          });
-        } else {
-          const amountChanged = Number(tRow.amountValue) !== Number(wantTuition);
-          await this.prisma.providerTuition.update({
-            where: { id: tRow.id },
-            data: {
-              amountValue: wantTuition,
-              isActive: true,
-              updatedById: actor.userId,
-              // A changed figure costs the approval. Merely switching the row
-              // back on does not — nothing about its content moved.
-              ...(amountChanged ? { reviewStatus: 'PENDING' as const } : {}),
-            },
-          });
-          if (amountChanged || !tRow.isActive) {
-            changes.push({ group: g.name, kind: 'tuition', action: amountChanged ? 'changed' : 'reactivated', from: Number(tRow.amountValue), to: wantTuition });
-            await this.audit('PROVIDER_PROGRAMME_GROUP_TUITION_SET', tRow.id, actor, {
-              programmeId, programmeName: programme.name, groupId: g.id, groupName: g.name,
-              amountValue: wantTuition, previousAmount: Number(tRow.amountValue), returnedToReview: amountChanged,
-            });
-          }
+        const r = await reconcileGroupRate(
+          this.prisma, this.events, kind,
+          { providerId: actor.providerId, programmeId, nationalityGroupId: g.id, level: null },
+          amount, actor,
+          { groupName: g.name, programmeName: programme.name, scholarshipName: entry?.scholarshipName },
+        );
+        if (r.action !== 'unchanged' && r.action !== 'absent') {
+          changes.push({ group: g.name, kind, action: r.action, from: r.previousAmount, to: r.amount });
         }
-      } else if (tRow?.isActive) {
-        await this.prisma.providerTuition.update({ where: { id: tRow.id }, data: { isActive: false, updatedById: actor.userId } });
-        changes.push({ group: g.name, kind: 'tuition', action: 'deactivated', from: Number(tRow.amountValue) });
-        await this.audit('PROVIDER_PROGRAMME_GROUP_TUITION_DEACTIVATED', tRow.id, actor, {
-          programmeId, programmeName: programme.name, groupId: g.id, groupName: g.name, amountValue: Number(tRow.amountValue),
-        });
-      }
-
-      // ── scholarship ──────────────────────────────────────────────────────
-      const sRow = await this.prisma.providerScholarship.findFirst({
-        where: { providerId: actor.providerId, programmeId, nationalityGroupId: g.id, ...SCOPE },
-        select: { id: true, name: true, amountValue: true, isActive: true, reviewStatus: true },
-        orderBy: { updatedAt: 'desc' },
-      });
-
-      if (wantScholarship != null) {
-        // The form asks for an amount, not a label, so one is derived. An
-        // existing row keeps the name it already had.
-        const name = entry?.scholarshipName?.trim() || sRow?.name || `${g.name} scholarship`;
-        if (!sRow) {
-          const created = await this.prisma.providerScholarship.create({
-            data: {
-              providerId: actor.providerId, programmeId, nationalityGroupId: g.id, nationality: null,
-              level: null, name, amountType: 'FIXED', amountValue: wantScholarship, currency: 'NZD',
-              isActive: true, reviewStatus: 'PENDING', updatedById: actor.userId,
-            },
-            select: { id: true },
-          });
-          changes.push({ group: g.name, kind: 'scholarship', action: 'created', to: wantScholarship });
-          await this.audit('PROVIDER_PROGRAMME_GROUP_SCHOLARSHIP_SET', created.id, actor, {
-            programmeId, programmeName: programme.name, groupId: g.id, groupName: g.name,
-            amountValue: wantScholarship, previousAmount: null, returnedToReview: true,
-          });
-        } else {
-          const amountChanged = Number(sRow.amountValue) !== Number(wantScholarship) || name !== sRow.name;
-          await this.prisma.providerScholarship.update({
-            where: { id: sRow.id },
-            data: {
-              amountValue: wantScholarship, name, isActive: true, updatedById: actor.userId,
-              ...(amountChanged ? { reviewStatus: 'PENDING' as const } : {}),
-            },
-          });
-          if (amountChanged || !sRow.isActive) {
-            changes.push({ group: g.name, kind: 'scholarship', action: amountChanged ? 'changed' : 'reactivated', from: Number(sRow.amountValue), to: wantScholarship });
-            await this.audit('PROVIDER_PROGRAMME_GROUP_SCHOLARSHIP_SET', sRow.id, actor, {
-              programmeId, programmeName: programme.name, groupId: g.id, groupName: g.name,
-              amountValue: wantScholarship, previousAmount: Number(sRow.amountValue), returnedToReview: amountChanged,
-            });
-          }
-        }
-      } else if (sRow?.isActive) {
-        await this.prisma.providerScholarship.update({ where: { id: sRow.id }, data: { isActive: false, updatedById: actor.userId } });
-        changes.push({ group: g.name, kind: 'scholarship', action: 'deactivated', from: Number(sRow.amountValue) });
-        await this.audit('PROVIDER_PROGRAMME_GROUP_SCHOLARSHIP_DEACTIVATED', sRow.id, actor, {
-          programmeId, programmeName: programme.name, groupId: g.id, groupName: g.name, amountValue: Number(sRow.amountValue),
-        });
       }
     }
 
     return { ...(await this.get(programmeId, actor)), changes };
   }
 
-  private audit(eventType: string, entityId: string, actor: PricingActor, payload: Record<string, unknown>) {
-    return this.events.emit(
-      eventType,
-      eventType.includes('TUITION') ? 'PROVIDER_TUITION' : 'PROVIDER_SCHOLARSHIP',
-      entityId,
-      null,
-      EventSource.USER,
-      actor.userId,
-      { ...payload, providerId: actor.providerId, providerName: actor.providerName },
-    );
-  }
 }
