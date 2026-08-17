@@ -26,7 +26,13 @@ export type ScholarshipAmountType = 'FIXED' | 'PERCENTAGE';
 export interface ScholarshipRow {
   id: string;
   name: string;
-  nationality: string; // ISO country code
+  /** Null when the row is scoped to a group instead — exactly one of the two is set. */
+  nationality: string | null; // ISO country code
+  /**
+   * PR-PROVIDER-PORTAL slice E — the ISO codes of the row's NationalityGroup,
+   * already loaded. Null when the row names a single nationality.
+   */
+  groupNationalities: string[] | null;
   programmeId: string | null; // null = applies to any programme of the provider
   level: string | null; // QualificationLevel; null = applies to any level
   amountType: ScholarshipAmountType;
@@ -73,12 +79,45 @@ export interface ScholarshipTotal {
 const norm = (v: string | null | undefined): string => (v ?? '').trim().toUpperCase();
 
 /**
+ * PR-PROVIDER-PORTAL slice E — GROUPS SUM, THEY DO NOT OUTRANK.
+ *
+ * Tuition resolves to ONE figure, so there an exact nationality beats a group
+ * outright (see student-pricing.logic). Scholarships are the opposite by an
+ * explicit Owner decision recorded at the top of this file: a student routinely
+ * holds two or three awards from different funding sources at once, and they are
+ * SUMMED. A group award is another distinct funding source, so it adds.
+ *
+ * The consequence, stated plainly because it involves money: an institution with
+ * a "South Asia — $2,000" group award AND an "India — $3,000" award gives an
+ * Indian student $5,000, not $3,000. That follows from the summing rule rather
+ * than contradicting it — but an institution that MIGRATES a country into a group
+ * and forgets to remove the old row has doubled an award by accident. The
+ * per-line breakdown names both, so it is visible rather than buried in a total,
+ * and staff see the same breakdown at review time before it reaches a student.
+ *
+ * If the Owner wants exact-suppresses-group here too, this is the one function to
+ * change — matchesStudent would filter group rows out when any exact row matched.
+ */
+export function nationalityMatch(
+  row: Pick<ScholarshipRow, 'nationality' | 'groupNationalities'>,
+  nationality: string,
+): 'EXACT' | 'GROUP' | null {
+  const want = norm(nationality);
+  if (!want) return null;
+  if (row.nationality != null) return norm(row.nationality) === want ? 'EXACT' : null;
+  if (row.groupNationalities) {
+    return row.groupNationalities.some((c) => norm(c) === want) ? 'GROUP' : null;
+  }
+  return null;
+}
+
+/**
  * Does this scholarship row apply to this (student, programme)?
  * A null programmeId or null level means "unscoped" — applies broadly.
  */
 export function matchesStudent(row: ScholarshipRow, ctx: ScholarshipContext): boolean {
   if (!row.isActive) return false;
-  if (norm(row.nationality) !== norm(ctx.nationality)) return false;
+  if (nationalityMatch(row, ctx.nationality) === null) return false;
   // null programmeId = provider-wide scholarship, applies to this programme too.
   if (row.programmeId !== null && row.programmeId !== ctx.programmeId) return false;
   // null level = any level. A non-null row level must equal the programme's level;

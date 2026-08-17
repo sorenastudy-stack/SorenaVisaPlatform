@@ -159,13 +159,17 @@ export class ProvidersService {
       this.prisma.providerTuition.findMany({
         where: { reviewStatus: 'PENDING' },
         orderBy: { createdAt: 'desc' },
-        include: { provider, programme: { select: { id: true, name: true } } },
+        // PR-PROVIDER-PORTAL slice E — the group too. A grouped rate has a NULL
+        // nationality, so without this the reviewer sees a blank in the "who does
+        // this apply to" column on precisely the rows that cover twenty countries
+        // at once.
+        include: { provider, programme: { select: { id: true, name: true } }, nationalityGroup: { select: { name: true, nationalities: true } } },
         take: 200,
       }),
       this.prisma.providerScholarship.findMany({
         where: { reviewStatus: 'PENDING' },
         orderBy: { createdAt: 'desc' },
-        include: { provider, programme: { select: { id: true, name: true } } },
+        include: { provider, programme: { select: { id: true, name: true } }, nationalityGroup: { select: { name: true, nationalities: true } } },
         take: 200,
       }),
     ]);
@@ -178,6 +182,9 @@ export class ProvidersService {
         programmeName: t.programme?.name ?? null,
         level: t.level,
         nationality: t.nationality,
+        nationalityGroup: t.nationalityGroup
+          ? { name: t.nationalityGroup.name, nationalities: t.nationalityGroup.nationalities }
+          : null,
         amountValue: t.amountValue,
         currency: t.currency,
         feeYear: t.feeYear,
@@ -193,6 +200,9 @@ export class ProvidersService {
         programmeName: sc.programme?.name ?? null,
         level: sc.level,
         nationality: sc.nationality,
+        nationalityGroup: sc.nationalityGroup
+          ? { name: sc.nationalityGroup.name, nationalities: sc.nationalityGroup.nationalities }
+          : null,
         name: sc.name,
         amountType: sc.amountType,
         amountValue: sc.amountValue,

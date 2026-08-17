@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveStudentPricing } from '../providers/student-pricing.logic';
+import { PRICING_GROUP_INCLUDE, toTuitionRow, toScholarshipRow } from '../providers/pricing-rows.mapper';
 import { sortExploreRows, buildMapPins, type ExploreRow, type ExploreSort } from './explore.logic';
 import { ContentMatchingAgent } from '../ai/agents/content-matching.agent';
 
@@ -93,14 +94,14 @@ export class ExploreService {
 
     const providerIds = [...new Set(programmes.map((p) => p.provider.id))];
     const [tuitions, scholarships] = await Promise.all([
-      this.prisma.providerTuition.findMany({ where: { providerId: { in: providerIds }, ...STUDENT_VISIBLE_PRICING } }),
-      this.prisma.providerScholarship.findMany({ where: { providerId: { in: providerIds }, ...STUDENT_VISIBLE_PRICING } }),
+      this.prisma.providerTuition.findMany({ where: { providerId: { in: providerIds }, ...STUDENT_VISIBLE_PRICING }, include: PRICING_GROUP_INCLUDE }),
+      this.prisma.providerScholarship.findMany({ where: { providerId: { in: providerIds }, ...STUDENT_VISIBLE_PRICING }, include: PRICING_GROUP_INCLUDE }),
     ]);
 
     const rows: ExploreRow[] = programmes.map((p) => {
       const pricing = resolveStudentPricing(
-        tuitions.filter((t) => t.providerId === p.provider.id) as any,
-        scholarships.filter((s) => s.providerId === p.provider.id) as any,
+        tuitions.filter((t) => t.providerId === p.provider.id).map(toTuitionRow),
+        scholarships.filter((s) => s.providerId === p.provider.id).map(toScholarshipRow),
         {
           nationality: nationality ?? '',
           programmeId: p.id,
@@ -185,11 +186,11 @@ export class ExploreService {
     if (!p) throw new NotFoundException('Programme not found.');
 
     const [tuitions, scholarships] = await Promise.all([
-      this.prisma.providerTuition.findMany({ where: { providerId: p.providerId, ...STUDENT_VISIBLE_PRICING } }),
-      this.prisma.providerScholarship.findMany({ where: { providerId: p.providerId, ...STUDENT_VISIBLE_PRICING } }),
+      this.prisma.providerTuition.findMany({ where: { providerId: p.providerId, ...STUDENT_VISIBLE_PRICING }, include: PRICING_GROUP_INCLUDE }),
+      this.prisma.providerScholarship.findMany({ where: { providerId: p.providerId, ...STUDENT_VISIBLE_PRICING }, include: PRICING_GROUP_INCLUDE }),
     ]);
 
-    const pricing = resolveStudentPricing(tuitions as any, scholarships as any, {
+    const pricing = resolveStudentPricing(tuitions.map(toTuitionRow), scholarships.map(toScholarshipRow), {
       nationality: nationality ?? '',
       programmeId: p.id,
       level: p.level,

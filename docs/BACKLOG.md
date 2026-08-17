@@ -488,12 +488,50 @@ was switched off**, an edit returning APPROVED→PENDING, a no-op edit keeping a
 cross-tenant read/edit/deactivate all 404. 13/13 in a real browser through the form. Backend
 1382/1382, frontend 53/53. Six guards each proven to go RED.
 
-### Slice E — country-grouped tuition and scholarships — NEXT
-Provider-facing management of the per-nationality pricing rows the slice-C importer creates, so a
-single wrong rate can be corrected without re-uploading a sheet. Then Slice F (analytics).
+### Slice E — grouped-nationality pricing — DONE 17 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_SLICE_E.md`. Migration `20260817163000_provider_portal_slice_e`.
 
-**Bulk approval is still unbuilt and still belongs after an upload becomes a thing the database
-knows about** — approving "everything from Tuesday's file" needs a batch identity.
+`NationalityGroup` (providerId, name, `nationalities String[]`), plus a nullable
+`nationalityGroupId` on both pricing models and `nationality` widened to nullable. **Two CHECK
+constraints enforce the XOR at the database** — exactly one of nationality/group, never both,
+never neither — written by hand because Prisma cannot express them. No backfill: counts confirmed
+first (tuition 0 dev / 0 prod, scholarships 297 dev / 0 prod), and every existing row already
+satisfies it.
+
+**The rule with money attached: an exact nationality always outranks a group.** A new top
+specificity tier (`EXACT_NATIONALITY_TIER = 4`) exceeds everything below it combined (programme 2
++ level 1), so a programme+level group rate with a newer fee year still loses to a provider-wide
+exact rate. Proven live — $30,000 exact beat $25,000 group — and proven by breaking it, including
+the subtle case of setting the tier to **3**, which ties rather than beats and goes red.
+
+**⚠ Scholarships are the opposite, deliberately: they SUM.** A "South Asia $2,000" award plus an
+"India $3,000" award gives an Indian student **$5,000**, following the Owner's standing rule that
+distinct funding sources stack. The risk to know about: migrating a country into a group without
+deleting the old row silently doubles an award. The per-line breakdown names both, and staff see
+it at review time. One function (`nationalityMatch` in `scholarship-total.logic.ts`) to change if
+the Owner wants exact-suppresses-group here too.
+
+**Deleting a group that still has rates is BLOCKED** (FK `RESTRICT` + a message naming the count),
+not nulled. Nulling would leave rows with neither a nationality nor a group — which the CHECK
+forbids — and would quietly change what a student is quoted with nothing tying it to the action.
+
+Two things found while wiring it: `matching.service` filtered scholarships by nationality **in
+SQL**, so every grouped award would have been excluded before the logic saw it — no error, just
+students never told about an award they qualify for. And three pricing call sites passed Prisma
+rows in with `as any`, which would have compiled happily while every grouped rate matched nobody;
+they now go through one mapper (`pricing-rows.mapper.ts`) with no casts.
+
+Proof: 29/29 over HTTP, 15/15 in a real browser, 19 logic tests, six guards proven RED. Backend
+1401/1401, frontend 53/53.
+
+### Slice F — provider analytics panel — NEXT
+What an institution can see about its own performance. Undesigned; needs a decision on what is
+theirs to see (their own applications and conversions) versus what is Sorena's (comparative
+ranking against other institutions).
+
+**Still unbuilt across the portal:** editing or deleting existing rate rows (slice E only creates
+them), bulk approval (still needs an upload to be a thing the database knows about), and
+rejected-programme resubmission (needs a rejection reason first).
 
 ---
 

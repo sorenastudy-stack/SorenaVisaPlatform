@@ -24,7 +24,16 @@ import {
 
 export interface TuitionRow {
   id: string;
-  nationality: string;
+  /** Null when the row is scoped to a group instead — exactly one of the two is set. */
+  nationality: string | null;
+  /**
+   * PR-PROVIDER-PORTAL slice E — the ISO codes of the row's NationalityGroup,
+   * already loaded. Null when the row names a single nationality.
+   *
+   * The list, not the group id: this file is pure, and "is the student in it" is
+   * the only question it ever asks of a group.
+   */
+  groupNationalities: string[] | null;
   programmeId: string | null; // null = provider-wide
   level: string | null; // null = any level
   amountValue: number;
@@ -32,6 +41,9 @@ export interface TuitionRow {
   feeYear: number | null;
   isActive: boolean;
 }
+
+/** How a row reached this student: by naming them, or by containing them. */
+export type NationalityMatch = 'EXACT' | 'GROUP' | null;
 
 export interface PricingContext {
   nationality: string; // the AUTHENTICATED student's nationality (ISO)
@@ -48,6 +60,12 @@ export interface ResolvedTuition {
   source: TuitionSource;
   /** Which ProviderTuition row won, when source is NATIONALITY_SPECIFIC. */
   rowId: string | null;
+  /**
+   * Whether the winning row named this nationality or contained it in a group.
+   * Reported for the same reason `source` is: "which figure did we use, and why"
+   * should never need a database query to answer.
+   */
+  matchedVia: NationalityMatch;
   feeYear: number | null;
   /** Set when a nationality row existed but could not be used (e.g. foreign currency). */
   note: string | null;
@@ -62,22 +80,57 @@ export interface StudentPricing {
 
 const norm = (v: string | null | undefined): string => (v ?? '').trim().toUpperCase();
 
+/**
+ * PR-PROVIDER-PORTAL slice E — how (or whether) this row reaches this student.
+ *
+ * Shared by the matcher and the specificity score deliberately: "does it match"
+ * and "how strongly" must never be able to disagree about which path was taken.
+ */
+export function nationalityMatch(
+  row: Pick<TuitionRow, 'nationality' | 'groupNationalities'>,
+  nationality: string,
+): NationalityMatch {
+  const want = norm(nationality);
+  if (!want) return null;
+  if (row.nationality != null) return norm(row.nationality) === want ? 'EXACT' : null;
+  if (row.groupNationalities) {
+    return row.groupNationalities.some((c) => norm(c) === want) ? 'GROUP' : null;
+  }
+  return null;
+}
+
 /** Does this tuition row apply to this (student, programme)? */
 export function tuitionMatches(row: TuitionRow, ctx: PricingContext): boolean {
   if (!row.isActive) return false;
-  if (norm(row.nationality) !== norm(ctx.nationality)) return false;
+  if (nationalityMatch(row, ctx.nationality) === null) return false;
   if (row.programmeId !== null && row.programmeId !== ctx.programmeId) return false;
   if (row.level !== null && norm(row.level) !== norm(ctx.level)) return false;
   return true;
 }
 
 /**
+ * AN EXACT NATIONALITY OUTRANKS A GROUP, ALWAYS.
+ *
+ * This value has to exceed the largest score the other terms can reach together
+ * (programme 2 + level 1 = 3), because the rule is not "exact counts for a lot"
+ * but "exact wins, full stop". A provider who writes a South Asia rate and then a
+ * separate Indian rate has said something specific about India, and a
+ * programme-scoped group rate must not overrule it — that is a different fee
+ * quoted to a real person.
+ *
+ * If a term is ever added below, THIS NUMBER MUST GO UP. The spec asserts the
+ * relationship rather than the number, so it will fail if someone forgets.
+ */
+export const EXACT_NATIONALITY_TIER = 4;
+
+/**
  * Specificity score — the MOST SPECIFIC matching row wins.
  * Tuition is one applicable figure, not a sum: a programme+level rate must beat a
  * provider-wide rate, or a student would be quoted the wrong (usually generic) fee.
  */
-function specificity(row: TuitionRow): number {
-  return (row.programmeId !== null ? 2 : 0) + (row.level !== null ? 1 : 0);
+export function specificity(row: TuitionRow, nationality: string): number {
+  const nat = nationalityMatch(row, nationality) === 'EXACT' ? EXACT_NATIONALITY_TIER : 0;
+  return nat + (row.programmeId !== null ? 2 : 0) + (row.level !== null ? 1 : 0);
 }
 
 /**
@@ -95,7 +148,7 @@ export function resolveStudentTuition(rows: TuitionRow[], ctx: PricingContext): 
   if (usable.length) {
     usable.sort(
       (a, b) =>
-        specificity(b) - specificity(a) ||
+        specificity(b, ctx.nationality) - specificity(a, ctx.nationality) ||
         (b.feeYear ?? 0) - (a.feeYear ?? 0) ||
         a.id.localeCompare(b.id), // deterministic final tiebreak
     );
@@ -104,6 +157,7 @@ export function resolveStudentTuition(rows: TuitionRow[], ctx: PricingContext): 
       amountNZD: round2(win.amountValue),
       source: 'NATIONALITY_SPECIFIC',
       rowId: win.id,
+      matchedVia: nationalityMatch(win, ctx.nationality),
       feeYear: win.feeYear,
       note: skippedForCurrency
         ? `${skippedForCurrency} matching rate(s) ignored — not denominated in NZD.`
@@ -116,6 +170,7 @@ export function resolveStudentTuition(rows: TuitionRow[], ctx: PricingContext): 
       amountNZD: round2(ctx.defaultTuitionNZD),
       source: 'DEFAULT',
       rowId: null,
+      matchedVia: null,
       feeYear: null,
       note: skippedForCurrency
         ? `Nationality-specific rate exists but is not in NZD; showing the default fee.`
@@ -123,7 +178,7 @@ export function resolveStudentTuition(rows: TuitionRow[], ctx: PricingContext): 
     };
   }
 
-  return { amountNZD: null, source: 'UNKNOWN', rowId: null, feeYear: null, note: null };
+  return { amountNZD: null, source: 'UNKNOWN', rowId: null, matchedVia: null, feeYear: null, note: null };
 }
 
 /** Resolve BOTH figures for one student on one programme, in one place. */

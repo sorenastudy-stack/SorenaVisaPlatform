@@ -2579,6 +2579,7 @@ model EducationProvider {
   scholarships ProviderScholarship[]
   tuitions     ProviderTuition[] // PR-EXPLORE — nationality-scoped tuition rates
   candidates   ProgrammeCandidate[] // PR-CATALOG-2 — new-programme discovery candidates
+  nationalityGroups NationalityGroup[] // PR-PROVIDER-PORTAL slice E
 
   @@map("education_providers")
 }
@@ -2799,7 +2800,14 @@ model ProgrammeStudyField {
 model ProviderScholarship {
   id               String              @id @default(cuid())
   providerId       String
-  nationality      String // ISO country code of the applicant nationality it applies to
+  /// PR-PROVIDER-PORTAL slice E — nullable since groups arrived. EXACTLY ONE of
+  /// `nationality` and `nationalityGroupId` is set, enforced by a CHECK
+  /// constraint in the migration (Prisma cannot express it) and re-checked in the
+  /// service so the error a provider sees is a sentence rather than a constraint
+  /// name. Neither set would be a row that applies to nobody; both set would be a
+  /// row whose meaning depends on which field the reader looks at first.
+  nationality      String? // ISO country code of the applicant nationality it applies to
+  nationalityGroupId String?
   programmeId      String? // optional — scope to a single programme
   level            QualificationLevel? // optional — scope to a qualification level
   name             String
@@ -2827,10 +2835,48 @@ model ProviderScholarship {
 
   provider  EducationProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
   programme EducationProgramme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  /// Restrict, NOT SetNull: nulling the reference would leave a row with neither
+  /// a nationality nor a group — a row that applies to nobody, and one the
+  /// resolver would silently skip on its way to the flat fee. Blocking the delete
+  /// makes the provider decide what those rates should say.
+  nationalityGroup NationalityGroup? @relation(fields: [nationalityGroupId], references: [id], onDelete: Restrict)
 
   @@index([providerId])
   @@index([nationality])
+  @@index([nationalityGroupId])
   @@map("provider_scholarships")
+}
+
+/// PR-PROVIDER-PORTAL slice E — an institution's own shorthand for a set of
+/// nationalities ("South Asia", "EU/EEA"), so one rate can cover twenty countries
+/// without twenty rows.
+///
+/// A group carries NO money and therefore NO review gate: it is a name and a list
+/// of country codes. The RATE attached to a group is a ProviderTuition or
+/// ProviderScholarship row and is gated exactly like every other rate. That is the
+/// same boundary as today — reviewing "these 20 countries are called South Asia"
+/// would be reviewing a label.
+///
+/// Codes are a String[] of ISO 3166-1 alpha-2, matching how nationality is stored
+/// on the pricing rows themselves; a join table would add a hop for a list that is
+/// only ever read whole.
+model NationalityGroup {
+  id            String   @id @default(cuid())
+  providerId    String
+  name          String
+  nationalities String[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  provider     EducationProvider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  tuitions     ProviderTuition[]
+  scholarships ProviderScholarship[]
+
+  /// One institution cannot have two groups called the same thing — the name is
+  /// how their own staff tell them apart on the rate screen.
+  @@unique([providerId, name])
+  @@index([providerId])
+  @@map("nationality_groups")
 }
 
 // PR-EXPLORE (Round 3) — nationality-scoped tuition. Deliberately shaped like
@@ -2850,7 +2896,11 @@ model ProviderTuition {
   providerId  String
   programmeId String? // null = applies to any programme of the provider
   level       QualificationLevel? // null = applies to any level
-  nationality String // ISO 3166-1 alpha-2 of the applicant nationality
+  /// PR-PROVIDER-PORTAL slice E — see ProviderScholarship.nationality. Exactly one
+  /// of this and `nationalityGroupId` is set; the CHECK constraint lives in the
+  /// migration.
+  nationality String? // ISO 3166-1 alpha-2 of the applicant nationality
+  nationalityGroupId String?
   amountValue Float
   currency    String              @default("NZD")
   // Same per-year/term granularity as the scholarship sheets — Yashua uploads
@@ -2878,9 +2928,12 @@ model ProviderTuition {
 
   provider  EducationProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
   programme EducationProgramme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  /// Restrict — see the note on ProviderScholarship.nationalityGroup.
+  nationalityGroup NationalityGroup? @relation(fields: [nationalityGroupId], references: [id], onDelete: Restrict)
 
   @@index([providerId])
   @@index([nationality])
+  @@index([nationalityGroupId])
   @@index([programmeId])
   @@map("provider_tuitions")
 }

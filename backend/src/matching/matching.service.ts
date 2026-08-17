@@ -64,8 +64,21 @@ export class MatchingService {
     const execConfig = await this.prisma.countryExecutionConfig.findUnique({ where: { countryCode: 'NZ' } });
     const weighting = (execConfig?.institutionTypeWeighting as unknown as InstitutionWeighting | null) ?? undefined;
 
+    // PR-PROVIDER-PORTAL slice E — this filter runs in SQL, so a group-scoped
+    // award had to be named here explicitly. Matching on `nationality` alone
+    // would have excluded every grouped scholarship before the logic ever saw
+    // it: no error, no empty list to notice, just students never told about an
+    // award they qualify for.
     const scholarships = criteria.nationality
-      ? await this.prisma.providerScholarship.findMany({ where: { ...STUDENT_VISIBLE_PRICING, nationality: criteria.nationality } })
+      ? await this.prisma.providerScholarship.findMany({
+          where: {
+            ...STUDENT_VISIBLE_PRICING,
+            OR: [
+              { nationality: criteria.nationality },
+              { nationalityGroup: { nationalities: { has: criteria.nationality } } },
+            ],
+          },
+        })
       : [];
     const scholarshipsFor = (p: (typeof programmes)[number]) =>
       scholarships.filter(
@@ -91,7 +104,7 @@ export class MatchingService {
             englishOverallMin: p.requirements.englishOverallMin,
           }
         : null,
-      scholarshipsForNationality: scholarshipsFor(p).map((s) => ({ name: s.name, nationality: s.nationality })),
+      scholarshipsForNationality: scholarshipsFor(p).map((s) => ({ name: s.name, nationality: s.nationality ?? criteria.nationality ?? null })),
       rankingScore: p.provider.rankingScore,
     }));
 

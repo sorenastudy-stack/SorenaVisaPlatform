@@ -1,0 +1,331 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { Loader2, Plus, PencilLine, Trash2, X, Clock3, CheckCircle2, Users } from 'lucide-react';
+import { toast } from 'sonner';
+import { api } from '@/lib/api';
+import { Card, CardContent } from '@/components/ui/Card';
+import { getCountryName, countryCodeToFlagEmoji } from '@/lib/country-codes';
+
+// PR-PROVIDER-PORTAL slice E — country groups, and the rates attached to them.
+//
+// A group is a label the institution invented ("South Asia"), so it is NOT
+// reviewed and the screen says nothing about review when you save one. The RATE
+// attached to a group is money, so it is reviewed exactly like every other rate,
+// and the screen says so before you enter one — the same pattern as the upload
+// panel in slice C.
+//
+// Deleting a group that still has rates is refused by the API. Rather than
+// letting someone press Delete and read an error, the button explains itself when
+// rates are attached: the count comes back with the group.
+
+interface Group {
+  id: string;
+  name: string;
+  nationalities: string[];
+  attachedRates: { tuitions: number; scholarships: number };
+}
+interface RateRow {
+  id: string;
+  nationality: string | null;
+  amountValue: number;
+  currency: string;
+  reviewStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  isActive: boolean;
+  name?: string;
+  amountType?: string;
+  nationalityGroup: { id: string; name: string; nationalities: string[] } | null;
+}
+
+const CODE = /^[A-Za-z]{2}$/;
+
+export function ProviderPricingGroups() {
+  const [groups, setGroups] = useState<Group[] | null>(null);
+  const [rates, setRates] = useState<{ tuitions: RateRow[]; scholarships: RateRow[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | 'new' | null>(null);
+  const [name, setName] = useState('');
+  const [codes, setCodes] = useState('');
+  const [rateFor, setRateFor] = useState<Group | null>(null);
+  const [rateKind, setRateKind] = useState<'tuition' | 'scholarship'>('tuition');
+  const [rateAmount, setRateAmount] = useState('');
+  const [rateName, setRateName] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    Promise.all([
+      api.get<{ groups: Group[] }>('/provider/nationality-groups'),
+      api.get<{ tuitions: RateRow[]; scholarships: RateRow[] }>('/provider/nationality-groups/rates'),
+    ])
+      .then(([g, r]) => { setGroups(g.groups); setRates(r); })
+      .catch((e) => setError(e?.message ?? 'Couldn’t load your country groups.'));
+  }, []);
+  useEffect(load, [load]);
+
+  const openNew = () => { setName(''); setCodes(''); setEditing('new'); };
+  const openEdit = (g: Group) => { setName(g.name); setCodes(g.nationalities.join(', ')); setEditing(g.id); };
+
+  const parseCodes = (raw: string) =>
+    [...new Set(raw.split(/[\s,;]+/).map((c) => c.trim().toUpperCase()).filter((c) => CODE.test(c)))];
+
+  const saveGroup = async () => {
+    const nationalities = parseCodes(codes);
+    if (!name.trim()) return toast.error('Give the group a name.');
+    if (nationalities.length === 0) return toast.error('Add at least one two-letter country code.');
+    setBusy('group');
+    try {
+      const body = { name: name.trim(), nationalities };
+      if (editing === 'new') {
+        await api.post('/provider/nationality-groups', body);
+        toast.success('Group saved.');
+      } else {
+        await api.put(`/provider/nationality-groups/${editing}`, body);
+        toast.success('Group updated. Any fees using it now apply to this list.');
+      }
+      setEditing(null);
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'That didn’t save.');
+    } finally { setBusy(null); }
+  };
+
+  const removeGroup = async (g: Group) => {
+    setBusy(g.id);
+    try {
+      await api.delete(`/provider/nationality-groups/${g.id}`);
+      toast.success(`“${g.name}” deleted.`);
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'That group couldn’t be deleted.');
+    } finally { setBusy(null); }
+  };
+
+  const saveRate = async () => {
+    if (!rateFor) return;
+    const amount = Number(rateAmount);
+    if (!Number.isFinite(amount) || amount <= 0) return toast.error('Enter an amount in NZD.');
+    if (rateKind === 'scholarship' && !rateName.trim()) return toast.error('Give the scholarship a name.');
+    setBusy('rate');
+    try {
+      if (rateKind === 'tuition') {
+        await api.post('/provider/nationality-groups/rates/tuition', { nationalityGroupId: rateFor.id, amountValue: amount });
+      } else {
+        await api.post('/provider/nationality-groups/rates/scholarship', { nationalityGroupId: rateFor.id, name: rateName.trim(), amountValue: amount });
+      }
+      toast.success('Sent to Sorena for review.');
+      setRateFor(null); setRateAmount(''); setRateName('');
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'That didn’t save.');
+    } finally { setBusy(null); }
+  };
+
+  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (!groups || !rates) return <div className="flex items-center gap-2 py-16 text-sorena-text/60"><Loader2 size={18} className="animate-spin" /> Loading…</div>;
+
+  const groupedRates = [...rates.tuitions, ...rates.scholarships].filter((r) => r.nationalityGroup);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-sorena-navy">Country groups</h1>
+          <p className="mt-0.5 max-w-xl text-sm text-sorena-text/60">
+            Group countries that share the same fee — then set one rate for the whole group instead of
+            entering it country by country.
+          </p>
+        </div>
+        <button onClick={openNew}
+          className="inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-[#1e3a5f] px-5 text-sm font-semibold text-white hover:bg-[#162d4a]">
+          <Plus size={16} /> New group
+        </button>
+      </div>
+
+      {/* Groups are a label, not money — so this says nothing about review. */}
+      {editing && (
+        <Card>
+          <CardContent className="space-y-4 p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                {editing === 'new' ? 'New group' : 'Edit group'}
+              </h2>
+              <button onClick={() => setEditing(null)} aria-label="Close" className="text-gray-400 hover:text-sorena-navy"><X size={18} /></button>
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Group name</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} className={INPUT} placeholder="South Asia" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Countries</span>
+              <input value={codes} onChange={(e) => setCodes(e.target.value)} className={INPUT} placeholder="IR, PK, IN, BD" />
+              <span className="mt-1 block text-xs text-gray-500">
+                Two-letter country codes, separated by commas.
+              </span>
+            </label>
+            {parseCodes(codes).length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {parseCodes(codes).map((c) => (
+                  <span key={c} className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs">
+                    <span aria-hidden>{countryCodeToFlagEmoji(c)}</span>
+                    <strong className="text-[#1e3a5f]">{getCountryName(c, 'en') || c}</strong>
+                  </span>
+                ))}
+              </div>
+            )}
+            {editing !== 'new' && (
+              <p className="text-xs text-gray-500">
+                Changing this list changes who any fee on this group applies to.
+              </p>
+            )}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button onClick={saveGroup} disabled={busy !== null}
+                className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-5 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+                {busy === 'group' ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Save group
+              </button>
+              <button onClick={() => setEditing(null)} disabled={busy !== null}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-gray-200 px-5 text-sm font-semibold text-[#1e3a5f] hover:bg-white disabled:opacity-50">
+                Cancel
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* The rate form — money, so the review gate is stated up front. */}
+      {rateFor && (
+        <Card>
+          <CardContent className="space-y-4 p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                Set a rate for “{rateFor.name}”
+              </h2>
+              <button onClick={() => setRateFor(null)} aria-label="Close" className="text-gray-400 hover:text-sorena-navy"><X size={18} /></button>
+            </div>
+
+            <div className="flex items-start gap-2.5 rounded-xl border border-[#c9a961]/40 bg-[#faf8f3] p-3.5">
+              <Clock3 size={16} className="mt-0.5 shrink-0 text-[#8a6d10]" />
+              <p className="text-xs leading-relaxed text-gray-700">
+                <strong className="text-[#1e3a5f]">Rates are checked by our team first.</strong>{' '}
+                This one will apply to all {rateFor.nationalities.length} countries in the group once it’s been
+                reviewed, so it won’t appear to students straight away.
+              </p>
+            </div>
+
+            <div className="flex gap-2" role="tablist">
+              {(['tuition', 'scholarship'] as const).map((k) => (
+                <button key={k} role="tab" aria-selected={rateKind === k} onClick={() => setRateKind(k)}
+                  className={`min-h-[48px] flex-1 rounded-xl border px-4 text-sm font-semibold transition ${
+                    rateKind === k ? 'border-[#1e3a5f] bg-[#1e3a5f] text-white' : 'border-gray-200 bg-white text-[#1e3a5f] hover:bg-[#1e3a5f]/5'
+                  }`}>
+                  {k === 'tuition' ? 'Tuition fee' : 'Scholarship'}
+                </button>
+              ))}
+            </div>
+
+            {rateKind === 'scholarship' && (
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Scholarship name</span>
+                <input value={rateName} onChange={(e) => setRateName(e.target.value)} className={INPUT} placeholder="Regional Excellence Award" />
+              </label>
+            )}
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Amount (NZD)</span>
+              <input inputMode="numeric" value={rateAmount} onChange={(e) => setRateAmount(e.target.value.replace(/[^\d.]/g, ''))}
+                className={INPUT} placeholder="25000" />
+            </label>
+
+            <button onClick={saveRate} disabled={busy !== null}
+              className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-5 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+              {busy === 'rate' ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Send for review
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {groups.length === 0 && !editing && (
+        <Card><CardContent className="p-8 text-center">
+          <p className="text-sm font-semibold text-sorena-navy">No country groups yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-gray-500">
+            If several countries pay the same fee, group them once and set the rate in one place.
+          </p>
+        </CardContent></Card>
+      )}
+
+      <div className="space-y-2">
+        {groups.map((g) => {
+          const attached = g.attachedRates.tuitions + g.attachedRates.scholarships;
+          return (
+            <Card key={g.id}>
+              <CardContent className="space-y-3 p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-sorena-navy">{g.name}</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+                      <Users size={12} /> {g.nationalities.length} countries
+                      {attached > 0 && ` · ${attached} rate${attached === 1 ? '' : 's'} using it`}
+                    </p>
+                  </div>
+                  <button onClick={() => { setRateFor(g); setRateAmount(''); setRateName(''); }}
+                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg bg-[#1e3a5f] px-3 text-xs font-semibold text-white hover:bg-[#162d4a]">
+                    <Plus size={14} /> Set a rate
+                  </button>
+                  <button onClick={() => openEdit(g)}
+                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-[#1e3a5f] hover:bg-[#faf8f3]">
+                    <PencilLine size={14} /> Edit
+                  </button>
+                  {/* Explains itself instead of failing when pressed. */}
+                  <button
+                    onClick={() => removeGroup(g)}
+                    disabled={busy === g.id || attached > 0}
+                    title={attached > 0 ? 'Remove the rates using this group first.' : undefined}
+                    className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-[#1e3a5f] hover:bg-[#faf8f3] disabled:cursor-not-allowed disabled:opacity-40">
+                    {busy === g.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} Delete
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {g.nationalities.map((c) => (
+                    <span key={c} className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs">
+                      <span aria-hidden>{countryCodeToFlagEmoji(c)}</span>
+                      <span className="text-gray-600">{getCountryName(c, 'en') || c}</span>
+                    </span>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {groupedRates.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">Rates set on a group</h2>
+          {groupedRates.map((r) => (
+            <Card key={r.id}>
+              <CardContent className="flex flex-wrap items-center gap-3 p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-sorena-navy">
+                    {r.name ?? 'Tuition fee'} — ${r.amountValue.toLocaleString()} {r.currency}
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {r.nationalityGroup!.name} · {r.nationalityGroup!.nationalities.length} countries
+                  </p>
+                </div>
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                  r.reviewStatus === 'APPROVED' && r.isActive
+                    ? 'border-[#15a86b]/40 bg-[#15a86b]/5 text-[#15a86b]'
+                    : 'border-[#c9a961]/50 bg-[#faf8f3] text-[#8a6d10]'
+                }`}>
+                  {r.reviewStatus === 'APPROVED' && r.isActive
+                    ? <><CheckCircle2 size={13} /> Shown to students</>
+                    : <><Clock3 size={13} /> With us for review</>}
+                </span>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const INPUT = 'min-h-[44px] w-full rounded-lg border border-gray-200 px-3 text-sm text-sorena-navy focus:border-[#1e3a5f] focus:outline-none';

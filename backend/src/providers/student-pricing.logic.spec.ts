@@ -11,6 +11,7 @@ import type { ScholarshipRow } from './scholarship-total.logic';
 const t = (over: Partial<TuitionRow>): TuitionRow => ({
   id: 't1',
   nationality: 'IR',
+  groupNationalities: null,
   programmeId: null,
   level: null,
   amountValue: 22000,
@@ -24,6 +25,7 @@ const s = (over: Partial<ScholarshipRow>): ScholarshipRow => ({
   id: 's1',
   name: 'Award',
   nationality: 'IR',
+  groupNationalities: null,
   programmeId: null,
   level: null,
   amountType: 'FIXED',

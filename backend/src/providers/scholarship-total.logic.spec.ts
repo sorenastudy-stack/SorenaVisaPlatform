@@ -11,6 +11,7 @@ const row = (over: Partial<ScholarshipRow>): ScholarshipRow => ({
   id: 's1',
   name: 'Scholarship',
   nationality: 'IR',
+  groupNationalities: null,
   programmeId: null,
   level: null,
   amountType: 'FIXED',
