@@ -2,7 +2,7 @@
 
 import { GraduationCap, Coins, Award } from 'lucide-react';
 import { useProviderMe } from './ProviderShell';
-import { ProviderImportSection } from './ProviderImportSection';
+import { ProviderMarketingAssets } from './ProviderMarketingAssets';
 import { Card, CardContent } from '@/components/ui/Card';
 
 // PR-PROVIDER-PORTAL slice C — what an institution sees when they sign in.
@@ -12,8 +12,12 @@ import { Card, CardContent } from '@/components/ui/Card';
 // against their own spreadsheet is how they find out we dropped half a file.
 //
 // The counts are TOTALS, not "live to students" — a count that quietly excluded
-// rows awaiting review would read as data loss. The review copy sits on the
-// upload panel where it belongs.
+// rows awaiting review would read as data loss.
+//
+// The spreadsheet uploads used to live here. They moved to the sections they
+// act on: the programme sheet sits with the programme form, the fee and
+// scholarship sheets sit with the pricing tools. This page is now what an
+// institution IS — its profile, its numbers, and the material it sends us.
 
 export function ProviderHome() {
   const me = useProviderMe();
@@ -44,14 +48,16 @@ export function ProviderHome() {
               <p className="mt-1 text-2xl font-bold tabular-nums text-sorena-navy">{s.value}</p>
               {/* An empty state that says what to do, rather than a bare zero. */}
               {s.value === 0 && (
-                <p className="mt-1 text-xs text-gray-500">Nothing on file yet — upload a sheet below.</p>
+                <p className="mt-1 text-xs text-gray-500">
+              {s.label === 'Programmes' ? 'Nothing yet — add them under Programmes.' : 'Nothing yet — add these under Country groups.'}
+            </p>
               )}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <ProviderImportSection />
+      <ProviderMarketingAssets />
     </div>
   );
 }

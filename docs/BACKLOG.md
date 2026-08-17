@@ -538,6 +538,41 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## Portal navigation reorganised + marketing materials — DONE 18 Aug 2026
+`docs/PHASE_PROVIDER_PORTAL_NAV_AND_MARKETING.md`. Migration
+`20260818090000_provider_marketing_assets` — one new table, additive.
+
+**Performance hidden from the nav**, feature untouched: the page, endpoint, guards and tests all
+still work if opened directly, and restoring it is one commented line. **"Your institution"** lost
+the spreadsheet uploader and gained **marketing materials** (logos, brochures, prospectus, photos
+for the marketing team). **Each sheet moved to what it acts on** — the programme sheet with the
+programme form, the fee and scholarship sheets with the pricing tools. `ProviderImportSection` took
+a `kinds` prop; nothing about the uploads themselves changed.
+
+**Upload precedent: reused, not reinvented.** `setProgrammeCoverImage` is the pattern — multipart
+through the API, whitelist and size cap on the bytes the server holds, key derived server-side, the
+KEY stored (never a URL), downloads as 60-second presigned URLs like `documents.service`. Multipart
+rather than a presigned PUT deliberately: a presigned URL is signed before anyone has seen the
+bytes.
+
+**⚠ Moderation is a live decision.** Precedent points both ways: staff-uploaded assets are not
+reviewed, but every *external* upload is (provider prices and programmes, and client documents via
+`CaseDocumentReview`). `DocumentUploadStatus.PENDING` is transfer state, not moderation. I
+implemented it **review-gated** — safer, consistent with everything else a provider submits, one
+line to remove. **But the gate is currently administrative**: nothing surfaces these files
+automatically, so a human is already in the loop. It only matters if marketing assets are ever
+displayed somewhere automatically. **Owner decision needed.**
+
+Also known: no staff screen for these files yet (stored and audited, but no reviewer UI), no virus
+scanning (nor has any other upload here), and SVG is accepted — safe while nothing renders it
+inline, worth dropping if that changes.
+
+Proof: 29/29 over HTTP and 18/18 in a real browser. A placement test asserts no sheet type is
+offered in two places — it caught the programme sheet's import being added while the component was
+never rendered. Backend 1455/1455, frontend 77/77.
+
+---
+
 ## Clearing a rate from the group screen — DONE 18 Aug 2026
 No migration. A **Clear** button beside each live rate in "Rates set on a group".
 

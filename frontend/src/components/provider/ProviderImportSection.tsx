@@ -72,8 +72,14 @@ const KIND_COPY: Record<Kind, { title: string; blurb: string; noun: string; path
   },
 };
 
-export function ProviderImportSection() {
-  const [kind, setKind] = useState<Kind>('tuition');
+/**
+ * `kinds` restricts which sheet types this instance offers, so the same
+ * component can sit in two places: Programmes shows only the programme sheet,
+ * Country groups only the money ones. Nothing about the upload itself changes —
+ * same dry run, same apply, same review gate, same ownership scoping.
+ */
+export function ProviderImportSection({ kinds = ['tuition', 'scholarships', 'programmes'] as Kind[] }: { kinds?: Kind[] } = {}) {
+  const [kind, setKind] = useState<Kind>(kinds[0]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Result | null>(null);
   const [busy, setBusy] = useState<'check' | 'commit' | null>(null);
@@ -133,7 +139,9 @@ export function ProviderImportSection() {
     <Card>
       <CardContent className="space-y-4 p-5">
         <div>
-          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">Upload your spreadsheets</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+            {kinds.length === 1 ? `Bulk upload — ${KIND_COPY[kinds[0]].title.toLowerCase()}` : 'Upload your spreadsheets'}
+          </h2>
           <p className="mt-1 text-xs text-gray-500">
             You’ll see exactly what we found in the file before anything is sent.
           </p>
@@ -149,8 +157,10 @@ export function ProviderImportSection() {
           </p>
         </div>
 
+        {/* One sheet type needs no tab strip — a single tab is furniture. */}
+        {kinds.length > 1 && (
         <div className="flex flex-wrap gap-2" role="tablist">
-          {(['tuition', 'scholarships', 'programmes'] as Kind[]).map((k) => (
+          {kinds.map((k) => (
             <button
               key={k}
               role="tab"
@@ -166,6 +176,7 @@ export function ProviderImportSection() {
             </button>
           ))}
         </div>
+        )}
 
         <p className="text-xs leading-relaxed text-gray-600">{copy.blurb}</p>
 

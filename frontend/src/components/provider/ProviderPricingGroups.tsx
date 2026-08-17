@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
 import { getCountryName, countryCodeToFlagEmoji } from '@/lib/country-codes';
 import { CountryMultiSelect } from '@/components/common/CountryMultiSelect';
+import { ProviderImportSection } from './ProviderImportSection';
 
 // PR-PROVIDER-PORTAL slice E — country groups, and the rates attached to them.
 //
@@ -389,6 +390,10 @@ Nothing will be deleted — we keep the record, it just stops applying.`,
           );
         })}
       </div>
+
+      {/* The fee and scholarship sheets sit with the manual pricing tools —
+          bulk and by-hand in one place, for the same money-side job. */}
+      <ProviderImportSection kinds={['tuition', 'scholarships']} />
 
       {groupedRates.length > 0 && (
         <div className="space-y-2">

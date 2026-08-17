@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/Card';
 import { ProgrammeGroupPricing, type GroupPricingDraft } from './ProgrammeGroupPricing';
+import { ProviderImportSection } from './ProviderImportSection';
 
 // PR-PROVIDER-PORTAL slice D — an institution's own programmes.
 //
@@ -267,6 +268,11 @@ export function ProviderProgrammes() {
           </p>
         </CardContent></Card>
       )}
+
+      {/* Bulk upload lives with the thing it creates: a provider managing
+          programmes finds the one-at-a-time form and the whole-list sheet in the
+          same place. Same dry run, same apply, same review gate. */}
+      <ProviderImportSection kinds={['programmes']} />
 
       <div className="space-y-2">
         {data.programmes.map((p) => (

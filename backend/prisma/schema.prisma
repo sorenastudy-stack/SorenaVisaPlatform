@@ -641,6 +641,7 @@ model User {
   affiliateAgent          AffiliateAgent?  @relation("AffiliateAgentLogin")
   // PR-PROVIDER-PORTAL slice A — the institution this login belongs to, if any.
   educationProvider       EducationProvider? @relation("EducationProviderLogin")
+  marketingUploads  ProviderMarketingAsset[] // PR-PROVIDER-PORTAL
   affiliateAgentsVerified AffiliateAgent[] @relation("AffiliateAgentVerifier")
 
   // PR-SCORECARD-4: OWNER-editable platform settings (booking URLs +
@@ -2580,6 +2581,7 @@ model EducationProvider {
   tuitions     ProviderTuition[] // PR-EXPLORE — nationality-scoped tuition rates
   candidates   ProgrammeCandidate[] // PR-CATALOG-2 — new-programme discovery candidates
   nationalityGroups NationalityGroup[] // PR-PROVIDER-PORTAL slice E
+  marketingAssets   ProviderMarketingAsset[] // PR-PROVIDER-PORTAL — brand/recruitment files
 
   @@map("education_providers")
 }
@@ -2845,6 +2847,46 @@ model ProviderScholarship {
   @@index([nationality])
   @@index([nationalityGroupId])
   @@map("provider_scholarships")
+}
+
+/// PR-PROVIDER-PORTAL — marketing material an institution sends us.
+///
+/// Logos, brochures, prospectuses, photography — files for Sorena's marketing and
+/// recruitment use, NOT student-facing catalogue data. Nothing here is read by
+/// the matcher, the resolver or the Explore page.
+///
+/// STORAGE follows the programme-cover-image precedent exactly: the bytes go to
+/// R2 under a key this service derives, and the KEY is what is stored. There is
+/// no public URL column, and downloads are issued as short-lived presigned URLs,
+/// so an asset cannot leak by someone guessing a path.
+///
+/// reviewStatus: PENDING by default. Every provider-submitted thing in this
+/// portal is reviewed before it is used — prices, programmes, and now this. See
+/// the phase doc for the precedent either way; the gate is one line to remove if
+/// the Owner decides marketing assets do not need one.
+model ProviderMarketingAsset {
+  id           String       @id @default(cuid())
+  providerId   String
+  /// The R2 object key. Never a URL — see above.
+  r2Key        String       @unique
+  fileName     String
+  contentType  String
+  sizeBytes    Int
+  /// The institution's own note about what this is ("2027 prospectus").
+  label        String?
+  reviewStatus ReviewStatus @default(PENDING)
+  /// Retired rather than deleted, like every other file-bearing row here.
+  isActive     Boolean      @default(true)
+  uploadedById String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  provider   EducationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  uploadedBy User?             @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([providerId])
+  @@index([reviewStatus])
+  @@map("provider_marketing_assets")
 }
 
 /// PR-PROVIDER-PORTAL slice E — an institution's own shorthand for a set of

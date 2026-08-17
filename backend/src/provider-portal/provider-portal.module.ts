@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { R2Module } from '../common/r2/r2.module';
 import { ProvidersModule } from '../providers/providers.module';
 import { EventsService } from '../events/events.service';
 import { ProviderPortalController } from './provider-portal.controller';
@@ -13,6 +14,8 @@ import { NationalityGroupController } from './nationality-group.controller';
 import { NationalityGroupService } from './nationality-group.service';
 import { ProviderAnalyticsController } from './provider-analytics.controller';
 import { ProviderAnalyticsService } from './provider-analytics.service';
+import { ProviderMarketingController } from './provider-marketing.controller';
+import { ProviderMarketingService } from './provider-marketing.service';
 import { ProviderAccessGuard } from './provider-access.guard';
 
 // PR-PROVIDER-PORTAL slice B — the institution-facing surface, deliberately its
@@ -22,13 +25,14 @@ import { ProviderAccessGuard } from './provider-access.guard';
 // reimplementing them — the wrapper adds the ownership boundary and the
 // external-upload constraints, and nothing else.
 @Module({
-  imports: [PrismaModule, ProvidersModule],
+  imports: [PrismaModule, ProvidersModule, R2Module],
   controllers: [
     ProviderPortalController, ProviderImportController, ProviderProgrammeController,
-    NationalityGroupController, ProviderAnalyticsController,
+    NationalityGroupController, ProviderAnalyticsController, ProviderMarketingController,
   ],
   providers: [
     ProviderPortalService, ProviderImportService, ProviderProgrammeService, ProviderProgrammePricingService, NationalityGroupService, ProviderAnalyticsService,
+    ProviderMarketingService,
     ProviderAccessGuard, EventsService,
   ],
 })
