@@ -164,11 +164,16 @@ describe('the receipt handler is the ONLY caller in this slice', () => {
   });
 
   it('no other upload surface calls the scanner in this slice', () => {
-    const { execSync } = require('child_process');
-    const hits = execSync(
-      'git grep -l "antivirus\\.\\(scanFile\\|scanBuffer\\)" -- "src/**/*.ts" || true',
-      { cwd: require('path').resolve(__dirname, '../../..'), encoding: 'utf8' },
-    ).trim().split('\n').filter(Boolean);
-    expect(hits).toEqual(['src/portal/portal.service.ts']);
+    // Specs are excluded: this spec names the method in its own assertions, and
+    // a test file is not an upload surface. Product code only.
+    const { execFileSync } = require('child_process');
+    const hits = execFileSync(
+      'git',
+      ['grep', '-l', '-E', 'antivirus\\.(scanFile|scanBuffer)', '--', 'backend/src/**/*.ts'],
+      { cwd: require('path').resolve(__dirname, '../../../..'), encoding: 'utf8' },
+    )
+      .trim().split('\n').filter(Boolean)
+      .filter((f: string) => !f.endsWith('.spec.ts'));
+    expect(hits).toEqual(['backend/src/portal/portal.service.ts']);
   });
 });
