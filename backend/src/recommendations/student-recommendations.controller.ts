@@ -25,6 +25,15 @@ export class StudentRecommendationsController {
     });
   }
 
+  // PR-RECS-PHASE1 — suggestions for the Apply/Study screen. Read-only, and
+  // empty until the student has made their own choice (enforced in the service).
+  @Get('for-admission')
+  async forAdmission(@Req() req: any) {
+    const userId = req.user?.userId ?? req.user?.id;
+    const caseId = await this.service.resolveCaseIdForStudent(userId);
+    return this.service.getSuggestionsForAdmission(caseId, userId);
+  }
+
   @Get()
   async current(@Req() req: any, @Query('sort') sort?: string) {
     const userId = req.user?.userId ?? req.user?.id;

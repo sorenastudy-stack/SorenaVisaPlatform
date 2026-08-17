@@ -17,6 +17,15 @@ import { MATCH_CRITERIA_RESOLVER, type MatchCriteriaResolver } from '../matching
 interface Actor { id: string | null; name?: string | null; role?: string | null }
 
 const SORTABLE = ['default', 'tuition', 'startDate', 'duration', 'city', 'featured'] as const;
+
+// PR-RECS-PHASE1 — how many suggestions to show in Apply/Study.
+//
+// DELIBERATELY NOT CountryExecutionConfig.slotCount, which also happens to be 5.
+// slotCount is how many programmes a student may CHOOSE; this is how many we
+// SUGGEST alongside. They answer different questions and must be able to move
+// independently — coupling them would mean raising the choice limit silently
+// changed how much we steer. A test asserts they stay separate.
+export const SUGGESTION_COUNT = 5;
 export type RecommendationSort = (typeof SORTABLE)[number];
 
 @Injectable()
@@ -142,6 +151,71 @@ export class RecommendationsService {
       criteriaSource: list.criteriaSource,
       generatedAt: list.generatedAt,
       items: this.sortItems(shaped, sort),
+    };
+  }
+
+  // ── PR-RECS-PHASE1 — suggestions inside Apply/Study ───────────────────────
+  //
+  // "Others you might also consider", shown AFTER the student has made their own
+  // programme choice. Read-only: this returns programmes to look at, and can
+  // never create an AdmissionProgrammeChoice. A suggestion is not a commitment.
+  //
+  // TIMING IS ENFORCED HERE, not just in the UI. With no choice on record the
+  // method returns `available: false` and NO items at all, so the suggestions
+  // cannot leak in front of the student's own decision even if a screen called
+  // this too early. The student decides first; we react.
+  //
+  // ELIGIBILITY is inherited, not re-implemented: the list comes from the same
+  // matcher, which hard-excludes disallowed study fields via allowedFieldIds()
+  // (the Q30 progression rule). Nothing here relaxes that, and no near-miss
+  // "you would need X" programmes are surfaced in this phase.
+  //
+  // EXPLANATIONS are the existing deterministic whyThisFits dimensions, passed
+  // through untouched. No generated prose.
+  async getSuggestionsForAdmission(caseId: string, studentUserId: string) {
+    // Programmes the student has already chosen — never suggest one of those back.
+    const chosen = await this.prisma.admissionProgrammeChoice.findMany({
+      where: { admissionApplication: { caseId } },
+      select: { programmeId: true },
+    });
+
+    if (chosen.length === 0) {
+      return {
+        available: false,
+        reason: 'NO_CHOICE_YET' as const,
+        items: [],
+        suggestionCount: SUGGESTION_COUNT,
+      };
+    }
+
+    let current = await this.getCurrentForCase(caseId, 'default', false);
+
+    // No list yet — build one from the same matcher. A student with no completed
+    // assessment simply gets no suggestions; it is not an error on this surface.
+    if (!current) {
+      try {
+        await this.generateForCase(caseId, studentUserId, { id: studentUserId });
+        current = await this.getCurrentForCase(caseId, 'default', false);
+      } catch {
+        return { available: false, reason: 'NO_ASSESSMENT' as const, items: [], suggestionCount: SUGGESTION_COUNT };
+      }
+    }
+    if (!current) {
+      return { available: false, reason: 'NO_ASSESSMENT' as const, items: [], suggestionCount: SUGGESTION_COUNT };
+    }
+
+    const chosenIds = new Set(chosen.map((c) => c.programmeId));
+    const items = current.items
+      .filter((it) => !chosenIds.has(it.programmeId))
+      .slice(0, SUGGESTION_COUNT);
+
+    return {
+      available: items.length > 0,
+      reason: items.length > 0 ? ('OK' as const) : ('NO_MATCHES' as const),
+      listId: current.listId,
+      generatedAt: current.generatedAt,
+      suggestionCount: SUGGESTION_COUNT,
+      items,
     };
   }
 

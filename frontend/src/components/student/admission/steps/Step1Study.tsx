@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ChevronUp, ChevronDown, Trash2, AlertTriangle, Star, Check } from 'lucide-react';
 import { useAdmission } from '../AdmissionFormContext';
+import { SuggestedProgrammes } from './SuggestedProgrammes';
 import { api, ApiError } from '@/lib/api';
 import { useLocaleStore } from '@/lib/stores/localeStore';
 
@@ -433,6 +434,11 @@ export function Step1Study() {
           ))}
         </div>
       )}
+
+      {/* PR-RECS-PHASE1 — suggestions come AFTER the student's own choice, never
+          before. Rendered only once at least one choice exists; the endpoint
+          independently refuses to return anything until then. */}
+      {programmeChoices.length > 0 && <SuggestedProgrammes choiceCount={programmeChoices.length} />}
     </div>
   );
 }

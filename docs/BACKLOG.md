@@ -333,8 +333,34 @@ nothing. The test institution was restored to its original values.
 edit screen now carry it — blank means "no separate English rate", and clearing it sends null
 rather than 0.
 
-**Phases 1–3 remain unscheduled**, per the Owner. Four open product questions must be answered
-before Phase 1 is scoped — see the end of the plan doc.
+**Phase 1 shipped 17 Aug 2026** — read-only suggestions in Apply/Study Step 1.
+
+Product decisions locked: suggestions appear **after** the student makes their own choice (never
+before), **5** of them, and only programmes they are **eligible** for.
+
+Reuses the existing matcher and `RecommendationList` persistence — no scoring is duplicated —
+and the "why" chips are the stored deterministic `whyThisFits` dimensions passed through
+untouched. No AI prose, no model call in the path.
+
+Three guarantees, each enforced on the SERVER rather than only in the UI:
+- **Timing.** With no choice on record the endpoint returns `available: false` and an empty
+  list, before any list is even fetched. Suggestions cannot precede the student's decision even
+  if a screen called too early.
+- **Read-only.** The path never creates, updates or deletes an `AdmissionProgrammeChoice`; the
+  only access is the read that gates on timing. A suggestion is not a commitment.
+- **Count independence.** `SUGGESTION_COUNT` is its own constant, deliberately NOT
+  `CountryExecutionConfig.slotCount` — which is also 5 today, and is the *choice* limit, a
+  different question. A test asserts the two never get coupled.
+
+Verified as a real student, 12/12: nothing before the choice, exactly 5 after, the chosen
+programme never suggested back, every suggestion inside the matcher's eligibility-filtered
+output, an excluded programme absent at the boundary, the explanation byte-identical to the
+stored breakdown, and no choice created by viewing. The student's original choices were
+restored.
+
+**Phases 2–3 unscheduled.** Question 4 (Phase 3 mandatory-slot policy) stays **open and parked**
+pending institution categorisation — 23 institutions are still uncategorised, which Phase 0 made
+fixable for the first time.
 
 ---
 

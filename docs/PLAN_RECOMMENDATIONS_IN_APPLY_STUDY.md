@@ -1,7 +1,7 @@
 # Plan — recommendations inside Apply/Study
 
-**Status:** plan only. Nothing built. Written 17 Aug 2026 against the code and the production
-database, after the state-check of the same date.
+**Status:** **Phase 0 and Phase 1 SHIPPED** (17 Aug 2026). Phases 2 and 3 unscheduled.
+Originally written 17 Aug 2026 against the code and the production database.
 
 **Owner decision being planned:** recommendations get built into the real Apply/Study flow
 (`AdmissionProgrammeChoice` / Step 1), not the separate unused `/student/recommendations` page.
@@ -153,8 +153,8 @@ separate decision.**
 
 | # | Phase | Size | Depends on |
 |---|---|---|---|
-| **0** | **Unblockers.** `institutionType` in the DTO + institution edit screen; seed `CountryExecutionConfig` for NZ; readiness indicator. | **~1 day** | nothing |
-| **1** | **Suggestions in Apply/Study, read-only.** Reuse the matcher, surface ranked suggestions in Step 1 beside the existing picker, deterministic "why". Student can still choose anything. | **~3–4 days** | phase 0 |
+| **0** | ✅ **SHIPPED.** `institutionType` in the DTO + institution edit screen; NZ `CountryExecutionConfig` seeded; readiness indicator. | ~1 day | — |
+| **1** | ✅ **SHIPPED.** Suggestions in Apply/Study, read-only, AFTER the student chooses. 5 suggestions, eligibility-filtered, deterministic "why". | ~3–4 days | — |
 | **2** | **Suggestion → choice.** One-tap add from a suggestion into the choice list, provenance link, staff visibility. | **~2–3 days** | phase 1 reviewed with a real screen |
 | **3** | **Enable slot rules.** Turn on mandatory institution-type positions. | **~1 day of code** | institutions categorised (a data task, not a code one) |
 
@@ -179,3 +179,8 @@ real screen with real data — which only exists after phase 1 ships.
    near-miss with "you would need X" is a different, larger feature.
 4. **Phase 3 policy:** which positions are mandatory, and which institution type each requires?
    The rule is fully config-driven, so this is a decision, not a build.
+   **STILL OPEN — parked, 17 Aug 2026.** Blocked on institution categorisation rather than on
+   anything technical: production still holds 23 uncategorised institutions and, until Phase 0,
+   no way to fix that existed. Revisit once the catalogue is typed. Questions 1–3 are answered
+   and shipped: suggestions appear **after** the student chooses, there are **5** of them, and
+   only **eligible** programmes are shown.
