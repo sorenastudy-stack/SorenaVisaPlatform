@@ -368,7 +368,40 @@ fixable for the first time.
 
 - **Agent Portal Phase 3** — DocuSeal contract signing for agents. Plan approved; held for
   the real template (id, party names verbatim, prefill field names including the rate
-  label). Six decisions recorded.
+  label). Six decisions recorded. **Phase 2 (below) is now done and unblocks nothing here** —
+  phase 3 still needs the template and an `AgentContract` model, which does not exist.
+
+### Agent Portal Phase 2 — DONE 17 Aug 2026
+`docs/PHASE_AGENT_PORTAL_2_RATE_AND_MANAGEMENT.md`.
+
+**The rate could not be set by anyone.** `commissionRatePercent` had a reader (the payables
+deriver) and no writer anywhere in the app, so every agent silently earned the company default.
+Now `PATCH /staff/marketing/agents/:id/rate` — OWNER only and re-checked in the service, bounds
+0–100 validated twice, and an `AFFILIATE_AGENT_RATE_CHANGED` audit event carrying old → new.
+
+**Null clears and is not zero** — null means no agreed rate so the default applies, 0 means one
+was agreed and it is nothing. Both verified.
+
+**List and detail** now show rate, verification and contract state. `contractState` is derived
+as NONE / MANUAL_OVERRIDE / SIGNED even though SIGNED is unreachable until phase 3, so the UI
+will not be wrong about real contracts later. **History** renders the five audit events that
+were already being written and had nowhere to be seen — no new storage.
+
+**`AgentProfile` deleted** in its own commit (0 rows in dev and production, zero references,
+wrong semantics). The migration RAISEs rather than dropping if the table is not empty at run
+time.
+
+Verified as a real Owner, 16/16, including an ADMIN being refused server-side with 403 and the
+default fallback surviving a clear.
+
+⚠ **A state-check error corrected.** That check reported the `EngagementPaidGuard` agent wording
+as still broken; it was fixed in `97cdd00` and the phase-1 doc's limitations list had simply
+never been updated. Nothing regressed, nothing was reapplied, and the phase-1 doc now marks the
+item resolved. A limitations list records the state at the time of writing — read it against the
+code before repeating it.
+
+**Still open on agents:** phase 4 (stats) is named and undesigned; payables have no per-agent
+visibility; there is no considered deactivation/offboarding flow; production still has 0 agents.
 - **DocuSeal engagement-letter wording** — the Owner was checking whether the template
   states a fee; it lives in DocuSeal's editor, outside the repo, so the GST correction did
   not cover it.
