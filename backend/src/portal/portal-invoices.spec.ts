@@ -16,7 +16,7 @@ describe('PortalService.getMyInvoices (own-data isolation)', () => {
   beforeAll(async () => {
     prisma = new PrismaClient();
     await prisma.$connect();
-    svc = new PortalService(prisma as any, {} as any, {} as any, {} as any);
+    svc = new PortalService(prisma as any, {} as any, {} as any, {} as any, { scanFile: async () => ({ status: 'CLEAN' }) } as any);
   }, 60000);
 
   afterAll(async () => { await prisma.$disconnect(); });

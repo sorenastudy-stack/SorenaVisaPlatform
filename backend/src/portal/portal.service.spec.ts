@@ -52,6 +52,7 @@ function makeService(findFirst: jest.Mock): PortalService {
     {} as any, // PaymentsService — unused by these tests
     {} as any, // PlatformSettingsService
     {} as any, // ContractsService (PR-CLIENT-CONTRACT)
+    { scanFile: async () => ({ status: 'CLEAN' }) } as any, // AntivirusService — receipt scanning, unused by these tests
   );
 }
 

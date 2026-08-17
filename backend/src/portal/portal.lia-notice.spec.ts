@@ -35,7 +35,7 @@ function makeService(opts: {
     consultation: { findFirst: consultationFindFirst },
   } as any;
 
-  const service = new PortalService(prisma, {} as any, {} as any, {} as any); // 4th = ContractsService (PR-CLIENT-CONTRACT); unused here
+  const service = new PortalService(prisma, {} as any, {} as any, {} as any, { scanFile: async () => ({ status: 'CLEAN' }) } as any); // 4th = ContractsService (PR-CLIENT-CONTRACT); unused here
   return { service, consultationFindFirst };
 }
 

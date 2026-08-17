@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import * as fs from 'fs';
@@ -14,6 +16,7 @@ import { ContractsService } from '../contracts/contracts.service';
 import { createSignedDownloadToken } from '../common/signed-url.util';
 import { getEngagementGateState } from '../common/engagement-payment.helper';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { AntivirusService } from '../common/antivirus/antivirus.service';
 
 // Client portal step 2 — service for the signed-in client's OWN case.
 //
@@ -37,7 +40,11 @@ export class PortalService {
     // PR-CLIENT-CONTRACT — client self-service "Request contract" reuses the
     // EXACT staff send engine (Phase A/B gate + DocuSeal dispatch), never a copy.
     private readonly contracts: ContractsService,
+    // PR-AV slice 1 — malware scan on the payment-receipt upload.
+    private readonly antivirus: AntivirusService,
   ) {}
+
+  private readonly logger = new Logger(PortalService.name);
 
   // POST /portal/me/contract/request — the client triggers their OWN engagement
   // contract send. Reuses the staff send path verbatim: resolve the caller's own
@@ -300,6 +307,68 @@ export class PortalService {
     if (!['SENT', 'OVERDUE'].includes(invoice.status)) {
       cleanup();
       throw new ConflictException('Invoice not payable');
+    }
+
+    // ── PR-AV slice 1 — scan before this file becomes a stored receipt ──────
+    //
+    // Placed after the cheap checks and before the only write: a file that was
+    // never going to be accepted does not need scanning, and a file that IS
+    // about to be accepted must not be stored unscanned. Multer has already put
+    // it on disk, so every rejection path below goes through cleanup() — the
+    // same contract the existing checks use.
+    //
+    // Finance Admin opens these by hand, which is what makes this the riskiest
+    // upload on the platform and the one slice 1 covers.
+    const verdict = await this.antivirus.scanFile(file.path);
+
+    if (verdict.status === 'INFECTED') {
+      cleanup();
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action:     'CREATE',
+          eventType:  'RECEIPT_UPLOAD_REJECTED_MALWARE',
+          entityType: 'Invoice',
+          entityId:   invoiceId,
+          newValue:   {
+            fileName:  file.originalname,
+            mimeType:  file.mimetype,
+            sizeBytes: file.size,
+            signature: verdict.signature,
+            outcome:   'rejected — not stored',
+          } as Prisma.InputJsonValue,
+        },
+      });
+      this.logger?.warn?.(
+        `Receipt upload rejected: ${verdict.signature} in "${file.originalname}" (invoice ${invoiceId})`,
+      );
+      // Deliberately says nothing technical. The uploader learns the file was
+      // not accepted; they do not learn what was detected or how.
+      throw new UnprocessableEntityException(
+        'This file could not be uploaded. Please try a different file.',
+      );
+    }
+
+    if (verdict.status === 'UNAVAILABLE') {
+      // FAIL CLOSED. Accepting an unscanned receipt because the scanner is down
+      // would keep the control on the org chart and off the money path. The
+      // message is different from the infected one on purpose — this is our
+      // outage, not their file.
+      cleanup();
+      await this.prisma.auditLog.create({
+        data: {
+          userId,
+          action:     'CREATE',
+          eventType:  'RECEIPT_UPLOAD_REJECTED_SCANNER_UNAVAILABLE',
+          entityType: 'Invoice',
+          entityId:   invoiceId,
+          newValue:   { fileName: file.originalname, reason: verdict.reason, outcome: 'rejected — not stored' } as Prisma.InputJsonValue,
+        },
+      });
+      this.logger?.error?.(`Receipt scan unavailable (invoice ${invoiceId}): ${verdict.reason}`);
+      throw new ServiceUnavailableException(
+        'We could not process that file right now. Please try again in a few minutes.',
+      );
     }
 
     await this.prisma.invoice.update({

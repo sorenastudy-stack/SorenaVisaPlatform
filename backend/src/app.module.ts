@@ -3,6 +3,7 @@ import { RolesAccessModule } from './staff/roles-access/roles-access.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AntivirusModule } from './common/antivirus/antivirus.module';
 import { IdentityThrottlerGuard } from './common/throttler/identity-throttler.guard';
 import { AcquisitionModule } from './acquisition/acquisition.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -78,6 +79,7 @@ import { ProviderPortalModule } from './provider-portal/provider-portal.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    AntivirusModule,
     ThrottlerModule.forRoot([
       {
         name: 'default',

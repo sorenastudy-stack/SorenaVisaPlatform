@@ -57,7 +57,7 @@ describe('Client self-service Request Contract', () => {
       // network from a test.
       { getRateForInvoice: async () => ({ rate: 1.6423, source: 'exchangerate.host', timestamp: new Date()}) } as any,
     );
-    portal = new PortalService(prisma as any, {} as any, {} as any, contracts);
+    portal = new PortalService(prisma as any, {} as any, {} as any, contracts, { scanFile: async () => ({ status: 'CLEAN' }) } as any);
   }, 60000);
 
   afterAll(async () => { await prisma.$disconnect(); });

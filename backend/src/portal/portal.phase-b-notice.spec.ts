@@ -22,7 +22,7 @@ function makeService(opts: { contractStatus: string; clientSigned: boolean }) {
     case: { findUnique: jest.fn(async () => ({ lead: { id: 'lead-1', liaEscalationRequired: false } })) },
     consultation: { findFirst: jest.fn(async () => null) },
   } as any;
-  return new PortalService(prisma, {} as any, {} as any, {} as any); // 4th = ContractsService (PR-CLIENT-CONTRACT); unused here
+  return new PortalService(prisma, {} as any, {} as any, {} as any, { scanFile: async () => ({ status: 'CLEAN' }) } as any); // 4th = ContractsService (PR-CLIENT-CONTRACT); unused here
 }
 
 function steps(service: PortalService) {
