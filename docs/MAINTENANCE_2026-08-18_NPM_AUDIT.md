@@ -52,3 +52,20 @@ multer bump, and `MailService` confirmed live end-to-end through the compiled cl
 with two messages accepted by Resend. Commits `5f615c7`, `968c4f5`, `e4fc059`.
 Fuller dependency context lives in
 [FOLLOWUP_DEPENDENCY_SECURITY.md](FOLLOWUP_DEPENDENCY_SECURITY.md).
+
+**Update — the Prisma advisory was closed without the major.** The
+`prisma`/`@prisma/config`/`deepmerge-ts` chain deferred above is resolved by a single
+`"overrides": { "deepmerge-ts": "^8.0.0" }` entry. `@prisma/config` pins `deepmerge-ts`
+at exactly 7.1.5, so npm cannot move it any other way — but nothing stops an override,
+and the Prisma CLI is unaffected (`generate`, `validate` and `migrate status` all verified
+on the newer transitive dependency). That took production advisories from 12 to 1; the
+only survivor is `@anthropic-ai/sdk`, whose advisory covers a local-filesystem memory tool
+this app does not use. **A full Prisma 6 → 7 migration was scoped first and deliberately
+deferred**: it needs driver adapters at 75 `new PrismaClient()` sites, a required generator
+`output` path which changes all 193 `@prisma/client` imports, and an ESM-vs-CommonJS
+decision in a CommonJS NestJS app. Worth noting one thing the audit settled either way —
+the current `binaryTargets = ["native", "linux-musl-openssl-3.0.x"]` is already correct for
+the `node:22-alpine` production image, and Prisma 7 would remove that setting entirely
+along with the Rust engine. None of that is urgent now that no advisory forces it; revisit
+it for support currency, not for security. Commit `5cb6b90`.
+
