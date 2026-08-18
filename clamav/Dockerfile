@@ -26,12 +26,28 @@ RUN set -eu; \
 # did not take. A clamd that will not start is a platform-wide upload outage,
 # because every upload fails closed — that is worth catching here, where the
 # previous deployment simply keeps serving.
+#
+# Asserted against `clamconf` in FULL, not `clamconf -n`. The -n form prints
+# only values that DIFFER from the built-in defaults, so a directive we set to
+# a default — ScanOLE2, and the four limits pinned at their current values — is
+# correctly absent from it. The first version of this check used -n and failed
+# the build claiming ScanOLE2 was missing when it was simply already correct.
+# Name AND value are compared, which is what we actually care about.
+COPY expected-config.txt /tmp/expected-config.txt
 RUN set -eu; \
-    clamconf -n > /tmp/conf.out 2>&1 || { echo 'clamconf failed to parse clamd.conf:'; cat /tmp/conf.out; exit 1; }; \
-    for expect in 'AlertEncrypted' 'AlertEncryptedArchive' 'AlertEncryptedDoc' 'ScanOLE2' 'OLE2BlockMacros' 'StreamMaxLength' 'AlertExceedsMax'; do \
-      grep -qi "^${expect}[[:space:]]*=" /tmp/conf.out || { echo "MISSING from clamd's own parsed config: ${expect}"; cat /tmp/conf.out; exit 1; }; \
-    done; \
-    echo '── clamd parsed config (non-default values) ──'; cat /tmp/conf.out; rm -f /tmp/conf.out
+    clamconf > /tmp/conf.out 2>&1 || { echo 'clamconf failed to parse the config:'; cat /tmp/conf.out; exit 1; }; \
+    fail=0; \
+    while IFS='=' read -r name value; do \
+      case "$name" in ''|\#*) continue ;; esac; \
+      if grep -qE "^${name}[[:space:]]*=[[:space:]]*\"?${value}\"?[[:space:]]*$" /tmp/conf.out; then \
+        echo "  ok   ${name} = ${value}"; \
+      else \
+        echo "  FAIL ${name}: expected ${value}, clamd reports: $(grep -E "^${name}[[:space:]]*=" /tmp/conf.out || echo '<absent>')"; \
+        fail=1; \
+      fi; \
+    done < /tmp/expected-config.txt; \
+    [ "$fail" -eq 0 ] || { echo '--- clamd full parsed config ---'; cat /tmp/conf.out; exit 1; }; \
+    rm -f /tmp/conf.out /tmp/expected-config.txt
 
 # ── 2. First-boot seed for the signature volume ────────────────────────────
 # Copied at build time, i.e. before any volume is mounted over /var/lib/clamav.

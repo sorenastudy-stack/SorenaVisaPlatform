@@ -1,0 +1,17 @@
+# What clamd must report back for the hardening to count as applied.
+# Checked at BUILD time against `clamconf` (full), name and value, so a typo in
+# hardening.conf fails the build rather than the deploy.
+#
+# Byte counts are the expanded form clamconf prints — 50M/400M/100M as written
+# in hardening.conf come back as these numbers.
+AlertEncrypted=yes
+AlertEncryptedArchive=yes
+AlertEncryptedDoc=yes
+ScanOLE2=yes
+OLE2BlockMacros=yes
+AlertExceedsMax=yes
+StreamMaxLength=52428800
+MaxScanSize=419430400
+MaxFileSize=104857600
+MaxRecursion=17
+MaxFiles=10000
