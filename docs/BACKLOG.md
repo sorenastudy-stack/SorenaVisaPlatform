@@ -538,6 +538,36 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## ⚠ Spreadsheet importers were dead on production since Phase 34 — FIXED 18 Aug 2026
+`xlsx` sat in **devDependencies**, so the production image never installed it. Every valid
+spreadsheet upload came back `400 — "Could not read the spreadsheet: Cannot find module 'xlsx'"`,
+across all nine importer routes: the three staff ones (`/providers/:id/import-programmes`,
+`/scholarships/import`, `/tuitions/import`) and the six provider-portal ones
+(`{programmes,tuition,scholarships}` × `{check,apply}`). Roughly five months, undetected.
+
+Moved to `dependencies`, and `package-lock.json` regenerated — the lock had `"dev": true` on the
+entry, which `npm ci --omit=dev` reads, so editing package.json alone would have changed nothing.
+
+**Found as a side effect of the antivirus slice-2 live verification, not caused by it.** The scan
+runs ahead of the parser, so the EICAR half of the importer check passed (422 from the scanner)
+while the clean-control half failed at the parse. Without the clean control — the half that
+exists to prove a route still works rather than merely refuses — the phase would have been
+reported green over a route that could not accept any file at all. Confirmed pre-existing:
+`git log -S'"xlsx"'` puts the move into devDependencies at `8af5c79` (Phase 34), and slice 2's
+own commit touched `package.json` only to add supertest.
+
+Two things kept it hidden. Each parser wraps `require('xlsx')` in a Proxy so the import is lazy —
+the comment says *"so boot never depends on it"* — which is true and meant the service started
+cleanly while the feature was broken. And the importers' own `catch` rewrites any error into
+"Could not read the spreadsheet", so a missing module read as a bad file.
+
+Also audited the rest: `xlsx` was the only devDependency imported by non-spec production source.
+(That audit first reported "none" because it ran from the repo root against the wrong
+package.json — worth remembering that a clean result from the wrong directory looks identical to
+a clean result.)
+
+---
+
 ## Virus scanning, slice 2 — every in-handler upload — DONE 18 Aug 2026
 `docs/PHASE_41_ANTIVIRUS_SLICE2_ALL_UPLOAD_POINTS.md`. No migration, no new env vars, no new
 services — 21 routes wired to one shared `UploadScanService.scanOrReject()`.
