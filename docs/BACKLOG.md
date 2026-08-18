@@ -538,6 +538,42 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## R2 case documents — the last unscanned upload path — DONE 18 Aug 2026
+`docs/PHASE_43_ANTIVIRUS_R2_CASE_DOCUMENTS.md`. Migration
+`20260818030000_document_scan_status` — additive: a `DocumentScanStatus` enum plus `scanStatus`,
+`scanSignature`, `scanCheckedAt`, `scanAttempts` and an index. No new env vars, no new services.
+
+Closes the gap left open since Phase 41. Case documents go to R2 by presigned PUT, so the backend
+never holds the bytes and there is no handler in which to refuse them. A 15-second poll now picks
+up rows awaiting a verdict, fetches the object, and scans it through the **same**
+`AntivirusService` as everything else — clean rows left alone, infected rows deleted from R2 and
+audited. `getDownloadUrl` refuses anything not `CLEAN`, with three distinct non-technical
+messages.
+
+**The guarantee here is weaker than every other route, and is documented that way rather than
+implied equivalent.** Elsewhere an infected file is *never stored*; here it **is** briefly stored
+(bounded to one poll cycle) and then deleted, because bytes reach storage before any scan is
+possible. The audit event says "stored briefly via presigned upload, then deleted" instead of
+"rejected — not stored", and a test fails if that wording drifts. Safe because the bucket is
+private and the gate is the only door — Phase 0 proved that 7/7: unauthenticated GET and listing
+refused, tampered and expired signatures refused, no public URL constructed anywhere.
+
+The migration default **is** the backfill — every pre-existing row became PENDING_SCAN on the
+column add and was picked up like a new upload. All 7 production rows went PENDING_SCAN → CLEAN,
+no script needed.
+
+Proof, via the real presigned flow rather than a shortcut: EICAR refused before the scan landed,
+INFECTED within 30s, object confirmed **gone** from the bucket by HeadObject (not by trusting the
+DB), download refused before and after with no URL ever issued; a clean PDF reached CLEAN in one
+cycle and served back byte-identical. 9/9 endpoint, 2/2 storage, 12/12 audit. Backend 1507/1507.
+
+One residual worth knowing: whether a Cloudflare public dev URL or custom domain is bound to the
+bucket cannot be checked from the S3 API — it lives in the Cloudflare dashboard. Everything
+testable says private; if that toggle is ever switched on, the download gate stops being the only
+door and the design needs a staging prefix instead.
+
+---
+
 ## clamd hardening — DONE 18 Aug 2026
 `docs/PHASE_42_ANTIVIRUS_CLAMD_HARDENING.md`. No migration, no new env vars. The `clamav` service
 now builds from `clamav/Dockerfile` in this repo, with a volume at `/var/lib/clamav`.
@@ -645,12 +681,10 @@ now so a bad path is a loud import error.
 
 Proof: 24/24 matrix, backend 1489/1489, clean build.
 
-**Still open.** (a) The R2 presigned case-document flow (`documents.service.ts`, 7 existing
-UPLOADED rows) — backend never sees the bytes, so there is no handler to scan and **the guard
-test cannot detect this gap**; needs a staging prefix, scan job, AVAILABLE download gate and a
-backfill. (b) clamd hardening — still stock `clamav/clamav:stable`; `AlertEncrypted`, `ScanOLE2`
-and an explicit `StreamMaxLength` all need a `clamav/Dockerfile` in this repo and the Railway
-service repointed to repo-deploy.
+**Both follow-ups are now closed.** (a) The R2 presigned case-document flow →
+`docs/PHASE_43_ANTIVIRUS_R2_CASE_DOCUMENTS.md` (18 Aug 2026). (b) clamd hardening →
+`docs/PHASE_42_ANTIVIRUS_CLAMD_HARDENING.md` (18 Aug 2026). Every upload path on the platform is
+now scanned.
 
 ---
 
