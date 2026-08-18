@@ -538,6 +538,37 @@ table cells. Four guards proven RED. Backend 1409/1409, frontend 53/53.
 
 ---
 
+## clamd hardening — DONE 18 Aug 2026
+`docs/PHASE_42_ANTIVIRUS_CLAMD_HARDENING.md`. No migration, no new env vars. The `clamav` service
+now builds from `clamav/Dockerfile` in this repo, with a volume at `/var/lib/clamav`.
+
+Eleven directives confirmed **live in the running container**, not just at build time:
+AlertEncrypted / AlertEncryptedArchive / AlertEncryptedDoc, ScanOLE2 + OLE2BlockMacros,
+AlertExceedsMax, StreamMaxLength 50 MB, and MaxScanSize / MaxFileSize / MaxRecursion / MaxFiles
+pinned at the values the stock image was already logging. Encrypted archives used to pass as
+**clean** because clamd cannot see inside them — a password-protected ZIP now returns 422 through
+a real route, which is the proof that control exists.
+
+**The real story is the deploy, not the config.** Four deployments failed with completely empty
+logs. Cause: `/railway.json` at the repo root is the BACKEND's config-as-code, and any service
+pointed at this repo inherits it — so Railway ran `npm run migrate:deploy` as a pre-deploy step
+inside a ClamAV image, which fails *before* a container exists, hence no output. Config-as-code
+overrides the API, so clearing startCommand/preDeployCommand read back clean and changed nothing;
+the deployment *snapshot* still had the backend's values. A Dockerfile containing nothing but
+`FROM clamav/clamav:stable` failed identically — that is what isolated it. Fixed by giving clamav
+its own `clamav/railway.json`. **Any new service in this repo needs one too** — see §8 of the
+phase doc.
+
+Two traps worth remembering: clamd does **not** log clean scans, only detections, so log silence
+proves nothing about whether it was called; and a 67-byte near-miss EICAR is not EICAR, so clamd
+correctly calls it clean — which looks exactly like a broken scanner. Both cost real time here;
+the byte-length assertion is now baked into the verification script.
+
+Proof: 9/9 live routes (EICAR + clean control) post-deploy and again post-volume, 3/3 encrypted
+ZIP, signatures current (daily 28095 / main 63 / bytecode 339), 0 test records left.
+
+---
+
 ## ⚠ Spreadsheet importers were dead on production since Phase 34 — FIXED 18 Aug 2026
 `xlsx` sat in **devDependencies**, so the production image never installed it. Every valid
 spreadsheet upload came back `400 — "Could not read the spreadsheet: Cannot find module 'xlsx'"`,

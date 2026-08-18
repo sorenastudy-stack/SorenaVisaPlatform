@@ -9,34 +9,40 @@ Baseline at the time: `npm audit` (backend) reported **43 vulnerabilities — 4 
 
 ---
 
-## 1. `xlsx` (SheetJS) — HIGH, no fix available
+## 1. `xlsx` (SheetJS) — ✅ RESOLVED 18 August 2026
 
 | | |
 |---|---|
 | Advisories | Prototype Pollution (GHSA-4r6h-8v6p-xvw6), ReDoS (GHSA-5pgg-2g8v-p4x9) |
-| Fix via npm | **None.** SheetJS moved off the public npm registry; the registry copy is frozen at a vulnerable version. |
-| Declared in | `backend/package.json` → `devDependencies` |
-| Used by | `providers/import/programme-import.logic.ts`, `providers/import/sheet-parse.logic.ts` (scholarship + tuition importers) |
+| Resolution | Pinned to `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` — the vendor's own registry, which publishes the patched versions npm does not carry (option 1 below). `npm audit --omit=dev` now reports nothing against `xlsx`. |
+| Declared in | `backend/package.json` → **`dependencies`** (see below) |
+| Used by | `providers/import/programme-import.logic.ts`, `sheet-parse.logic.ts`, `scholarship-import.logic.ts`, `catalogue-workbook.logic.ts` |
 
-**Why it was accepted for now — exposure is narrow:**
+**Two things in the original assessment turned out to be wrong, and both are worth recording.**
 
-- All three upload endpoints are `@Roles('OWNER','SUPER_ADMIN')` — not public, not
-  client-facing.
-- Reaching the parser requires an authenticated Owner session.
-- The module is **lazily loaded** behind a Proxy, so it is not resident unless an
-  import actually runs.
-- Input is a spreadsheet the Owner uploads themselves.
+**It was in `devDependencies`, which meant production never installed it at all.** Every
+spreadsheet importer — nine routes — had been answering
+`400 "Could not read the spreadsheet: Cannot find module 'xlsx'"` to any valid upload since Phase
+34, roughly five months. Two things hid it: each parser defers `require('xlsx')` behind a Proxy so
+boot never depends on it (true, and it let the service start healthy while the feature was broken),
+and the importers rewrite any parse error into "Could not read the spreadsheet", so a missing
+module read as a bad file. Found as a side effect of the antivirus slice-2 live verification, not
+by the audit.
 
-Realistic threat is "Owner uploads a maliciously crafted .xlsx", not remote
-exploitation.
+**"Exposure is narrow — Owner only" was also wrong.** Three importer routes are Owner-gated, but
+the other six are provider-portal routes reachable by **external institutions** with the PROVIDER
+role. So the realistic threat was not only "Owner uploads a crafted .xlsx" — an outside party
+could reach the parser. That is why the CDN pin was taken rather than accepting the risk.
 
-**Options when this is picked up:**
+⚠️ **Trade-off now in force:** this dependency no longer comes from the npm registry. Builds
+depend on `cdn.sheetjs.com` being reachable, and **`npm audit` cannot track future advisories
+against a URL dependency** — SheetJS releases have to be checked by hand. A CDN outage fails the
+build, not the running service.
 
-1. Install SheetJS from the vendor's own registry (`https://cdn.sheetjs.com/`),
-   which publishes patched versions npm does not carry.
-2. Swap to a maintained alternative (e.g. `exceljs`) — larger change; the parsers
-   are pure-logic and well covered by tests, so the blast radius is contained.
-3. Accept and document, given the role gate.
+Fixed in `f16ab89` (move to `dependencies`, lockfile regenerated — the lock carried `"dev": true`
+and `npm ci --omit=dev` reads the lock, so editing package.json alone would have changed nothing)
+and `479c7b1` (CDN pin). All nine importer routes verified live afterwards: clean workbooks
+accepted and rows actually imported, EICAR still refused at 422.
 
 ---
 
