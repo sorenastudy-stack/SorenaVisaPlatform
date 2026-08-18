@@ -7,6 +7,35 @@ Last updated: 14 August 2026.
 
 ---
 
+## Application status progression — FIXED for the visa side, admission side has no UI — 19 Aug 2026
+`Application.status` was a dead mechanism: a correct forward-only transition map, milestone
+timestamp columns and `PATCH /applications/:id/status` all existed, and **nothing called any of
+it**. Every application sat at `PREPARATION`, so "how many visas approved" was zero by
+construction rather than by fact. Meanwhile the LIA actions that mark the real milestones moved
+`Case.stage` and never touched `Application.status` — two notions of progress, one maintained and
+one abandoned.
+
+Now wired to the actions staff already take: INZ submission → `VISA_SUBMITTED`, visa outcome →
+`VISA_APPROVED` / `VISA_DECLINED`, with both revert endpoints as audited correction paths. Only
+applications in the expected predecessor state move, so a multi-programme case cannot have history
+invented for programmes the student never accepted. Every change writes an `AuditLog` row with who,
+when, old, new and the triggering endpoint. Verified end-to-end over real HTTP: a case driven
+`PREPARATION → SUBMITTED → OFFER_RECEIVED → OFFER_ACCEPTED → VISA_SUBMITTED → VISA_APPROVED`
+entirely through staff endpoints, 13/13, and `count(VISA_APPROVED)` returning 1. No backfill —
+production holds zero applications and the 1,102 dev rows are synthetic.
+
+⚠️ **The natural follow-up, not started and not blocking.** The three admission-side transitions —
+`SUBMITTED`, `OFFER_RECEIVED`, `OFFER_ACCEPTED` — still have **no UI trigger, only the API**. There
+is no offer-stage endpoint anywhere beyond the manual `PATCH`. So in practice **no case can reach
+`OFFER_ACCEPTED` through the product today**, and because the LIA hooks start from there, the visa
+milestones cannot fire either without someone calling the API by hand. Wiring those three to real
+Admission Specialist actions is the next step, and it needs a decision first: which existing screen
+or action each one belongs to (recording a submission to a provider, receiving an offer letter,
+the student accepting it). That is a product judgment, not a code one — which is why it was
+deliberately left rather than guessed at.
+
+---
+
 ## Small / quick
 
 ### Audit untracked `scripts/` files for stale references
