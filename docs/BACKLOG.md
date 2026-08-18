@@ -561,6 +561,20 @@ the comment says *"so boot never depends on it"* — which is true and meant the
 cleanly while the feature was broken. And the importers' own `catch` rewrites any error into
 "Could not read the spreadsheet", so a missing module read as a bad file.
 
+**Follow-on, same day — the version had to change too.** Promoting `xlsx@0.18.5` to production
+shipped two unpatched high-severity advisories into the runtime: prototype pollution
+(GHSA-4r6h-8v6p-xvw6) and ReDoS (GHSA-5pgg-2g8v-p4x9), `fixAvailable: false` because SheetJS
+stopped publishing to npm at 0.18.5. While the package was dev-only those CVEs were unreachable —
+production parsed no spreadsheets at all — so restoring the feature also restored the exposure,
+on six routes reachable by external institutions. Antivirus does not help here: prototype
+pollution arrives in a structurally valid workbook, not a signature.
+
+Now pinned to `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` (Owner decision). `npm audit
+--omit=dev` reports no xlsx advisory. **The trade-off to remember: this dependency no longer comes
+from the npm registry.** Builds depend on cdn.sheetjs.com being reachable, and `npm audit` cannot
+track future advisories against it — check SheetJS releases by hand. A build-time CDN outage fails
+the build rather than the running service, since Railway keeps serving the previous deployment.
+
 Also audited the rest: `xlsx` was the only devDependency imported by non-spec production source.
 (That audit first reported "none" because it ran from the repo root against the wrong
 package.json — worth remembering that a clean result from the wrong directory looks identical to
