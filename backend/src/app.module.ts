@@ -7,7 +7,6 @@ import { AntivirusModule } from './common/antivirus/antivirus.module';
 import { IdentityThrottlerGuard } from './common/throttler/identity-throttler.guard';
 import { AcquisitionModule } from './acquisition/acquisition.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { EmailModule } from './email/email.module';
 import { MailModule } from './mail/mail.module';
 import { AuthModule } from './auth/auth.module';
 import { ContactsModule } from './contacts/contacts.module';
@@ -89,10 +88,10 @@ import { ProviderPortalModule } from './provider-portal/provider-portal.module';
     ]),
     PrismaModule,
     // PR-EMAIL-1 — unified Resend-based mail. @Global, so available
-    // app-wide without re-importing. Coexists with EmailModule +
-    // NotificationsModule until call sites are repointed.
+    // app-wide without re-importing. The nodemailer-based EmailModule it used
+    // to coexist with is gone: nothing ever injected EmailService, so it built
+    // an SMTP transport at boot and never sent through it.
     MailModule,
-    EmailModule,
     AuthModule,
     ContactsModule,
     LeadsModule,

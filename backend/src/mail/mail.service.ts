@@ -35,7 +35,7 @@ import {
 
 // PR-EMAIL-1 — Unified Resend-based email service.
 //
-// Replaces the split EmailService + NotificationsService pipelines.
+// Replaced the split EmailService + NotificationsService pipelines.
 // One transporter, one branded HTML shell, one env-var convention
 // (RESEND_API_KEY + EMAIL_FROM + FRONTEND_URL).
 //
@@ -47,9 +47,10 @@ import {
 //     must never block a business action (a failed welcome email
 //     can't roll back a lead creation).
 //
-// This service does NOT replace EmailService or NotificationsService
-// yet. Those stay in place until call sites are individually
-// repointed in a follow-up PR. Coexistence is intentional.
+// The migration this anticipated is done on the EmailService side: it was
+// deleted once it turned out nothing ever injected it — it built an SMTP
+// transport at boot and never sent through it. NotificationsService is still
+// in place; MailService coexists with that one only.
 
 @Injectable()
 export class MailService implements OnModuleInit {
@@ -414,8 +415,9 @@ export class MailService implements OnModuleInit {
 
   // EMAIL-MIGRATION: generic public sendEmail for callers that build
   // their own subject + HTML (the admission flow does this — see
-  // students/admission/admission.service.ts). Same signature as
-  // EmailService.sendEmail, so call sites need only a field-rename.
+  // students/admission/admission.service.ts). Kept the signature the old
+  // nodemailer-based EmailService.sendEmail had, so repointing call sites was
+  // a field-rename; that service has since been deleted.
   // Routes through the standard `send` path so the [MAIL MOCK] fallback
   // and the failure-swallow contract are preserved.
   async sendEmail(args: { to: string; subject: string; html: string }): Promise<void> {

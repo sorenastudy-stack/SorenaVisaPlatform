@@ -6,8 +6,9 @@ import { MailService } from './mail.service';
 // `@Global()` so any service can inject MailService without each
 // owning module importing this one. Pattern mirrors PrismaModule's
 // approach (any place can use Prisma without re-importing).
-// Eventually replaces EmailModule + NotificationsModule once all
-// call sites are repointed — for now it coexists with them.
+// EmailModule is gone (its nodemailer service was never injected by anything).
+// This still coexists with NotificationsModule until those call sites are
+// repointed.
 @Global()
 @Module({
   providers: [MailService],
