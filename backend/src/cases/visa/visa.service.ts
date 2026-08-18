@@ -15,6 +15,8 @@ import { MailService } from '../../mail/mail.service';
 // Phase 4 — Pastoral Care (SUPPORT slot) auto-assigns when the visa is approved.
 import { LiaAssignmentService } from '../lia-assignment.service';
 import { UploadScanService } from '../../common/antivirus/upload-scan.service';
+import { ApplicationsService } from '../../applications/applications.service';
+import { ApplicationStatus } from '@prisma/client';
 import {
   DeclineVisaDto,
   EditVisaDto,
@@ -68,6 +70,9 @@ export class VisaService {
     private readonly liaAssignments: LiaAssignmentService,
     // PR-AV slice 2 — the shared scan-or-reject gate.
     private readonly uploadScan: UploadScanService,
+    // PR-APPSTATUS — recording a visa outcome is the milestone every
+    // "visas approved" report depends on. Only Case.stage moved before this.
+    private readonly applications: ApplicationsService,
   ) {}
 
   // ─── Issue (APPROVED) ──────────────────────────────────────────────────
@@ -250,6 +255,28 @@ export class VisaService {
       );
     }
 
+
+    // PR-APPSTATUS — the milestone every "visas approved" report depends on.
+    // After the transaction on purpose: the Visa row is the authoritative
+    // record and already exists, so failing to derive status from it must not
+    // roll back a recorded outcome. Only applications at VISA_SUBMITTED move.
+    try {
+      const moved = await this.applications.advanceForCase(
+        caseId,
+        ApplicationStatus.VISA_SUBMITTED,
+        ApplicationStatus.VISA_APPROVED,
+        'POST /cases/:id/visa/issue',
+        { id: actor.id, role: actor.role ?? null },
+      );
+      if (moved.advanced === 0) {
+        this.logger.warn(
+          `Visa approved for case ${caseId} but no application was at VISA_SUBMITTED to advance.`,
+        );
+      }
+    } catch (e: any) {
+      this.logger.error(`Visa approved for case ${caseId} but advancing application status failed: ${e?.message ?? e}`);
+    }
+
     return updated;
   }
 
@@ -361,6 +388,27 @@ export class VisaService {
       this.logger.warn(
         `Visa declined for case ${caseId} but no client email on file.`,
       );
+    }
+
+
+    // PR-APPSTATUS — same derivation for the declined outcome, so a decline is
+    // recorded as a real terminal state rather than leaving the application
+    // stuck at VISA_SUBMITTED.
+    try {
+      const moved = await this.applications.advanceForCase(
+        caseId,
+        ApplicationStatus.VISA_SUBMITTED,
+        ApplicationStatus.VISA_DECLINED,
+        'POST /cases/:id/visa/decline',
+        { id: actor.id, role: actor.role ?? null },
+      );
+      if (moved.advanced === 0) {
+        this.logger.warn(
+          `Visa declined for case ${caseId} but no application was at VISA_SUBMITTED to advance.`,
+        );
+      }
+    } catch (e: any) {
+      this.logger.error(`Visa decline for case ${caseId}: advancing application status failed: ${e?.message ?? e}`);
     }
 
     return updated;
@@ -495,6 +543,25 @@ export class VisaService {
     dto: RevertVisaDto,
     actor: Actor,
   ) {
+    // PR-APPSTATUS — the correction path for a wrongly-recorded outcome. The
+    // application goes back to VISA_SUBMITTED and is audited under
+    // APPLICATION_STATUS_REVERTED, distinct from the forward event, so undoing
+    // a decision can never be read as progress. Endpoint is LIA/ADMIN/
+    // SUPER_ADMIN/OWNER only, so the role gate is already in place.
+    try {
+      for (const from of [ApplicationStatus.VISA_APPROVED, ApplicationStatus.VISA_DECLINED]) {
+        await this.applications.revertForCase(
+          caseId,
+          from,
+          ApplicationStatus.VISA_SUBMITTED,
+          'POST /cases/:id/visa/revert',
+          { id: actor.id, role: actor.role ?? null },
+        );
+      }
+    } catch (e: any) {
+      this.logger.error(`Visa revert for case ${caseId}: application status revert failed: ${e?.message ?? e}`);
+    }
+
     const existing = await this.prisma.visa.findUnique({
       where: { caseId },
     });
