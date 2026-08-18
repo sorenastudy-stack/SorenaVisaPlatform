@@ -49,15 +49,13 @@ RUN set -eu; \
     [ "$fail" -eq 0 ] || { echo '--- clamd full parsed config ---'; cat /tmp/conf.out; exit 1; }; \
     rm -f /tmp/conf.out /tmp/expected-config.txt
 
-# ── 2. First-boot seed for the signature volume ────────────────────────────
-# Copied at build time, i.e. before any volume is mounted over /var/lib/clamav,
-# so seed-and-start.sh can populate an empty volume on its first boot.
-RUN cp -a /var/lib/clamav /var/lib/clamav-seed
-
-COPY seed-and-start.sh /usr/local/bin/seed-and-start.sh
-RUN chmod +x /usr/local/bin/seed-and-start.sh
-
-# NOTE: the upstream ENTRYPOINT (/init) is deliberately left in place for now.
-# Wrapping it broke container start with no output at all, and the hardening is
-# worth more than the seed optimisation — so this ships the config change alone
-# and the wrapper is reintroduced separately, once it can be proven.
+# ── 2. Volume seeding — NOT here ───────────────────────────────────────────
+# An earlier revision copied the baked-in signature database to
+# /var/lib/clamav-seed so a freshly attached (empty) volume could be populated
+# without a cold ~350 MB download. That doubled the image and the container
+# stopped starting at all — INITIALIZING straight to REMOVED, no log output,
+# with and without a custom entrypoint. Image size is the difference between
+# this and the stock image that works, so it is the suspect.
+#
+# The hardening is what this change is for, and it is proven at build time.
+# Seeding is an optimisation; it comes back only once it can be shown to boot.
