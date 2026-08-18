@@ -13,6 +13,17 @@ import { htmlToText, looksJsEmpty, looksBlocked } from './page-fetch.logic';
 const USER_AGENT =
   'Mozilla/5.0 (compatible; SorenaCatalogBot/1.0; +https://sorena.co.nz/bot) programme-catalogue-sync';
 const STATIC_TIMEOUT_MS = 15_000;
+// Not a CVE — a gap found while auditing axios. The fetch had a timeout but no
+// size ceiling, so a hostile or misconfigured institution page could stream
+// unbounded data straight into memory: a slow trickle stays under the timeout
+// indefinitely, and a fast large body exhausts the heap well before 15s.
+//
+// 8 MB is generous for an HTML page (the largest real NZ institution page seen
+// in a sweep is well under 1 MB) and small enough that a hostile response is
+// cut off long before it matters. axios aborts the request once the cap is
+// exceeded, which surfaces here as a normal fetch failure and degrades to the
+// same "failed" page the ladder already handles.
+const MAX_PAGE_BYTES = 8 * 1024 * 1024;
 const HEADLESS_TIMEOUT_MS = 30_000;
 
 export interface FetchedPage {
@@ -50,6 +61,12 @@ export class PageFetchService implements PageFetcher {
       const res = await axios.get<string>(url, {
         timeout: STATIC_TIMEOUT_MS,
         maxRedirects: 5,
+        // Both, deliberately: maxContentLength bounds the response we accept,
+        // maxBodyLength bounds what we would send. A remote server can lie in
+        // Content-Length or omit it, so axios enforces this on the stream as it
+        // arrives rather than trusting the header.
+        maxContentLength: MAX_PAGE_BYTES,
+        maxBodyLength: MAX_PAGE_BYTES,
         responseType: 'text',
         headers: {
           'User-Agent': USER_AGENT,

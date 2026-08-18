@@ -43,7 +43,7 @@
     "@pdf-lib/fontkit": "^1.1.1",
     "@prisma/client": "^6.0.0",
     "@types/multer": "^2.1.0",
-    "axios": "^1.14.0",
+    "axios": "^1.19.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
@@ -51,7 +51,7 @@
     "dotenv": "^17.4.1",
     "helmet": "^7.1.0",
     "i18n-iso-countries": "^7.14.0",
-    "multer": "^2.1.1",
+    "multer": "^2.2.0",
     "nodemailer": "^6.10.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
@@ -90,5 +90,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "multer": "$multer"
   }
 }
