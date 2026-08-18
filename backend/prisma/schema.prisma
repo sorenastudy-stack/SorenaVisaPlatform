@@ -638,11 +638,11 @@ model User {
   //                            agent login rather than a staff or client one.
   // `affiliateAgentsVerified` — agents whose ID/business documents this
   //                            OWNER reviewed.
-  affiliateAgent          AffiliateAgent?  @relation("AffiliateAgentLogin")
+  affiliateAgent          AffiliateAgent?          @relation("AffiliateAgentLogin")
   // PR-PROVIDER-PORTAL slice A — the institution this login belongs to, if any.
-  educationProvider       EducationProvider? @relation("EducationProviderLogin")
-  marketingUploads  ProviderMarketingAsset[] // PR-PROVIDER-PORTAL
-  affiliateAgentsVerified AffiliateAgent[] @relation("AffiliateAgentVerifier")
+  educationProvider       EducationProvider?       @relation("EducationProviderLogin")
+  marketingUploads        ProviderMarketingAsset[] // PR-PROVIDER-PORTAL
+  affiliateAgentsVerified AffiliateAgent[]         @relation("AffiliateAgentVerifier")
 
   // PR-SCORECARD-4: OWNER-editable platform settings (booking URLs +
   // Wix webhook secret) and the Wix payments matched to this user by
@@ -2573,13 +2573,13 @@ model EducationProvider {
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
 
-  faculties    EducationFaculty[]
-  programmes   EducationProgramme[]
-  applications Application[]
-  commissions  Commission[]
-  scholarships ProviderScholarship[]
-  tuitions     ProviderTuition[] // PR-EXPLORE — nationality-scoped tuition rates
-  candidates   ProgrammeCandidate[] // PR-CATALOG-2 — new-programme discovery candidates
+  faculties         EducationFaculty[]
+  programmes        EducationProgramme[]
+  applications      Application[]
+  commissions       Commission[]
+  scholarships      ProviderScholarship[]
+  tuitions          ProviderTuition[] // PR-EXPLORE — nationality-scoped tuition rates
+  candidates        ProgrammeCandidate[] // PR-CATALOG-2 — new-programme discovery candidates
   nationalityGroups NationalityGroup[] // PR-PROVIDER-PORTAL slice E
   marketingAssets   ProviderMarketingAsset[] // PR-PROVIDER-PORTAL — brand/recruitment files
 
@@ -2800,24 +2800,24 @@ model ProgrammeStudyField {
 // commissions context and (future) AI offer-generation / recommendation engine.
 // Amount reuses CommissionType: PERCENTAGE (of tuition) or FIXED (in `currency`).
 model ProviderScholarship {
-  id               String              @id @default(cuid())
-  providerId       String
+  id                 String              @id @default(cuid())
+  providerId         String
   /// PR-PROVIDER-PORTAL slice E — nullable since groups arrived. EXACTLY ONE of
   /// `nationality` and `nationalityGroupId` is set, enforced by a CHECK
   /// constraint in the migration (Prisma cannot express it) and re-checked in the
   /// service so the error a provider sees is a sentence rather than a constraint
   /// name. Neither set would be a row that applies to nobody; both set would be a
   /// row whose meaning depends on which field the reader looks at first.
-  nationality      String? // ISO country code of the applicant nationality it applies to
+  nationality        String? // ISO country code of the applicant nationality it applies to
   nationalityGroupId String?
-  programmeId      String? // optional — scope to a single programme
-  level            QualificationLevel? // optional — scope to a qualification level
-  name             String
-  amountType       CommissionType      @default(FIXED)
-  amountValue      Float
-  currency         String              @default("NZD")
-  eligibilityNotes String?
-  isActive         Boolean             @default(true)
+  programmeId        String? // optional — scope to a single programme
+  level              QualificationLevel? // optional — scope to a qualification level
+  name               String
+  amountType         CommissionType      @default(FIXED)
+  amountValue        Float
+  currency           String              @default("NZD")
+  eligibilityNotes   String?
+  isActive           Boolean             @default(true)
   /// PR-PROVIDER-PORTAL slice A — pricing must be reviewed before a student sees it.
   ///
   /// Programmes have had this gate since the catalogue import existed; tuition and
@@ -2829,19 +2829,19 @@ model ProviderScholarship {
   /// review standard, not two tiers of trust — a staff upload is gated exactly
   /// like a future provider submission. This is a deliberate workflow change:
   /// uploading no longer makes a price live.
-  reviewStatus ReviewStatus @default(PENDING)
+  reviewStatus       ReviewStatus        @default(PENDING)
 
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  updatedById      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedById String?
 
-  provider  EducationProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  programme EducationProgramme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  provider         EducationProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  programme        EducationProgramme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
   /// Restrict, NOT SetNull: nulling the reference would leave a row with neither
   /// a nationality nor a group — a row that applies to nobody, and one the
   /// resolver would silently skip on its way to the flat fee. Blocking the delete
   /// makes the provider decide what those rates should say.
-  nationalityGroup NationalityGroup? @relation(fields: [nationalityGroupId], references: [id], onDelete: Restrict)
+  nationalityGroup NationalityGroup?   @relation(fields: [nationalityGroupId], references: [id], onDelete: Restrict)
 
   @@index([providerId])
   @@index([nationality])
@@ -2903,7 +2903,7 @@ model ProviderMarketingAsset {
 /// on the pricing rows themselves; a join table would add a hop for a list that is
 /// only ever read whole.
 model NationalityGroup {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   providerId    String
   name          String
   nationalities String[]
@@ -2919,8 +2919,8 @@ model NationalityGroup {
   /// A timestamp rather than a boolean: "when was this retired" is the question
   /// asked afterwards, and a boolean cannot answer it.
   archivedAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   provider     EducationProvider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
   tuitions     ProviderTuition[]
@@ -2950,23 +2950,23 @@ model NationalityGroup {
 // several rows match, the most SPECIFIC one wins (programme+level > programme >
 // level > provider-wide), and ties break on the most recent feeYear.
 model ProviderTuition {
-  id          String              @id @default(cuid())
-  providerId  String
-  programmeId String? // null = applies to any programme of the provider
-  level       QualificationLevel? // null = applies to any level
+  id                 String              @id @default(cuid())
+  providerId         String
+  programmeId        String? // null = applies to any programme of the provider
+  level              QualificationLevel? // null = applies to any level
   /// PR-PROVIDER-PORTAL slice E — see ProviderScholarship.nationality. Exactly one
   /// of this and `nationalityGroupId` is set; the CHECK constraint lives in the
   /// migration.
-  nationality String? // ISO 3166-1 alpha-2 of the applicant nationality
+  nationality        String? // ISO 3166-1 alpha-2 of the applicant nationality
   nationalityGroupId String?
-  amountValue Float
-  currency    String              @default("NZD")
+  amountValue        Float
+  currency           String              @default("NZD")
   // Same per-year/term granularity as the scholarship sheets — Yashua uploads
   // both for an institution in one sitting.
-  feeYear     Int?
-  term        String?
-  notes       String?
-  isActive    Boolean             @default(true)
+  feeYear            Int?
+  term               String?
+  notes              String?
+  isActive           Boolean             @default(true)
   /// PR-PROVIDER-PORTAL slice A — pricing must be reviewed before a student sees it.
   ///
   /// Programmes have had this gate since the catalogue import existed; tuition and
@@ -2978,16 +2978,16 @@ model ProviderTuition {
   /// review standard, not two tiers of trust — a staff upload is gated exactly
   /// like a future provider submission. This is a deliberate workflow change:
   /// uploading no longer makes a price live.
-  reviewStatus ReviewStatus @default(PENDING)
+  reviewStatus       ReviewStatus        @default(PENDING)
 
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   updatedById String?
 
-  provider  EducationProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  programme EducationProgramme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  provider         EducationProvider   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  programme        EducationProgramme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
   /// Restrict — see the note on ProviderScholarship.nationalityGroup.
-  nationalityGroup NationalityGroup? @relation(fields: [nationalityGroupId], references: [id], onDelete: Restrict)
+  nationalityGroup NationalityGroup?   @relation(fields: [nationalityGroupId], references: [id], onDelete: Restrict)
 
   @@index([providerId])
   @@index([nationality])
@@ -3815,7 +3815,6 @@ model AdmissionDocument {
   @@index([educationEntryId])
   @@map("admission_documents")
 }
-
 
 // ─── LIA PROFILES (PR-DOCUSIGN-1) ─────────────────────────────────────────────
 // LIA's IAA (Immigration Advisers Authority) credential record. 1:1 with a
@@ -5632,18 +5631,38 @@ enum DocumentUploadStatus {
   FAILED
 }
 
+// PR-AV slice 3 — malware scan state for case documents.
+//
+// These are the ONE upload path where the bytes reach storage before we can
+// look at them: the browser PUTs straight to R2 with a presigned URL, so the
+// backend never holds the file and there is no handler in which to refuse it.
+// Scanning therefore happens after the fact, on a poll, and the download gate
+// is what keeps an unscanned document unreachable in the meantime.
+enum DocumentScanStatus {
+  PENDING_SCAN
+  CLEAN
+  INFECTED
+  SCAN_ERROR
+}
+
 model Document {
-  id           String               @id @default(cuid())
-  caseId       String
-  uploaderId   String
-  r2Key        String               @unique
-  originalName String
-  mimeType     String
-  sizeBytes    Int
-  status       DocumentUploadStatus @default(PENDING)
-  category     String?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  id            String               @id @default(cuid())
+  caseId        String
+  uploaderId    String
+  r2Key         String               @unique
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  status        DocumentUploadStatus @default(PENDING)
+  // PR-AV slice 3. Existing rows land on PENDING_SCAN by the migration default,
+  // which IS the backfill — the poll job picks them up like any new upload.
+  scanStatus    DocumentScanStatus   @default(PENDING_SCAN)
+  scanSignature String? // signature name when INFECTED
+  scanCheckedAt DateTime? // last time the poll job looked at this row
+  scanAttempts  Int                  @default(0)
+  category      String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
   case     Case @relation("CaseDocuments", fields: [caseId], references: [id], onDelete: Cascade)
   uploader User @relation("DocumentUploader", fields: [uploaderId], references: [id], onDelete: Restrict)
@@ -5651,6 +5670,8 @@ model Document {
   @@index([caseId])
   @@index([uploaderId])
   @@index([status])
+  // The poll job's only query: rows awaiting a verdict, oldest first.
+  @@index([scanStatus])
   @@map("documents")
 }
 

@@ -36,6 +36,9 @@ interface DocumentShape {
   id: string;
   caseId: string;
   status: 'PENDING' | 'UPLOADED' | 'FAILED';
+  // PR-AV slice 3 — optional so existing fixtures compile; the download gate
+  // treats anything that is not CLEAN as not downloadable.
+  scanStatus?: 'PENDING_SCAN' | 'CLEAN' | 'INFECTED' | 'SCAN_ERROR';
   originalName: string;
   mimeType: string;
   sizeBytes: number;
@@ -403,6 +406,9 @@ describe('DocumentsService.getDownloadUrl', () => {
         id: 'doc-1',
         caseId: 'case-1',
         status: 'UPLOADED',
+        // PR-AV slice 3 — the download gate refuses anything not CLEAN, so a
+        // fixture that predates scanStatus now (correctly) gets refused.
+        scanStatus: 'CLEAN',
         originalName: 'p.pdf',
         mimeType: 'application/pdf',
         sizeBytes: 1,

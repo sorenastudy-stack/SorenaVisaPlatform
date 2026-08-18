@@ -4,8 +4,10 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  ServiceUnavailableException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
-import { DocumentUploadStatus, Prisma } from '@prisma/client';
+import { DocumentScanStatus, DocumentUploadStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../common/r2/r2.service';
@@ -268,6 +270,7 @@ export class DocumentsService {
         id: true,
         caseId: true,
         status: true,
+        scanStatus: true,
         r2Key: true,
         originalName: true,
       },
@@ -277,6 +280,31 @@ export class DocumentsService {
     }
     if (doc.status !== DocumentUploadStatus.UPLOADED) {
       throw new NotFoundException('Document not found on this case.');
+    }
+
+    // PR-AV slice 3 — no URL for anything that is not CLEAN.
+    //
+    // This gate is what makes after-the-fact scanning safe. These files arrive
+    // by presigned PUT, so they exist in storage before anyone can scan them;
+    // this endpoint is the ONLY way to obtain a URL for one (the bucket is
+    // private, no public domain is bound to it), which means an unscanned or
+    // infected document is unreachable no matter how long the verdict takes.
+    //
+    // Three distinct messages on purpose. "Still processing" and "no longer
+    // available" are different facts and a person can act on the difference —
+    // wait, versus re-upload something else. None of them mentions a scanner.
+    if (doc.scanStatus !== DocumentScanStatus.CLEAN) {
+      if (doc.scanStatus === DocumentScanStatus.PENDING_SCAN) {
+        throw new UnprocessableEntityException(
+          'This document is still being processed. Please try again in a moment.',
+        );
+      }
+      if (doc.scanStatus === DocumentScanStatus.INFECTED) {
+        throw new UnprocessableEntityException('This document is no longer available.');
+      }
+      throw new ServiceUnavailableException(
+        'We could not retrieve that document right now. Please try again shortly.',
+      );
     }
 
     // 60s TTL (was 300): least-access for PII — narrows the window in which an

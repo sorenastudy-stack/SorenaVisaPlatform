@@ -64,6 +64,30 @@ export class R2Service {
     await this.client.send(command);
   }
 
+  // PR-AV slice 3 — pull an object's bytes back for scanning. The only reader
+  // is the case-document scan job: those files arrive by presigned PUT, so this
+  // is the one path where the backend has to fetch bytes it never received.
+  // Returns null when the object is gone (already deleted, or never landed),
+  // which the caller treats as nothing to scan rather than as an error.
+  async getObjectBytes(key: string): Promise<Buffer | null> {
+    try {
+      const res = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      const body = res.Body as any;
+      if (!body) return null;
+      const chunks: Buffer[] = [];
+      for await (const chunk of body) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
+    } catch (e: any) {
+      const code = e?.name ?? e?.Code ?? '';
+      if (/NoSuchKey|NotFound/i.test(String(code))) return null;
+      throw e;
+    }
+  }
+
   async getPresignedUploadUrl(
     key: string,
     contentType: string,
