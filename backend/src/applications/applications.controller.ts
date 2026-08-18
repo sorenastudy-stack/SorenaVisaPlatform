@@ -47,7 +47,12 @@ export class ApplicationsController {
     @Body() dto: UpdateApplicationStatusDto,
     @Req() req: any,
   ) {
-    return this.applicationsService.updateStatus(id, dto, req.user?.id ?? null);
+    return this.applicationsService.updateStatus(
+      id,
+      dto,
+      req.user?.userId ?? req.user?.id ?? null,
+      req.user?.role ?? null,
+    );
   }
 
   @Post(':id/documents')

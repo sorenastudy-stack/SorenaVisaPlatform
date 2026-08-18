@@ -15,9 +15,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { EventsService } from '../events/events.service';
 import { CryptoModule } from '../common/crypto/crypto.module';
 import { MailModule } from '../mail/mail.module';
+import { ApplicationsModule } from '../applications/applications.module';
 
 @Module({
-  imports: [PrismaModule, CryptoModule, MailModule],
+  imports: [ApplicationsModule, PrismaModule, CryptoModule, MailModule],
   controllers: [
     CasesController,
     LiaRosterController,

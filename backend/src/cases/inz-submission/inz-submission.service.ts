@@ -9,6 +9,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UploadScanService } from '../../common/antivirus/upload-scan.service';
+import { ApplicationsService } from '../../applications/applications.service';
+import { ApplicationStatus } from '@prisma/client';
 import { setCaseStage } from '../case-stage.util';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { MailService } from '../../mail/mail.service';
@@ -59,6 +61,11 @@ export class InzSubmissionService {
     private readonly mail: MailService,
     // PR-AV slice 2 — the shared scan-or-reject gate.
     private readonly uploadScan: UploadScanService,
+    // PR-APPSTATUS — submitting to INZ is the real-world "visa submitted"
+    // milestone, so it advances the application status as well as the case
+    // stage. Before this, only Case.stage moved and Application.status sat at
+    // PREPARATION forever.
+    private readonly applications: ApplicationsService,
   ) {}
 
   // ─── Submit ────────────────────────────────────────────────────────────
@@ -186,6 +193,31 @@ export class InzSubmissionService {
 
       return u;
     });
+
+    // PR-APPSTATUS — the case has reached "visa submitted", so the
+    // application(s) it holds should say so too. Deliberately AFTER the
+    // transaction: the INZ record is the authoritative fact and it already
+    // happened, so a failure to derive status from it must not roll back the
+    // submission. Only applications sitting at OFFER_ACCEPTED move; a case can
+    // hold several applications and only the accepted one goes to a visa.
+    try {
+      const moved = await this.applications.advanceForCase(
+        caseId,
+        ApplicationStatus.OFFER_ACCEPTED,
+        ApplicationStatus.VISA_SUBMITTED,
+        'POST /cases/:id/inz-submission',
+        { id: actor.id, role: actor.role ?? null },
+      );
+      if (moved.advanced === 0) {
+        // Not an error — a case may legitimately have no application at
+        // OFFER_ACCEPTED — but silence would hide a workflow that has drifted.
+        this.logger.warn(
+          `INZ submitted for case ${caseId} but no application was at OFFER_ACCEPTED to advance.`,
+        );
+      }
+    } catch (e: any) {
+      this.logger.error(`INZ submitted for case ${caseId} but advancing application status failed: ${e?.message ?? e}`);
+    }
 
     // Best-effort client email. Fire-and-forget; failures log only.
     const clientEmail = updated.lead?.contact?.email ?? null;
@@ -323,6 +355,23 @@ export class InzSubmissionService {
       inzSubmittedAt: existing.inzSubmittedAt,
       inzReceiptFileName: existing.inzReceiptFileName,
     };
+
+    // PR-APPSTATUS — the correction path. Undoing an INZ submission means the
+    // application is no longer "visa submitted", so it goes back to
+    // OFFER_ACCEPTED. Audited under APPLICATION_STATUS_REVERTED rather than the
+    // forward event, so a reversal never reads as progress. This endpoint is
+    // already LIA/ADMIN/SUPER_ADMIN/OWNER only.
+    try {
+      await this.applications.revertForCase(
+        caseId,
+        ApplicationStatus.VISA_SUBMITTED,
+        ApplicationStatus.OFFER_ACCEPTED,
+        'POST /cases/:id/inz-submission/revert',
+        { id: actor.id, role: actor.role ?? null },
+      );
+    } catch (e: any) {
+      this.logger.error(`INZ revert for case ${caseId}: application status revert failed: ${e?.message ?? e}`);
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const u = await tx.case.update({
