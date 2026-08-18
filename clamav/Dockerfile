@@ -49,13 +49,26 @@ RUN set -eu; \
     [ "$fail" -eq 0 ] || { echo '--- clamd full parsed config ---'; cat /tmp/conf.out; exit 1; }; \
     rm -f /tmp/conf.out /tmp/expected-config.txt
 
-# ── 2. Volume seeding — NOT here ───────────────────────────────────────────
-# An earlier revision copied the baked-in signature database to
-# /var/lib/clamav-seed so a freshly attached (empty) volume could be populated
-# without a cold ~350 MB download. That doubled the image and the container
-# stopped starting at all — INITIALIZING straight to REMOVED, no log output,
-# with and without a custom entrypoint. Image size is the difference between
-# this and the stock image that works, so it is the suspect.
+# ── 2. First-boot seed for the signature volume ────────────────────────────
+# A Railway volume mounted at /var/lib/clamav starts EMPTY and masks the
+# database the image ships with. Without this, the first boot after attaching it
+# has clamd waiting on freshclam to pull ~350 MB before answering — and since
+# every upload now fails closed, that wait is a platform-wide upload outage
+# rather than a slow start.
 #
-# The hardening is what this change is for, and it is proven at build time.
-# Seeding is an optimisation; it comes back only once it can be shown to boot.
+# So the database is copied aside at build time (before any volume exists), and
+# seed-and-start.sh moves it into the volume the single time the volume is
+# empty. Every later deploy finds it populated and does nothing, which is the
+# whole point of attaching it.
+#
+# (An earlier attempt at this appeared to break container start. It did not —
+# the deployments were failing on the backend's railway.json being applied to
+# this service, which is fixed in clamav/railway.json.)
+RUN cp -a /var/lib/clamav /var/lib/clamav-seed
+
+COPY seed-and-start.sh /usr/local/bin/seed-and-start.sh
+RUN chmod +x /usr/local/bin/seed-and-start.sh
+
+# The upstream entrypoint is /init and there is no CMD; seed-and-start.sh execs
+# it verbatim so freshclam + clamd still start exactly as upstream intends.
+ENTRYPOINT ["/usr/local/bin/seed-and-start.sh"]
