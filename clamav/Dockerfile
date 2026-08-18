@@ -50,12 +50,14 @@ RUN set -eu; \
     rm -f /tmp/conf.out /tmp/expected-config.txt
 
 # ── 2. First-boot seed for the signature volume ────────────────────────────
-# Copied at build time, i.e. before any volume is mounted over /var/lib/clamav.
+# Copied at build time, i.e. before any volume is mounted over /var/lib/clamav,
+# so seed-and-start.sh can populate an empty volume on its first boot.
 RUN cp -a /var/lib/clamav /var/lib/clamav-seed
 
 COPY seed-and-start.sh /usr/local/bin/seed-and-start.sh
 RUN chmod +x /usr/local/bin/seed-and-start.sh
 
-# The upstream entrypoint is /init and there is no CMD; seed-and-start.sh execs
-# it verbatim so freshclam + clamd still start exactly as upstream intends.
-ENTRYPOINT ["/usr/local/bin/seed-and-start.sh"]
+# NOTE: the upstream ENTRYPOINT (/init) is deliberately left in place for now.
+# Wrapping it broke container start with no output at all, and the hardening is
+# worth more than the seed optimisation — so this ships the config change alone
+# and the wrapper is reintroduced separately, once it can be proven.
