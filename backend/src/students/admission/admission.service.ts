@@ -28,6 +28,7 @@ import { isValidCountryCode } from '../../common/country-codes';
 import { ProgrammeChoiceRulesService } from './programme-choice-rules.service';
 import { validateEmploymentYears } from './employment-history.logic';
 import { EventsService, EventSource } from '../../events/events.service';
+import { P1GateService } from '../../case-documents/p1-gate.service';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? './uploads';
 
@@ -379,6 +380,8 @@ export class AdmissionService {
     private declarations: DeclarationAcceptanceService,
     // PR-AV slice 2 — the shared scan-or-reject gate.
     private readonly uploadScan: UploadScanService,
+    // PR-CHECKLIST item 7 — the Priority-1/Priority-2 progression gate.
+    private readonly p1Gate: P1GateService,
   ) {}
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -528,6 +531,14 @@ export class AdmissionService {
         throw new ForbiddenException('Education entry not found or does not belong to this application');
       }
     }
+
+    // PR-CHECKLIST item 7 — Priority-2 material waits until the educational
+    // (Priority-1) documents are in and verified. Checked BEFORE the scan and
+    // the disk write, so a refused upload costs nothing and leaves no row.
+    await this.p1Gate.assertMayUpload(caseRecord.id, {
+      source: 'ADMISSION',
+      docType: documentType,
+    });
 
     // PR-AV slice 2 — scan before these bytes touch the disk.
     //

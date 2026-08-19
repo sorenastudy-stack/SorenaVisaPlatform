@@ -1010,3 +1010,51 @@ visibility; there is no considered deactivation/offboarding flow; production sti
 - **DocuSeal engagement-letter wording** — the Owner was checking whether the template
   states a fee; it lives in DocuSeal's editor, outside the repo, so the GST correction did
   not cover it.
+
+---
+
+## Checklist wiring batch — 4 of 6 built, 2 blocked on a decision — 19 Aug 2026
+
+Follow-on from the 13-item reconciliation above. Branch `fix/checklist-wiring-batch`, **not merged**.
+Each item was re-investigated before any code was written; the "partial" diagnosis held for four of
+the six and failed for two.
+
+**Built and proven**
+
+- **Item 3 (checklist #3) — client 2-week document follow-up.** The existing follow-up cron chases
+  the *institution* at 5 working days; the client side had no trigger at all. Now
+  `case-messages/document-follow-up/`: a daily 09:45 NZ sweep raises one `CLIENT_DOCUMENT_FOLLOW_UP`
+  notification to the staff member who requested a document that is still unfulfilled 14 calendar
+  days later, and the client's own fulfilment clears it inside the same transaction. Idempotent by
+  `link` (no migration — `Notification` has no reference column).
+- **Item 5 (checklist #5) — commission-trigger notification.** `CommissionTrigger` already had the
+  persist-until-approved lifecycle; nobody was told. Submission now notifies the case's Admission
+  Specialist (`Case.consultantId`, falling back to the submitter), and approval marks it read.
+  A notification failure never costs the claim.
+- **Item 7 (checklist #7) — P1/P2 progression gate.** `document-priority.ts` was enforced only as a
+  *visibility* boundary. Added `p1-gate.logic.ts` + `p1-gate.service.ts`, consulted by both client
+  upload paths before the antivirus scan and disk write. An empty P1 set is a CLOSED gate — "all P1
+  approved" is vacuously true of a client who has uploaded nothing, which is the case the gate exists
+  to stop. Staff uploads are deliberately not gated.
+- **Item 11 (checklist #11) — third-party payer.** Optional, fully-validated `payer` block on the two
+  case-keyed payment links, carried in Stripe metadata and landing on `Payment.metadata` via the
+  webhook line that already persists it — **no migration**. Surfaced on the case payments list as
+  `thirdPartyPayer`, null for every historical row.
+
+**Blocked on a decision, not built** (per the brief's own instruction to flag rather than guess)
+
+- **Item 4 (checklist #4) — LIA 8-week visa-buffer alert.** There is no parseable date to measure the
+  buffer against. `Case` carries no visa-submission deadline or course-start date;
+  `ProgrammeIntake.label` is free text ("Feb 2027", "17 Feb 2026") and `IntakeForm.preferredStartDate`
+  is a `String?`. Needs a decision on where the authoritative course-start date lives before the
+  detection can be written.
+- **Item 6 (checklist #6) — same-specialist routing on resubmission.** No case→prior-case link exists
+  on any model (`grep` for `parentCaseId|previousCaseId|resubmissionOf|originalCaseId|reopenedFrom`
+  returns nothing), and `submission.service.ts` states outright that a resubmission is simply another
+  `create`. Routing off it would mean inventing the data model.
+
+**Residual decision on item 7:** the gate treats "every P1 the client has uploaded is APPROVED" as
+the open condition. There is no *required*-document model, so one approved passport currently
+satisfies it. If a mandatory P1 set is wanted, that list is a business decision.
+
+Suite: **124 suites / 1546 tests green** (`--runInBand`), from a 1516 baseline — +30, all new.

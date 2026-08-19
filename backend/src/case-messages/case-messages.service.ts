@@ -12,6 +12,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import {
+  CLIENT_DOCUMENT_FOLLOW_UP,
+  followUpLink,
+} from './document-follow-up/document-follow-up.logic';
+import {
   CreateMessageDto,
   FulfilRequestDto,
   LiaMessageKindDto,
@@ -197,6 +201,19 @@ export class CaseMessagesService {
         },
         noteSummary: `Client fulfilled document request "${msg.requestedDocType ?? ''}" with ${fulfilmentFileName}`,
         noteType: 'TICKET',
+      });
+      // The document arrived — the 2-week chase for it is over. Inside the same
+      // transaction so a notice can never outlive the fulfilment that answered
+      // it. A failure here would roll back the fulfilment, which is correct:
+      // better to reject the upload than to leave staff chasing a client who
+      // already delivered.
+      await tx.notification.updateMany({
+        where: {
+          type: CLIENT_DOCUMENT_FOLLOW_UP,
+          link: followUpLink(caseId, messageId),
+          read: false,
+        },
+        data: { read: true },
       });
       return this.shapeMessage(
         updated,

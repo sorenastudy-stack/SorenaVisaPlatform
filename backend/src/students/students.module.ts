@@ -15,6 +15,8 @@ import { MailModule } from '../mail/mail.module';
 import { CryptoModule } from '../common/crypto/crypto.module';
 import { EventsService } from '../events/events.service';
 import { DeclarationAcceptanceService } from '../common/declaration-acceptance.service';
+// PR-CHECKLIST item 7 — provides P1GateService to the two client upload paths.
+import { CaseDocumentsModule } from '../case-documents/case-documents.module';
 
 @Module({
   imports: [
@@ -25,6 +27,7 @@ import { DeclarationAcceptanceService } from '../common/declaration-acceptance.s
     TicketsModule,
     MeetingsModule,
     ChatbotModule,
+    CaseDocumentsModule,
   ],
   controllers: [StudentsController, AdmissionController, VisaController],
   providers: [StudentsService, AdmissionService, VisaService, ProgrammeChoiceRulesService, EventsService, DeclarationAcceptanceService],

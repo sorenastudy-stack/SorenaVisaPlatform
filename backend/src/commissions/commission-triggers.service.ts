@@ -4,10 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { CommissionTriggerStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { hasRole } from '../auth/role.util';
 import { CommissionsService } from './commissions.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // PR-COMMISSION-TRIGGER — the claim an Admission Officer makes, and the decision
 // Finance makes on it.
@@ -36,9 +38,13 @@ export interface TriggerActor {
 
 @Injectable()
 export class CommissionTriggersService {
+  private readonly logger = new Logger(CommissionTriggersService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly commissions: CommissionsService,
+    // PR-CHECKLIST item 5 — the claim's own Admission Specialist is told it is
+    // waiting. The lifecycle already persisted; nobody was ever informed.
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** The moment a first class must precede for its claim to be submittable. */
@@ -234,9 +240,11 @@ export class CommissionTriggersService {
     }
 
     try {
-      return await this.prisma.commissionTrigger.create({
+      const created = await this.prisma.commissionTrigger.create({
         data: { programmeChoiceId, submittedById: actor.id },
       });
+      await this.notifyAdmissionSpecialist(created.id, programmeChoiceId, actor);
+      return created;
     } catch (e) {
       // The partial unique index — one live claim per choice. Two officers
       // clicking at once is the realistic case, and it deserves a sentence
@@ -246,6 +254,86 @@ export class CommissionTriggersService {
       }
       throw e;
     }
+  }
+
+
+  /**
+   * Tell the Admission Specialist their commission claim is pending.
+   *
+   * The PENDING -> APPROVED lifecycle already existed and already persisted;
+   * what was missing was anyone finding out. The notification is addressed to
+   * the CONSULTANT on the case (the "Admission Specialist" slot, Case.consultantId),
+   * falling back to whoever submitted it when a case has no consultant assigned —
+   * better the submitter hears than nobody does.
+   *
+   * It stays UNREAD until the claim is decided; markApprovedNotificationsRead()
+   * clears it on approval, which is what "persists until approved" means here
+   * given the existing notification model's only state is read/unread.
+   *
+   * Never throws: a claim that was successfully submitted must not fail because
+   * the notification could not be written.
+   */
+  private async notifyAdmissionSpecialist(
+    triggerId: string,
+    programmeChoiceId: string,
+    actor: TriggerActor,
+  ): Promise<void> {
+    try {
+      const choice = await this.prisma.admissionProgrammeChoice.findUnique({
+        where: { id: programmeChoiceId },
+        select: {
+          programme: { select: { name: true, provider: { select: { name: true } } } },
+          admissionApplication: {
+            select: {
+              case: {
+                select: {
+                  id: true,
+                  consultantId: true,
+                  lead: { select: { contact: { select: { fullName: true } } } },
+                },
+              },
+            },
+          },
+        },
+      });
+      const kase = choice?.admissionApplication?.case ?? null;
+      const recipient = kase?.consultantId ?? actor.id;
+      if (!recipient) return;
+
+      const client = kase?.lead?.contact?.fullName ?? 'a client';
+      const programme = choice?.programme?.name ?? 'a programme';
+      const provider = choice?.programme?.provider?.name;
+
+      await this.notifications.create({
+        userId: recipient,
+        type: 'COMMISSION_TRIGGER_PENDING',
+        title: 'Commission claim submitted — awaiting approval',
+        body: `${client} — ${programme}${provider ? ` at ${provider}` : ''}. It stays here until Finance approves it.`,
+        link: kase?.id ? `/staff/cases/${kase.id}` : null,
+      });
+    } catch (e: any) {
+      this.logger?.warn?.(`commission trigger ${triggerId}: could not notify the Admission Specialist: ${e?.message ?? e}`);
+    }
+  }
+
+  /**
+   * Clear the pending notification once the claim is approved — the "until
+   * approved" half of the requirement. Marking read rather than deleting keeps
+   * the trail: the specialist can still see it happened.
+   */
+  private async clearPendingNotification(programmeChoiceId: string): Promise<void> {
+    try {
+      const choice = await this.prisma.admissionProgrammeChoice.findUnique({
+        where: { id: programmeChoiceId },
+        select: { admissionApplication: { select: { case: { select: { id: true, consultantId: true } } } } },
+      });
+      const kase = choice?.admissionApplication?.case;
+      if (!kase?.consultantId) return;
+      await this.prisma.notification.updateMany({
+        where: { userId: kase.consultantId, type: 'COMMISSION_TRIGGER_PENDING', read: false, link: `/staff/cases/${kase.id}` },
+        data: { read: true },
+      });
+    } catch { /* clearing a badge must never fail an approval */ }
   }
 
   /** The approval queue. */
@@ -346,6 +434,9 @@ export class CommissionTriggersService {
         decidedAt: new Date(),
       },
     });
+
+    // PR-CHECKLIST item 5 — the claim is decided, so the pending badge clears.
+    await this.clearPendingNotification(trigger.programmeChoiceId);
 
     return { trigger: updated, commission };
   }

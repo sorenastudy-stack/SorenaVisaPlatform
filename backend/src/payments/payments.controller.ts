@@ -15,6 +15,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CreatePaymentLinkDto } from './dto/create-payment-link.dto';
 import { CreateCaseConsultationLinkDto } from './dto/create-case-consultation-link.dto';
 import { CreateCaseCustomLinkDto } from './dto/create-case-custom-link.dto';
+import type { ThirdPartyPayer } from './third-party-payer';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { RejectPaymentDto } from './dto/reject-payment.dto';
@@ -84,6 +85,7 @@ export class PaymentsController {
     return this.paymentsService.createConsultationLinkForCase(
       caseId,
       dto.consultationType,
+      dto.payer as ThirdPartyPayer | undefined,
     );
   }
 
@@ -106,6 +108,8 @@ export class PaymentsController {
       caseId,
       dto.amount,
       (dto.currency ?? FEE_CURRENCY).toLowerCase(),
+      undefined,   // invoiceId — staff custom-amount path is not invoice-bound
+      dto.payer as ThirdPartyPayer | undefined,
     );
   }
 

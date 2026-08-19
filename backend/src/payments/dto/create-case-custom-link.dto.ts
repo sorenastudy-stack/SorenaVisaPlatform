@@ -1,4 +1,6 @@
-import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Length, Max, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ThirdPartyPayerDto } from './third-party-payer.dto';
 
 // Body DTO for POST /payments/case/:caseId/custom-link.
 //
@@ -27,4 +29,11 @@ export class CreateCaseCustomLinkDto {
   @IsString()
   @Length(3, 3, { message: 'currency must be a 3-letter ISO code (e.g. nzd, usd)' })
   currency?: string;
+
+  // PR-CHECKLIST item 11 — optional. Present only when someone other than the
+  // client is settling this link.
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ThirdPartyPayerDto)
+  payer?: ThirdPartyPayerDto;
 }

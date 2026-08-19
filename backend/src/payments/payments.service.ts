@@ -10,6 +10,7 @@ import { StripeService } from './stripe.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import { FEE_CURRENCY, GST_RATE, calculateFeeBreakdown, getFeePriceCents, isFeeType } from './fee-config';
+import { readPayerFromMetadata, type ThirdPartyPayer } from './third-party-payer';
 
 // PR-PHASE40 — this table used to live here with its own numbers (GAP_CLOSING
 // 30, LIA_CONSULTATION 150, both NZD) while booking priced the same two
@@ -49,6 +50,9 @@ export class PaymentsService {
     // to that case. Callers that don't have a case (regular consultation
     // bookings) omit this and the chain behaves as before.
     caseId?: string,
+    // PR-CHECKLIST item 11 — a declared third-party payer, when the person
+    // settling this link is not the client.
+    payer?: ThirdPartyPayer,
   ) {
     const baseCents = amount !== undefined
       ? Math.round(amount * 100)
@@ -71,6 +75,7 @@ export class PaymentsService {
       consultationType,
       breakdown,
       caseId,
+      payer,
     );
     return { url: paymentLink.url, free: false, consultationType, breakdown };
   }
@@ -91,6 +96,8 @@ export class PaymentsService {
   async createConsultationLinkForCase(
     caseId: string,
     consultationType: string,
+    // PR-CHECKLIST item 11 — set when someone other than the client is paying.
+    payer?: ThirdPartyPayer,
   ) {
     const c = await this.prisma.case.findUnique({
       where:  { id: caseId },
@@ -105,6 +112,7 @@ export class PaymentsService {
       undefined,   // amount — fall back to the fee-config price for this type
       FEE_CURRENCY,
       caseId,      // 5th arg threads caseId into the Stripe link metadata
+      payer,
     );
   }
 
@@ -124,6 +132,8 @@ export class PaymentsService {
     amountCents: number,
     currency:    string = FEE_CURRENCY,
     invoiceId?:  string,
+    // PR-CHECKLIST item 11 — set when someone other than the client is paying.
+    payer?:      ThirdPartyPayer,
   ) {
     const c = await this.prisma.case.findUnique({
       where:  { id: caseId },
@@ -139,6 +149,7 @@ export class PaymentsService {
       amountCents,
       currency,
       invoiceId,
+      payer,
     );
 
     return {
@@ -182,6 +193,8 @@ export class PaymentsService {
         verifiedAt:         true,
         verificationNote:   true,
         receiptDocumentId:  true,
+        // PR-CHECKLIST item 11 — carries the declared third-party payer.
+        metadata:           true,
       },
     });
 
@@ -219,6 +232,11 @@ export class PaymentsService {
       verifiedAt:         r.verifiedAt,
       verificationNote:   r.verificationNote,
       receiptDocumentId:  r.receiptDocumentId,
+      // PR-CHECKLIST item 11 — null when the client paid for themselves, which
+      // is every payment recorded before this existed. Surfaced here rather
+      // than left in the metadata blob because a compliance record nobody can
+      // read is not a compliance record.
+      thirdPartyPayer:    readPayerFromMetadata(r.metadata),
     }));
   }
 
