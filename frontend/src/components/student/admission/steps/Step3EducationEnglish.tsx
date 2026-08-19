@@ -149,8 +149,8 @@ export function Step3EducationEnglish() {
       if (lastYearOfSchool !== null) patchBody.lastYearOfSchool = lastYearOfSchool;
       if (highestQualification) patchBody.highestQualification = highestQualification;
       if (sponsorshipProgramme) patchBody.sponsorshipProgramme = sponsorshipProgramme;
-      if (hasDisability && disabilityDetails?.trim()) patchBody.disabilityDetails = disabilityDetails.trim();
-      if (needsEvacAssistance && evacDetails?.trim()) patchBody.evacDetails = evacDetails.trim();
+      patchBody.disabilityDetails = (hasDisability && disabilityDetails?.trim()) ? disabilityDetails.trim() : null;
+      patchBody.evacDetails = (needsEvacAssistance && evacDetails?.trim()) ? evacDetails.trim() : null;
       if (medicalNotes?.trim()) patchBody.medicalNotes = medicalNotes.trim();
       if (otherStudyNotes?.trim()) patchBody.otherStudyNotes = otherStudyNotes.trim();
       await patchApplication(patchBody);
