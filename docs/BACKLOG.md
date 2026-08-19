@@ -11,34 +11,36 @@ Last updated: 14 August 2026.
 
 Ground truth for the pre-launch checklist in
 `Sorena_Scoring_Reference/Sorena_Strategic_Session_v4_0_Final.docx`, checked against the code rather
-than against naming. **Investigation only — nothing was built or changed.** Several items turned out
-to exist under different names, and several "existing" ones do something adjacent to what the
-checklist actually asks for.
+than against naming. Several items turned out to exist under different names, and several "existing"
+ones do something adjacent to what the checklist actually asks for.
+
+*Originally investigation-only. Table updated 19 Aug 2026 after the build that closed items 3, 5, 7
+and 11; items 4 and 6 were re-stated as blocked on a specific decision rather than "partial".*
 
 | # | Item | Status | Note |
 |---|---|---|---|
 | 1 | Fee/refund/resubmission language signed off by LIA | **BUSINESS** | Not code-checkable. Contract templates exist (`backend/assets/contract-templates/engagement-letter-v1.pdf`) but no sign-off artefact in the repo. Owner/legal action. |
 | 2 | Refund policy in 3 locations, referencing 5 institutions | **NOT FOUND** | The only refund copy is **booking-cancellation** policy (`backend/src/booking/refund-policy.ts`, the portal booking page, `i18n/messages/*.json`) — a different policy. No account-opening/resubmission refund language, and no "5 institutions" reference anywhere in code or content. |
-| 3 | CRM notification, 2-week follow-up during document collection | **PARTIAL** | A follow-up cron exists (`students/admission/follow-up/`) but it chases the **institution** at **5 working days** after submission, not the **client** at 2 weeks during document collection. Mechanism reusable; trigger and interval are different. |
-| 4 | LIA inbox alert for 8-week visa-buffer risk, persists until acknowledged | **PARTIAL** | The primitives exist: a `Notification` model with a `read` flag, and a threshold-based reminder system for **visa expiry** (`visa-expiry/`, idempotent per recipient/threshold). The 8-week **buffer-risk** detection itself does not exist. |
-| 5 | Commission-trigger notification for Admission Specialist, persists until approved | **PARTIAL** | `CommissionTrigger` + `CommissionTriggerStatus` (PENDING → APPROVED/REJECTED) gives the persist-until-approved lifecycle, and an approval endpoint exists. **No notification is emitted** to the Admission Specialist when a trigger is raised. |
-| 6 | Case allocation — equal distribution, same-specialist reassign on resubmission | **PARTIAL** | Equal distribution is real: `cases/lia-assignment.service.ts` sorts candidates by `openCases` (least-loaded first, oldest as tiebreak) across the LIA, CONSULTANT and SUPPORT slots. **No same-specialist reassignment on resubmission** — a resubmission is "simply another create" (`submission.service.ts`), carrying no prior assignment. |
-| 7 | Priority 1 / Priority 2 document gate | **PARTIAL** | `case-documents/document-priority.ts` classifies every type P1/P2 and is genuinely enforced — but as a **visibility boundary** (the Admission Specialist sees P1 only, list + download gated). It does **not** block P2 collection until P1 is verified; there is no progression gate on priority. |
+| 3 | CRM notification, 2-week follow-up during document collection | **DONE** | Built 19 Aug 2026 — `case-messages/document-follow-up/`: a daily 09:45 NZ sweep notifies the requesting staff member when a `DOCUMENT_REQUEST` is still unfulfilled 14 calendar days on, cleared by the client's own fulfilment. |
+| 4 | LIA inbox alert for 8-week visa-buffer risk, persists until acknowledged | **OPEN — blocked on a data decision** | The notification primitives exist, but there is **no authoritative, parseable date anywhere** to measure an 8-week buffer against: `Case` carries no visa deadline or course-start date, `ProgrammeIntake.label` is free text ("Feb 2027", "17 Feb 2026") and `IntakeForm.preferredStartDate` is a nullable `String`. **Question to answer first: where should the course-start / visa-deadline date live as a real `DateTime` field, and who populates it?** No buffer logic can be built until that field exists and is reliably filled. |
+| 5 | Commission-trigger notification for Admission Specialist, persists until approved | **DONE** | Built 19 Aug 2026 — `commissions/commission-triggers.service.ts` notifies the case's Admission Specialist (`Case.consultantId`, falling back to the submitter) on submission; approval marks it read. |
+| 6 | Case allocation — equal distribution, same-specialist reassign on resubmission | **OPEN — blocked on a data-model decision** | Equal distribution is real (`cases/lia-assignment.service.ts`). The reassignment half cannot be built because **no case-to-prior-case link exists in the data model at all** — no `parentCaseId`/`previousCaseId`/`resubmissionOf` column on any model, and `submission.service.ts` treats a resubmission as an ordinary new case. **Question to answer first: how should a resubmission be linked to the case it resubmits?** Routing logic has nothing to key off until that link exists. |
+| 7 | Priority 1 / Priority 2 document gate | **DONE** | Built 19 Aug 2026 — `case-documents/p1-gate.logic.ts` + `p1-gate.service.ts`, enforced on both client upload paths before the AV scan. Additive to the existing visibility boundary; an empty P1 set is a closed gate. Live on existing cases from merge, no grace period. |
 | 8 | AI meeting transcription, auto-uploaded to portal as minutes | **PARTIAL** | `VisaMeeting` + `VisaMeetingTranscript` exist and transcripts **are** surfaced to students (`students/meetings/`). But they are **manually uploaded** by a consultant (`AttachTranscriptDto`) — there is no AI transcription and no auto-generated minutes. |
 | 9 | AI CV and SOP generation — editable, versioned, stored in portal | **DONE** | `ai/agents/cv-generation.agent.ts` and `sop-generation.agent.ts`, with `CvDocument` / `SopDocument` models carrying `version`, `status` (DRAFT…), `contentJson`, `editedAt`, `approvedAt`. Student-facing under `students/admission/cv` and `/sop`. |
 | 10 | AI SOP quality gate blocking progression | **DONE** | `students/admission/sop/sop-content.logic.ts` implements exactly the three named gates — `careerPlan`, `nzReasoning`, `homeTies` — AI-scored, **fail-closed** (an unparseable verdict is a failure, never a silent pass), with `blocksApproval` and a per-country `sopGateEnforcement` flag. |
-| 11 | Payment links — unique client reference, third-party payment, NZD invoicing | **PARTIAL** | Three payment-link endpoints exist (`payments/consultation-link`, `case/:caseId/consultation-link`, `case/:caseId/custom-link`), invoices carry a unique `invoiceNumber` and a per-invoice `currency` with GST/fee breakdown. **No explicit third-party-payer concept** — nothing models "someone other than the client is paying". |
+| 11 | Payment links — unique client reference, third-party payment, NZD invoicing | **DONE** | Built 19 Aug 2026 — `payments/third-party-payer.ts` + an optional all-or-nothing `payer` block on the case-keyed links, carried in Stripe metadata onto `Payment.metadata` (no migration) and surfaced as `thirdPartyPayer` on the case payments list. |
 | 12 | Language matching to Admission Specialist and Student Support Specialist | **DONE** | Implemented for **both** slots: `assignConsultantToCase` and the mirroring SUPPORT assignment narrow the pool to speakers of the client's `preferredLanguage` when one exists, else fall back to pure workload. Keys on language only — nationality is explicitly never read. ⚠️ The in-code comment claiming `preferredLanguage` is "'en' everywhere" is **stale**: dev data holds 270 `vi` and 135 `fa`, so the narrowing is live, and whether intake reliably captures it is worth confirming. |
 | 13 | YouTube FAQ library substantially complete | **CONTENT** | Not code-checkable. No trace in the repo. Marketing/owner action. |
 
-**Shape of the result:** 2 done outright (9, 10) plus 1 done with a caveat (12); 7 partial, where a
-reusable mechanism exists but is pointed at a different trigger, audience or interval than the
-checklist describes; 1 genuinely absent (2); 2 non-dev (1, 13). The recurring pattern in the partials
-is worth noting before any build decision — items 3, 4, 5 and 7 each have most of the machinery
-already and are closer to a wiring job than a feature build, much like the application-status fix
-above. Item 8 is the exception: AI transcription is genuinely new work, not a rewiring.
+**Shape of the result (updated 19 Aug 2026):** items 3, 5, 7 and 11 are now **DONE** — see the
+"Checklist wiring batch" entry below for what was built and how each was proven. Items 4 and 6 remain
+**OPEN**, but no longer as "partial": both are blocked on a decision that has to be made before any
+code can be written, and each row above now states the specific question. Otherwise unchanged: 2 done
+outright (9, 10) plus 1 done with a caveat (12); 1 genuinely absent (2); 2 non-dev (1, 13); item 8
+(AI transcription) remains genuinely new work rather than a rewiring.
 
-No fixes implemented — sequencing these is a separate decision.
+Originally investigation-only; the build that closed items 3/5/7/11 followed on 19 Aug 2026.
 
 ---
 
