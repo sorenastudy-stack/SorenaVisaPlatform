@@ -14,6 +14,7 @@ import { UploadScanService } from '../../common/antivirus/upload-scan.service';
 import { createSignedDownloadToken } from '../../common/signed-url.util';
 import { decryptPiiFields } from '../admission/admission-encryption.util';
 import { isValidCountryCode } from '../../common/country-codes';
+import { P1GateService } from '../../case-documents/p1-gate.service';
 
 // PR-FILES-1 — same UPLOAD_DIR convention as admission.service.ts:16.
 // Stored fileUrls are the rename target produced by path.join() — the
@@ -250,6 +251,8 @@ export class VisaService {
     private declarations: DeclarationAcceptanceService,
     // PR-AV slice 2 — the shared scan-or-reject gate.
     private readonly uploadScan: UploadScanService,
+    // PR-CHECKLIST item 7 — the Priority-1/Priority-2 progression gate.
+    private readonly p1Gate: P1GateService,
   ) {}
 
   // ── Auth helper — same shape as AdmissionService.resolveContactAndCase ──
@@ -3231,6 +3234,15 @@ export class VisaService {
         'Visa application not found. Save Step 1 first to create it.',
       );
     }
+
+    // PR-CHECKLIST item 7 — same progression gate as the admission upload.
+    // PASSPORT and NATIONAL_ID classify P1 and pass straight through; the
+    // rest of this surface (residence visa, military record, travel history,
+    // authority doc) is P2 and waits.
+    await this.p1Gate.assertMayUpload(admission.caseId, {
+      source: 'VISA_SUPPORTING',
+      docType: documentType,
+    });
 
     // PR-AV slice 2 — scan before these bytes touch the disk. memoryStorage
     // means nothing has been written yet, so a rejection leaves no temp file

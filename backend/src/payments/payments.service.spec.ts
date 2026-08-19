@@ -144,6 +144,9 @@ describe('PaymentsService.listPaymentsForCase', () => {
       verifiedAt:         null,
       verificationNote:   null,
       receiptDocumentId:  'doc-receipt-1',
+      // PR-CHECKLIST item 11 — null when the client paid for themselves, which
+      // is every payment recorded before the payer field existed.
+      thirdPartyPayer:    null,
     });
 
     // Stripe ACCOUNT_OPENING row — CONFIRMED with verifier name resolved.
@@ -539,6 +542,9 @@ describe('PaymentsService.createConsultationLinkForCase', () => {
         paymentMethod: 'card',
       },
       'case-99',
+      // PR-CHECKLIST item 11 — the declared third-party payer. undefined here:
+      // this link is for the client to pay themselves.
+      undefined,
     );
     expect(result).toEqual({
       url: 'https://buy.stripe.com/test_link_abc',
@@ -628,6 +634,7 @@ describe('PaymentsService.createCustomLinkForCase', () => {
       7500,
       'usd',
       undefined,
+      undefined, // payer — nobody other than the client is paying
     );
 
     // Returned shape includes the resolved URL + the amount/currency
@@ -665,6 +672,7 @@ describe('PaymentsService.createCustomLinkForCase', () => {
       5000,
       'usd',
       undefined, // invoiceId — not an invoice-linked payment
+      undefined, // payer — nobody other than the client is paying
     );
   });
 });

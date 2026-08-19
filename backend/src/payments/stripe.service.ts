@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import type { FeeBreakdown } from './fee-config';
 import { FEE_CURRENCY } from './fee-config';
+import { payerMetadata, type ThirdPartyPayer } from './third-party-payer';
 
 const Stripe = require('stripe');
 
@@ -44,6 +45,8 @@ export class StripeService {
     // to assign an LIA to on ACCOUNT_OPENING success. Existing callers
     // (consultation bookings without a case) continue to work unchanged.
     caseId?: string,
+    // PR-CHECKLIST item 11 — merged into both metadata buckets below.
+    payer?: ThirdPartyPayer,
   ) {
     this.assertConfigured();
     const currency = breakdown.currency;
@@ -102,6 +105,7 @@ export class StripeService {
       metadata.paymentType = 'consultation';
       metadata.type = consultationType;
     }
+    Object.assign(metadata, payerMetadata(payer));
 
     // Stripe treats Payment Link metadata and PaymentIntent metadata as
     // SEPARATE buckets. Top-level `metadata` stays on the Payment Link
@@ -162,6 +166,10 @@ export class StripeService {
     amountCents: number,
     currency:    string = FEE_CURRENCY,
     invoiceId?:  string,
+    // PR-CHECKLIST item 11 — a declared third-party payer. Merged into BOTH
+    // metadata buckets below, so it reaches the PaymentIntent the webhook reads
+    // and lands on Payment.metadata with everything else.
+    payer?:      ThirdPartyPayer,
   ) {
     this.assertConfigured();
 
@@ -184,6 +192,7 @@ export class StripeService {
     if (invoiceId) {
       metadata.invoiceId = invoiceId;
     }
+    Object.assign(metadata, payerMetadata(payer));
 
     const paymentLink = await this.stripe.paymentLinks.create({
       line_items: [{

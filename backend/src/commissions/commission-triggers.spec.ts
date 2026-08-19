@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { PrismaClient } from '@prisma/client';
 import { CommissionsService } from './commissions.service';
 import { CommissionTriggersService, ELIGIBILITY_DAYS } from './commission-triggers.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * PR-COMMISSION-TRIGGER — claim, decide, and the fortnight in between.
@@ -74,7 +75,11 @@ describe('commission triggers', () => {
     await prisma.$connect();
     const events: any = { emit: jest.fn().mockResolvedValue(undefined) };
     const commissions = new CommissionsService(prisma as any, events);
-    triggers = new CommissionTriggersService(prisma as any, commissions);
+    // PR-CHECKLIST item 5 — the service now notifies the Admission Specialist.
+    // Real NotificationsService against the same client, so these tests exercise
+    // the notification write rather than mocking it away.
+    const notifications = new NotificationsService(prisma as any);
+    triggers = new CommissionTriggersService(prisma as any, commissions, notifications);
 
     consultantA = await mkUser('CONSULTANT');
     consultantB = await mkUser('CONSULTANT');

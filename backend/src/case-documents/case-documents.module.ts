@@ -6,6 +6,7 @@ import { CaseDocumentsController } from './case-documents.controller';
 import { StaffCaseDocumentsController } from './staff-case-documents.controller';
 import { StudentDocumentStatusService } from './student-document-status.service';
 import { StudentDocumentStatusController } from './student-document-status.controller';
+import { P1GateService } from './p1-gate.service';
 
 // PR-LIA-5 — Cross-source document listing + signed-URL downloads +
 // internal-only review verdicts. OpsDocumentsController adds the OPS
@@ -15,7 +16,7 @@ import { StudentDocumentStatusController } from './student-document-status.contr
 @Module({
   imports: [PrismaModule, CryptoModule],
   controllers: [CaseDocumentsController, StaffCaseDocumentsController, StudentDocumentStatusController],
-  providers: [CaseDocumentsService, StudentDocumentStatusService],
-  exports: [CaseDocumentsService],
+  providers: [CaseDocumentsService, StudentDocumentStatusService, P1GateService],
+  exports: [CaseDocumentsService, P1GateService],
 })
 export class CaseDocumentsModule {}

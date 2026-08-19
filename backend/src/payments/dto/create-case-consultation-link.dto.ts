@@ -1,4 +1,6 @@
-import { IsIn, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ThirdPartyPayerDto } from './third-party-payer.dto';
 import { CONSULTATION_TYPES } from './create-payment-link.dto';
 
 // Body DTO for POST /payments/case/:caseId/consultation-link.
@@ -18,4 +20,11 @@ export class CreateCaseConsultationLinkDto {
     message: `consultationType must be one of: ${CONSULTATION_TYPES.join(', ')}`,
   })
   consultationType!: string;
+
+  // PR-CHECKLIST item 11 — optional. Present only when someone other than the
+  // client is settling this link.
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ThirdPartyPayerDto)
+  payer?: ThirdPartyPayerDto;
 }
