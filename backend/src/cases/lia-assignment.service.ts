@@ -247,9 +247,10 @@ export class LiaAssignmentService {
   //      flow — an empty pool logs an audit row and returns quietly.
   //   2. Language preference. When the client has a non-default language
   //      AND at least one active consultant speaks it, the pool narrows to
-  //      those speakers; otherwise it stays the full pool. Today client
-  //      preferredLanguage is 'en' everywhere (until 2b captures a real
-  //      value), so this is a guarded no-op and selection is pure workload.
+  //      those speakers; otherwise it stays the full pool. preferredLanguage
+  //      is captured on real intake (see submit-intake.dto.ts) and this
+  //      narrowing is live — not a no-op — matching real non-English
+  //      applicants (e.g. Vietnamese, Persian) to a speaker of their language.
   //
   // COMPLIANCE: selection keys on LANGUAGE ONLY. Nationality is never read
   // or considered here.
@@ -624,8 +625,10 @@ export class LiaAssignmentService {
       return { status: 'no_candidates', supportId: null, supportName: null, langMatched: false };
     }
 
-    // Language preference (guarded no-op while clientLang is 'en'), same as the
-    // consultant. Lowercase ISO-639-1 compare on both sides.
+    // Language preference — live, same as the consultant pool above (see the
+    // note on assignConsultantToCase): narrows to a speaker of the client's
+    // real preferredLanguage when one is active, else falls back to the full
+    // pool. Lowercase ISO-639-1 compare on both sides.
     const clientLang = (existing.lead?.contact?.preferredLanguage ?? 'en').trim().toLowerCase();
     const langAware = candidates.filter((c) =>
       (c.languages ?? []).map((l) => l.toLowerCase()).includes(clientLang),
