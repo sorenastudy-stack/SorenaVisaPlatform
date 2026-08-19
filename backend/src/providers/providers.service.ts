@@ -416,6 +416,11 @@ export class ProvidersService {
             requirements: true,
           },
         },
+        // Surfaced so the staff "Universities" screen can show whether a
+        // portal login exists and, if so, which email — provisionLogin()
+        // below is otherwise unreachable from any UI (it existed as an
+        // API-only action; see the "Portal login" section in ProviderForm).
+        user: { select: { id: true, email: true } },
       },
     });
 

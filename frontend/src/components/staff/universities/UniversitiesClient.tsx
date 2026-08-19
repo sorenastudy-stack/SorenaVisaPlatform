@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   GraduationCap, Loader2, Plus, ArrowLeft, Save, Trash2, Pencil, X, Award, Upload, RefreshCw, ListChecks, Search,
+  KeyRound, CheckCircle2, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -47,6 +48,10 @@ interface Provider {
   commissionY1Type: string; commissionY1Value: number; commissionY2Type: string; commissionY2Value: number;
   volumeTarget: number | null; bonusType: string | null; bonusValue: number | null; notes: string | null;
   programmes?: Programme[];
+  // PR-PROVIDER-PORTAL slice B follow-up — provisionLogin() existed as an
+  // API-only action with no UI anywhere to trigger it (found 19 Aug 2026
+  // while trying to set up a test provider login). null = no portal login yet.
+  user?: { id: string; email: string } | null;
 }
 interface Scholarship {
   id: string; providerId: string; nationality: string; programmeId: string | null; level: string | null;
@@ -207,6 +212,7 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
+  const [login, setLogin] = useState<{ id: string; email: string } | null | undefined>(undefined);
   const set = (k: keyof FormState, v: string | number) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -224,6 +230,7 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
         agreementStartDate: iso(p.agreementStartDate), agreementEndDate: iso(p.agreementEndDate), agreementRenewalDate: iso(p.agreementRenewalDate), agreementUrl: p.agreementUrl ?? '',
       });
       setProgrammes(p.programmes ?? []);
+      setLogin(p.user ?? null);
     }).catch(() => toast.error('Could not load the university.')).finally(() => setLoading(false));
   }, [providerId]);
 
@@ -372,6 +379,9 @@ function ProviderForm({ providerId, onDone }: { providerId?: string; onDone: () 
         </div>
       </CardContent></Card>
 
+      {isEdit && providerId && (
+        <PortalLoginSection providerId={providerId} login={login} onProvisioned={(u) => setLogin(u)} />
+      )}
       {isEdit && providerId && <ImportProgrammesSection providerId={providerId} />}
       {isEdit && providerId && <PricingImportSection providerId={providerId} />}
       {isEdit && providerId && <ProgrammeCoversSection programmes={programmes} />}
@@ -389,6 +399,82 @@ function RateField({ label, type, value, onType, onValue }: { label: string; typ
         <input type="number" className={inputCls} value={value} onChange={(e) => onValue(e.target.value)} />
       </div>
     </div>
+  );
+}
+
+// ── Portal login ─────────────────────────────────────────────────────────
+// PR-PROVIDER-PORTAL slice B follow-up (19 Aug 2026) — the only way to give an
+// institution its portal login was POST /providers/:id/provision-login, which
+// had no button anywhere. Owner-only on the backend (re-checked there); this
+// screen doesn't gate on role client-side, so a non-Owner sees the same form
+// and gets the backend's real refusal rather than a UI that quietly lies about
+// what's possible.
+function PortalLoginSection({
+  providerId, login, onProvisioned,
+}: {
+  providerId: string;
+  login: { id: string; email: string } | null | undefined;
+  onProvisioned: (u: { id: string; email: string }) => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const provision = async () => {
+    const normalised = email.trim().toLowerCase();
+    if (!normalised) { toast.error('Enter the email the login should go to.'); return; }
+    setBusy(true);
+    try {
+      const result = await api.post<{ userId: string; email: string }>(
+        `/providers/${providerId}/provision-login`,
+        { email: normalised },
+      );
+      toast.success(`Portal login created for ${result.email}. They sign in with a magic link — there is no password.`);
+      onProvisioned({ id: result.userId, email: result.email });
+      setEmail('');
+    } catch (e) {
+      // The backend already gives specific, actionable messages (already has a
+      // login / email belongs to a lead or another institution / not Owner) —
+      // surface them as-is rather than a generic failure.
+      toast.error(e instanceof Error ? e.message : 'Could not provision the login.');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Card><CardContent className="space-y-3">
+      <div className="flex items-center gap-2">
+        <KeyRound size={16} className="text-[#1e3a5f]" />
+        <h3 className="font-bold text-[#1e3a5f]">Portal login</h3>
+      </div>
+      {login === undefined ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 size={14} className="animate-spin" /> Loading…</div>
+      ) : login ? (
+        <div className="flex items-center gap-2 text-sm text-[#15a86b]">
+          <CheckCircle2 size={16} />
+          <span>Login active — <strong className="text-[#1e3a5f]">{login.email}</strong>. They sign in with a one-time emailed link; there is no password to reset or share.</span>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-gray-500">
+            No portal login yet. Provisioning one sends nothing immediately — the institution requests their
+            own sign-in link from the login page whenever they're ready. One login per institution; this
+            can't be changed here once set.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              className={`${inputCls} sm:max-w-sm`}
+              type="email"
+              placeholder="institution-contact@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button type="button" onClick={provision} disabled={busy}
+              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#1e3a5f] px-5 text-sm font-semibold text-white hover:bg-[#162d4a] disabled:opacity-50">
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Provision login
+            </button>
+          </div>
+        </>
+      )}
+    </CardContent></Card>
   );
 }
 
