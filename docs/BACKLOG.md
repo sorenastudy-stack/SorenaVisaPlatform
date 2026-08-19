@@ -1115,3 +1115,36 @@ exists, otherwise an email field + "Provision login" button hitting the existing
 show. No backend logic changed — same OWNER-only guard, same already-has-login /
 email-belongs-to-a-lead-or-another-account refusals, same audit log write; the UI only surfaces
 what already existed and relays whatever message the backend returns.
+
+---
+
+## Step 3 Health Information — stale disability/evac details on answer flip — closed 19 Aug 2026 (`55c6dbc`, `6c89326`)
+
+Found reviewing an old uncommitted backup branch (`backup/step3-rounds-7-8-uncommitted`) that
+turned out to be fully superseded — the Health Information section itself shipped properly via
+`d2760bd`/`2d59645` before this backup branch was ever touched. Reviewing it anyway surfaced one
+real gap still on `main`: the Step 3 PATCH body sent `disabilityDetails`/`evacDetails` only when
+the textarea had text in it, so flipping the Yes/No answer back to "No" left the old text
+attached to the case server-side — a case could show `hasDisability: false` alongside a populated
+`disabilityDetailsEncrypted` column.
+
+Fixed in two commits: `55c6dbc` gated the PATCH send on the current `hasDisability`/
+`needsEvacAssistance` value (stops new staleness), then `6c89326` changed it to always send an
+explicit `null` when the answer is "No" (clears it server-side too, not just stops it from
+recurring). No backend change was needed — `coerceField()` in `admission.service.ts` already
+passed `null` through untouched, and `encryptPiiFields()` in `admission-encryption.util.ts`
+already normalized `null` to a cleared encrypted column.
+
+Checked whether any existing records needed a backfill: local dev (868 admission applications)
+had exactly one row with either health flag set and zero populated detail columns; production had
+one admission application total, no health answers recorded. No backfill was needed — production
+hasn't carried real student volume through Step 3's health section yet, so the fix is preventive
+rather than a data cleanup.
+
+Also confirmed `backup/step3-rounds-7-8-uncommitted` is stale and safe to delete — verified before
+deleting rather than on the strength of the branch name: all 13 health-related i18n keys and every
+health marker in `Step3EducationEnglish.tsx` / `AdmissionFormContext.tsx` were already present on
+`main` (main carries one MORE occurrence of `hasDisability`/`needsEvacAssistance` — the two fixes
+above). The only key the flattened comparison showed as branch-only was `dashboard`, which main had
+expanded from a plain string into a nested object. Branch tip was `f3fb623` (614 commits behind
+main), recorded here so the deletion is reversible.
