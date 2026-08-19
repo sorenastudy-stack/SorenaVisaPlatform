@@ -1095,3 +1095,23 @@ currently leaves a stray `previousCaseId` column in at least one local dev datab
 the backend test harness's per-worker schema copy (`column "previousCaseId" does not exist`) on
 any machine that hasn't merged it. Needs the branch either merged or its local DB state rolled
 back — an Owner call, not touched here.
+
+---
+
+## Provider portal login had no UI — closed 19 Aug 2026 (`29094f3`)
+
+Found while trying to set up a disposable test provider account to verify the closeouts above:
+`POST /providers/:id/provision-login` (PR-PROVIDER-PORTAL slice B) was Owner-only, fully checked
+server-side, and had **no button anywhere in the staff panel** — API-only since it was built. The
+manual path (a one-off Prisma script mirroring the service method, run against production) is what
+was used to provision the actual test account (`sorenastudy+qaprovider@gmail.com` → the institution
+now named "QA Test Institute", formerly "[TEST] Provider Portal Demo") — later confirmed live and
+working end-to-end (expand/clear on a real disposable rate).
+
+Closed properly rather than left as a one-off script: added a "Portal login" card to the
+university edit screen (`staff/universities?edit=<id>`) — shows the provisioned email if one
+exists, otherwise an email field + "Provision login" button hitting the existing endpoint.
+`findOne()` now also returns the linked `user.id`/`user.email` so the screen knows which state to
+show. No backend logic changed — same OWNER-only guard, same already-has-login /
+email-belongs-to-a-lead-or-another-account refusals, same audit log write; the UI only surfaces
+what already existed and relays whatever message the backend returns.
