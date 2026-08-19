@@ -60,6 +60,10 @@ export function ProviderPricingGroups() {
   const [rateAmount, setRateAmount] = useState('');
   const [rateName, setRateName] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  // Which group has its own rates opened inline. The full list still lives
+  // further down the page; this is about reaching THIS group's prices from the
+  // card you are already looking at, rather than scrolling off to find them.
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     Promise.all([
@@ -328,6 +332,8 @@ Nothing will be deleted — we keep the record, it just stops applying.`,
           // archiving. A cleared rate still references the group but is not in
           // front of anybody.
           const livePrices = groupedRates.filter((r) => r.nationalityGroup?.id === g.id && r.isActive).length;
+          const thisGroupsRates = groupedRates.filter((r) => r.nationalityGroup?.id === g.id);
+          const isExpanded = expandedGroupId === g.id;
           return (
             <Card key={g.id}>
               <CardContent className="space-y-3 p-4">
@@ -336,7 +342,23 @@ Nothing will be deleted — we keep the record, it just stops applying.`,
                     <p className="text-sm font-semibold text-sorena-navy">{g.name}</p>
                     <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
                       <Users size={12} /> {g.nationalities.length} countries
-                      {attached > 0 && ` · ${attached} rate${attached === 1 ? '' : 's'} using it`}
+                      {attached > 0 && (
+                        <>
+                          {' · '}
+                          {/* The count was already here and already told you
+                              prices existed — it just gave you no way to reach
+                              them. Same number, now the way in. */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
+                            aria-expanded={isExpanded}
+                            className="underline underline-offset-2 hover:text-[#1e3a5f]"
+                          >
+                            {attached} rate{attached === 1 ? '' : 's'} using it{' '}
+                            <span className="text-[#8a6d10]">{isExpanded ? '(hide)' : '(view / clear)'}</span>
+                          </button>
+                        </>
+                      )}
                     </p>
                     {/* At a glance: is there a default, and is it live yet? */}
                     <p className="mt-1 text-xs">
@@ -385,6 +407,53 @@ Nothing will be deleted — we keep the record, it just stops applying.`,
                     </span>
                   ))}
                 </div>
+
+                {/* This group's own prices, in place. Deliberately the same
+                    three states and the same Clear action as the full list at
+                    the bottom of the page — two places showing the same rate
+                    must never disagree about whether it is live. */}
+                {isExpanded && (
+                  <div className="space-y-2 rounded-lg border border-gray-200 bg-[#faf8f3] p-3">
+                    {thisGroupsRates.length === 0 ? (
+                      <p className="text-xs text-gray-500">No prices are set on this group yet.</p>
+                    ) : (
+                      thisGroupsRates.map((r) => (
+                        <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-white p-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-sorena-navy">
+                              {r.name ?? 'Tuition fee'} — ${r.amountValue.toLocaleString()} {r.currency}
+                            </p>
+                            <p className="mt-0.5 text-xs text-gray-500">
+                              {r.programme ? r.programme.name : 'all programmes'}
+                            </p>
+                          </div>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                            !r.isActive
+                              ? 'border-gray-200 bg-gray-50 text-gray-500'
+                              : r.reviewStatus === 'APPROVED'
+                                ? 'border-[#15a86b]/40 bg-[#15a86b]/5 text-[#15a86b]'
+                                : 'border-[#c9a961]/50 bg-[#faf8f3] text-[#8a6d10]'
+                          }`}>
+                            {!r.isActive
+                              ? <><EyeOff size={13} /> Not applied</>
+                              : r.reviewStatus === 'APPROVED'
+                                ? <><CheckCircle2 size={13} /> Shown to students</>
+                                : <><Clock3 size={13} /> With us for review</>}
+                          </span>
+                          {r.isActive && (
+                            <button
+                              onClick={() => clearRate(r)}
+                              disabled={busy === r.id}
+                              title="Stop applying this price. Nothing will be deleted."
+                              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-[#1e3a5f] hover:bg-[#faf8f3] disabled:opacity-40">
+                              {busy === r.id ? <Loader2 size={14} className="animate-spin" /> : <EyeOff size={14} />} Clear
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
