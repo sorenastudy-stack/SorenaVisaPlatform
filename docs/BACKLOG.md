@@ -1060,3 +1060,38 @@ the open condition. There is no *required*-document model, so one approved passp
 satisfies it. If a mandatory P1 set is wanted, that list is a business decision.
 
 Suite: **124 suites / 1546 tests green** (`--runInBand`), from a 1516 baseline — +30, all new.
+
+---
+
+## Three small closeouts — 19 Aug 2026 (`3ca7e26`, `a54b436`)
+
+All minor, non-blocking, requested as a batch. Each verified before commit; both code commits are
+merged straight to `main` (low-risk, no schema/API change).
+
+- **Provider portal discoverability gap (closed).** A group's own card now shows a
+  "N rates using it — view / clear" toggle that opens that group's attached rates inline, with the
+  same Clear action as the "Rates set on a group" list further down the page. Previously the only
+  way to clear a group's prices — the precondition for archiving it — was to scroll to that separate
+  list and match rows up by name. `a54b436`, frontend-only, `tsc --noEmit` clean.
+- **Checklist item 12 — stale code comment (closed).** Two comments in `lia-assignment.service.ts`
+  (`assignConsultantToCase` and `assignPastoralCareToCase`) claimed language-matching was a
+  "guarded no-op" because `preferredLanguage` was assumed to always be `'en'`. That assumption is
+  no longer true — `preferredLanguage` is captured on real intake (`submit-intake.dto.ts`,
+  validated by `@IsLanguageCode()`) and the narrowing is live (see the 13-item reconciliation above:
+  270 Vietnamese, 135 Persian applicants correctly matched). Comment-only, `3ca7e26`.
+- **23 merged/inert branches → 22 deleted, 1 held back.** Before deleting anything, each of the 23
+  was checked against `git branch -r --merged origin/main` rather than trusted by name. 22 were
+  genuinely merged and are gone. **`backup/step3-rounds-7-8-uncommitted` was NOT deleted** — it is
+  not merged and holds ~210 lines of real, uncommitted-elsewhere work (a "Health Information"
+  section and visual heading changes to the student admission Step 3 form:
+  `AdmissionFormContext.tsx`, `Step3EducationEnglish.tsx`, `en.json`/`fa.json`). It needs an Owner
+  decision — merge it properly, or explicitly confirm it's safe to lose — before it is ever deleted.
+  Remaining remotes are now just `main` and this one branch.
+
+**Known, not addressed here:** checklist items 4 and 6 (LIA visa-buffer alert, resubmission
+routing via `previousCaseId`) have real work sitting on a local, unpushed branch
+`fix/checklist-items-4-6` — not visible from `main` and not covered by this pass. That branch also
+currently leaves a stray `previousCaseId` column in at least one local dev database, which breaks
+the backend test harness's per-worker schema copy (`column "previousCaseId" does not exist`) on
+any machine that hasn't merged it. Needs the branch either merged or its local DB state rolled
+back — an Owner call, not touched here.
