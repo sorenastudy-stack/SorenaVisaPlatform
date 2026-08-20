@@ -40,6 +40,8 @@ interface WrapOpts {
    * transactional emails omit it (they're account-necessary, not opt-out-able).
    */
   unsubscribeUrl?: string;
+  /** Override the reason line for recipients who do not yet have an account. */
+  recipientReason?: string;
 }
 
 export function wrapHtml(bodyHtml: string, opts: WrapOpts = {}): string {
@@ -92,7 +94,7 @@ export function wrapHtml(bodyHtml: string, opts: WrapOpts = {}): string {
             </td>
           </tr>
         </table>
-        <div style="color:${MUTED};font-size:11px;margin-top:12px;">You're receiving this because you have an active account with Sorena Visa.</div>
+        <div style="color:${MUTED};font-size:11px;margin-top:12px;">${opts.recipientReason ?? "You're receiving this because you have an active account with Sorena Visa."}</div>
         ${opts.unsubscribeUrl ? `<div style="color:${MUTED};font-size:11px;margin-top:6px;">Prefer not to receive these? <a href="${opts.unsubscribeUrl}" style="color:${MUTED};text-decoration:underline;">Unsubscribe</a> — you'll stop getting nurture and newsletter emails.</div>` : ''}
       </td>
     </tr>
