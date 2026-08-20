@@ -7,6 +7,10 @@ import {
   getAlpha2CodeFromName,
 } from '../common/country-codes';
 import { normaliseWebinarPayload, pickEnvelopeString } from './webinar-payload-normaliser';
+import {
+  WebinarEmailLifecycleService,
+  buildWebinarEmailSchedule,
+} from './webinar-email-lifecycle.service';
 
 // PR-WEBINAR-1 — Webinar registration service.
 //
@@ -53,6 +57,7 @@ export class WebinarsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsService,
+    private readonly webinarEmails: WebinarEmailLifecycleService,
   ) {}
 
   async listUpcoming() {
@@ -233,6 +238,15 @@ export class WebinarsService {
         },
       });
 
+      // Create the entire operational email lifecycle in the SAME transaction
+      // as registration. A committed registration can therefore never be left
+      // without its confirmation/reminder jobs, and the unique ledger key makes
+      // this safe against retries.
+      await tx.webinarEmailDelivery.createMany({
+        data: buildWebinarEmailSchedule(registration.id, webinar, now),
+        skipDuplicates: true,
+      });
+
       await this.events.emit(
         'WEBINAR_REGISTERED',
         'WebinarRegistration',
@@ -264,6 +278,17 @@ export class WebinarsService {
 
       return registration;
     });
+
+    // Attempt the confirmation now for a good user experience. Delivery errors
+    // never roll back the already-committed registration; the durable FAILED
+    // row remains eligible for the minute cron's retry policy.
+    try {
+      await this.webinarEmails.dispatchDueForRegistration(result.id);
+    } catch (err: any) {
+      this.logger.error(
+        `[webinar-email] immediate dispatch failed registration=${result.id}: ${err?.message ?? err}`,
+      );
+    }
 
     this.logger.log(`[webinar] registered ${maskEmail(email)} → ${webinar.slug}`);
     return { status: 'registered', registrationId: result.id, webinar: summarise(webinar) };
