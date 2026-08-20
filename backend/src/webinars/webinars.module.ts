@@ -6,6 +6,7 @@ import { WebinarsService } from './webinars.service';
 import { WebinarApiKeyGuard } from './guards/webinar-api-key.guard';
 import { EventsService } from '../events/events.service';
 import { WebinarsRecurrenceCron } from './webinars-recurrence.cron';
+import { WebinarEmailLifecycleService } from './webinar-email-lifecycle.service';
 
 // PR-WEBINAR-1 — Webinar registration module. Receives the sorenavisa.com
 // website's registration calls (see webinars.controller.ts) and exposes the
@@ -21,6 +22,12 @@ import { WebinarsRecurrenceCron } from './webinars-recurrence.cron';
 @Module({
   imports: [ConfigModule, PrismaModule],
   controllers: [WebinarsController],
-  providers: [WebinarsService, WebinarApiKeyGuard, EventsService, WebinarsRecurrenceCron],
+  providers: [
+    WebinarsService,
+    WebinarApiKeyGuard,
+    EventsService,
+    WebinarsRecurrenceCron,
+    WebinarEmailLifecycleService,
+  ],
 })
 export class WebinarsModule {}
