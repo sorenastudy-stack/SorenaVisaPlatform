@@ -52,6 +52,12 @@ import {
 // transport at boot and never sent through it. NotificationsService is still
 // in place; MailService coexists with that one only.
 
+export interface MailDeliveryResult {
+  sent: boolean;
+  providerMessageId?: string;
+  error?: string;
+}
+
 @Injectable()
 export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
@@ -422,6 +428,57 @@ export class MailService implements OnModuleInit {
   // and the failure-swallow contract are preserved.
   async sendEmail(args: { to: string; subject: string; html: string }): Promise<void> {
     await this.send(args);
+  }
+
+  // PR-WEBINAR-EMAIL — unlike the legacy best-effort transactional methods,
+  // lifecycle delivery needs a truthful provider result for retry accounting.
+  // The stable idempotency key is forwarded to Resend, making a retry safe even
+  // if the process stopped after Resend accepted the first call but before the
+  // database row was marked SENT.
+  async sendIdempotentEmail(args: {
+    to: string;
+    subject: string;
+    html: string;
+    idempotencyKey: string;
+  }): Promise<MailDeliveryResult> {
+    if (!this.enabled || !this.client) {
+      const error = 'Resend is not configured';
+      this.logger.warn(
+        `Tracked email not sent to=${args.to} subject="${args.subject}": ${error}`,
+      );
+      return { sent: false, error };
+    }
+
+    try {
+      const res = await this.client.emails.send(
+        {
+          from: this.from,
+          to: args.to,
+          subject: args.subject,
+          html: args.html,
+        },
+        { idempotencyKey: args.idempotencyKey },
+      );
+
+      if (res.error) {
+        this.logger.error(
+          `Resend tracked send failed to=${args.to} subject="${args.subject}": ${res.error.message}`,
+        );
+        return { sent: false, error: res.error.message };
+      }
+
+      const providerMessageId = res.data?.id;
+      this.logger.log(
+        `Tracked email sent to=${args.to} subject="${args.subject}" id=${providerMessageId ?? '?'}`,
+      );
+      return { sent: true, providerMessageId };
+    } catch (err: any) {
+      const error = err?.message ?? String(err);
+      this.logger.error(
+        `Resend tracked exception to=${args.to} subject="${args.subject}": ${error}`,
+      );
+      return { sent: false, error };
+    }
   }
 
   // PR-SUPPORT-1 follow-up — notification only. Body of the reply
