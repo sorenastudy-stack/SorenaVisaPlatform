@@ -33,6 +33,7 @@ import { CryptoModule } from './common/crypto/crypto.module';
 import { EmailHashModule } from './common/email-hash/email-hash.module';
 import { StaffModule } from './staff/staff.module';
 import { WixWebhooksModule } from './webhooks/wix/wix-webhooks.module';
+import { WebinarsModule } from './webinars/webinars.module';
 import { LegalNotesModule } from './legal-notes/legal-notes.module';
 import { CaseConversationNotesModule } from './case-conversation-notes/case-conversation-notes.module';
 import { CaseMessagesModule } from './case-messages/case-messages.module';
@@ -208,6 +209,10 @@ import { ProviderPortalModule } from './provider-portal/provider-portal.module';
     SlaModule,
     // PR-PROVIDER-PORTAL slice B — the institution's own, ownership-scoped surface.
     ProviderPortalModule,
+    // PR-WEBINAR-1: receiving side of the sorenavisa.com website's webinar
+    // registration call (POST /api/webinars/register) + the public
+    // GET /api/webinars listing.
+    WebinarsModule,
   ],
   providers: [
     // Apply the ThrottlerModule baseline (60/min from the `default`

@@ -1105,6 +1105,11 @@ model Lead {
   // @unique idempotency on stripePaymentIntentId.
   payments Payment[]
 
+  // PR-WEBINAR-1: webinar registrations submitted by the public website
+  // (sorenavisa.com), linked to this Lead via Lead.clientId as the shared
+  // reference — see WebinarRegistration below.
+  webinarRegistrations WebinarRegistration[]
+
   @@index([contactId])
   @@index([leadStatus])
   @@index([scoreBand])
@@ -6025,4 +6030,76 @@ model ProgrammeCandidate {
   @@index([providerId])
   @@index([providerId, nameNormalized, nzqfLevel, campusCity])
   @@map("programme_candidates")
+}
+
+
+// PR-WEBINAR-1 — website (sorenavisa.com) → Sorena Study webinar integration.
+//
+// The website's existing `/api/webinar-registration` server route calls this
+// platform server-to-server (SORENA_STUDY_WEBINAR_API_URL + _API_KEY on the
+// website side); today that call 503s because no receiving endpoint exists.
+// This is that endpoint's schema.
+//
+// `slug` is the externally-addressable identifier — the website never sees or
+// stores our internal cuid, only the slug, so webinars can be created/rotated
+// here without coordinating a deploy on the website side. The live site sends
+// `eventSlug: "study-in-new-zealand-weekly"` (hardcoded in its registration
+// component), so a Webinar row must carry exactly that slug or every real
+// registration 404s.
+model Webinar {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  description String?
+  startsAt    DateTime
+  durationMin Int
+  speaker     String?
+  topic       String?
+  joinUrl     String?
+  status      WebinarStatus @default(SCHEDULED)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  registrations WebinarRegistration[]
+
+  @@index([startsAt])
+  @@map("webinars")
+}
+
+enum WebinarStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+// One row per (webinar, email) — deliberately linked to the existing `Lead`
+// (via Lead.clientId as the authoritative shared reference) rather than a new
+// lead-like entity, per the schema's "reuse before you add" review.
+model WebinarRegistration {
+  id                  String   @id @default(cuid())
+  webinarId           String
+  leadId              String
+  email               String
+  fullName            String
+  phone               String?
+  countryOfResidence  String?
+  intendedStudyLevel  String?
+  intake              String?
+  operationalConsent  Boolean  @default(true)
+  marketingConsent    Boolean?
+  attended            Boolean  @default(false)
+  attendedDurationMin Int?
+  utmSource           String?
+  utmMedium           String?
+  utmCampaign         String?
+  landingPage         String?
+  createdAt           DateTime @default(now())
+
+  webinar Webinar @relation(fields: [webinarId], references: [id], onDelete: Cascade)
+  lead    Lead    @relation(fields: [leadId], references: [id])
+
+  @@unique([webinarId, email])
+  @@index([leadId])
+  @@map("webinar_registrations")
 }
