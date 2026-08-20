@@ -6115,10 +6115,53 @@ model WebinarRegistration {
   landingPage         String?
   createdAt           DateTime @default(now())
 
-  webinar Webinar @relation(fields: [webinarId], references: [id], onDelete: Cascade)
-  lead    Lead    @relation(fields: [leadId], references: [id])
+  webinar        Webinar               @relation(fields: [webinarId], references: [id], onDelete: Cascade)
+  lead           Lead                  @relation(fields: [leadId], references: [id])
+  emailDeliveries WebinarEmailDelivery[]
 
   @@unique([webinarId, email])
   @@index([leadId])
   @@map("webinar_registrations")
+}
+
+// Durable, idempotent lifecycle queue for operational webinar emails.
+// One row per registration + lifecycle message prevents duplicate sends,
+// records delivery attempts, and lets the cron safely retry transient failures.
+model WebinarEmailDelivery {
+  id                String             @id @default(cuid())
+  registrationId    String
+  kind              WebinarEmailKind
+  status            WebinarEmailStatus @default(PENDING)
+  scheduledFor      DateTime
+  nextAttemptAt     DateTime?
+  attempts          Int                @default(0)
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+  providerMessageId String?
+  lastError         String?            @db.Text
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  registration WebinarRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@unique([registrationId, kind])
+  @@index([status, nextAttemptAt])
+  @@index([scheduledFor])
+  @@map("webinar_email_deliveries")
+}
+
+enum WebinarEmailKind {
+  CONFIRMATION
+  REMINDER_24H
+  REMINDER_1H
+  REMINDER_10M
+  SCORECARD_FOLLOWUP
+}
+
+enum WebinarEmailStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
 }
