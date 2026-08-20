@@ -15,8 +15,13 @@ import { normaliseWebinarPayload, pickEnvelopeString } from './webinar-payload-n
 // website's webinar registration flow. Two deliberate differences from the Wix
 // path:
 //   - Dedupe key is (webinarId, email), a real unique constraint, not a
-//     time-window hash. Registering twice for the SAME webinar is a no-op;
-//     registering for a DIFFERENT webinar with the same email is a new row.
+//     time-window hash. Registering twice for the SAME OCCURRENCE (one specific
+//     week's session — `webinarId`, not `slug`) is a no-op; registering for a
+//     later week of a recurring series, or a different webinar entirely, is a
+//     new row. See PR-WEBINAR-2: `slug` identifies a recurring series and
+//     resolves to the next upcoming occurrence — deliberately not unique on
+//     Webinar, precisely so a weekly regular isn't blocked from registering
+//     again. Their Lead stays the same one either way.
 //   - The Lead is looked up by contact email and reused if one already exists
 //     (a repeat registrant, or someone who already came through the Wix form or
 //     the Scorecard) rather than always creating a new one — Lead.clientId is
@@ -84,9 +89,30 @@ export class WebinarsService {
       return { status: 'invalid', error: 'Missing or invalid name' };
     }
 
-    const webinar = await this.prisma.webinar.findUnique({ where: { slug: norm.webinarSlug } });
+    // PR-WEBINAR-2: `slug` identifies a recurring SERIES, not one eternal row —
+    // the website always sends the same static slug regardless of which week's
+    // session it is. Resolve to the next upcoming occurrence of that series.
+    //
+    // The time filter is load-bearing, not decoration. Without it the earliest
+    // SCHEDULED row wins even when its session is long past — so after any gap
+    // in the recurrence cron the public page would advertise next Wednesday
+    // while registrations silently attached people to LAST Wednesday. A LIVE
+    // row is included whatever its start time, because a session running right
+    // now is exactly the one a late registrant wants to join, and it sorts
+    // first for the same reason.
+    const now = new Date();
+    const webinar = await this.prisma.webinar.findFirst({
+      where: {
+        slug: norm.webinarSlug,
+        OR: [
+          { status: 'LIVE' },
+          { status: 'SCHEDULED', startsAt: { gte: now } },
+        ],
+      },
+      orderBy: { startsAt: 'asc' },
+    });
     if (!webinar) {
-      return { status: 'not_found', error: `No webinar with slug '${norm.webinarSlug}'` };
+      return { status: 'not_found', error: `No upcoming webinar with slug '${norm.webinarSlug}'` };
     }
 
     const email = norm.email.toLowerCase().trim();

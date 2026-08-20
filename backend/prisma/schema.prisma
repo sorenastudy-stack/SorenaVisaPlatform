@@ -6046,23 +6046,37 @@ model ProgrammeCandidate {
 // `eventSlug: "study-in-new-zealand-weekly"` (hardcoded in its registration
 // component), so a Webinar row must carry exactly that slug or every real
 // registration 404s.
+//
+// PR-WEBINAR-2 — `slug` is deliberately NOT unique. "study-in-new-zealand-weekly"
+// is a genuinely recurring weekly series under one static slug, and the same
+// person legitimately registers again for a later week — that must succeed, not
+// bounce as a duplicate. So each week's session is its own Webinar ROW (its own
+// id, its own startsAt) sharing the slug; `register()` resolves a slug to the
+// next upcoming occurrence, and the existing `@@unique([webinarId, email])`
+// dedupe now scopes to ONE week's session rather than the whole series.
+//
+// `recurrenceDays` (set once on the first row, e.g. 7) drives the automatic
+// clone in WebinarsRecurrenceCron, so nobody has to remember to create next
+// week's row. Leave it null for a genuine one-off event.
 model Webinar {
-  id          String        @id @default(cuid())
-  slug        String        @unique
-  title       String
-  description String?
-  startsAt    DateTime
-  durationMin Int
-  speaker     String?
-  topic       String?
-  joinUrl     String?
-  status      WebinarStatus @default(SCHEDULED)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id             String        @id @default(cuid())
+  slug           String
+  title          String
+  description    String?
+  startsAt       DateTime
+  durationMin    Int
+  speaker        String?
+  topic          String?
+  joinUrl        String?
+  status         WebinarStatus @default(SCHEDULED)
+  recurrenceDays Int?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   registrations WebinarRegistration[]
 
   @@index([startsAt])
+  @@index([slug])
   @@map("webinars")
 }
 
