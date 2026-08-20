@@ -17,6 +17,8 @@ import {
 
 const MAX_ATTEMPTS = 5;
 const PROCESSING_TIMEOUT_MS = 10 * 60_000;
+const WEBINAR_RECIPIENT_REASON =
+  "You're receiving this because you registered for a Sorena Visa webinar.";
 
 const REMINDER_OFFSETS: ReadonlyArray<{
   kind: WebinarEmailKind;
@@ -270,6 +272,7 @@ export class WebinarEmailLifecycleService {
           subject: 'Your webinar seat is reserved — Sorena Visa',
           html: wrapHtml(webinarConfirmationBody(data), {
             heading: 'Your seat is reserved',
+            recipientReason: WEBINAR_RECIPIENT_REASON,
           }),
         };
       case WebinarEmailKind.REMINDER_24H:
@@ -277,6 +280,7 @@ export class WebinarEmailLifecycleService {
           subject: `Tomorrow: ${webinar.title}`,
           html: wrapHtml(webinarReminderBody(data, 'tomorrow'), {
             heading: 'Your webinar is tomorrow',
+            recipientReason: WEBINAR_RECIPIENT_REASON,
           }),
         };
       case WebinarEmailKind.REMINDER_1H:
@@ -284,6 +288,7 @@ export class WebinarEmailLifecycleService {
           subject: `Starting in 1 hour: ${webinar.title}`,
           html: wrapHtml(webinarReminderBody(data, 'in 1 hour'), {
             heading: 'Starting in one hour',
+            recipientReason: WEBINAR_RECIPIENT_REASON,
           }),
         };
       case WebinarEmailKind.REMINDER_10M:
@@ -291,6 +296,7 @@ export class WebinarEmailLifecycleService {
           subject: `Starting in 10 minutes: ${webinar.title}`,
           html: wrapHtml(webinarReminderBody(data, 'in 10 minutes'), {
             heading: 'We start in ten minutes',
+            recipientReason: WEBINAR_RECIPIENT_REASON,
           }),
         };
       case WebinarEmailKind.SCORECARD_FOLLOWUP:
@@ -298,6 +304,7 @@ export class WebinarEmailLifecycleService {
           subject: 'Your Sorena Scorecard invitation',
           html: wrapHtml(webinarScorecardFollowupBody(data), {
             heading: 'Your next step',
+            recipientReason: WEBINAR_RECIPIENT_REASON,
           }),
         };
       default:
