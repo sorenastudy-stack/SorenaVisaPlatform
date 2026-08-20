@@ -58,6 +58,12 @@ const SYNONYMS: Record<string, string[]> = {
   preferredLanguage: [
     'preferredlanguage', 'language', 'lang',
   ],
+  // Exact key confirmed from the live form: <textarea name="question">
+  // ("What would you most like us to explain?"). Synonyms cover a rename.
+  question: [
+    'question', 'yourquestion', 'mainquestion', 'message', 'enquiry', 'inquiry',
+    'comments', 'notes',
+  ],
   marketingConsent: [
     'marketingconsent', 'marketingoptin', 'newsletteroptin',
   ],
@@ -154,6 +160,7 @@ export interface NormalisedWebinarRegistration {
   countryOfResidence: string | null;
   intendedStudyLevel: string | null;
   intake:             string | null;
+  question:           string | null;
   preferredLanguage:  string | null;
   marketingConsent:   boolean | null;
   operationalConsent: boolean | null;
@@ -174,6 +181,7 @@ export function normaliseWebinarPayload(body: unknown): NormalisedWebinarRegistr
     countryOfResidence: pickString(flat, SYNONYMS.countryOfResidence),
     intendedStudyLevel: pickString(flat, SYNONYMS.intendedStudyLevel),
     intake:             pickString(flat, SYNONYMS.intake),
+    question:           pickString(flat, SYNONYMS.question),
     preferredLanguage:  pickString(flat, SYNONYMS.preferredLanguage),
     marketingConsent:   pickConsent(flat, SYNONYMS.marketingConsent),
     operationalConsent: pickConsent(flat, SYNONYMS.operationalConsent),

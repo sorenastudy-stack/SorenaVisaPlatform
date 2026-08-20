@@ -6086,6 +6086,11 @@ model WebinarRegistration {
   countryOfResidence  String?
   intendedStudyLevel  String?
   intake              String?
+  // "What would you most like us to explain?" — free-text from the
+  // website's own registration form; the site's copy promises it reaches
+  // Sorena Study, so it's captured for staff review even though no
+  // automation reads it yet.
+  question            String?  @db.Text
   operationalConsent  Boolean  @default(true)
   marketingConsent    Boolean?
   attended            Boolean  @default(false)

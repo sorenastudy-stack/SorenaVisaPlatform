@@ -193,6 +193,9 @@ export class WebinarsService {
           countryOfResidence: countryOfResidence ?? countryRaw,
           intendedStudyLevel: norm.intendedStudyLevel,
           intake: norm.intake,
+          // Free text the registrant typed. Stored verbatim for staff to read;
+          // nothing parses it.
+          question: norm.question,
           // Recorded as submitted rather than assumed. `undefined` falls back
           // to the column default (true) only when the caller said nothing.
           operationalConsent: norm.operationalConsent ?? undefined,
