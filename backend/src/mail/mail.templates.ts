@@ -564,3 +564,65 @@ export function newsletterBody(d: NewsletterData): string {
     ${ctaButton(d.ctaUrl, 'Explore your options')}
     ${noReplyNote()}`;
 }
+
+
+// ─── PR-WEBINAR-EMAIL — operational webinar lifecycle ─────────────────────
+// These messages are tied directly to a registration and do not use marketing
+// consent. They contain logistics and the Scorecard invitation promised on the
+// registration confirmation page; no immigration advice or outcome claim.
+
+export interface WebinarEmailTemplateData {
+  name: string;
+  title: string;
+  whenLabel: string;
+  durationMin: number;
+  joinUrl: string | null;
+  calendarUrl: string | null;
+  scorecardUrl: string;
+}
+
+function webinarDetails(d: WebinarEmailTemplateData): string {
+  return `
+    <div style="margin:18px 0;padding:16px;background:${OFF_WHITE};border-radius:10px;border-left:3px solid ${GOLD};">
+      <div style="color:${NAVY};font-size:16px;font-weight:700;">${esc(d.title)}</div>
+      <div style="margin-top:8px;color:${BODY};font-size:14px;"><strong>${esc(d.whenLabel)}</strong></div>
+      <div style="margin-top:3px;color:${MUTED};font-size:13px;">${esc(d.durationMin)} minutes · Online via Microsoft Teams</div>
+    </div>`;
+}
+
+export function webinarConfirmationBody(d: WebinarEmailTemplateData): string {
+  return `
+    <p>Hi ${esc(d.name)},</p>
+    <p>Your place is confirmed for our free live webinar.</p>
+    ${webinarDetails(d)}
+    ${d.joinUrl ? primaryButton('Join the live webinar', d.joinUrl) : ''}
+    ${d.calendarUrl ? `<p style="margin:14px 0 0;"><a href="${esc(d.calendarUrl)}" style="color:${NAVY};font-size:13px;font-weight:600;">Add this session to Google Calendar</a></p>` : ''}
+    <p style="color:${MUTED};font-size:13px;margin-top:22px;">Please keep this joining link for yourself. We will also send reminders before the session.</p>
+    <p style="color:${MUTED};font-size:12px;margin-top:18px;">This webinar provides general education and immigration-process information. It is not individual immigration advice and does not guarantee any outcome.</p>
+  `;
+}
+
+export function webinarReminderBody(
+  d: WebinarEmailTemplateData,
+  timing: string,
+): string {
+  return `
+    <p>Hi ${esc(d.name)},</p>
+    <p>A quick reminder that <strong>${esc(d.title)}</strong> starts ${esc(timing)}.</p>
+    ${webinarDetails(d)}
+    ${d.joinUrl ? primaryButton('Join the live webinar', d.joinUrl) : ''}
+    <p style="color:${MUTED};font-size:13px;margin-top:22px;">You can join from a computer or mobile device. We recommend opening the link a few minutes early.</p>
+  `;
+}
+
+export function webinarScorecardFollowupBody(
+  d: WebinarEmailTemplateData,
+): string {
+  return `
+    <p>Hi ${esc(d.name)},</p>
+    <p>Thank you for joining <strong>${esc(d.title)}</strong>.</p>
+    <p>Your Sorena Scorecard is the next step. It helps us understand your education background and study plans so the platform can prepare a structured assessment for you.</p>
+    ${primaryButton('Complete my Sorena Scorecard', d.scorecardUrl)}
+    <p style="color:${MUTED};font-size:12px;margin-top:20px;">The Scorecard is an educational assessment tool. It does not provide individual immigration advice, determine visa eligibility, or guarantee an admission or visa outcome.</p>
+  `;
+}
