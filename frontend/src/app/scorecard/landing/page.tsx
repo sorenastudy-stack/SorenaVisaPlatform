@@ -26,26 +26,64 @@ import { SorenaLogo } from '@/components/brand/SorenaLogo';
 // Fix 9 (English-only): no locale toggle on this page. Strings come
 // from the labels.ts plain-string export.
 
-// Attribution capture: reads ?ch=, ?agent=, ?campaign= and persists
-// them to sessionStorage so they survive the navigation through
-// signup → form → results. The sv_attribution cookie set by the
-// /s/:shortCode short-link redirector is also forwarded to the form
-// at submit time (the form reads it from document.cookie).
+// Attribution capture: reads ?ch=, ?agent=, ?campaign= (Sorena's own
+// short-link mechanism — unchanged) AND ?utm_source=, ?utm_medium=,
+// ?utm_campaign=, ?landing_page= (raw marketing-campaign params, forwarded
+// verbatim by the public website when it links a visitor here — see
+// docs/IMPLEMENTATION_HANDOFF_20260821.md §5 for the website-side
+// contract), then persists them to sessionStorage so they survive the
+// navigation through signup → form → results. The sv_attribution cookie
+// set by the /s/:shortCode short-link redirector is also forwarded to the
+// form at submit time (the form reads it from document.cookie).
+//
+// PR-SCORECARD-ATTR-1 — FIRST-TOUCH ONLY: if this session already has a
+// stored attribution snapshot (the visitor landed here once already this
+// session — e.g. clicked back, or the website redirected them here twice),
+// it is NEVER overwritten. Whatever campaign/UTM values were present on
+// the FIRST landing are what stick for this session, matching the
+// first-attribution-wins semantics enforced everywhere else in this
+// pipeline (saveDraft's autosave guard, submitScorecard's Lead-attribution
+// write). Without this check, a visitor who bounces between two campaign
+// links in one session would have their attribution silently overwritten
+// by whichever link they clicked LAST rather than FIRST.
 
 export default function ScorecardLandingPage() {
   const router = useRouter();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // First-touch guard — if a snapshot already exists this session,
+    // leave it alone entirely (don't even re-read the URL).
+    try {
+      if (sessionStorage.getItem('sv_scorecard_attribution')) return;
+    } catch {
+      // sessionStorage disabled — fall through; the write below will
+      // also no-op (caught separately), so this is a pure pass-through.
+    }
+
     const params = new URLSearchParams(window.location.search);
     const ch = params.get('ch');
     const agent = params.get('agent');
     const campaign = params.get('campaign');
-    if (ch || agent || campaign) {
+    const utmSource = params.get('utm_source');
+    const utmMedium = params.get('utm_medium');
+    const utmCampaign = params.get('utm_campaign');
+    // Explicit ?landing_page= from the website takes priority; falls back
+    // to document.referrer (the website page the visitor actually left
+    // from) when the website doesn't set it.
+    const landingPage = params.get('landing_page')
+      || (document.referrer || null);
+
+    if (ch || agent || campaign || utmSource || utmMedium || utmCampaign || landingPage) {
       const attribution = {
         channel: ch ?? null,
         agentId: agent ?? null,
         campaignLabel: campaign ?? null,
+        utmSource: utmSource ?? null,
+        utmMedium: utmMedium ?? null,
+        utmCampaign: utmCampaign ?? null,
+        landingPage: landingPage ?? null,
       };
       try {
         sessionStorage.setItem('sv_scorecard_attribution', JSON.stringify(attribution));

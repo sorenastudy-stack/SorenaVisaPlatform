@@ -86,12 +86,37 @@ const FAKE_ROUTING = {
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
+interface DraftFixture {
+  id: string;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  landingPage?: string | null;
+}
+
+interface LeadFixture {
+  id: string;
+  contactId: string;
+  leadStatus: string;
+  sourceChannel?: string | null;
+  trackingLinkId?: string | null;
+  attributedAgentId?: string | null;
+  campaignId?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  targetCountry?: string | null;
+}
+
 function makeService(opts: {
-  existingDraft?: { id: string } | null;
+  existingDraft?: DraftFixture | null;
   trackingLink?: Record<string, unknown> | null;
   affiliateAgent?: Record<string, unknown> | null;
   existingAssessmentCompletedEvent?: { id: string } | null;
   scorecardSubmissionUpdateMany?: jest.Mock;
+  existingContact?: { id: string } | null;
+  // PR-SCORECARD-ATTR-1 — the "Webinar already created this Lead" fixture.
+  existingLead?: LeadFixture | null;
 } = {}) {
   const userFindUnique = jest.fn().mockResolvedValue({
     id: 'user-1', role: 'LEAD', name: 'Test User', email: 'test@example.com',
@@ -101,9 +126,13 @@ function makeService(opts: {
   const scorecardSubmissionUpdate = jest.fn(async ({ data }: any) => ({ id: 'sub-existing', ...data }));
   const scorecardSubmissionUpdateMany = opts.scorecardSubmissionUpdateMany
     ?? jest.fn().mockResolvedValue({ count: 1 });
-  const contactFindFirst = jest.fn().mockResolvedValue(null);
+  const contactFindFirst = jest.fn().mockResolvedValue(opts.existingContact ?? null);
   const contactCreate = jest.fn().mockResolvedValue({ id: 'contact-1' });
+  const leadFindFirst = jest.fn().mockResolvedValue(opts.existingLead ?? null);
   const leadCreate = jest.fn(async ({ data }: any) => ({ id: 'lead-1', ...data }));
+  const leadUpdate = jest.fn(async ({ data }: any) => ({
+    id: opts.existingLead?.id ?? 'lead-1', ...opts.existingLead, ...data,
+  }));
   const userUpdate = jest.fn().mockResolvedValue({});
   const auditLogCreate = jest.fn().mockResolvedValue({ id: 'audit-1' });
   const trackingLinkFindUnique = jest.fn().mockResolvedValue(opts.trackingLink ?? null);
@@ -119,7 +148,7 @@ function makeService(opts: {
       updateMany: scorecardSubmissionUpdateMany,
     },
     contact: { findFirst: contactFindFirst, create: contactCreate, update: jest.fn() },
-    lead: { create: leadCreate },
+    lead: { findFirst: leadFindFirst, create: leadCreate, update: leadUpdate },
     user: { update: userUpdate },
     auditLog: { create: auditLogCreate },
     crmEvent: { findFirst: crmEventFindFirst, create: crmEventCreate },
@@ -154,7 +183,8 @@ function makeService(opts: {
   return {
     service, prisma: prismaMock, events: eventsMock,
     scorecardSubmissionCreate, scorecardSubmissionUpdate, scorecardSubmissionUpdateMany,
-    leadCreate, crmEventFindFirst, trackingLinkFindUnique, affiliateAgentFindUnique,
+    leadCreate, leadFindFirst, leadUpdate, auditLogCreate,
+    crmEventFindFirst, trackingLinkFindUnique, affiliateAgentFindUnique,
   };
 }
 
@@ -358,5 +388,194 @@ describe('ScorecardService — submitScorecard', () => {
     expect(leadData.utmSource).toBeNull();
     expect(leadData.utmMedium).toBeNull();
     expect(leadData.utmCampaign).toBeNull();
+  });
+
+  // ─── PR-SCORECARD-ATTR-1: Lead reuse across Webinar → Scorecard ───────
+
+  it('REGRESSION: Webinar registration → existing Contact/Lead → Scorecard submission → same Lead reused → no duplicate Lead', async () => {
+    const webinarLead: LeadFixture = {
+      id: 'lead-from-webinar',
+      contactId: 'contact-1',
+      leadStatus: 'NEW',
+      sourceChannel: 'WEBSITE_WEBINAR',
+      trackingLinkId: null,
+      attributedAgentId: null,
+      campaignId: null,
+      utmSource: null,
+      utmMedium: null,
+      utmCampaign: null,
+      targetCountry: null,
+    };
+    const { service, leadCreate, leadUpdate, leadFindFirst } = makeService({
+      existingDraft: null,
+      existingContact: { id: 'contact-1' },
+      existingLead: webinarLead,
+    });
+
+    const payload = await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: 'test@example.com' },
+      {},
+      ACTOR,
+      { utmSource: 'google', utmMedium: 'cpc', utmCampaign: 'launch' },
+    );
+
+    // The defining assertion: no second Lead was created.
+    expect(leadCreate).not.toHaveBeenCalled();
+    expect(leadFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { contactId: 'contact-1' } }),
+    );
+    expect(leadUpdate).toHaveBeenCalledTimes(1);
+    expect(leadUpdate.mock.calls[0][0].where).toEqual({ id: 'lead-from-webinar' });
+
+    const updateData = leadUpdate.mock.calls[0][0].data;
+    // Pre-scoring status → advances to SCORING_DONE.
+    expect(updateData.leadStatus).toBe('SCORING_DONE');
+    // sourceChannel must NOT be present in the update payload — the Lead's
+    // original provenance (how it first entered the pipeline) is preserved.
+    expect(updateData.sourceChannel).toBeUndefined();
+    // First-attribution-wins: the webinar Lead had none yet, so THIS
+    // submit's UTM fills it.
+    expect(updateData.utmSource).toBe('google');
+    expect(updateData.utmMedium).toBe('cpc');
+    expect(updateData.utmCampaign).toBe('launch');
+    // Scores always reflect the latest attempt.
+    expect(updateData.readinessScore).toBe(FAKE_SCORE_RESULT.total);
+
+    expect(payload.leadId).toBe('lead-from-webinar');
+  });
+
+  it('does not regress leadStatus for a Lead that already progressed past scoring (e.g. QUALIFIED)', async () => {
+    const advancedLead: LeadFixture = {
+      id: 'lead-advanced', contactId: 'contact-1', leadStatus: 'QUALIFIED',
+    };
+    const { service, leadUpdate } = makeService({
+      existingDraft: null,
+      existingContact: { id: 'contact-1' },
+      existingLead: advancedLead,
+    });
+
+    await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: 'test@example.com' },
+      {},
+      ACTOR,
+    );
+
+    expect(leadUpdate.mock.calls[0][0].data.leadStatus).toBe('QUALIFIED');
+  });
+
+  it('reused Lead: first-attribution-wins preserves the Lead\'s existing trackingLinkId/attributedAgentId/campaignId — never overwritten by a later submit', async () => {
+    const attributedLead: LeadFixture = {
+      id: 'lead-attributed', contactId: 'contact-1', leadStatus: 'NEW',
+      trackingLinkId: 'original-tl', attributedAgentId: 'original-agent', campaignId: 'original-campaign',
+    };
+    const { service, leadUpdate } = makeService({
+      existingDraft: null,
+      existingContact: { id: 'contact-1' },
+      existingLead: attributedLead,
+      trackingLink: { id: 'tl-new', status: 'ACTIVE', agentId: 'agent-new', campaignLabel: 'new-campaign', channel: 'FACEBOOK' },
+    });
+
+    await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: 'test@example.com' },
+      {},
+      ACTOR,
+      { trackingLinkId: 'tl-new' },
+    );
+
+    const data = leadUpdate.mock.calls[0][0].data;
+    expect(data.trackingLinkId).toBe('original-tl');
+    expect(data.attributedAgentId).toBe('original-agent');
+    expect(data.campaignId).toBe('original-campaign');
+  });
+
+  it('audits a reused Lead as SCORECARD_LEAD_REUSED (action UPDATE), not SCORECARD_LEAD_CREATED', async () => {
+    const { service, auditLogCreate } = makeService({
+      existingDraft: null,
+      existingContact: { id: 'contact-1' },
+      existingLead: { id: 'lead-from-webinar', contactId: 'contact-1', leadStatus: 'NEW' },
+    });
+
+    await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: 'test@example.com' },
+      {},
+      ACTOR,
+    );
+
+    const leadAuditCall = auditLogCreate.mock.calls.find(
+      (c: any[]) => c[0].data.entityType === 'LEAD',
+    );
+    expect(leadAuditCall[0].data.eventType).toBe('SCORECARD_LEAD_REUSED');
+    expect(leadAuditCall[0].data.action).toBe('UPDATE');
+  });
+
+  // ─── PR-SCORECARD-ATTR-1: first-touch preservation through submit ─────
+
+  it('FIRST-TOUCH PRESERVATION: draft already captured UTM; final submit carries none → the draft\'s stored attribution wins, not lost', async () => {
+    const { service, scorecardSubmissionUpdate, leadCreate } = makeService({
+      existingDraft: {
+        id: 'draft-1', utmSource: 'meta', utmMedium: 'paid-social', utmCampaign: 'first-touch', landingPage: '/nz',
+      },
+    });
+
+    await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: 'test@example.com' },
+      {},
+      ACTOR,
+      {}, // submit request carries NO attribution at all
+    );
+
+    const submissionData = scorecardSubmissionUpdate.mock.calls[0][0].data;
+    expect(submissionData.utmSource).toBe('meta');
+    expect(submissionData.utmMedium).toBe('paid-social');
+    expect(submissionData.utmCampaign).toBe('first-touch');
+    expect(submissionData.landingPage).toBe('/nz');
+
+    const leadData = leadCreate.mock.calls[0][0].data;
+    expect(leadData.utmSource).toBe('meta');
+    expect(leadData.utmMedium).toBe('paid-social');
+    expect(leadData.utmCampaign).toBe('first-touch');
+  });
+
+  it('FIRST-TOUCH PRESERVATION: draft\'s stored attribution wins even when the final submit carries a DIFFERENT value (not just none)', async () => {
+    const { service, scorecardSubmissionUpdate } = makeService({
+      existingDraft: {
+        id: 'draft-1', utmSource: 'meta', utmMedium: 'paid-social', utmCampaign: 'first-touch', landingPage: null,
+      },
+    });
+
+    await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: 'test@example.com' },
+      {},
+      ACTOR,
+      { utmSource: 'google', utmMedium: 'cpc', utmCampaign: 'later-touch' }, // a DIFFERENT campaign at submit time
+    );
+
+    const submissionData = scorecardSubmissionUpdate.mock.calls[0][0].data;
+    // The draft's original bundle wins in full — not a per-field mix.
+    expect(submissionData.utmSource).toBe('meta');
+    expect(submissionData.utmMedium).toBe('paid-social');
+    expect(submissionData.utmCampaign).toBe('first-touch');
+  });
+
+  it('no first-touch bundle on the draft → falls through to whatever the submit request carries (normal case)', async () => {
+    const { service, scorecardSubmissionUpdate } = makeService({
+      existingDraft: { id: 'draft-1', utmSource: null, utmMedium: null, utmCampaign: null, landingPage: null },
+    });
+
+    await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: 'test@example.com' },
+      {},
+      ACTOR,
+      { utmSource: 'google' },
+    );
+
+    expect(scorecardSubmissionUpdate.mock.calls[0][0].data.utmSource).toBe('google');
   });
 });

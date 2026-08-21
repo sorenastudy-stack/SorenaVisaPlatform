@@ -50,6 +50,16 @@ interface Attribution {
   agentId?: string;
   campaignLabel?: string;
   channel?: string;
+  // PR-SCORECARD-ATTR-1 — raw marketing-campaign UTM + landing page,
+  // separate from the trackingLinkId/agentId short-link mechanism above.
+  // Read verbatim from sessionStorage (set by /scorecard/landing from the
+  // website's ?utm_source=/?utm_medium=/?utm_campaign=/?landing_page=
+  // query params, or document.referrer as a landingPage fallback) — no
+  // server-side lookup, matching how the backend treats these fields.
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  landingPage?: string;
 }
 
 const TOTAL_SECTIONS = FORM_SCHEMA.length + 1; // +1 for declaration
@@ -75,10 +85,19 @@ function readAttribution(): Attribution {
         channel?: string | null;
         agentId?: string | null;
         campaignLabel?: string | null;
+        utmSource?: string | null;
+        utmMedium?: string | null;
+        utmCampaign?: string | null;
+        landingPage?: string | null;
       };
       if (parsed.channel) out.channel = parsed.channel;
       if (parsed.agentId) out.agentId = parsed.agentId;
       if (parsed.campaignLabel) out.campaignLabel = parsed.campaignLabel;
+      // PR-SCORECARD-ATTR-1 — same sessionStorage snapshot, additive fields.
+      if (parsed.utmSource) out.utmSource = parsed.utmSource;
+      if (parsed.utmMedium) out.utmMedium = parsed.utmMedium;
+      if (parsed.utmCampaign) out.utmCampaign = parsed.utmCampaign;
+      if (parsed.landingPage) out.landingPage = parsed.landingPage;
     }
   } catch { /* sessionStorage disabled */ }
 
@@ -186,12 +205,20 @@ export function ScorecardForm({
       }
       if (!isAuthenticated) {
         // Anonymous — persist client-side only; the server draft route is
-        // auth-gated and must stay that way (no cross-user reads).
+        // auth-gated and must stay that way (no cross-user reads). No
+        // ASSESSMENT_STARTED CRM event exists for this path — see the
+        // backend's saveDraft() doc comment for the full event-model
+        // explanation.
         try { window.localStorage.setItem(ANON_DRAFT_KEY, JSON.stringify(cleaned)); } catch { /* ignore */ }
         setSaving(false);
         return true;
       }
-      await api.post('/scorecard/draft', { answers: cleaned });
+      // PR-SCORECARD-ATTR-1 — include attribution on every autosave, not
+      // just the final submit. The backend applies first-attribution-wins
+      // itself (as one atomic bundle) on the existing-draft path, so
+      // sending it repeatedly is safe — only the FIRST autosave that
+      // carries a value is ever actually persisted.
+      await api.post('/scorecard/draft', { answers: cleaned, attribution: readAttribution() });
       setSaving(false);
       return true;
     } catch (err) {
