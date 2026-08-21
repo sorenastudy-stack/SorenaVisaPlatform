@@ -60,7 +60,9 @@ export class ScorecardController {
   @Roles('LEAD', 'STUDENT', 'OWNER', 'ADMIN', 'SUPER_ADMIN')
   saveDraft(@Body() dto: SaveScorecardDraftDto, @Req() req: any) {
     const actor = this.viewer(req);
-    return this.service.saveDraft(actor.userId, dto.answers);
+    // PR-SCORECARD-ATTR-1: forward attribution so the first draft can
+    // capture UTM/landingPage and fire ASSESSMENT_STARTED.
+    return this.service.saveDraft(actor.userId, dto.answers, dto.attribution ?? {});
   }
 
   // GET /scorecard/me/draft — PR-SCORECARD-2 draft retrieval. Returns

@@ -6,6 +6,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ScorecardService } from './scorecard.service';
 import { ScorecardController } from './scorecard.controller';
 import { ScorecardPublicController } from './scorecard-public.controller';
+import { EventsService } from '../events/events.service';
 
 // PR-SCORECARD-1 — Readiness Assessment scoring engine + lead pipeline.
 //
@@ -23,7 +24,7 @@ import { ScorecardPublicController } from './scorecard-public.controller';
   // must beat the authenticated controller's `:submissionId/booking-opened`
   // param routes when Nest matches.
   controllers: [ScorecardPublicController, ScorecardController],
-  providers: [ScorecardService],
+  providers: [ScorecardService, EventsService],
   exports: [ScorecardService],
 })
 export class ScorecardModule {}

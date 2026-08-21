@@ -25,6 +25,7 @@ import {
   type InternalReportData, type ClientReportData,
 } from './pdf';
 import { resolveReportLocale } from './pdf/client-report.copy';
+import { EventsService } from '../events/events.service';
 
 // PR-SCORECARD-1 — Readiness Assessment service.
 //
@@ -60,11 +61,22 @@ interface SubmissionMetadata {
 
 // PR-SCORECARD-2 — attribution carried in the submit body (client-side
 // reads sv_attribution cookie + URL ?ch/agent/campaign and forwards it).
+//
+// PR-SCORECARD-ATTR-1 — utmSource/utmMedium/utmCampaign/landingPage are a
+// SEPARATE, additive mechanism: raw marketing-campaign query params the
+// website reads verbatim (?utm_source=...) and forwards with no server-side
+// lookup. They do NOT touch trackingLinkId/agentId/campaignLabel/channel,
+// which continue to resolve through Sorena's own short-link →
+// TrackingLink → AffiliateAgent flow, unchanged.
 export interface AttributionInput {
   trackingLinkId?: string | null;
   agentId?: string | null;
   campaignLabel?: string | null;
   channel?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  landingPage?: string | null;
 }
 
 // Fix 5: gateResults is now a SORTED ARRAY (server-side numerical
@@ -120,6 +132,7 @@ export class ScorecardService {
     private readonly crypto: CryptoService,
     private readonly magicLink: MagicLinkService,
     private readonly passwordSetup: PasswordSetupService,
+    private readonly events: EventsService,
   ) {}
 
   // ─── Submit ───────────────────────────────────────────────────────────
@@ -204,6 +217,12 @@ export class ScorecardService {
         nextActionContent: routing.nextActionContent as unknown as Prisma.InputJsonValue,
         ipAddress: meta.ipAddress ?? null,
         userAgent: meta.userAgent ?? null,
+        // PR-SCORECARD-ATTR-1 — raw campaign UTM + landing page, separate
+        // from the trackingLinkId/agentId short-link mechanism above.
+        utmSource: resolvedAttribution.utmSource,
+        utmMedium: resolvedAttribution.utmMedium,
+        utmCampaign: resolvedAttribution.utmCampaign,
+        landingPage: resolvedAttribution.landingPage,
         isDraft: false,
         draftLastSavedAt: null,
         submittedAt: new Date(),
@@ -293,6 +312,16 @@ export class ScorecardService {
           trackingLinkId:    resolvedAttribution.trackingLinkId,
           attributedAgentId: resolvedAttribution.agentId,
           campaignId:        resolvedAttribution.campaignLabel,
+          // PR-SCORECARD-ATTR-1 — "first-attribution-wins" is trivially
+          // satisfied here: submitScorecard() always creates a brand-new
+          // Lead row (no existing-Lead-reuse logic exists in this method
+          // today), so whatever UTM values resolve on THIS submit are, by
+          // construction, this Lead's first and only attribution. If
+          // Lead-reuse is ever introduced here, this write must become
+          // conditional (only set when the column is currently null).
+          utmSource:         resolvedAttribution.utmSource,
+          utmMedium:         resolvedAttribution.utmMedium,
+          utmCampaign:       resolvedAttribution.utmCampaign,
           // Country the visitor picked on /start. Client-supplied → whitelisted
           // to the enum-or-null here (single trust boundary). Nullable —
           // deep-links straight to the assessment have none.
@@ -350,6 +379,38 @@ export class ScorecardService {
           actorRoleSnapshot: actor.role ?? null,
         },
       });
+
+      // PR-SCORECARD-ATTR-1 — ASSESSMENT_COMPLETED, inside the same
+      // transaction as the submission/Lead rows so the event can never exist
+      // without them (and vice versa). Idempotent: a defensive existence
+      // check guards against this submission id somehow firing twice (e.g.
+      // a future retry path) — belt-and-braces alongside the atomicity the
+      // transaction already gives us.
+      const alreadyCompleted = await tx.crmEvent.findFirst({
+        where: {
+          eventType: 'ASSESSMENT_COMPLETED',
+          entityType: 'SCORECARD_SUBMISSION',
+          entityId: created.id,
+        },
+        select: { id: true },
+      });
+      if (!alreadyCompleted) {
+        await this.events.emit(
+          'ASSESSMENT_COMPLETED',
+          'SCORECARD_SUBMISSION',
+          created.id,
+          lead.id,
+          'SYSTEM',
+          actor.userId,
+          {
+            submissionId: created.id,
+            leadId: lead.id,
+            band: result.band.enumValue,
+            totalScore: result.total,
+          },
+          tx,
+        );
+      }
 
       return { id: created.id, leadId: lead.id, submittedAt: created.submittedAt };
     });
@@ -997,6 +1058,11 @@ export class ScorecardService {
   async saveDraft(
     userId: string,
     answers: Record<string, string>,
+    // PR-SCORECARD-ATTR-1 — a visitor may abandon before ever reaching
+    // submit, so this is where UTM/landingPage are captured for anyone who
+    // never converts, and where ASSESSMENT_STARTED fires (once, on the
+    // first draft only — see the `else` branch below).
+    attribution: AttributionInput = {},
   ): Promise<{ id: string; draftLastSavedAt: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -1006,6 +1072,13 @@ export class ScorecardService {
 
     const encrypted = this.crypto.encrypt(JSON.stringify(answers));
     const now = new Date();
+    // No DB lookup needed — plain pass-through, same as resolveAttribution's
+    // UTM handling. trackingLinkId/agentId/campaignLabel resolution stays
+    // submit-time-only, unchanged.
+    const utmSource = attribution.utmSource?.trim() || null;
+    const utmMedium = attribution.utmMedium?.trim() || null;
+    const utmCampaign = attribution.utmCampaign?.trim() || null;
+    const landingPage = attribution.landingPage?.trim() || null;
 
     const existing = await this.prisma.scorecardSubmission.findFirst({
       where: { userId, isDraft: true },
@@ -1020,32 +1093,77 @@ export class ScorecardService {
           draftLastSavedAt: now,
         },
       });
+      // First-attribution-wins, applied as one atomic bundle rather than
+      // per-field: the four values are read together from a single URL/
+      // cookie snapshot on the client, so mixing e.g. utmSource from one
+      // autosave with utmCampaign from a later one would fabricate an
+      // attribution that never actually occurred. The WHERE guard only
+      // fires the write when ALL FOUR columns are still empty (i.e. this is
+      // genuinely the first autosave to carry any attribution); once any
+      // one of them is set, the whole bundle is frozen. Prisma has no "set
+      // only if currently null" primitive, so this is a conditional second
+      // write rather than folded into the update above.
+      if (utmSource || utmMedium || utmCampaign || landingPage) {
+        await this.prisma.scorecardSubmission.updateMany({
+          where: {
+            id: existing.id,
+            utmSource: null,
+            utmMedium: null,
+            utmCampaign: null,
+            landingPage: null,
+          },
+          data: { utmSource, utmMedium, utmCampaign, landingPage },
+        });
+      }
       return { id: updated.id, draftLastSavedAt: now.toISOString() };
     }
 
     // New draft. Populate sentinel zeros for the NOT NULL scoring
     // columns — they're never read while isDraft=true.
-    const created = await this.prisma.scorecardSubmission.create({
-      data: {
+    const { created } = await this.prisma.$transaction(async (tx) => {
+      const createdRow = await tx.scorecardSubmission.create({
+        data: {
+          userId,
+          answersEncrypted: encrypted as never,
+          totalScore: 0,
+          category1Score: 0,
+          category2Score: 0,
+          category3Score: 0,
+          category4Score: 0,
+          band: 'BAND_1' as ScorecardBand,
+          hardStops: [] as unknown as Prisma.InputJsonValue,
+          riskFlags: [],
+          executionEligible: false,
+          gateResults: {} as unknown as Prisma.InputJsonValue,
+          nextAction: 'NURTURE_ONLY' as ScorecardNextAction,
+          nextActionTextEn: '',
+          nextActionTextFa: '',
+          isDraft: true,
+          draftLastSavedAt: now,
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          landingPage,
+        },
+      });
+
+      // ASSESSMENT_STARTED fires exactly once per user's first-ever draft —
+      // this branch only runs when no isDraft:true row existed for them.
+      // leadId is null: no Lead exists yet at draft-start time.
+      await this.events.emit(
+        'ASSESSMENT_STARTED',
+        'SCORECARD_SUBMISSION',
+        createdRow.id,
+        null,
+        'SYSTEM',
         userId,
-        answersEncrypted: encrypted as never,
-        totalScore: 0,
-        category1Score: 0,
-        category2Score: 0,
-        category3Score: 0,
-        category4Score: 0,
-        band: 'BAND_1' as ScorecardBand,
-        hardStops: [] as unknown as Prisma.InputJsonValue,
-        riskFlags: [],
-        executionEligible: false,
-        gateResults: {} as unknown as Prisma.InputJsonValue,
-        nextAction: 'NURTURE_ONLY' as ScorecardNextAction,
-        nextActionTextEn: '',
-        nextActionTextFa: '',
-        isDraft: true,
-        draftLastSavedAt: now,
-      },
+        { submissionId: createdRow.id },
+        tx,
+      );
+
+      return { created: createdRow };
     });
+
     return { id: created.id, draftLastSavedAt: now.toISOString() };
   }
 
@@ -1056,11 +1174,21 @@ export class ScorecardService {
     agentId: string | null;
     campaignLabel: string | null;
     sourceChannel: string;
+    // PR-SCORECARD-ATTR-1 — plain pass-through, no DB lookup. Kept on this
+    // return type purely for convenience so callers read one resolved object.
+    utmSource: string | null;
+    utmMedium: string | null;
+    utmCampaign: string | null;
+    landingPage: string | null;
   }> {
     let trackingLinkId: string | null = null;
     let agentId: string | null = null;
     let campaignLabel: string | null = input.campaignLabel?.trim() || null;
     let sourceChannel = 'SCORECARD';
+    const utmSource = input.utmSource?.trim() || null;
+    const utmMedium = input.utmMedium?.trim() || null;
+    const utmCampaign = input.utmCampaign?.trim() || null;
+    const landingPage = input.landingPage?.trim() || null;
 
     if (input.trackingLinkId) {
       try {
@@ -1109,6 +1237,9 @@ export class ScorecardService {
       sourceChannel = `SCORECARD_${input.channel.toUpperCase()}`;
     }
 
-    return { trackingLinkId, agentId, campaignLabel, sourceChannel };
+    return {
+      trackingLinkId, agentId, campaignLabel, sourceChannel,
+      utmSource, utmMedium, utmCampaign, landingPage,
+    };
   }
 }

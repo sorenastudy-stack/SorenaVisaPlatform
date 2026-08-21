@@ -13,6 +13,15 @@ import { Type } from 'class-transformer';
 // pulled by the client from the sv_attribution cookie and/or the
 // ?ch=X&agent=Y&campaign=Z URL parameters. All three fields are
 // optional — direct traffic submits with an empty attribution object.
+//
+// PR-SCORECARD-ATTR-1 — adds raw campaign UTM/landing-page fields
+// alongside the above. Deliberately a SEPARATE set of fields, not a
+// replacement: trackingLinkId/agentId/campaignLabel/channel resolve through
+// Sorena's own short-link → TrackingLink → AffiliateAgent mechanism
+// (`sv_attribution` cookie, 90-day, set only by GET /s/:shortCode); these
+// four are plain pass-through strings the website reads from its own
+// ?utm_source=...&utm_medium=...&utm_campaign=... query parameters (or
+// wherever it stores them) and forwards verbatim — no server-side lookup.
 
 export class AttributionDto {
   @IsOptional()
@@ -32,6 +41,25 @@ export class AttributionDto {
   @IsOptional()
   @IsString()
   channel?: string;
+
+  @IsOptional()
+  @IsString()
+  utmSource?: string;
+
+  @IsOptional()
+  @IsString()
+  utmMedium?: string;
+
+  @IsOptional()
+  @IsString()
+  utmCampaign?: string;
+
+  // The page the visitor was on when they left the website for the
+  // Scorecard (e.g. a country landing page or the webinar page) — not
+  // necessarily the URL they first arrived on.
+  @IsOptional()
+  @IsString()
+  landingPage?: string;
 }
 
 export class SubmitScorecardDto {
@@ -55,9 +83,19 @@ export class SubmitScorecardDto {
 // PR-SCORECARD-2 — autosave payload. Same shape as submit but
 // the controller routes it to saveDraft() — answers may be partial,
 // scoring is NOT run, no Lead is created.
+//
+// PR-SCORECARD-ATTR-1 — attribution is optional here too. The first
+// saveDraft() call for a given user is where ASSESSMENT_STARTED fires
+// and where UTM/landingPage are first captured, since a visitor may
+// abandon before ever reaching submit.
 export class SaveScorecardDraftDto {
   @IsObject()
   answers!: Record<string, string>;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AttributionDto)
+  attribution?: AttributionDto;
 }
 
 export class RecordBookingOpenedDto {
