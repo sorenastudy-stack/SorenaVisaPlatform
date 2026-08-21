@@ -17,6 +17,10 @@ import { ScorecardCountrySelect } from '@/components/scorecard/ScorecardCountryS
 import { PhoneInput } from '@/components/common/PhoneInput';
 import { localeToLanguageCode } from '@/lib/languages';
 import { useLocaleStore } from '@/lib/stores/localeStore';
+import {
+  readScorecardAttribution,
+  ScorecardAttribution,
+} from '@/lib/scorecard/attribution';
 
 // PR-SCORECARD-2 — Multi-step scorecard form.
 //
@@ -45,23 +49,6 @@ interface InitialDraft {
   draftLastSavedAt: string | null;
 }
 
-interface Attribution {
-  trackingLinkId?: string;
-  agentId?: string;
-  campaignLabel?: string;
-  channel?: string;
-  // PR-SCORECARD-ATTR-1 — raw marketing-campaign UTM + landing page,
-  // separate from the trackingLinkId/agentId short-link mechanism above.
-  // Read verbatim from sessionStorage (set by /scorecard/landing from the
-  // website's ?utm_source=/?utm_medium=/?utm_campaign=/?landing_page=
-  // query params, or document.referrer as a landingPage fallback) — no
-  // server-side lookup, matching how the backend treats these fields.
-  utmSource?: string;
-  utmMedium?: string;
-  utmCampaign?: string;
-  landingPage?: string;
-}
-
 const TOTAL_SECTIONS = FORM_SCHEMA.length + 1; // +1 for declaration
 
 // Path A: anonymous visitors have no server draft (that endpoint is
@@ -76,29 +63,10 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match.split('=')[1] ?? '') : null;
 }
 
-function readAttribution(): Attribution {
-  const out: Attribution = {};
+function readAttribution(): ScorecardAttribution {
+  let out: ScorecardAttribution = {};
   try {
-    const stored = sessionStorage.getItem('sv_scorecard_attribution');
-    if (stored) {
-      const parsed = JSON.parse(stored) as {
-        channel?: string | null;
-        agentId?: string | null;
-        campaignLabel?: string | null;
-        utmSource?: string | null;
-        utmMedium?: string | null;
-        utmCampaign?: string | null;
-        landingPage?: string | null;
-      };
-      if (parsed.channel) out.channel = parsed.channel;
-      if (parsed.agentId) out.agentId = parsed.agentId;
-      if (parsed.campaignLabel) out.campaignLabel = parsed.campaignLabel;
-      // PR-SCORECARD-ATTR-1 — same sessionStorage snapshot, additive fields.
-      if (parsed.utmSource) out.utmSource = parsed.utmSource;
-      if (parsed.utmMedium) out.utmMedium = parsed.utmMedium;
-      if (parsed.utmCampaign) out.utmCampaign = parsed.utmCampaign;
-      if (parsed.landingPage) out.landingPage = parsed.landingPage;
-    }
+    out = readScorecardAttribution(window.sessionStorage);
   } catch { /* sessionStorage disabled */ }
 
   const cookieLinkId = getCookie('sv_attribution');

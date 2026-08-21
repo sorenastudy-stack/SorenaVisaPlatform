@@ -274,7 +274,11 @@ export class ScorecardService {
 
       // ─── Lead auto-creation ─────────────────────────────────────────
       const fullName = (answers.full_name ?? user.name ?? '').trim() || user.name || 'Lead';
-      const email = (answers.email ?? user.email ?? '').trim() || null;
+      // Normalise exactly as the Webinar flow does. Without this, a Webinar
+      // registration stored as `person@example.com` and a later Scorecard
+      // answer entered as `Person@Example.com` could miss the canonical
+      // Contact and create a duplicate Lead.
+      const email = (answers.email ?? user.email ?? '').trim().toLowerCase() || null;
       const phone = (answers.phone ?? '').trim() || null;
       const country = (answers.current_country ?? '').trim() || null;
       // Phase 2b: the optional first-language answer. `capturedLang` is a valid
@@ -295,7 +299,9 @@ export class ScorecardService {
       // collide on the unique(email) constraint with NULLs.
       let contactId: string | null = null;
       if (email) {
-        const existing = await tx.contact.findFirst({ where: { email } });
+        const existing = await tx.contact.findFirst({
+          where: { email: { equals: email, mode: 'insensitive' } },
+        });
         if (existing) {
           contactId = existing.id;
           // Refresh the returning lead's language to what they just selected —
@@ -1278,8 +1284,8 @@ export class ScorecardService {
         },
       });
 
-      // ASSESSMENT_STARTED fires exactly once per user's first-ever draft —
-      // this branch only runs when no isDraft:true row existed for them.
+      // ASSESSMENT_STARTED fires exactly once for this open assessment draft —
+      // this branch only runs when no isDraft:true row exists for the user.
       // leadId is null: no Lead exists yet at draft-start time.
       await this.events.emit(
         'ASSESSMENT_STARTED',

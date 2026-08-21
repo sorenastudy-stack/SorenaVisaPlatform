@@ -15,9 +15,9 @@
 -- Apply with `prisma db execute --file <this file> --schema prisma/schema.prisma`
 -- (never `migrate dev` / `db push`), then register it with
 -- `prisma migrate resolve --applied 20260821110000_scorecard_utm_attribution`.
--- See docs/IMPLEMENTATION_HANDOFF_20260821.md §6 for the full safe sequence
--- (backup → validate on an isolated DB → apply → verify → resolve → deploy
--- → smoke test).
+-- Operational sequence: backup → validate on an isolated DB → apply → verify
+-- → resolve → deploy → smoke test. Never mark this migration applied before
+-- the SQL and object-level verification have succeeded in that environment.
 --
 -- All four columns are nullable, no default, no backfill: existing rows
 -- (draft or submitted) simply read back NULL, exactly like every other

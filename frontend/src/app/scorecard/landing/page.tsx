@@ -7,6 +7,7 @@ import {
   Compass, Target, Globe, ShieldCheck, Banknote, Clock,
 } from 'lucide-react';
 import { LANDING_STRINGS } from '@/lib/scorecard/labels';
+import { captureFirstScorecardAttribution } from '@/lib/scorecard/attribution';
 import { SorenaLogo } from '@/components/brand/SorenaLogo';
 
 // PR-SCORECARD-2 — Public scorecard landing page (Fix 8 overhaul).
@@ -28,10 +29,10 @@ import { SorenaLogo } from '@/components/brand/SorenaLogo';
 
 // Attribution capture: reads ?ch=, ?agent=, ?campaign= (Sorena's own
 // short-link mechanism — unchanged) AND ?utm_source=, ?utm_medium=,
-// ?utm_campaign=, ?landing_page= (raw marketing-campaign params, forwarded
-// verbatim by the public website when it links a visitor here — see
-// docs/IMPLEMENTATION_HANDOFF_20260821.md §5 for the website-side
-// contract), then persists them to sessionStorage so they survive the
+// ?utm_campaign=, ?landing_page= (marketing-campaign params forwarded
+// by the public website when it links a visitor here). Values are bounded
+// and landing_page is reduced to its pathname before storage, then
+// persists them to sessionStorage so they survive the
 // navigation through signup → form → results. The sv_attribution cookie
 // set by the /s/:shortCode short-link redirector is also forwarded to the
 // form at submit time (the form reads it from document.cookie).
@@ -53,44 +54,14 @@ export default function ScorecardLandingPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // First-touch guard — if a snapshot already exists this session,
-    // leave it alone entirely (don't even re-read the URL).
     try {
-      if (sessionStorage.getItem('sv_scorecard_attribution')) return;
+      captureFirstScorecardAttribution(
+        window.sessionStorage,
+        window.location.search,
+        document.referrer,
+      );
     } catch {
-      // sessionStorage disabled — fall through; the write below will
-      // also no-op (caught separately), so this is a pure pass-through.
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const ch = params.get('ch');
-    const agent = params.get('agent');
-    const campaign = params.get('campaign');
-    const utmSource = params.get('utm_source');
-    const utmMedium = params.get('utm_medium');
-    const utmCampaign = params.get('utm_campaign');
-    // Explicit ?landing_page= from the website takes priority; falls back
-    // to document.referrer (the website page the visitor actually left
-    // from) when the website doesn't set it.
-    const landingPage = params.get('landing_page')
-      || (document.referrer || null);
-
-    if (ch || agent || campaign || utmSource || utmMedium || utmCampaign || landingPage) {
-      const attribution = {
-        channel: ch ?? null,
-        agentId: agent ?? null,
-        campaignLabel: campaign ?? null,
-        utmSource: utmSource ?? null,
-        utmMedium: utmMedium ?? null,
-        utmCampaign: utmCampaign ?? null,
-        landingPage: landingPage ?? null,
-      };
-      try {
-        sessionStorage.setItem('sv_scorecard_attribution', JSON.stringify(attribution));
-      } catch {
-        // sessionStorage disabled — attribution still flows via the
-        // sv_attribution cookie set by the short-link redirector.
-      }
+      // Attribution is optional; storage restrictions must not block entry.
     }
   }, []);
 

@@ -1,4 +1,11 @@
-import { IsObject, IsOptional, IsString, MinLength, ValidateNested } from 'class-validator';
+import {
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 // PR-SCORECARD-1 — DTOs.
@@ -26,32 +33,39 @@ import { Type } from 'class-transformer';
 export class AttributionDto {
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   trackingLinkId?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(191)
   agentId?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   campaignLabel?: string;
 
   // Channel hint from ?ch=...; used as a fallback when trackingLinkId
   // is absent but the user came from a URL with the channel encoded.
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   channel?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   utmSource?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   utmMedium?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
   utmCampaign?: string;
 
   // The page the visitor was on when they left the website for the
@@ -59,6 +73,7 @@ export class AttributionDto {
   // necessarily the URL they first arrived on.
   @IsOptional()
   @IsString()
+  @MaxLength(2048)
   landingPage?: string;
 }
 

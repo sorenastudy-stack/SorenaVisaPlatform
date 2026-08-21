@@ -183,7 +183,7 @@ function makeService(opts: {
   return {
     service, prisma: prismaMock, events: eventsMock,
     scorecardSubmissionCreate, scorecardSubmissionUpdate, scorecardSubmissionUpdateMany,
-    leadCreate, leadFindFirst, leadUpdate, auditLogCreate,
+    contactFindFirst, contactCreate, leadCreate, leadFindFirst, leadUpdate, auditLogCreate,
     crmEventFindFirst, trackingLinkFindUnique, affiliateAgentFindUnique,
   };
 }
@@ -443,6 +443,32 @@ describe('ScorecardService — submitScorecard', () => {
     expect(updateData.readinessScore).toBe(FAKE_SCORE_RESULT.total);
 
     expect(payload.leadId).toBe('lead-from-webinar');
+  });
+
+  it('normalises the Scorecard email and matches an existing Webinar Contact case-insensitively', async () => {
+    const { service, contactFindFirst, contactCreate, leadCreate } = makeService({
+      existingContact: { id: 'contact-1' },
+      existingLead: {
+        id: 'lead-from-webinar',
+        contactId: 'contact-1',
+        leadStatus: 'NEW',
+      },
+    });
+
+    await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: '  Test@Example.COM  ' },
+      {},
+      ACTOR,
+    );
+
+    expect(contactFindFirst).toHaveBeenCalledWith({
+      where: {
+        email: { equals: 'test@example.com', mode: 'insensitive' },
+      },
+    });
+    expect(contactCreate).not.toHaveBeenCalled();
+    expect(leadCreate).not.toHaveBeenCalled();
   });
 
   it('does not regress leadStatus for a Lead that already progressed past scoring (e.g. QUALIFIED)', async () => {
