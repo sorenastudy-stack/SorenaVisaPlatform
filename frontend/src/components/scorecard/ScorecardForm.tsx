@@ -17,6 +17,10 @@ import { ScorecardCountrySelect } from '@/components/scorecard/ScorecardCountryS
 import { PhoneInput } from '@/components/common/PhoneInput';
 import { localeToLanguageCode } from '@/lib/languages';
 import { useLocaleStore } from '@/lib/stores/localeStore';
+import {
+  readScorecardAttribution,
+  ScorecardAttribution,
+} from '@/lib/scorecard/attribution';
 
 // PR-SCORECARD-2 — Multi-step scorecard form.
 //
@@ -45,13 +49,6 @@ interface InitialDraft {
   draftLastSavedAt: string | null;
 }
 
-interface Attribution {
-  trackingLinkId?: string;
-  agentId?: string;
-  campaignLabel?: string;
-  channel?: string;
-}
-
 const TOTAL_SECTIONS = FORM_SCHEMA.length + 1; // +1 for declaration
 
 // Path A: anonymous visitors have no server draft (that endpoint is
@@ -66,20 +63,10 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match.split('=')[1] ?? '') : null;
 }
 
-function readAttribution(): Attribution {
-  const out: Attribution = {};
+function readAttribution(): ScorecardAttribution {
+  let out: ScorecardAttribution = {};
   try {
-    const stored = sessionStorage.getItem('sv_scorecard_attribution');
-    if (stored) {
-      const parsed = JSON.parse(stored) as {
-        channel?: string | null;
-        agentId?: string | null;
-        campaignLabel?: string | null;
-      };
-      if (parsed.channel) out.channel = parsed.channel;
-      if (parsed.agentId) out.agentId = parsed.agentId;
-      if (parsed.campaignLabel) out.campaignLabel = parsed.campaignLabel;
-    }
+    out = readScorecardAttribution(window.sessionStorage);
   } catch { /* sessionStorage disabled */ }
 
   const cookieLinkId = getCookie('sv_attribution');
@@ -186,12 +173,20 @@ export function ScorecardForm({
       }
       if (!isAuthenticated) {
         // Anonymous — persist client-side only; the server draft route is
-        // auth-gated and must stay that way (no cross-user reads).
+        // auth-gated and must stay that way (no cross-user reads). No
+        // ASSESSMENT_STARTED CRM event exists for this path — see the
+        // backend's saveDraft() doc comment for the full event-model
+        // explanation.
         try { window.localStorage.setItem(ANON_DRAFT_KEY, JSON.stringify(cleaned)); } catch { /* ignore */ }
         setSaving(false);
         return true;
       }
-      await api.post('/scorecard/draft', { answers: cleaned });
+      // PR-SCORECARD-ATTR-1 — include attribution on every autosave, not
+      // just the final submit. The backend applies first-attribution-wins
+      // itself (as one atomic bundle) on the existing-draft path, so
+      // sending it repeatedly is safe — only the FIRST autosave that
+      // carries a value is ever actually persisted.
+      await api.post('/scorecard/draft', { answers: cleaned, attribution: readAttribution() });
       setSaving(false);
       return true;
     } catch (err) {

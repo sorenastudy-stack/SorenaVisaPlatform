@@ -5345,6 +5345,18 @@ model ScorecardSubmission {
   // Audit (request-side context; the user-side audit row is in audit_logs)
   ipAddress            String?             @db.VarChar(64)
   userAgent            String?             @db.Text
+  // PR-SCORECARD-ATTR-1: raw marketing-campaign attribution (Google/Meta Ads
+  // style — utm_source=google&utm_medium=cpc&...), captured from the website
+  // separately from the agent/affiliate sv_attribution mechanism above
+  // (trackingLinkId resolves through the TrackingLink table to an
+  // AffiliateAgent; these four columns do not). Set on both draft rows (as
+  // captured at draft-save time) and the final submission (as sent with the
+  // submit request) — nullable throughout, since direct traffic and deep
+  // links to the assessment carry none of it.
+  utmSource            String?
+  utmMedium            String?
+  utmCampaign          String?
+  landingPage          String?
 
   user User  @relation("ScorecardUser", fields: [userId], references: [id], onDelete: Cascade)
   lead Lead? @relation("ScorecardLead", fields: [leadId], references: [id])

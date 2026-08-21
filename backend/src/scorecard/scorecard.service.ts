@@ -25,6 +25,7 @@ import {
   type InternalReportData, type ClientReportData,
 } from './pdf';
 import { resolveReportLocale } from './pdf/client-report.copy';
+import { EventsService } from '../events/events.service';
 
 // PR-SCORECARD-1 — Readiness Assessment service.
 //
@@ -60,11 +61,22 @@ interface SubmissionMetadata {
 
 // PR-SCORECARD-2 — attribution carried in the submit body (client-side
 // reads sv_attribution cookie + URL ?ch/agent/campaign and forwards it).
+//
+// PR-SCORECARD-ATTR-1 — utmSource/utmMedium/utmCampaign/landingPage are a
+// SEPARATE, additive mechanism: raw marketing-campaign query params the
+// website reads verbatim (?utm_source=...) and forwards with no server-side
+// lookup. They do NOT touch trackingLinkId/agentId/campaignLabel/channel,
+// which continue to resolve through Sorena's own short-link →
+// TrackingLink → AffiliateAgent flow, unchanged.
 export interface AttributionInput {
   trackingLinkId?: string | null;
   agentId?: string | null;
   campaignLabel?: string | null;
   channel?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  landingPage?: string | null;
 }
 
 // Fix 5: gateResults is now a SORTED ARRAY (server-side numerical
@@ -120,6 +132,7 @@ export class ScorecardService {
     private readonly crypto: CryptoService,
     private readonly magicLink: MagicLinkService,
     private readonly passwordSetup: PasswordSetupService,
+    private readonly events: EventsService,
   ) {}
 
   // ─── Submit ───────────────────────────────────────────────────────────
@@ -172,11 +185,46 @@ export class ScorecardService {
     // (update in place) instead of creating a new row. This keeps
     // (userId, isDraft=true) at most one row per user — the draft
     // "graduates" into a submission.
+    //
+    // PR-SCORECARD-ATTR-1: also select the draft's own UTM/landingPage
+    // columns — the first-touch-preservation check below needs them.
     const existingDraft = await this.prisma.scorecardSubmission.findFirst({
       where: { userId, isDraft: true },
       orderBy: { submittedAt: 'desc' },
-      select: { id: true },
+      select: {
+        id: true, utmSource: true, utmMedium: true, utmCampaign: true, landingPage: true,
+      },
     });
+
+    // PR-SCORECARD-ATTR-1 — first-touch preservation through submit. If
+    // this draft already captured UTM/landingPage on an earlier autosave
+    // (possibly in a prior browser session, after sessionStorage cleared —
+    // this can never happen for a genuinely anonymous visitor, since the
+    // draft endpoint is auth-gated and existingDraft is always null there),
+    // that captured value IS the true first touch and wins over whatever
+    // — or nothing — the final submit request carries. Treated as one
+    // atomic bundle (all four fields together), same as the autosave
+    // first-attribution-wins guard in saveDraft(): never silently
+    // overwritten with null just because this particular request didn't
+    // carry attribution, and never partially mixed with a different
+    // touch's values.
+    const draftHadAttribution = !!existingDraft && (
+      !!existingDraft.utmSource || !!existingDraft.utmMedium
+      || !!existingDraft.utmCampaign || !!existingDraft.landingPage
+    );
+    const finalUtm = draftHadAttribution
+      ? {
+          utmSource: existingDraft!.utmSource,
+          utmMedium: existingDraft!.utmMedium,
+          utmCampaign: existingDraft!.utmCampaign,
+          landingPage: existingDraft!.landingPage,
+        }
+      : {
+          utmSource: resolvedAttribution.utmSource,
+          utmMedium: resolvedAttribution.utmMedium,
+          utmCampaign: resolvedAttribution.utmCampaign,
+          landingPage: resolvedAttribution.landingPage,
+        };
 
     // Fix 5: store the gateResults JSON column in the new sorted-array
     // shape so SQL queries / staff views read the same shape that
@@ -204,6 +252,14 @@ export class ScorecardService {
         nextActionContent: routing.nextActionContent as unknown as Prisma.InputJsonValue,
         ipAddress: meta.ipAddress ?? null,
         userAgent: meta.userAgent ?? null,
+        // PR-SCORECARD-ATTR-1 — raw campaign UTM + landing page, separate
+        // from the trackingLinkId/agentId short-link mechanism above.
+        // finalUtm (not resolvedAttribution directly) so a first touch
+        // already captured on the draft is never overwritten — see above.
+        utmSource: finalUtm.utmSource,
+        utmMedium: finalUtm.utmMedium,
+        utmCampaign: finalUtm.utmCampaign,
+        landingPage: finalUtm.landingPage,
         isDraft: false,
         draftLastSavedAt: null,
         submittedAt: new Date(),
@@ -218,7 +274,11 @@ export class ScorecardService {
 
       // ─── Lead auto-creation ─────────────────────────────────────────
       const fullName = (answers.full_name ?? user.name ?? '').trim() || user.name || 'Lead';
-      const email = (answers.email ?? user.email ?? '').trim() || null;
+      // Normalise exactly as the Webinar flow does. Without this, a Webinar
+      // registration stored as `person@example.com` and a later Scorecard
+      // answer entered as `Person@Example.com` could miss the canonical
+      // Contact and create a duplicate Lead.
+      const email = (answers.email ?? user.email ?? '').trim().toLowerCase() || null;
       const phone = (answers.phone ?? '').trim() || null;
       const country = (answers.current_country ?? '').trim() || null;
       // Phase 2b: the optional first-language answer. `capturedLang` is a valid
@@ -239,7 +299,9 @@ export class ScorecardService {
       // collide on the unique(email) constraint with NULLs.
       let contactId: string | null = null;
       if (email) {
-        const existing = await tx.contact.findFirst({ where: { email } });
+        const existing = await tx.contact.findFirst({
+          where: { email: { equals: email, mode: 'insensitive' } },
+        });
         if (existing) {
           contactId = existing.id;
           // Refresh the returning lead's language to what they just selected —
@@ -265,40 +327,107 @@ export class ScorecardService {
         contactId = c.id;
       }
 
-      // PR-CLIENT-ID — assign the permanent human-readable id at creation.
-      const clientId = await generateClientId(tx, { countryOfResidence: country, contactId });
-      const lead = await tx.lead.create({
-        data: {
-          clientId,
-          contactId,
-          sourceChannel: resolvedAttribution.sourceChannel,
-          leadStatus: 'SCORING_DONE',
-          readinessScore: result.total,
-          academicScore: categoryScores[2] ?? 0,
-          financialScore: categoryScores[3] ?? 0,
-          // englishScore + intentScore are derived signals — pull the
-          // raw point values for Q22 + Q27 so the existing CRM
-          // surfaces keep their per-axis numbers.
-          englishScore: result.perFieldScores.q22_english_score?.points ?? null,
-          intentScore: result.perFieldScores.q27_study_goal?.points ?? null,
-          scoreBand: legacyBand,
-          riskFlags: result.riskFlags,
-          hardStopFlag: result.hardStops.length > 0,
-          hardStopReason: result.hardStops[0]?.name ?? null,
-          liaEscalationRequired: result.hardStops.some((h) => h.code === 'HS4'),
-          executionAllowed: result.execution.eligible,
-          // PR-SCORECARD-2: marketing attribution. New rows always
-          // accept the resolved attribution (since the Lead is fresh,
-          // first-attribution-wins is implicit — nothing to overwrite).
-          trackingLinkId:    resolvedAttribution.trackingLinkId,
-          attributedAgentId: resolvedAttribution.agentId,
-          campaignId:        resolvedAttribution.campaignLabel,
-          // Country the visitor picked on /start. Client-supplied → whitelisted
-          // to the enum-or-null here (single trust boundary). Nullable —
-          // deep-links straight to the assessment have none.
-          targetCountry:     this.sanitizeTargetCountry(opts.targetCountry),
-        },
+      // PR-SCORECARD-ATTR-1 — reuse the canonical Lead for this Contact when
+      // one already exists (e.g. created moments earlier by a Webinar
+      // registration for the same email — mirrors the exact reuse pattern
+      // WebinarsService already uses: contact.upsert-by-email, then
+      // lead.findFirst({contactId}, orderBy createdAt desc), reuse-or-
+      // create). Without this, a webinar registrant who goes on to complete
+      // the Scorecard got a SECOND, disconnected Lead every time — the same
+      // person fragmented across two CRM records with two different
+      // attribution/status histories.
+      const existingLead = await tx.lead.findFirst({
+        where: { contactId },
+        orderBy: { createdAt: 'desc' },
       });
+
+      const sanitizedTargetCountry = this.sanitizeTargetCountry(opts.targetCountry);
+
+      let lead;
+      if (existingLead) {
+        lead = await tx.lead.update({
+          where: { id: existingLead.id },
+          data: {
+            // Scoring data always reflects the LATEST assessment attempt —
+            // unconditionally overwritten, unlike attribution below.
+            readinessScore: result.total,
+            academicScore: categoryScores[2] ?? 0,
+            financialScore: categoryScores[3] ?? 0,
+            englishScore: result.perFieldScores.q22_english_score?.points ?? null,
+            intentScore: result.perFieldScores.q27_study_goal?.points ?? null,
+            scoreBand: legacyBand,
+            riskFlags: result.riskFlags,
+            hardStopFlag: result.hardStops.length > 0,
+            hardStopReason: result.hardStops[0]?.name ?? null,
+            liaEscalationRequired: result.hardStops.some((h) => h.code === 'HS4'),
+            executionAllowed: result.execution.eligible,
+            // "Where safe": only ADVANCE leadStatus to SCORING_DONE when the
+            // existing Lead is still pre-scoring in the funnel. A Lead that
+            // already progressed further (QUALIFIED, NURTURE, EXECUTING,
+            // CLOSED_*, DISQUALIFIED) is never regressed by a Scorecard
+            // resubmission.
+            leadStatus: this.shouldAdvanceLeadStatusToScoringDone(existingLead.leadStatus)
+              ? 'SCORING_DONE'
+              : existingLead.leadStatus,
+            // sourceChannel is deliberately NOT overwritten — it records how
+            // this Lead FIRST entered the pipeline (e.g. 'WEBSITE_WEBINAR'),
+            // which the Scorecard submission must not erase.
+            //
+            // First-attribution-wins for every attribution field: only fill
+            // a column that's currently empty. A Lead created by an earlier
+            // touch (Webinar registration, a prior Scorecard draft-turned-
+            // Lead, etc.) keeps whatever attribution it already has.
+            trackingLinkId:    existingLead.trackingLinkId    ?? resolvedAttribution.trackingLinkId,
+            attributedAgentId: existingLead.attributedAgentId ?? resolvedAttribution.agentId,
+            campaignId:        existingLead.campaignId        ?? resolvedAttribution.campaignLabel,
+            utmSource:         existingLead.utmSource          ?? finalUtm.utmSource,
+            utmMedium:         existingLead.utmMedium          ?? finalUtm.utmMedium,
+            utmCampaign:       existingLead.utmCampaign        ?? finalUtm.utmCampaign,
+            targetCountry:     existingLead.targetCountry      ?? sanitizedTargetCountry,
+          },
+        });
+      } else {
+        // PR-CLIENT-ID — assign the permanent human-readable id at creation.
+        const clientId = await generateClientId(tx, { countryOfResidence: country, contactId });
+        lead = await tx.lead.create({
+          data: {
+            clientId,
+            contactId,
+            sourceChannel: resolvedAttribution.sourceChannel,
+            leadStatus: 'SCORING_DONE',
+            readinessScore: result.total,
+            academicScore: categoryScores[2] ?? 0,
+            financialScore: categoryScores[3] ?? 0,
+            // englishScore + intentScore are derived signals — pull the
+            // raw point values for Q22 + Q27 so the existing CRM
+            // surfaces keep their per-axis numbers.
+            englishScore: result.perFieldScores.q22_english_score?.points ?? null,
+            intentScore: result.perFieldScores.q27_study_goal?.points ?? null,
+            scoreBand: legacyBand,
+            riskFlags: result.riskFlags,
+            hardStopFlag: result.hardStops.length > 0,
+            hardStopReason: result.hardStops[0]?.name ?? null,
+            liaEscalationRequired: result.hardStops.some((h) => h.code === 'HS4'),
+            executionAllowed: result.execution.eligible,
+            // PR-SCORECARD-2: marketing attribution. New rows always
+            // accept the resolved attribution (since the Lead is fresh,
+            // first-attribution-wins is implicit — nothing to overwrite).
+            trackingLinkId:    resolvedAttribution.trackingLinkId,
+            attributedAgentId: resolvedAttribution.agentId,
+            campaignId:        resolvedAttribution.campaignLabel,
+            // PR-SCORECARD-ATTR-1 — likewise trivially "first" on a brand-
+            // new Lead. finalUtm (not resolvedAttribution) so a first touch
+            // already captured on the draft carries through even here.
+            utmSource:         finalUtm.utmSource,
+            utmMedium:         finalUtm.utmMedium,
+            utmCampaign:       finalUtm.utmCampaign,
+            // Country the visitor picked on /start. Client-supplied → whitelisted
+            // to the enum-or-null here (single trust boundary). Nullable —
+            // deep-links straight to the assessment have none.
+            targetCountry:     sanitizedTargetCountry,
+          },
+        });
+      }
 
       // Link submission → lead (1:0..1)
       await tx.scorecardSubmission.update({
@@ -335,21 +464,58 @@ export class ScorecardService {
           actorRoleSnapshot: actor.role ?? null,
         },
       });
+      // PR-SCORECARD-ATTR-1 — distinct audit trail for reuse vs creation, so
+      // staff/dev reading the audit log can see a Lead was linked to (not
+      // spawned by) this submission. `action` stays a plain string column —
+      // no schema/enum change needed for the new eventType.
       await tx.auditLog.create({
         data: {
           userId: actor.userId,
-          action: 'CREATE',
-          eventType: 'SCORECARD_LEAD_CREATED',
+          action: existingLead ? 'UPDATE' : 'CREATE',
+          eventType: existingLead ? 'SCORECARD_LEAD_REUSED' : 'SCORECARD_LEAD_CREATED',
           entityType: 'LEAD',
           entityId: lead.id,
           newValue: {
             leadId: lead.id,
             scorecardSubmissionId: created.id,
+            ...(existingLead ? { previousLeadStatus: existingLead.leadStatus, previousSourceChannel: existingLead.sourceChannel } : {}),
           } as Prisma.InputJsonValue,
           actorNameSnapshot: actor.name ?? null,
           actorRoleSnapshot: actor.role ?? null,
         },
       });
+
+      // PR-SCORECARD-ATTR-1 — ASSESSMENT_COMPLETED, inside the same
+      // transaction as the submission/Lead rows so the event can never exist
+      // without them (and vice versa). Idempotent: a defensive existence
+      // check guards against this submission id somehow firing twice (e.g.
+      // a future retry path) — belt-and-braces alongside the atomicity the
+      // transaction already gives us.
+      const alreadyCompleted = await tx.crmEvent.findFirst({
+        where: {
+          eventType: 'ASSESSMENT_COMPLETED',
+          entityType: 'SCORECARD_SUBMISSION',
+          entityId: created.id,
+        },
+        select: { id: true },
+      });
+      if (!alreadyCompleted) {
+        await this.events.emit(
+          'ASSESSMENT_COMPLETED',
+          'SCORECARD_SUBMISSION',
+          created.id,
+          lead.id,
+          'SYSTEM',
+          actor.userId,
+          {
+            submissionId: created.id,
+            leadId: lead.id,
+            band: result.band.enumValue,
+            totalScore: result.total,
+          },
+          tx,
+        );
+      }
 
       return { id: created.id, leadId: lead.id, submittedAt: created.submittedAt };
     });
@@ -966,6 +1132,17 @@ export class ScorecardService {
     return role === 'SALES' || role === 'SUPPORT';
   }
 
+  // PR-SCORECARD-ATTR-1 — mirrors shouldPromoteToLead's "only ever move
+  // forward" rule, applied to LeadStatus when a Scorecard submission
+  // reuses an existing Lead (e.g. one created by a Webinar registration).
+  // Only advance to SCORING_DONE from the pre-scoring states; a Lead that
+  // already progressed further in the funnel is never regressed by a
+  // Scorecard resubmission.
+  private shouldAdvanceLeadStatusToScoringDone(current: string): boolean {
+    const PRE_SCORING = new Set(['NEW', 'CONTACTED', 'INTAKE_STARTED', 'INTAKE_COMPLETED']);
+    return PRE_SCORING.has(current);
+  }
+
   // ─── PR-SCORECARD-2: drafts ───────────────────────────────────────
 
   async getDraft(userId: string): Promise<{
@@ -997,6 +1174,32 @@ export class ScorecardService {
   async saveDraft(
     userId: string,
     answers: Record<string, string>,
+    // PR-SCORECARD-ATTR-1 — a visitor may abandon before ever reaching
+    // submit, so this is where UTM/landingPage are captured for anyone who
+    // never converts, and where ASSESSMENT_STARTED fires (once, on the
+    // first draft only — see the `else` branch below).
+    //
+    // IMPORTANT — event-model coverage limitation: this method (and
+    // therefore ASSESSMENT_STARTED) is only ever reached by an
+    // AUTHENTICATED caller — POST /scorecard/draft sits behind
+    // JwtAuthGuard (scorecard.controller.ts). A genuinely anonymous
+    // visitor's in-progress answers are held ENTIRELY client-side, in
+    // browser localStorage (ScorecardForm.tsx's ANON_DRAFT_KEY) — no
+    // backend call happens until they submit. So:
+    //   • anonymous visitor starts filling the form → NO CRM event at all
+    //     today (would need a website/platform web-analytics event, e.g.
+    //     a `scorecard_started` pageview/interaction event, NOT a CRM
+    //     event — no such analytics abstraction exists in this frontend
+    //     yet, so none was added; flagged as a gap, not implemented, to
+    //     avoid adding a public draft endpoint for the sole purpose of
+    //     manufacturing a CRM event).
+    //   • authenticated visitor's first draft save → ASSESSMENT_STARTED
+    //     CRM event (this method).
+    //   • ANY successful final submission (authenticated or anonymous) →
+    //     ASSESSMENT_COMPLETED CRM event (submitScorecard(), below).
+    // Do not read ASSESSMENT_STARTED as "every Scorecard start" — it is
+    // "every authenticated Scorecard start" only.
+    attribution: AttributionInput = {},
   ): Promise<{ id: string; draftLastSavedAt: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -1006,6 +1209,13 @@ export class ScorecardService {
 
     const encrypted = this.crypto.encrypt(JSON.stringify(answers));
     const now = new Date();
+    // No DB lookup needed — plain pass-through, same as resolveAttribution's
+    // UTM handling. trackingLinkId/agentId/campaignLabel resolution stays
+    // submit-time-only, unchanged.
+    const utmSource = attribution.utmSource?.trim() || null;
+    const utmMedium = attribution.utmMedium?.trim() || null;
+    const utmCampaign = attribution.utmCampaign?.trim() || null;
+    const landingPage = attribution.landingPage?.trim() || null;
 
     const existing = await this.prisma.scorecardSubmission.findFirst({
       where: { userId, isDraft: true },
@@ -1020,32 +1230,77 @@ export class ScorecardService {
           draftLastSavedAt: now,
         },
       });
+      // First-attribution-wins, applied as one atomic bundle rather than
+      // per-field: the four values are read together from a single URL/
+      // cookie snapshot on the client, so mixing e.g. utmSource from one
+      // autosave with utmCampaign from a later one would fabricate an
+      // attribution that never actually occurred. The WHERE guard only
+      // fires the write when ALL FOUR columns are still empty (i.e. this is
+      // genuinely the first autosave to carry any attribution); once any
+      // one of them is set, the whole bundle is frozen. Prisma has no "set
+      // only if currently null" primitive, so this is a conditional second
+      // write rather than folded into the update above.
+      if (utmSource || utmMedium || utmCampaign || landingPage) {
+        await this.prisma.scorecardSubmission.updateMany({
+          where: {
+            id: existing.id,
+            utmSource: null,
+            utmMedium: null,
+            utmCampaign: null,
+            landingPage: null,
+          },
+          data: { utmSource, utmMedium, utmCampaign, landingPage },
+        });
+      }
       return { id: updated.id, draftLastSavedAt: now.toISOString() };
     }
 
     // New draft. Populate sentinel zeros for the NOT NULL scoring
     // columns — they're never read while isDraft=true.
-    const created = await this.prisma.scorecardSubmission.create({
-      data: {
+    const { created } = await this.prisma.$transaction(async (tx) => {
+      const createdRow = await tx.scorecardSubmission.create({
+        data: {
+          userId,
+          answersEncrypted: encrypted as never,
+          totalScore: 0,
+          category1Score: 0,
+          category2Score: 0,
+          category3Score: 0,
+          category4Score: 0,
+          band: 'BAND_1' as ScorecardBand,
+          hardStops: [] as unknown as Prisma.InputJsonValue,
+          riskFlags: [],
+          executionEligible: false,
+          gateResults: {} as unknown as Prisma.InputJsonValue,
+          nextAction: 'NURTURE_ONLY' as ScorecardNextAction,
+          nextActionTextEn: '',
+          nextActionTextFa: '',
+          isDraft: true,
+          draftLastSavedAt: now,
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          landingPage,
+        },
+      });
+
+      // ASSESSMENT_STARTED fires exactly once for this open assessment draft —
+      // this branch only runs when no isDraft:true row exists for the user.
+      // leadId is null: no Lead exists yet at draft-start time.
+      await this.events.emit(
+        'ASSESSMENT_STARTED',
+        'SCORECARD_SUBMISSION',
+        createdRow.id,
+        null,
+        'SYSTEM',
         userId,
-        answersEncrypted: encrypted as never,
-        totalScore: 0,
-        category1Score: 0,
-        category2Score: 0,
-        category3Score: 0,
-        category4Score: 0,
-        band: 'BAND_1' as ScorecardBand,
-        hardStops: [] as unknown as Prisma.InputJsonValue,
-        riskFlags: [],
-        executionEligible: false,
-        gateResults: {} as unknown as Prisma.InputJsonValue,
-        nextAction: 'NURTURE_ONLY' as ScorecardNextAction,
-        nextActionTextEn: '',
-        nextActionTextFa: '',
-        isDraft: true,
-        draftLastSavedAt: now,
-      },
+        { submissionId: createdRow.id },
+        tx,
+      );
+
+      return { created: createdRow };
     });
+
     return { id: created.id, draftLastSavedAt: now.toISOString() };
   }
 
@@ -1056,11 +1311,21 @@ export class ScorecardService {
     agentId: string | null;
     campaignLabel: string | null;
     sourceChannel: string;
+    // PR-SCORECARD-ATTR-1 — plain pass-through, no DB lookup. Kept on this
+    // return type purely for convenience so callers read one resolved object.
+    utmSource: string | null;
+    utmMedium: string | null;
+    utmCampaign: string | null;
+    landingPage: string | null;
   }> {
     let trackingLinkId: string | null = null;
     let agentId: string | null = null;
     let campaignLabel: string | null = input.campaignLabel?.trim() || null;
     let sourceChannel = 'SCORECARD';
+    const utmSource = input.utmSource?.trim() || null;
+    const utmMedium = input.utmMedium?.trim() || null;
+    const utmCampaign = input.utmCampaign?.trim() || null;
+    const landingPage = input.landingPage?.trim() || null;
 
     if (input.trackingLinkId) {
       try {
@@ -1109,6 +1374,9 @@ export class ScorecardService {
       sourceChannel = `SCORECARD_${input.channel.toUpperCase()}`;
     }
 
-    return { trackingLinkId, agentId, campaignLabel, sourceChannel };
+    return {
+      trackingLinkId, agentId, campaignLabel, sourceChannel,
+      utmSource, utmMedium, utmCampaign, landingPage,
+    };
   }
 }

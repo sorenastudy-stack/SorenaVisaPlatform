@@ -7,6 +7,7 @@ import {
   Compass, Target, Globe, ShieldCheck, Banknote, Clock,
 } from 'lucide-react';
 import { LANDING_STRINGS } from '@/lib/scorecard/labels';
+import { captureFirstScorecardAttribution } from '@/lib/scorecard/attribution';
 import { SorenaLogo } from '@/components/brand/SorenaLogo';
 
 // PR-SCORECARD-2 — Public scorecard landing page (Fix 8 overhaul).
@@ -26,33 +27,41 @@ import { SorenaLogo } from '@/components/brand/SorenaLogo';
 // Fix 9 (English-only): no locale toggle on this page. Strings come
 // from the labels.ts plain-string export.
 
-// Attribution capture: reads ?ch=, ?agent=, ?campaign= and persists
-// them to sessionStorage so they survive the navigation through
-// signup → form → results. The sv_attribution cookie set by the
-// /s/:shortCode short-link redirector is also forwarded to the form
-// at submit time (the form reads it from document.cookie).
+// Attribution capture: reads ?ch=, ?agent=, ?campaign= (Sorena's own
+// short-link mechanism — unchanged) AND ?utm_source=, ?utm_medium=,
+// ?utm_campaign=, ?landing_page= (marketing-campaign params forwarded
+// by the public website when it links a visitor here). Values are bounded
+// and landing_page is reduced to its pathname before storage, then
+// persists them to sessionStorage so they survive the
+// navigation through signup → form → results. The sv_attribution cookie
+// set by the /s/:shortCode short-link redirector is also forwarded to the
+// form at submit time (the form reads it from document.cookie).
+//
+// PR-SCORECARD-ATTR-1 — FIRST-TOUCH ONLY: if this session already has a
+// stored attribution snapshot (the visitor landed here once already this
+// session — e.g. clicked back, or the website redirected them here twice),
+// it is NEVER overwritten. Whatever campaign/UTM values were present on
+// the FIRST landing are what stick for this session, matching the
+// first-attribution-wins semantics enforced everywhere else in this
+// pipeline (saveDraft's autosave guard, submitScorecard's Lead-attribution
+// write). Without this check, a visitor who bounces between two campaign
+// links in one session would have their attribution silently overwritten
+// by whichever link they clicked LAST rather than FIRST.
 
 export default function ScorecardLandingPage() {
   const router = useRouter();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const ch = params.get('ch');
-    const agent = params.get('agent');
-    const campaign = params.get('campaign');
-    if (ch || agent || campaign) {
-      const attribution = {
-        channel: ch ?? null,
-        agentId: agent ?? null,
-        campaignLabel: campaign ?? null,
-      };
-      try {
-        sessionStorage.setItem('sv_scorecard_attribution', JSON.stringify(attribution));
-      } catch {
-        // sessionStorage disabled — attribution still flows via the
-        // sv_attribution cookie set by the short-link redirector.
-      }
+
+    try {
+      captureFirstScorecardAttribution(
+        window.sessionStorage,
+        window.location.search,
+        document.referrer,
+      );
+    } catch {
+      // Attribution is optional; storage restrictions must not block entry.
     }
   }, []);
 
