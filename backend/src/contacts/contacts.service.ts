@@ -11,15 +11,18 @@ export interface ContactsActor {
 }
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
+import { normalizeEmail } from '../common/normalize-email';
 
 @Injectable()
 export class ContactsService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateContactDto) {
+    const email = normalizeEmail(dto.email);
+    if (!email) throw new BadRequestException('A valid email is required');
     // Check for duplicate email
-    const existing = await this.prisma.contact.findUnique({
-      where: { email: dto.email },
+    const existing = await this.prisma.contact.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
     });
 
     if (existing && !existing.archivedAt) {
@@ -27,7 +30,7 @@ export class ContactsService {
     }
 
     return this.prisma.contact.create({
-      data: dto,
+      data: { ...dto, email },
     });
   }
 
@@ -121,11 +124,15 @@ export class ContactsService {
 
   async update(id: string, dto: UpdateContactDto) {
     const contact = await this.findOne(id);
+    const email = dto.email === undefined ? undefined : normalizeEmail(dto.email);
 
     // If email is being updated, check for duplicates
-    if (dto.email && dto.email !== contact.email) {
-      const existing = await this.prisma.contact.findUnique({
-        where: { email: dto.email },
+    if (email && email !== normalizeEmail(contact.email)) {
+      const existing = await this.prisma.contact.findFirst({
+        where: {
+          id: { not: id },
+          email: { equals: email, mode: 'insensitive' },
+        },
       });
       if (existing && !existing.archivedAt) {
         throw new BadRequestException('A contact with this email already exists');
@@ -134,7 +141,7 @@ export class ContactsService {
 
     return this.prisma.contact.update({
       where: { id },
-      data: dto,
+      data: { ...dto, ...(dto.email === undefined ? {} : { email }) },
       select: {
         id: true,
         fullName: true,

@@ -11,6 +11,7 @@ import {
   WebinarEmailLifecycleService,
   buildWebinarEmailSchedule,
 } from './webinar-email-lifecycle.service';
+import { normalizeEmail } from '../common/normalize-email';
 
 // PR-WEBINAR-1 — Webinar registration service.
 //
@@ -120,7 +121,7 @@ export class WebinarsService {
       return { status: 'not_found', error: `No upcoming webinar with slug '${norm.webinarSlug}'` };
     }
 
-    const email = norm.email.toLowerCase().trim();
+    const email = normalizeEmail(norm.email)!;
     const fullName = norm.fullName.trim();
     const phone = norm.phone && PHONE_REGEX.test(norm.phone) ? norm.phone : null;
 
@@ -163,21 +164,25 @@ export class WebinarsService {
     const landingPage = pickEnvelopeString(body, ['landingPage', 'landing_page', 'pageUrl']);
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const contact = await tx.contact.upsert({
-        where: { email },
-        update: {
+      let contact = await tx.contact.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
+      });
+      contact = contact
+        ? await tx.contact.update({
+          where: { id: contact.id },
+          data: {
           fullName,
           phone: phone ?? undefined,
           countryOfResidence: countryOfResidence ?? undefined,
-        },
-        create: {
+          },
+        })
+        : await tx.contact.create({ data: {
           fullName,
           email,
           phone: phone ?? undefined,
           countryOfResidence: countryOfResidence ?? undefined,
           preferredLanguage: 'en',
-        },
-      });
+        } });
 
       // Reuse an existing Lead for this contact if one already exists (repeat
       // registrant / already came through Wix or the Scorecard). Most recently

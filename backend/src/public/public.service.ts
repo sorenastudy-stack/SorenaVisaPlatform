@@ -7,6 +7,7 @@ import { ScoringService } from '../scoring/scoring.service';
 import { HighRiskEngineService } from '../scoring/high-risk-engine.service';
 import { MailService } from '../mail/mail.service';
 import { LeadStatus, RecommendedRoute, ReviewStatus } from '@prisma/client';
+import { normalizeEmail } from '../common/normalize-email';
 
 @Injectable()
 export class PublicService {
@@ -48,37 +49,47 @@ export class PublicService {
       console.log('[INTAKE] Received payload:', JSON.stringify(data, null, 2));
       const intakeResult = await this.prisma.$transaction(async (tx) => {
       // Create or update contact using unique email if available
-      const contact = data.email
-        ? await tx.contact.upsert({
-            where: { email: data.email },
-            update: {
-              fullName: data.fullName,
-              phone: data.phone,
-              whatsapp: data.whatsapp,
-              nationality: data.nationality,
-              preferredLanguage: data.preferredLanguage || undefined,
-              countryOfResidence: data.destination || undefined,
-            },
-            create: {
-              fullName: data.fullName,
-              email: data.email,
-              phone: data.phone,
-              whatsapp: data.whatsapp,
-              nationality: data.nationality,
-              preferredLanguage: data.preferredLanguage || 'en',
-              countryOfResidence: data.destination,
-            },
-          })
-        : await tx.contact.create({
-            data: {
-              fullName: data.fullName,
-              phone: data.phone,
-              whatsapp: data.whatsapp,
-              nationality: data.nationality,
-              preferredLanguage: data.preferredLanguage || 'en',
-              countryOfResidence: data.destination,
-            },
-          });
+      const normalizedEmail = normalizeEmail(data.email);
+      let contact;
+      if (normalizedEmail) {
+        contact = await tx.contact.findFirst({
+          where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+        });
+        contact = contact
+          ? await tx.contact.update({
+              where: { id: contact.id },
+              data: {
+                fullName: data.fullName,
+                phone: data.phone,
+                whatsapp: data.whatsapp,
+                nationality: data.nationality,
+                preferredLanguage: data.preferredLanguage || undefined,
+                countryOfResidence: data.destination || undefined,
+              },
+            })
+          : await tx.contact.create({
+              data: {
+                fullName: data.fullName,
+                email: normalizedEmail,
+                phone: data.phone,
+                whatsapp: data.whatsapp,
+                nationality: data.nationality,
+                preferredLanguage: data.preferredLanguage || 'en',
+                countryOfResidence: data.destination,
+              },
+            });
+      } else {
+        contact = await tx.contact.create({
+          data: {
+            fullName: data.fullName,
+            phone: data.phone,
+            whatsapp: data.whatsapp,
+            nationality: data.nationality,
+            preferredLanguage: data.preferredLanguage || 'en',
+            countryOfResidence: data.destination,
+          },
+        });
+      }
 
       // Create lead — PR-CLIENT-ID assigns the permanent human-readable id.
       const clientId = await generateClientId(tx, {
