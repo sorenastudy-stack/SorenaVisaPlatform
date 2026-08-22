@@ -4,6 +4,7 @@ import { apiServer, ApiServerError } from '@/lib/apiServer';
 import { ScorecardForm } from '@/components/scorecard/ScorecardForm';
 import { ScorecardHeader } from '@/components/scorecard/ScorecardHeader';
 import { AboutSorenaBrief } from '@/components/scorecard/AboutSorenaBrief';
+import { ReturningScorecardChoice } from '@/components/scorecard/ReturningScorecardChoice';
 
 // PR-SCORECARD-2 — Public scorecard form page.
 //
@@ -20,14 +21,30 @@ interface InitialDraft {
   draftLastSavedAt: string | null;
 }
 
-export default async function ScorecardFormPage() {
+interface ScorecardState {
+  hasDraft: boolean;
+  draftId: string | null;
+  hasCompleted: boolean;
+  latestCompletedSubmissionId: string | null;
+  latestCompletedAt: string | null;
+}
+
+export default async function ScorecardFormPage({
+  searchParams,
+}: {
+  searchParams?: { retake?: string };
+}) {
   let initialDraft: InitialDraft | null = null;
+  let scorecardState: ScorecardState | null = null;
   let isAuthenticated = false;
   try {
     // The draft endpoint is auth-gated, so a success (even null draft) means
     // the caller is signed in; a 401 means an anonymous visitor.
     initialDraft = await apiServer.get<InitialDraft | null>('/scorecard/me/draft');
     isAuthenticated = true;
+    if (!initialDraft) {
+      scorecardState = await apiServer.get<ScorecardState>('/scorecard/me/state');
+    }
   } catch (e) {
     if (e instanceof ApiServerError && e.statusCode === 401) {
       // Anonymous — render the empty form (account created on submit).
@@ -36,6 +53,11 @@ export default async function ScorecardFormPage() {
     }
     // Other errors (e.g. 500) — fall through, treated as anonymous/no draft.
   }
+
+  const showReturningChoice = isAuthenticated
+    && !initialDraft
+    && scorecardState?.hasCompleted === true
+    && searchParams?.retake !== '1';
 
   return (
     <div className="min-h-screen bg-[#FAF8F3]">
@@ -51,7 +73,11 @@ export default async function ScorecardFormPage() {
           </Link>
         </div>
 
-        <ScorecardForm initialDraft={initialDraft} isAuthenticated={isAuthenticated} />
+        {showReturningChoice ? (
+          <ReturningScorecardChoice latestCompletedAt={scorecardState?.latestCompletedAt ?? null} />
+        ) : (
+          <ScorecardForm initialDraft={initialDraft} isAuthenticated={isAuthenticated} />
+        )}
       </div>
     </div>
   );

@@ -121,6 +121,14 @@ export interface ScorecardResultPayload {
   consultationBookedAt: string | null;
 }
 
+export interface ScorecardStatePayload {
+  hasDraft: boolean;
+  draftId: string | null;
+  hasCompleted: boolean;
+  latestCompletedSubmissionId: string | null;
+  latestCompletedAt: string | null;
+}
+
 const STAFF_ROLES = new Set(['OWNER', 'ADMIN', 'SUPER_ADMIN', 'CONSULTANT']);
 
 @Injectable()
@@ -433,7 +441,8 @@ export class ScorecardService {
         });
       }
 
-      // Link submission → lead (1:0..1)
+      // Link this attempt to the canonical Lead. A returning applicant may
+      // have multiple completed submissions referencing the same Lead.
       await tx.scorecardSubmission.update({
         where: { id: created.id },
         data: { leadId: lead.id },
@@ -718,9 +727,32 @@ export class ScorecardService {
 
   // ─── Read endpoints ───────────────────────────────────────────────────
 
+  async getMyState(userId: string): Promise<ScorecardStatePayload> {
+    const [draft, latestCompleted] = await Promise.all([
+      this.prisma.scorecardSubmission.findFirst({
+        where: { userId, isDraft: true },
+        orderBy: { submittedAt: 'desc' },
+        select: { id: true },
+      }),
+      this.prisma.scorecardSubmission.findFirst({
+        where: { userId, isDraft: false },
+        orderBy: { submittedAt: 'desc' },
+        select: { id: true, submittedAt: true },
+      }),
+    ]);
+
+    return {
+      hasDraft: !!draft,
+      draftId: draft?.id ?? null,
+      hasCompleted: !!latestCompleted,
+      latestCompletedSubmissionId: latestCompleted?.id ?? null,
+      latestCompletedAt: latestCompleted?.submittedAt.toISOString() ?? null,
+    };
+  }
+
   async getMyLatestResult(userId: string): Promise<ScorecardResultPayload> {
     const row = await this.prisma.scorecardSubmission.findFirst({
-      where: { userId },
+      where: { userId, isDraft: false },
       orderBy: { submittedAt: 'desc' },
     });
     if (!row) throw new NotFoundException('No scorecard submissions for this user yet.');
@@ -729,7 +761,7 @@ export class ScorecardService {
 
   async getMyHistory(userId: string): Promise<ScorecardResultPayload[]> {
     const rows = await this.prisma.scorecardSubmission.findMany({
-      where: { userId },
+      where: { userId, isDraft: false },
       orderBy: { submittedAt: 'desc' },
     });
     return rows.map((r) => this.hydrate(r));

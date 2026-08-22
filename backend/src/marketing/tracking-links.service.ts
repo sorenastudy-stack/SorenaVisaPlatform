@@ -290,7 +290,12 @@ export class TrackingLinksService {
       this.prisma.lead.findMany({
         where: { trackingLinkId: link.id, createdAt: { gte: since } },
         select: {
-          scorecardSubmission: { select: { band: true, isDraft: true } },
+          scorecardSubmissions: {
+            where: { isDraft: false },
+            orderBy: { submittedAt: 'desc' },
+            take: 1,
+            select: { band: true },
+          },
         },
       }),
     ]);
@@ -300,8 +305,8 @@ export class TrackingLinksService {
     };
     let scorecardCompletions = 0;
     for (const lead of attributedLeads) {
-      const sub = lead.scorecardSubmission;
-      if (sub && !sub.isDraft) {
+      const sub = lead.scorecardSubmissions[0];
+      if (sub) {
         scorecardCompletions++;
         bandDistribution[sub.band] = (bandDistribution[sub.band] ?? 0) + 1;
       }

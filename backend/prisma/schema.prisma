@@ -1084,11 +1084,10 @@ model Lead {
   events              CrmEvent[]
   managerNotesLogs    ManagerNotesLog[]
   statusHistory       LeadStatusHistory[]
-  // PR-SCORECARD-1: the scorecard submission this Lead was auto-
-  // created from. Optional (1:0..1) because legacy Leads pre-date
-  // the scorecard. The inverse on ScorecardSubmission.leadId is
-  // @unique so a Lead can only be the result of one submission.
-  scorecardSubmission ScorecardSubmission? @relation("ScorecardLead")
+  // Scorecard submissions linked to this Lead. Legacy Leads can have none;
+  // returning applicants can complete the assessment multiple times while
+  // retaining one canonical CRM Lead and a full attempt history.
+  scorecardSubmissions ScorecardSubmission[] @relation("ScorecardLead")
 
   // PR-SCORECARD-2: attribution relations.
   trackingLink    TrackingLink?   @relation("LeadAttributedLink", fields: [trackingLinkId], references: [id])
@@ -5271,10 +5270,10 @@ model PlatformSetting {
 // answers payload should reproduce the same numbers, but we don't
 // want to re-decrypt + re-score on every staff view.
 //
-// `leadId` 1:0..1 — set after the auto-created Lead row lands in the
-// CRM in the same transaction as the submission. The unique constraint
-// enforces "one Lead per submission" so re-submissions don't pile
-// onto the same Lead row.
+// `leadId` is set after the canonical Lead row is created or reused in the
+// same transaction as the submission. Multiple completed submissions may
+// reference the same Lead so returning applicants retain one CRM identity
+// while each assessment attempt remains independently auditable.
 enum ScorecardBand {
   BAND_1
   BAND_2
@@ -5340,7 +5339,7 @@ model ScorecardSubmission {
   draftLastSavedAt     DateTime?
   // Lifecycle
   submittedAt          DateTime            @default(now())
-  leadId               String?             @unique
+  leadId               String?
   consultationBookedAt DateTime?
   // Audit (request-side context; the user-side audit row is in audit_logs)
   ipAddress            String?             @db.VarChar(64)
@@ -5364,6 +5363,7 @@ model ScorecardSubmission {
   @@index([userId, submittedAt])
   @@index([band, submittedAt])
   @@index([executionEligible])
+  @@index([leadId])
   // PR-SCORECARD-2: fast "get my open draft" lookup. Composite
   // (userId, isDraft) keeps the index narrow — most rows are
   // submitted (false), only the in-flight draft per user is true.
