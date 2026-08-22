@@ -605,3 +605,109 @@ describe('ScorecardService — submitScorecard', () => {
     expect(scorecardSubmissionUpdate.mock.calls[0][0].data.utmSource).toBe('google');
   });
 });
+
+
+// ─── PR-SCORECARD-SUBMIT-RACE-FIX ──────────────────────────────────────────
+//
+// The race PR-SCORECARD-ATTR-1's Lead reuse made reachable: two submits for
+// one contact resolve to the SAME Lead, each creates its own submission row,
+// and `ScorecardSubmission.leadId` is @unique — so the second loses and used
+// to reach the visitor as "An unexpected error occurred", for a submission
+// that had already succeeded.
+//
+// These tests exist mostly to hold the BLAST RADIUS down. Recovering from an
+// error is one line away from swallowing errors that deserve to be seen, so
+// three of the five assert that something still throws.
+
+describe('ScorecardService.submitScorecard — concurrent-submit race recovery', () => {
+  const ANSWERS = { full_name: 'Test User', email: 'test@example.com' };
+  const leadIdRace = () =>
+    Object.assign(new Error('Unique constraint failed on the fields: (`leadId`)'), {
+      code: 'P2002',
+      meta: { target: ['leadId'] },
+    });
+
+  const submit = (service: any) =>
+    service.submitScorecard('user-1', ANSWERS, {}, ACTOR, {});
+
+  it('returns the submission that already committed, instead of crashing', async () => {
+    const { service, prisma } = makeService({ existingDraft: null });
+    const committed = {
+      id: 'sub-already-committed',
+      leadId: 'lead-already-committed',
+      submittedAt: new Date('2026-08-21T05:09:19.000Z'),
+      consultationBookedAt: null,
+    };
+    prisma.$transaction = jest.fn().mockRejectedValue(leadIdRace());
+    // findFirst is shared between the pre-transaction draft check and the
+    // recovery lookup, so the two calls are sequenced rather than stubbed once.
+    prisma.scorecardSubmission.findFirst
+      .mockReset()
+      .mockResolvedValueOnce(null)        // draft check
+      .mockResolvedValueOnce(committed);  // recovery lookup
+
+    const payload = await submit(service);
+
+    // The visitor's real submission — not a fabricated new one.
+    expect(payload.submissionId).toBe('sub-already-committed');
+    expect(payload.leadId).toBe('lead-already-committed');
+    expect(prisma.scorecardSubmission.findFirst).toHaveBeenCalledTimes(2);
+    expect(prisma.scorecardSubmission.findFirst.mock.calls[1][0]).toMatchObject({
+      where: { userId: 'user-1', isDraft: false },   // a real submission, not a draft
+      orderBy: { submittedAt: 'desc' },              // the most recent one
+    });
+  });
+
+  it('rethrows when there is no committed submission to stand in for', async () => {
+    // Nothing succeeded, so there is nothing to recover — reporting success
+    // here would lose the submission silently.
+    const { service, prisma } = makeService({ existingDraft: null });
+    const race = leadIdRace();
+    prisma.$transaction = jest.fn().mockRejectedValue(race);
+    prisma.scorecardSubmission.findFirst
+      .mockReset()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    await expect(submit(service)).rejects.toBe(race);
+  });
+
+  it('rethrows a P2002 on a different column — the match is on leadId, not on "duplicate"', async () => {
+    const { service, prisma } = makeService({ existingDraft: null });
+    const other = Object.assign(new Error('Unique constraint failed on the fields: (`email`)'), {
+      code: 'P2002',
+      meta: { target: ['email'] },
+    });
+    prisma.$transaction = jest.fn().mockRejectedValue(other);
+
+    await expect(submit(service)).rejects.toBe(other);
+    // Not even looked for a recovery — only the pre-transaction draft check ran.
+    expect(prisma.scorecardSubmission.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('rethrows an unrelated failure such as the database going away', async () => {
+    const { service, prisma } = makeService({ existingDraft: null });
+    const outage = new Error('Connection terminated unexpectedly');
+    prisma.$transaction = jest.fn().mockRejectedValue(outage);
+
+    await expect(submit(service)).rejects.toBe(outage);
+    expect(prisma.scorecardSubmission.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves an ordinary submit completely untouched', async () => {
+    const { service, prisma, scorecardSubmissionCreate, leadCreate } =
+      makeService({ existingDraft: null });
+
+    const payload = await submit(service);
+
+    expect(payload.submissionId).toBe('sub-new');
+    expect(payload.leadId).toBe('lead-1');
+    expect(scorecardSubmissionCreate).toHaveBeenCalledTimes(1);
+    expect(leadCreate).toHaveBeenCalledTimes(1);
+    // The recovery path was never entered, because nothing threw.
+    expect(prisma.scorecardSubmission.findFirst).toHaveBeenCalledTimes(1);
+    // Previously hardcoded null; now sourced from the row, and must not have
+    // become undefined in the process.
+    expect(payload.consultationBookedAt).toBeNull();
+  });
+});
