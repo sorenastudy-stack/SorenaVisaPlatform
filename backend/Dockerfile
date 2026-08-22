@@ -37,6 +37,10 @@ COPY prisma ./prisma/
 RUN npm ci --only=production
 RUN npx prisma generate
 COPY --from=builder /app/dist ./dist
+# Operational maintenance tooling is excluded from the compiled Nest `dist/`
+# tree by design. Copy this single reviewed, dependency-free production script
+# explicitly; do not copy the whole development scripts directory.
+COPY scripts/backfill-lead-attribution.js ./scripts/backfill-lead-attribution.js
 # Runtime static assets — engagement-letter PDF + Caladea TTF that
 # stampLiaIdentity() reads at every contract send, plus any other
 # fixtures under assets/. Without this COPY the container starts
