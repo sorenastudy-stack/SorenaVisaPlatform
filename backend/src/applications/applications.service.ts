@@ -32,8 +32,12 @@ export class ApplicationsService {
       );
     }
 
-    // Validate case exists
-    await this.ensureCaseExists(dto.caseId);
+    // Resolve the canonical Lead so the conversion event is attributable.
+    const caseRecord = await this.prisma.case.findUnique({
+      where: { id: dto.caseId },
+      select: { leadId: true },
+    });
+    if (!caseRecord) throw new NotFoundException('Case not found');
 
     // Validate provider matches programme
     if (programme.providerId !== dto.providerId) {
@@ -44,11 +48,11 @@ export class ApplicationsService {
       data: dto,
     });
 
-    await this.eventsService.emit(
-      'APPLICATION_SUBMITTED',
+    await this.eventsService.emitOnce(
+      'APPLICATION_STARTED',
       'APPLICATION',
       application.id,
-      null,
+      caseRecord.leadId,
       EventSource.USER,
       null,
       { caseId: dto.caseId, programmeId: dto.programmeId },
