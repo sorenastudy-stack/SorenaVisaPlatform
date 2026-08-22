@@ -37,4 +37,25 @@ export class EventsService {
       },
     });
   }
+
+  /** Emit one lifecycle milestone per stable domain entity. */
+  async emitOnce(
+    eventType: string,
+    entityType: string,
+    entityId: string,
+    leadId: string | null,
+    triggerSource: string,
+    actorId: string | null,
+    payloadJson?: Record<string, any>,
+    prismaClient?: Prisma.TransactionClient,
+  ) {
+    const client = prismaClient ?? this.prisma;
+    const existing = await client.crmEvent.findFirst({
+      where: { eventType, entityType, entityId },
+      select: { id: true },
+    });
+    if (existing) return existing;
+    return this.emit(eventType, entityType, entityId, leadId, triggerSource,
+      actorId, payloadJson, prismaClient);
+  }
 }
