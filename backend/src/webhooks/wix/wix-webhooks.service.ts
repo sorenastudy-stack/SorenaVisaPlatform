@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { generateClientId } from '../../leads/client-id';
+import { normalizeEmail } from '../../common/normalize-email';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -122,21 +123,26 @@ export class WixWebhooksService {
       // Contact upsert. Find by email (unique) — mirrors the
       // PublicService.submitIntakeForm path so the lead-to-contact
       // attachment is consistent across both intake sources.
-      const contact = await tx.contact.upsert({
-        where: { email: norm.email! },
-        update: {
+      const email = normalizeEmail(norm.email)!;
+      let contact = await tx.contact.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
+      });
+      contact = contact
+        ? await tx.contact.update({
+          where: { id: contact.id },
+          data: {
           fullName:           norm.fullName!,
           phone:              phone ?? undefined,
           countryOfResidence: countryOfResidence ?? undefined,
-        },
-        create: {
+          },
+        })
+        : await tx.contact.create({ data: {
           fullName:           norm.fullName!,
-          email:              norm.email!,
+          email,
           phone:              phone ?? undefined,
           countryOfResidence: countryOfResidence ?? undefined,
           preferredLanguage:  'en',
-        },
-      });
+        } });
 
       // PR-CLIENT-ID — permanent human-readable id (country from the Wix-
       // provided residence/raw name, falling back to the contact).
