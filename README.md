@@ -4,6 +4,14 @@ A production-ready lead acquisition system for Sorena Visa NZ, handling visitor 
 
 ---
 
+## Ecosystem context
+
+This repository contains the Sorena Study platform. The public Sorena Visa marketing website is maintained separately in [sorenastudy-stack/sorena-visa-website](https://github.com/sorenastudy-stack/sorena-visa-website).
+
+Before assessing website readiness, SEO, analytics, public conversion journeys or website-to-platform integration, read [the cross-repository context](docs/CROSS_REPO_WEBSITE_PLATFORM_CONTEXT.md) and inspect both repositories. The `frontend/` directory in this repository is the authenticated Sorena Study application, not the public marketing website.
+
+---
+
 ## Project Structure
 
 ```
