@@ -25,6 +25,7 @@ import {
 import { BookingConfirmationService } from './booking-confirmation.service';
 import { WalletService } from '../wallet/wallet.service';
 import { BookingEligibilityService } from './booking-eligibility.service';
+import { EventsService } from '../events/events.service';
 
 // PR-BOOKING-1 — booking service (Stage 1+2: data loading + slot engine +
 // commit guard). No controller/endpoints yet — that's the next stage.
@@ -91,6 +92,7 @@ export class BookingService {
     private readonly bookingConfirmation: BookingConfirmationService,
     private readonly wallet: WalletService,
     private readonly eligibility: BookingEligibilityService,
+    private readonly events: EventsService,
   ) {}
 
   /**
@@ -547,6 +549,10 @@ export class BookingService {
 
       // Best-effort finalize (Jitsi link + email), same as the card path.
       await this.bookingConfirmation.onConfirmed(consultationId).catch(() => undefined);
+      await this.events.emitOnce(
+        'BOOKING_CONFIRMED', 'CONSULTATION', consultationId, hold.leadId,
+        'SYSTEM', userId, { paymentMethod: 'WALLET', type: hold.type },
+      );
       this.logger.log(`Booking ${consultationId} confirmed via wallet credit (${priceCents}c) for user ${userId}`);
       return { status: 'CONFIRMED', paidWith: 'WALLET', newBalanceCents: result.newBalanceCents };
     } catch (e) {
@@ -640,6 +646,10 @@ export class BookingService {
         // PR-BOOKING-5 — finalize (Jitsi link + confirmation email).
         // Best-effort; never let it unwind the confirmed free booking.
         await this.bookingConfirmation.onConfirmed(committed.id).catch(() => undefined);
+        await this.events.emitOnce(
+          'BOOKING_CONFIRMED', 'CONSULTATION', committed.id, leadId,
+          'SYSTEM', params.userId, { paymentMethod: 'FREE', type: sessionType },
+        );
         return {
           id: committed.id,
           scheduledAt: committed.scheduledAt,
