@@ -186,7 +186,12 @@ export class AffiliateAgentsService {
         },
         attributedLeads: {
           select: {
-            scorecardSubmission: { select: { band: true } },
+            scorecardSubmissions: {
+              where: { isDraft: false },
+              orderBy: { submittedAt: 'desc' },
+              take: 1,
+              select: { band: true },
+            },
           },
         },
       },
@@ -197,7 +202,7 @@ export class AffiliateAgentsService {
       BAND_1: 0, BAND_2: 0, BAND_3: 0, BAND_4: 0, BAND_5: 0, BAND_6: 0,
     };
     for (const lead of row.attributedLeads) {
-      const band = lead.scorecardSubmission?.band;
+      const band = lead.scorecardSubmissions[0]?.band;
       if (band) bandDistribution[band] = (bandDistribution[band] ?? 0) + 1;
     }
 

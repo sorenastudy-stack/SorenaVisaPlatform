@@ -110,6 +110,8 @@ interface LeadFixture {
 
 function makeService(opts: {
   existingDraft?: DraftFixture | null;
+  scorecardSubmissionFindFirst?: jest.Mock;
+  scorecardSubmissionFindMany?: jest.Mock;
   trackingLink?: Record<string, unknown> | null;
   affiliateAgent?: Record<string, unknown> | null;
   existingAssessmentCompletedEvent?: { id: string } | null;
@@ -121,7 +123,10 @@ function makeService(opts: {
   const userFindUnique = jest.fn().mockResolvedValue({
     id: 'user-1', role: 'LEAD', name: 'Test User', email: 'test@example.com',
   });
-  const scorecardSubmissionFindFirst = jest.fn().mockResolvedValue(opts.existingDraft ?? null);
+  const scorecardSubmissionFindFirst = opts.scorecardSubmissionFindFirst
+    ?? jest.fn().mockResolvedValue(opts.existingDraft ?? null);
+  const scorecardSubmissionFindMany = opts.scorecardSubmissionFindMany
+    ?? jest.fn().mockResolvedValue([]);
   const scorecardSubmissionCreate = jest.fn(async ({ data }: any) => ({ id: 'sub-new', ...data }));
   const scorecardSubmissionUpdate = jest.fn(async ({ data }: any) => ({ id: 'sub-existing', ...data }));
   const scorecardSubmissionUpdateMany = opts.scorecardSubmissionUpdateMany
@@ -143,6 +148,7 @@ function makeService(opts: {
   const txDelegates = {
     scorecardSubmission: {
       findFirst: scorecardSubmissionFindFirst,
+      findMany: scorecardSubmissionFindMany,
       create: scorecardSubmissionCreate,
       update: scorecardSubmissionUpdate,
       updateMany: scorecardSubmissionUpdateMany,
@@ -158,6 +164,7 @@ function makeService(opts: {
     user: { findUnique: userFindUnique, findFirst: jest.fn() },
     scorecardSubmission: {
       findFirst: scorecardSubmissionFindFirst,
+      findMany: scorecardSubmissionFindMany,
       create: scorecardSubmissionCreate,
       update: scorecardSubmissionUpdate,
       updateMany: scorecardSubmissionUpdateMany,
@@ -182,6 +189,7 @@ function makeService(opts: {
 
   return {
     service, prisma: prismaMock, events: eventsMock,
+    scorecardSubmissionFindFirst, scorecardSubmissionFindMany,
     scorecardSubmissionCreate, scorecardSubmissionUpdate, scorecardSubmissionUpdateMany,
     contactFindFirst, contactCreate, leadCreate, leadFindFirst, leadUpdate, auditLogCreate,
     crmEventFindFirst, trackingLinkFindUnique, affiliateAgentFindUnique,
@@ -445,6 +453,38 @@ describe('ScorecardService — submitScorecard', () => {
     expect(payload.leadId).toBe('lead-from-webinar');
   });
 
+  it('REPEAT SUBMISSION: creates a new attempt and links it to the same canonical Lead', async () => {
+    const { service, scorecardSubmissionCreate, scorecardSubmissionUpdate, leadCreate, leadUpdate } = makeService({
+      existingDraft: null,
+      existingContact: { id: 'contact-1' },
+      existingLead: {
+        id: 'lead-existing',
+        contactId: 'contact-1',
+        leadStatus: 'SCORING_DONE',
+        sourceChannel: 'SCORECARD',
+      },
+    });
+
+    const payload = await service.submitScorecard(
+      'user-1',
+      { full_name: 'Test User', email: 'test@example.com' },
+      {},
+      ACTOR,
+    );
+
+    expect(scorecardSubmissionCreate).toHaveBeenCalledTimes(1);
+    expect(leadCreate).not.toHaveBeenCalled();
+    expect(leadUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'lead-existing' },
+    }));
+    expect(scorecardSubmissionUpdate).toHaveBeenCalledWith({
+      where: { id: 'sub-new' },
+      data: { leadId: 'lead-existing' },
+    });
+    expect(payload.submissionId).toBe('sub-new');
+    expect(payload.leadId).toBe('lead-existing');
+  });
+
   it('normalises the Scorecard email and matches an existing Webinar Contact case-insensitively', async () => {
     const { service, contactFindFirst, contactCreate, leadCreate } = makeService({
       existingContact: { id: 'contact-1' },
@@ -606,7 +646,6 @@ describe('ScorecardService — submitScorecard', () => {
   });
 });
 
-
 // ─── PR-SCORECARD-SUBMIT-RACE-FIX ──────────────────────────────────────────
 //
 // The race PR-SCORECARD-ATTR-1's Lead reuse made reachable: two submits for
@@ -709,5 +748,61 @@ describe('ScorecardService.submitScorecard — concurrent-submit race recovery',
     // Previously hardcoded null; now sourced from the row, and must not have
     // become undefined in the process.
     expect(payload.consultationBookedAt).toBeNull();
+  });
+});
+
+describe('ScorecardService — returning-user reads', () => {
+  it('latest result excludes open drafts', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const { service } = makeService({ scorecardSubmissionFindFirst: findFirst });
+
+    await expect(service.getMyLatestResult('user-1')).rejects.toThrow(
+      'No scorecard submissions for this user yet.',
+    );
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-1', isDraft: false },
+      orderBy: { submittedAt: 'desc' },
+    });
+  });
+
+  it('history excludes open drafts', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const { service } = makeService({ scorecardSubmissionFindMany: findMany });
+
+    await expect(service.getMyHistory('user-1')).resolves.toEqual([]);
+    expect(findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', isDraft: false },
+      orderBy: { submittedAt: 'desc' },
+    });
+  });
+
+  it('returns a PII-free state summary for the entry page', async () => {
+    const findFirst = jest.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'sub-complete',
+        submittedAt: new Date('2026-08-21T05:26:38.804Z'),
+      });
+    const { service } = makeService({ scorecardSubmissionFindFirst: findFirst });
+
+    await expect(service.getMyState('user-1')).resolves.toEqual({
+      hasDraft: false,
+      draftId: null,
+      hasCompleted: true,
+      latestCompletedSubmissionId: 'sub-complete',
+      latestCompletedAt: '2026-08-21T05:26:38.804Z',
+    });
+    expect(findFirst.mock.calls).toEqual([
+      [{
+        where: { userId: 'user-1', isDraft: true },
+        orderBy: { submittedAt: 'desc' },
+        select: { id: true },
+      }],
+      [{
+        where: { userId: 'user-1', isDraft: false },
+        orderBy: { submittedAt: 'desc' },
+        select: { id: true, submittedAt: true },
+      }],
+    ]);
   });
 });

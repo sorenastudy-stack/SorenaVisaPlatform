@@ -75,6 +75,15 @@ export class ScorecardController {
     return this.service.getDraft(actor.userId);
   }
 
+  // GET /scorecard/me/state — a PII-free returning-user summary used by the
+  // form entry page to offer resume/view-latest/start-new choices explicitly.
+  @Get('scorecard/me/state')
+  @Roles('LEAD', 'STUDENT', 'OWNER', 'ADMIN', 'SUPER_ADMIN')
+  myState(@Req() req: any) {
+    const actor = this.viewer(req);
+    return this.service.getMyState(actor.userId);
+  }
+
   // GET /scorecard/me/latest
   @Get('scorecard/me/latest')
   @Roles('LEAD', 'STUDENT', 'OWNER', 'ADMIN', 'SUPER_ADMIN')

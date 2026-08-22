@@ -141,10 +141,10 @@ export class StaffLeadsService {
     if (filters.band && filters.band.trim().length > 0) {
       const band = filters.band.trim().toUpperCase();
       if (band === 'NONE') {
-        where.scorecardSubmission = null;
+        where.scorecardSubmissions = { none: { isDraft: false } };
       } else if ((Object.values(ScorecardBand) as string[]).includes(band)) {
-        where.scorecardSubmission = {
-          is: { band: band as ScorecardBand, isDraft: false },
+        where.scorecardSubmissions = {
+          some: { band: band as ScorecardBand, isDraft: false },
         };
       }
     }
@@ -187,7 +187,10 @@ export class StaffLeadsService {
         include: {
           contact:        { select: { fullName: true, email: true, phone: true, countryOfResidence: true } },
           owner:          { select: { id: true, name: true } },
-          scorecardSubmission: {
+          scorecardSubmissions: {
+            where: { isDraft: false },
+            orderBy: { submittedAt: 'desc' },
+            take: 1,
             select: { id: true, band: true, totalScore: true, submittedAt: true, isDraft: true },
           },
           attributedAgent: { select: { fullName: true } },
@@ -216,7 +219,11 @@ export class StaffLeadsService {
       include: {
         contact:        true,
         owner:          { select: { id: true, name: true, role: true } },
-        scorecardSubmission: true,
+        scorecardSubmissions: {
+          where: { isDraft: false },
+          orderBy: { submittedAt: 'desc' },
+          take: 1,
+        },
         attributedAgent: { select: { id: true, fullName: true } },
         trackingLink:   { select: { id: true, shortCode: true, channel: true, campaignLabel: true } },
         wixPayments:    {
@@ -280,6 +287,8 @@ export class StaffLeadsService {
       .filter((p) => p.currency === 'NZD' && p.status === 'RECEIVED')
       .reduce((acc, p) => acc + Number(p.amount), 0);
 
+    const latestScorecard = lead.scorecardSubmissions[0] ?? null;
+
     return {
       id: lead.id,
       clientId: lead.clientId,
@@ -297,7 +306,7 @@ export class StaffLeadsService {
 
       // PR-CRM-CASE-CREATE — gate inputs for the Create-Case action
       // card. Sourced from the Lead row's own columns (NOT from
-      // scorecardSubmission — that's a snapshot at submission time and
+      // a ScorecardSubmission — that's a snapshot at submission time and
       // doesn't reflect override-panel changes). CasesService.createCase
       // gates on `!lead.executionAllowed || lead.hardStopFlag` so the
       // frontend can pre-check identically and avoid a guaranteed-400
@@ -322,15 +331,15 @@ export class StaffLeadsService {
           }
         : null,
 
-      scorecard: lead.scorecardSubmission && !lead.scorecardSubmission.isDraft
+      scorecard: latestScorecard
         ? {
-            submissionId:        lead.scorecardSubmission.id,
-            band:                lead.scorecardSubmission.band,
-            totalScore:          lead.scorecardSubmission.totalScore,
-            submittedAt:         lead.scorecardSubmission.submittedAt,
-            executionEligible:   lead.scorecardSubmission.executionEligible,
-            hardStopsCount: Array.isArray(lead.scorecardSubmission.hardStops)
-              ? lead.scorecardSubmission.hardStops.length
+            submissionId:        latestScorecard.id,
+            band:                latestScorecard.band,
+            totalScore:          latestScorecard.totalScore,
+            submittedAt:         latestScorecard.submittedAt,
+            executionEligible:   latestScorecard.executionEligible,
+            hardStopsCount: Array.isArray(latestScorecard.hardStops)
+              ? latestScorecard.hardStops.length
               : 0,
           }
         : null,
@@ -522,19 +531,17 @@ export class StaffLeadsService {
       countryOfResidence: string | null;
     };
     owner: { id: string; name: string } | null;
-    scorecardSubmission: {
+    scorecardSubmissions: Array<{
       band: ScorecardBand;
       totalScore: number;
       submittedAt: Date;
       isDraft: boolean;
-    } | null;
+    }>;
     attributedAgent: { fullName: string } | null;
     trackingLink: { channel: string } | null;
     wixPayments: { amount: Prisma.Decimal; currency: string; status: string }[];
   }): LeadListRow {
-    const submitted = r.scorecardSubmission && !r.scorecardSubmission.isDraft
-      ? r.scorecardSubmission
-      : null;
+    const submitted = r.scorecardSubmissions[0] ?? null;
 
     const paid = r.wixPayments
       .filter((p) => p.currency === 'NZD' && p.status === 'RECEIVED')
