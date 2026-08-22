@@ -38,7 +38,11 @@ const stripeService: any = {
   },
 };
 
-const svc = new PaymentsService(stripeService, prisma as any);
+const svc = new PaymentsService(
+  stripeService,
+  prisma as any,
+  { emitOnce: jest.fn().mockResolvedValue(undefined) } as any,
+);
 
 const tag = () => 'TPP-' + randomBytes(4).toString('hex');
 
