@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RecordManualPaymentDto } from './dto/record-manual-payment.dto';
 import { FEE_CURRENCY, GST_RATE, calculateFeeBreakdown, getFeePriceCents, isFeeType } from './fee-config';
 import { readPayerFromMetadata, type ThirdPartyPayer } from './third-party-payer';
+import { EventsService } from '../events/events.service';
 
 // PR-PHASE40 — this table used to live here with its own numbers (GAP_CLOSING
 // 30, LIA_CONSULTATION 150, both NZD) while booking priced the same two
@@ -37,6 +38,7 @@ export class PaymentsService {
   constructor(
     private stripeService: StripeService,
     private prisma: PrismaService,
+    private events: EventsService,
   ) {}
 
   async createConsultationPaymentLink(
@@ -77,6 +79,12 @@ export class PaymentsService {
       caseId,
       payer,
     );
+    if (consultationType === 'ACCOUNT_OPENING') {
+      await this.events.emitOnce(
+        'ACCOUNT_OPENING_INITIATED', 'LEAD', leadId, leadId, 'USER', null,
+        { caseId: caseId ?? null, paymentLinkUrl: paymentLink.url },
+      );
+    }
     return { url: paymentLink.url, free: false, consultationType, breakdown };
   }
 
