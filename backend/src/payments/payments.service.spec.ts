@@ -78,9 +78,10 @@ function makeService(opts: {
     createConsultationPaymentLink: jest.fn(),
   };
 
-  const service = new PaymentsService(stripeMock, prismaMock);
+  const eventsMock: any = { emitOnce: jest.fn().mockResolvedValue(undefined) };
+  const service = new PaymentsService(stripeMock, prismaMock, eventsMock);
   return {
-    service, prisma: prismaMock, stripe: stripeMock,
+    service, prisma: prismaMock, stripe: stripeMock, events: eventsMock,
     findMany, caseFindUnique, docFindUnique, payFindUnique, userFindMany,
     paymentCreate, paymentUpdate, auditCreate,
   };
@@ -506,6 +507,30 @@ describe('PaymentsService.recordManualPayment', () => {
 // ─── createConsultationLinkForCase (unchanged from Phase 6) ─────────────
 
 describe('PaymentsService.createConsultationLinkForCase', () => {
+  it('emits one canonical ACCOUNT_OPENING_INITIATED conversion event', async () => {
+    const { service, stripe, events } = makeService({
+      caseRow: { id: 'case-open', leadId: 'lead-open' },
+    });
+    stripe.createConsultationPaymentLink.mockResolvedValue({
+      url: 'https://buy.stripe.com/account_opening',
+    });
+
+    await service.createConsultationLinkForCase('case-open', 'ACCOUNT_OPENING');
+
+    expect(events.emitOnce).toHaveBeenCalledWith(
+      'ACCOUNT_OPENING_INITIATED',
+      'LEAD',
+      'lead-open',
+      'lead-open',
+      'USER',
+      null,
+      {
+        caseId: 'case-open',
+        paymentLinkUrl: 'https://buy.stripe.com/account_opening',
+      },
+    );
+  });
+
   it('resolves leadId from caseId and delegates to stripe with caseId as the 5th arg', async () => {
     const { service, stripe, caseFindUnique } = makeService({
       caseRow: { id: 'case-99', leadId: 'lead-from-case' },
