@@ -23,7 +23,11 @@ export class WhatsappService {
 
   async handleInboundMessage(body: any, headers: any): Promise<void> {
     try {
-      // Verify webhook signature (optional for demo)
+      // PR-WHATSAPP-SEC-1: signature verification now happens BEFORE this
+      // method is reached — WhatsappSignatureGuard on the controller route
+      // rejects any request whose X-Hub-Signature-256 doesn't match
+      // HMAC-SHA256(WHATSAPP_APP_SECRET, raw body). This method can trust
+      // that `body` genuinely came from Meta.
       const entries = body.entry || [];
       for (const entry of entries) {
         const changes = entry.changes || [];
