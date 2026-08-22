@@ -232,7 +232,11 @@ export class ScorecardService {
     // are tolerated on read by `gatesToArray`.
     const gateRowsForStorage = ScorecardService.gatesToArray(result.execution.gates);
 
-    const submission = await this.prisma.$transaction(async (tx) => {
+    // PR-SCORECARD-SUBMIT-RACE-FIX: a duplicate/concurrent submit for this
+    // user recovers instead of crashing with a raw, unhandled "leadId"
+    // unique-constraint error — see runSubmitScorecardTransaction below.
+    const submission = await this.runSubmitScorecardTransaction(userId, () =>
+      this.prisma.$transaction(async (tx) => {
       const submissionData = {
         userId,
         answersEncrypted: answersEncrypted as never,
@@ -517,8 +521,17 @@ export class ScorecardService {
         );
       }
 
-      return { id: created.id, leadId: lead.id, submittedAt: created.submittedAt };
-    });
+      return {
+        id: created.id,
+        leadId: lead.id,
+        submittedAt: created.submittedAt,
+        // `?? null` because the draft-update branch selects only the columns
+        // it wrote — the caller previously hardcoded null here, and this must
+        // not start emitting `undefined` in its place.
+        consultationBookedAt: created.consultationBookedAt ?? null,
+      };
+      }),
+    );
 
     return this.toPayload({
       submissionId: submission.id,
@@ -526,9 +539,80 @@ export class ScorecardService {
       routing,
       submittedAt: submission.submittedAt,
       leadId: submission.leadId,
-      consultationBookedAt: null,
+      consultationBookedAt: submission.consultationBookedAt,
       includeAnswers: true,
     });
+  }
+
+  /**
+   * PR-SCORECARD-SUBMIT-RACE-FIX — recover from a duplicate submit instead of
+   * crashing.
+   *
+   * PR-SCORECARD-ATTR-1 made the submit transaction REUSE an existing Lead for
+   * a contact (`tx.lead.findFirst({ where: { contactId } })`) rather than
+   * always creating a fresh one — correct, and the reason a Webinar registrant
+   * and their later Scorecard end up on one profile. The consequence is that
+   * two near-simultaneous submits for the same person legitimately resolve to
+   * the SAME Lead, while each still creates its own ScorecardSubmission row and
+   * tries to claim that Lead as its own `leadId`. That column is `@unique`, so
+   * exactly one of them can win; the loser used to surface to the visitor as
+   * "An unexpected error occurred" — for a submission that had in fact just
+   * succeeded a moment earlier. A double-click on "Submit assessment" is the
+   * likely trigger.
+   *
+   * So the losing request is not a failure to report, it is a duplicate of one
+   * that already worked: look up the committed submission and return it.
+   *
+   * Deliberately narrow. Only P2002 naming `leadId` recovers; every other
+   * error — including a P2002 on some other column, or a genuine outage —
+   * rethrows untouched, because masking those would turn a visible failure
+   * into silent data loss. And if the lookup finds nothing, there was no
+   * earlier success to stand in for, so the original error rethrows too.
+   */
+  private async runSubmitScorecardTransaction(
+    userId: string,
+    run: () => Promise<{
+      id: string;
+      leadId: string;
+      submittedAt: Date;
+      consultationBookedAt: Date | null;
+    }>,
+  ): Promise<{
+    id: string;
+    leadId: string | null;
+    submittedAt: Date;
+    consultationBookedAt: Date | null;
+  }> {
+    try {
+      return await run();
+    } catch (e) {
+      // Duck-typed rather than `instanceof Prisma.PrismaClientKnownRequestError`:
+      // that class is not reliably exported across generated-client versions,
+      // and a failed instanceof here would silently disable the recovery. The
+      // shape (`code` + `meta.target`) is stable regardless.
+      const err = e as { code?: string; meta?: { target?: string[] | string } };
+      const isLeadIdRace =
+        err?.code === 'P2002' && !!err.meta?.target?.toString().includes('leadId');
+      if (!isLeadIdRace) throw e;
+
+      const recovered = await this.prisma.scorecardSubmission.findFirst({
+        where: { userId, isDraft: false },
+        orderBy: { submittedAt: 'desc' },
+      });
+      if (!recovered) throw e;
+
+      // IDs only — never answers, email or any other personal data.
+      this.logger.warn(
+        `submitScorecard: recovered from a concurrent-submit race for user ${userId} — ` +
+          `returning the already-committed submission ${recovered.id} instead of failing.`,
+      );
+      return {
+        id: recovered.id,
+        leadId: recovered.leadId,
+        submittedAt: recovered.submittedAt,
+        consultationBookedAt: recovered.consultationBookedAt,
+      };
+    }
   }
 
   // ─── Path A: public (anonymous) submit — account created on submit ──────
