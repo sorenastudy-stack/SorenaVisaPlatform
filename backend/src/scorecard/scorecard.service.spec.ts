@@ -447,6 +447,8 @@ describe('ScorecardService — submitScorecard', () => {
     expect(updateData.utmSource).toBe('google');
     expect(updateData.utmMedium).toBe('cpc');
     expect(updateData.utmCampaign).toBe('launch');
+    expect(updateData.firstTouchSource).toBe('google');
+    expect(updateData.lastTouchSource).toBe('google');
     // Scores always reflect the latest attempt.
     expect(updateData.readinessScore).toBe(FAKE_SCORE_RESULT.total);
 
@@ -605,6 +607,8 @@ describe('ScorecardService — submitScorecard', () => {
     expect(leadData.utmSource).toBe('meta');
     expect(leadData.utmMedium).toBe('paid-social');
     expect(leadData.utmCampaign).toBe('first-touch');
+    expect(leadData.firstTouchSource).toBe('meta');
+    expect(leadData.lastTouchSource).toBe('meta');
   });
 
   it('FIRST-TOUCH PRESERVATION: draft\'s stored attribution wins even when the final submit carries a DIFFERENT value (not just none)', async () => {

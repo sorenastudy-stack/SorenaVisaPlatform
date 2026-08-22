@@ -395,6 +395,11 @@ export class ScorecardService {
             utmSource:         existingLead.utmSource          ?? finalUtm.utmSource,
             utmMedium:         existingLead.utmMedium          ?? finalUtm.utmMedium,
             utmCampaign:       existingLead.utmCampaign        ?? finalUtm.utmCampaign,
+            firstTouchSource:  existingLead.firstTouchSource   ?? finalUtm.utmSource
+              ?? existingLead.sourceChannel ?? resolvedAttribution.sourceChannel,
+            // Last touch is intentionally mutable. It records the latest
+            // conversion surface while sourceChannel and utm* retain origin.
+            lastTouchSource:   finalUtm.utmSource ?? 'SCORECARD',
             targetCountry:     existingLead.targetCountry      ?? sanitizedTargetCountry,
           },
         });
@@ -433,6 +438,8 @@ export class ScorecardService {
             utmSource:         finalUtm.utmSource,
             utmMedium:         finalUtm.utmMedium,
             utmCampaign:       finalUtm.utmCampaign,
+            firstTouchSource:  finalUtm.utmSource ?? resolvedAttribution.sourceChannel,
+            lastTouchSource:   finalUtm.utmSource ?? 'SCORECARD',
             // Country the visitor picked on /start. Client-supplied → whitelisted
             // to the enum-or-null here (single trust boundary). Nullable —
             // deep-links straight to the assessment have none.
@@ -525,6 +532,10 @@ export class ScorecardService {
             leadId: lead.id,
             band: result.band.enumValue,
             totalScore: result.total,
+            utmSource: finalUtm.utmSource,
+            utmMedium: finalUtm.utmMedium,
+            utmCampaign: finalUtm.utmCampaign,
+            landingPage: finalUtm.landingPage,
           },
           tx,
         );

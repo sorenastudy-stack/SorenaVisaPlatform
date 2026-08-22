@@ -12,6 +12,7 @@ import {
   buildWebinarEmailSchedule,
 } from './webinar-email-lifecycle.service';
 import { normalizeEmail } from '../common/normalize-email';
+import { webinarLeadAttribution } from './webinar-attribution';
 
 // PR-WEBINAR-1 — Webinar registration service.
 //
@@ -162,6 +163,7 @@ export class WebinarsService {
     const utmMedium   = pickEnvelopeString(body, ['utmMedium', 'utm_medium']);
     const utmCampaign = pickEnvelopeString(body, ['utmCampaign', 'utm_campaign']);
     const landingPage = pickEnvelopeString(body, ['landingPage', 'landing_page', 'pageUrl']);
+    const incomingAttribution = { utmSource, utmMedium, utmCampaign };
 
     const result = await this.prisma.$transaction(async (tx) => {
       let contact = await tx.contact.findFirst({
@@ -193,6 +195,7 @@ export class WebinarsService {
       });
 
       if (!lead) {
+        const leadAttribution = webinarLeadAttribution(null, incomingAttribution);
         const clientId = await generateClientId(tx, {
           countryOfResidence,
           countryRaw,
@@ -203,6 +206,7 @@ export class WebinarsService {
             clientId,
             contactId: contact.id,
             sourceChannel: 'WEBSITE_WEBINAR',
+            ...leadAttribution,
             // leadStatus omitted — the column already defaults to NEW.
           },
         });
@@ -217,6 +221,14 @@ export class WebinarsService {
           { source: 'WEBSITE_WEBINAR', webinarSlug: webinar.slug },
           tx,
         );
+      } else {
+        // Canonical Lead reuse: preserve its origin and first campaign, but
+        // record this webinar as the latest measurable conversion touch.
+        const leadAttribution = webinarLeadAttribution(lead, incomingAttribution);
+        lead = await tx.lead.update({
+          where: { id: lead.id },
+          data: leadAttribution,
+        });
       }
 
       const registration = await tx.webinarRegistration.create({
@@ -259,7 +271,14 @@ export class WebinarsService {
         lead.id,
         'SYSTEM',
         null,
-        { webinarId: webinar.id, webinarSlug: webinar.slug },
+        {
+          webinarId: webinar.id,
+          webinarSlug: webinar.slug,
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          landingPage,
+        },
         tx,
       );
 
